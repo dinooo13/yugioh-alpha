@@ -1,16 +1,15 @@
 ---
 # yugioh-alpha-23wn
 title: Global card catalog with YGOPRODeck import
-status: todo
+status: in-progress
 type: feature
 priority: normal
 tags:
-    - effort:large
     - area:catalog
-    - agent-ready
     - area:infra
+    - effort:large
 created_at: 2026-07-04T18:26:28Z
-updated_at: 2026-07-04T18:35:16Z
+updated_at: 2026-07-04T18:51:09Z
 parent: yugioh-alpha-brmu
 ---
 
@@ -300,3 +299,22 @@ Tags: `effort:large` (keep), `area:catalog` (keep), add `area:infra` (schema + i
 </details>
 
 _Plan promoted by orchestrator on behalf of the user, 2026-07-04._
+
+## Delivery
+- Branch: claude/23wn-global-card-catalog
+- PR: https://github.com/dinooo13/yugioh-alpha/pull/2
+
+## Progress
+_Current step: gates green, PR opened as draft_
+- [x] Extend `server/db/schema.ts` with catalog_card/catalog_set/catalog_printing/catalog_card_image/catalog_sync tables + indexes
+- [x] Generate Drizzle migration (`0001_smart_speedball.sql`)
+- [x] `server/utils/ygoprodeck.ts` — typed client + pure mappers (mapCardToRows, slugifySetName)
+- [x] `server/utils/catalog-sync.ts` — chunked transactional upsert + catalog_sync run log
+- [x] `server/tasks/catalog/sync.ts` Nitro task + `nitro.experimental.tasks` config
+- [x] `server/api/admin/catalog/sync.post.ts` guarded endpoint (401 if unauthenticated)
+- [x] ADR 0001 (card catalog data model and YGOPRODeck import) + docs/adr/README.md index
+- [x] README updated with sync instructions
+- [x] Unit tests: mapper (monster, spell, set dedup) + slugify
+- [x] Unit tests: syncCatalog idempotency, success run log, error run log/re-raise
+- [x] Gates green: pnpm test, pnpm typecheck, pnpm lint, pnpm build
+- [x] Draft PR opened
