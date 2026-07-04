@@ -5,6 +5,7 @@ import { getAuthSession } from '~/utils/session'
 
 const navItems: NavigationMenuItem[] = [
   { label: 'Dashboard', icon: 'i-lucide-layout-dashboard', to: '/' },
+  { label: 'Katalog', icon: 'i-lucide-book-open', to: '/katalog' },
   { label: 'Inventar', icon: 'i-lucide-archive', to: '/inventar' },
   { label: 'Decks', icon: 'i-lucide-layers', to: '/decks' },
   { label: 'Formate', icon: 'i-lucide-scroll-text', to: '/formate' },

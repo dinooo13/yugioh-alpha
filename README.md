@@ -68,6 +68,8 @@ curl -X POST http://localhost:3000/api/admin/catalog/sync \
 
 The sync is idempotent (upsert-based) and safe to re-run at any time to pick up new or updated cards. Card images are currently stored as remote YGOPRODeck URLs; a local image proxy/cache is planned as follow-up work (see the ADR).
 
+Authenticated users can browse the synced catalog at `/katalog`, with server-side search, faceted filters, pagination, and card detail views. The page shows an import hint until a sync has populated the catalog tables.
+
 ## Quality Checks
 
 ```bash
