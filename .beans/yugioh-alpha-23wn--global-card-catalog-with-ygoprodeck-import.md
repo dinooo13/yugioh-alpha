@@ -1,10 +1,15 @@
 ---
 # yugioh-alpha-23wn
 title: Global card catalog with YGOPRODeck import
-status: todo
+status: draft
 type: feature
+priority: normal
+tags:
+    - needs-plan
+    - effort:large
+    - area:catalog
 created_at: 2026-07-04T18:26:28Z
-updated_at: 2026-07-04T18:26:28Z
+updated_at: 2026-07-04T18:29:27Z
 parent: yugioh-alpha-brmu
 ---
 
