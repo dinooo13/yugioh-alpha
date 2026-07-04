@@ -7,6 +7,13 @@ export default defineNuxtConfig({
   typescript: {
     strict: true,
   },
+  nitro: {
+    // Enables server/tasks/** (used by the catalog:sync task).
+    // https://nitro.build/guide/tasks
+    experimental: {
+      tasks: true,
+    },
+  },
   colorMode: {
     preference: 'light',
   },
