@@ -5,6 +5,7 @@ import { getAuthSession } from '~/utils/session'
 
 const navItems: NavigationMenuItem[] = [
   { label: 'Dashboard', icon: 'i-lucide-layout-dashboard', to: '/' },
+  { label: 'Katalog', icon: 'i-lucide-book-open', to: '/katalog' },
   { label: 'Inventar', icon: 'i-lucide-archive', to: '/inventar' },
   { label: 'Decks', icon: 'i-lucide-layers', to: '/decks' },
   { label: 'Formate', icon: 'i-lucide-scroll-text', to: '/formate' },
@@ -31,22 +32,27 @@ onMounted(async () => {
 
 async function onLogout() {
   await authClient.signOut()
-  // Volle Navigation, damit kein gecachter Session-Zustand übrig bleibt.
-  await navigateTo('/login', { external: true })
+  // Volle Dokumentnavigation, damit kein gecachter Session-Zustand übrig bleibt.
+  if (import.meta.client) {
+    window.location.assign('/login')
+    return
+  }
+
+  await navigateTo('/login')
 }
 </script>
 
 <template>
-  <div class="flex min-h-screen bg-gray-50">
-    <aside class="flex w-64 shrink-0 flex-col border-r border-gray-200 bg-white">
-      <div class="flex items-center gap-2.5 px-5 py-5">
+  <div class="flex min-h-screen flex-col bg-gray-50 md:flex-row">
+    <aside class="flex w-full shrink-0 flex-col border-b border-gray-200 bg-white md:w-64 md:border-b-0 md:border-r">
+      <div class="flex items-center gap-2.5 px-4 py-4 md:px-5 md:py-5">
         <div class="flex size-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-white">
           Y
         </div>
         <span class="text-base font-semibold text-gray-900">yugioh alpha</span>
       </div>
 
-      <nav class="px-3">
+      <nav class="px-3 pb-3 md:pb-0">
         <UNavigationMenu
           orientation="vertical"
           :items="navItems"
@@ -54,7 +60,7 @@ async function onLogout() {
         />
       </nav>
 
-      <div class="mt-6 flex-1 overflow-y-auto px-3">
+      <div class="mt-6 hidden flex-1 overflow-y-auto px-3 md:block">
         <p class="px-2.5 text-xs font-semibold tracking-wider text-gray-400">
           SAMMLUNGEN
         </p>
@@ -78,7 +84,7 @@ async function onLogout() {
         </ul>
       </div>
 
-      <div class="border-t border-gray-200 p-3">
+      <div class="hidden border-t border-gray-200 p-3 md:block">
         <UButton
           icon="i-lucide-plus"
           label="Neue Sammlung"
@@ -111,7 +117,7 @@ async function onLogout() {
       </div>
     </aside>
 
-    <main class="flex-1 p-8">
+    <main class="min-w-0 flex-1 p-4 sm:p-6 md:p-8">
       <slot />
     </main>
   </div>
