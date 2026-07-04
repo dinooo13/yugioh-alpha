@@ -8,9 +8,8 @@ tags:
     - area:ui
     - effort:large
     - area:inventory
-    - needs-qa
 created_at: 2026-07-04T18:26:28Z
-updated_at: 2026-07-04T19:44:46Z
+updated_at: 2026-07-04T20:02:42Z
 parent: yugioh-alpha-brmu
 blocked_by:
     - yugioh-alpha-23wn
