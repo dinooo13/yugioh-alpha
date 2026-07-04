@@ -1,16 +1,16 @@
 ---
 # yugioh-alpha-f785
 title: Collections and storage locations
-status: draft
+status: todo
 type: feature
 priority: normal
 tags:
-    - needs-plan-review
     - effort:medium
     - area:inventory
     - area:ui
+    - agent-ready
 created_at: 2026-07-04T18:26:28Z
-updated_at: 2026-07-04T18:44:02Z
+updated_at: 2026-07-04T18:45:05Z
 parent: yugioh-alpha-brmu
 blocked_by:
     - yugioh-alpha-wxy4
@@ -290,3 +290,5 @@ Tags: `effort:medium`, `area:inventory` (both already present and correct — co
 | Q12 | No new ADR |
 
 </details>
+
+_Plan promoted by orchestrator on behalf of the user, 2026-07-04._
