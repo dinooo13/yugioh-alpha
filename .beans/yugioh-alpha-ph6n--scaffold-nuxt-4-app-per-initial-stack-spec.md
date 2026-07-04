@@ -1,11 +1,11 @@
 ---
 # yugioh-alpha-ph6n
 title: Scaffold Nuxt 4 app per initial stack spec
-status: todo
+status: completed
 type: task
 priority: normal
 created_at: 2026-07-04T15:18:23Z
-updated_at: 2026-07-04T15:27:56Z
+updated_at: 2026-07-04T16:29:41Z
 ---
 
 Walking-skeleton scaffold for the Yu-Gi-Oh card app (see docs/Roadmap.md, Phase 1). This bean carries the full initial-stack specification decided in the /spec brainstorming session on 2026-07-04. The visual design (Claude design handoff, 2026-07-04) is documented in the Design Reference section below.
@@ -35,18 +35,18 @@ Walking-skeleton scaffold for the Yu-Gi-Oh card app (see docs/Roadmap.md, Phase 
 
 ## Scaffold Checklist
 
-- [ ] Init Nuxt 4 project with pnpm, TypeScript strict
-- [ ] Add Nuxt UI v4
-- [ ] Add @nuxt/eslint
-- [ ] Wire Drizzle + SQLite (better-sqlite3) + first migration via drizzle-kit
-- [ ] Integrate Better Auth: register/login/logout pages + route middleware
-- [ ] Add @vite-pwa/nuxt with manifest + basic service worker
-- [ ] Vitest + @nuxt/test-utils setup with one smoke test
-- [ ] Playwright setup with auth happy-path E2E (register → login → logout)
-- [ ] Dockerfile (multi-stage) + compose.yaml with `./data` volume + .env.example
-- [ ] GitHub Actions CI: lint, typecheck, test
-- [ ] App shell per design: sidebar layout (Dashboard, Inventar, Decks, Formate, Turniere as placeholder routes), yugioh alpha branding, indigo/violet primary theme, German labels
-- [ ] README quickstart
+- [x] Init Nuxt 4 project with pnpm, TypeScript strict
+- [x] Add Nuxt UI v4
+- [x] Add @nuxt/eslint
+- [x] Wire Drizzle + SQLite (better-sqlite3) + first migration via drizzle-kit
+- [x] Integrate Better Auth: register/login/logout pages + route middleware
+- [x] Add @vite-pwa/nuxt with manifest + basic service worker
+- [x] Vitest + @nuxt/test-utils setup with one smoke test
+- [x] Playwright setup with auth happy-path E2E (register → login → logout)
+- [x] Dockerfile (multi-stage) + compose.yaml with `./data` volume + .env.example
+- [x] GitHub Actions CI: lint, typecheck, test
+- [x] App shell per design: sidebar layout (Dashboard, Inventar, Decks, Formate, Turniere as placeholder routes), yugioh alpha branding, indigo/violet primary theme, German labels
+- [x] README quickstart
 
 ## Test Plan
 
@@ -98,3 +98,18 @@ Three-column desktop layout:
 - App shell = sidebar layout above with the five nav items as (mostly placeholder) routes; German nav labels.
 - Sammlungswert implies card pricing data — YGOPRODeck dump includes prices; note for the catalog-sync follow-up bean, not the scaffold.
 - Inventory grid/detail panel/filters are feature work for follow-up beans; the scaffold only delivers the shell layout and theming.
+
+## Summary of Changes
+
+Scaffolded the full walking skeleton (implemented via a 4-stage agent pipeline, 2026-07-04):
+
+- **Foundation**: Nuxt 4.4.8 at repo root (pnpm 11.9.0 via corepack, TypeScript strict), @nuxt/ui 4.9.0, @nuxt/eslint, @vite-pwa/nuxt 1.1.1 (manifest + generateSW service worker, served in dev).
+- **App shell**: German sidebar layout per design — yugioh alpha branding, custom brand palette (#6D5DF6) via Tailwind v4 theme, nav Dashboard/Inventar/Decks/Formate/Turniere as placeholder routes, SAMMLUNGEN section with placeholder collections, "+ Neue Sammlung" footer.
+- **Data**: Drizzle 0.45.2 + better-sqlite3, schema in server/db/, drizzle-kit migrations auto-applied at startup via Nitro plugin; DB path from runtimeConfig (NUXT_DB_FILE_PATH, default ./data/app.db).
+- **Auth**: Better Auth 1.6.23 email/password via Drizzle adapter, catch-all route server/api/auth/[...all].ts, German /login + /register pages (auth layout), Abmelden in sidebar, global SSR-safe middleware redirecting unauthenticated users to /login.
+- **Tests**: Vitest + @nuxt/test-utils smoke test (login page mount); Playwright chromium E2E against a real production build with isolated DB — auth happy path (register → logout → login → logout) and protected-route redirects. All passing.
+- **Ops**: multi-stage Dockerfile (node:22-bookworm-slim, non-root, copies migrations since Nitro does not bundle them), compose.yaml with ./data volume, .env.example with working NUXT_-prefixed vars, GitHub Actions CI (lint/typecheck/unit + E2E job), German README quickstart.
+
+Fixed along the way: a login/session race (client navigation could outrun cookie visibility in the middleware session check) — auth state changes now use full-page navigation; login redirect param is guarded against open redirects.
+
+Notes: Docker build was verified via an exact runtime-stage simulation (Docker not installed on this machine) — worth a real `docker compose up` check on a Docker host. PWA icon is a single SVG; real 192/512 PNG + maskable icons are a small follow-up.

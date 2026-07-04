@@ -1,0 +1,17 @@
+@import "tailwindcss";
+@import "@nuxt/ui";
+
+@theme static {
+  /* Brand palette centered on #6D5DF6 (indigo/violet) */
+  --color-brand-50: #f3f2fe;
+  --color-brand-100: #e9e7fd;
+  --color-brand-200: #d6d2fc;
+  --color-brand-300: #b9b0fa;
+  --color-brand-400: #9787f8;
+  --color-brand-500: #6d5df6;
+  --color-brand-600: #5a3fee;
+  --color-brand-700: #4b2eda;
+  --color-brand-800: #3e27b7;
+  --color-brand-900: #352396;
+  --color-brand-950: #1f1465;
+}

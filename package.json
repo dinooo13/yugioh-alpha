@@ -1,0 +1,47 @@
+{
+  "name": "yugioh-alpha",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "nuxt build",
+    "dev": "nuxt dev",
+    "generate": "nuxt generate",
+    "lint": "eslint .",
+    "typecheck": "nuxt typecheck",
+    "typecheck:e2e": "tsc --noEmit -p e2e/tsconfig.json",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "auth:generate": "npx @better-auth/cli generate",
+    "test": "vitest run",
+    "pretest:e2e": "rm -rf e2e-data && nuxt build",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "@nuxt/ui": "^4.9.0",
+    "@vite-pwa/nuxt": "^1.1.1",
+    "better-auth": "^1.6.23",
+    "better-sqlite3": "^12.11.1",
+    "drizzle-orm": "^0.45.2",
+    "nuxt": "^4.4.8",
+    "vue": "^3.5.39",
+    "vue-router": "^5.1.0"
+  },
+  "devDependencies": {
+    "@iconify-json/lucide": "^1.2.116",
+    "@nuxt/eslint": "^1.16.0",
+    "@nuxt/test-utils": "^4.0.3",
+    "@playwright/test": "^1.61.1",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^26.1.0",
+    "@vue/test-utils": "^2.4.11",
+    "drizzle-kit": "^0.31.10",
+    "eslint": "^10.6.0",
+    "happy-dom": "^20.10.6",
+    "playwright-core": "^1.61.1",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9",
+    "vue-tsc": "^3.3.6"
+  }
+}

@@ -1,0 +1,21 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - '3000:3000'
+    environment:
+      NODE_ENV: production
+      NUXT_DB_FILE_PATH: /app/data/app.db
+      # REQUIRED in production: set a long random secret, e.g. via .env
+      # (NUXT_BETTER_AUTH_SECRET=...) or export it in your shell before
+      # running `docker compose up`. The fallback below is NOT secure.
+      NUXT_BETTER_AUTH_SECRET: ${NUXT_BETTER_AUTH_SECRET:-change-me-to-a-long-random-string}
+      NUXT_PUBLIC_BETTER_AUTH_URL: ${NUXT_PUBLIC_BETTER_AUTH_URL:-http://localhost:3000}
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
