@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { NavigationMenuItem } from '@nuxt/ui'
-import { authClient, useSession } from '~/utils/auth-client'
+import { authClient } from '~/utils/auth-client'
+import { getAuthSession } from '~/utils/session'
 
 const navItems: NavigationMenuItem[] = [
   { label: 'Dashboard', icon: 'i-lucide-layout-dashboard', to: '/' },
@@ -18,7 +19,15 @@ const collections = [
   { name: 'Trade Pile', count: 64, color: 'bg-rose-500' },
 ]
 
-const { data: session } = await useSession(useFetch)
+const session = ref(await getAuthSession(
+  import.meta.server ? useRequestHeaders(['cookie']) : undefined,
+))
+
+onMounted(async () => {
+  if (!session.value) {
+    session.value = await getAuthSession()
+  }
+})
 
 async function onLogout() {
   await authClient.signOut()

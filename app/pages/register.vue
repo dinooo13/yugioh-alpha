@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { authClient } from '~/utils/auth-client'
+import { waitForAuthSession } from '~/utils/session'
 
 definePageMeta({ layout: 'auth' })
 useHead({ title: 'Registrieren – yugioh alpha' })
@@ -24,6 +25,8 @@ async function onSubmit() {
     error.value = signUpError.message || 'Registrierung fehlgeschlagen. Bitte versuche es erneut.'
     return
   }
+
+  await waitForAuthSession()
 
   // Volle Navigation, damit die Session-Prüfung der Middleware
   // das frische Cookie garantiert sieht (kein Client-Cache).

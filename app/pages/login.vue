@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { authClient } from '~/utils/auth-client'
+import { waitForAuthSession } from '~/utils/session'
 
 definePageMeta({ layout: 'auth' })
 useHead({ title: 'Anmelden – yugioh alpha' })
@@ -24,6 +25,8 @@ async function onSubmit() {
     error.value = signInError.message || 'Anmeldung fehlgeschlagen. Bitte überprüfe deine Angaben.'
     return
   }
+
+  await waitForAuthSession()
 
   const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/'
   // Nur interne Pfade zulassen; volle Navigation, damit die Session-Prüfung
