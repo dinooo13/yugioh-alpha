@@ -1,10 +1,15 @@
 ---
 # yugioh-alpha-f785
 title: Collections and storage locations
-status: todo
+status: draft
 type: feature
+priority: normal
+tags:
+    - needs-plan
+    - effort:medium
+    - area:inventory
 created_at: 2026-07-04T18:26:28Z
-updated_at: 2026-07-04T18:26:28Z
+updated_at: 2026-07-04T18:30:16Z
 parent: yugioh-alpha-brmu
 blocked_by:
     - yugioh-alpha-wxy4
