@@ -1,11 +1,15 @@
 ---
 # yugioh-alpha-4d77
 title: Search across the full inventory
-status: todo
+status: draft
 type: feature
 priority: normal
+tags:
+    - effort:medium
+    - area:inventory
+    - needs-plan
 created_at: 2026-07-04T18:26:28Z
-updated_at: 2026-07-04T18:26:28Z
+updated_at: 2026-07-04T18:31:00Z
 parent: yugioh-alpha-brmu
 blocked_by:
     - yugioh-alpha-wxy4
