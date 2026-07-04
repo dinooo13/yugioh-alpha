@@ -1,10 +1,15 @@
 ---
 # yugioh-alpha-wxy4
 title: Manual inventory entry with owned card quantities
-status: todo
+status: draft
 type: feature
+priority: normal
+tags:
+    - effort:large
+    - area:inventory
+    - needs-plan
 created_at: 2026-07-04T18:26:28Z
-updated_at: 2026-07-04T18:26:28Z
+updated_at: 2026-07-04T18:29:06Z
 parent: yugioh-alpha-brmu
 blocked_by:
     - yugioh-alpha-23wn
