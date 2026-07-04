@@ -1,16 +1,16 @@
 ---
 # yugioh-alpha-wxy4
 title: Manual inventory entry with owned card quantities
-status: draft
+status: todo
 type: feature
 priority: normal
 tags:
+    - area:ui
+    - agent-ready
     - effort:large
     - area:inventory
-    - needs-plan-review
-    - area:ui
 created_at: 2026-07-04T18:26:28Z
-updated_at: 2026-07-04T18:39:13Z
+updated_at: 2026-07-04T18:40:46Z
 parent: yugioh-alpha-brmu
 blocked_by:
     - yugioh-alpha-23wn
@@ -301,3 +301,5 @@ Tags: `effort:large` (keep — new schema + 4 endpoints + auth util + page + mod
 | Q12 | integer card FK + text printing FK |
 
 </details>
+
+_Plan promoted by orchestrator on behalf of the user, 2026-07-04._
