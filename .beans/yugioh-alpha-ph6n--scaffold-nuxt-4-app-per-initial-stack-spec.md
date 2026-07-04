@@ -3,11 +3,12 @@
 title: Scaffold Nuxt 4 app per initial stack spec
 status: todo
 type: task
+priority: normal
 created_at: 2026-07-04T15:18:23Z
-updated_at: 2026-07-04T15:18:23Z
+updated_at: 2026-07-04T15:27:00Z
 ---
 
-Walking-skeleton scaffold for the Yu-Gi-Oh card app (see docs/Roadmap.md, Phase 1). This bean carries the full initial-stack specification decided in the /spec brainstorming session on 2026-07-04. A visual design from Claude design will follow separately — do not lock in visual design details; build with stock Nuxt UI components until the design handoff.
+Walking-skeleton scaffold for the Yu-Gi-Oh card app (see docs/Roadmap.md, Phase 1). This bean carries the full initial-stack specification decided in the /spec brainstorming session on 2026-07-04. The visual design (Claude design handoff, 2026-07-04) is documented in the Design Reference section below.
 
 ## Stack Decisions
 
@@ -44,6 +45,7 @@ Walking-skeleton scaffold for the Yu-Gi-Oh card app (see docs/Roadmap.md, Phase 
 - [ ] Playwright setup with auth happy-path E2E (register → login → logout)
 - [ ] Dockerfile (multi-stage) + compose.yaml with `./data` volume + .env.example
 - [ ] GitHub Actions CI: lint, typecheck, test
+- [ ] App shell per design: sidebar layout (Dashboard, Inventar, Decks, Formate, Turniere as placeholder routes), Cardex branding, indigo/violet primary theme, German labels
 - [ ] README quickstart
 
 ## Test Plan
@@ -65,4 +67,34 @@ Walking-skeleton scaffold for the Yu-Gi-Oh card app (see docs/Roadmap.md, Phase 
 - AI assistance, sharing/social, tournaments
 - OAuth providers (email/password only for now)
 - Postgres migration
-- Visual design — pending Claude design handoff; use stock Nuxt UI components until then
+- Inventory grid, card detail panel, filters, stats (design documented below; feature work for follow-up beans)
+
+## Design Reference (Claude design, 2026-07-04)
+
+App name: **Cardex**. Light theme, near-white neutral background, white cards with subtle borders and rounded corners, indigo/violet primary (~#6D5DF6). UI language: **German** (single language for now, no i18n framework needed yet).
+
+### Layout
+
+Three-column desktop layout:
+
+```
++----------+--------------------------------------+---------------+
+| Sidebar  |  Main content                        | Detail panel  |
+| (nav +   |  (page header, stats, filters,       | (selected     |
+|  collec- |   card grid)                         |  card)        |
+|  tions)  |                                      |               |
++----------+--------------------------------------+---------------+
+```
+
+- **Sidebar**: Cardex logo (purple rounded-square mark); nav items Dashboard, Inventar, Decks, Formate, Turniere; section "SAMMLUNGEN" listing collections with colored dots and card counts (Alle Karten, Box 1, Box 2, Binder, Trade Pile); footer action "+ Neue Sammlung".
+- **Inventory page ("Inventar")**: title with subtitle "N Karten · M Unikate"; search input "Karten durchsuchen..."; primary button "+ Karte hinzufügen"; four stat cards: Karten gesamt, Unikate, Format-legal (% + format name), Sammlungswert (€); filter chip row: Typ / Attribut / Set dropdowns, "Nur im Besitz" toggle chip, right-aligned "Sortieren: <field>".
+- **Card grid**: tiles with card image, top-left type badge with colored dot (Normal/Effekt/Zauber/Falle), top-right quantity badge (×N), card name, sub-line with ATK/DEF · Stufe or card category (Zauber · Schnell, Falle · Normal).
+- **Card detail panel ("KARTENDETAIL")**: closable; card image, name, type chips (e.g. "Effekt · Zombie"), attribute/level line (FEUER · Stufe 3), ATK/DEF; ownership block: Im Besitz (Exemplare), Lagerort (collections), In Decks (count), format legality badge (e.g. "Limitiert · max 1"); EFFEKT text section; primary button "Zu Deck" + secondary export/download icon button.
+
+### Implications for the scaffold
+
+- App display name/branding is **Cardex** (repo stays yugioh-alpha).
+- Nuxt UI theme: primary indigo/violet; light mode default (dark mode can stay available via Nuxt UI).
+- App shell = sidebar layout above with the five nav items as (mostly placeholder) routes; German nav labels.
+- Sammlungswert implies card pricing data — YGOPRODeck dump includes prices; note for the catalog-sync follow-up bean, not the scaffold.
+- Inventory grid/detail panel/filters are feature work for follow-up beans; the scaffold only delivers the shell layout and theming.
