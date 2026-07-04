@@ -215,18 +215,19 @@ async function reloadCards() {
       </div>
 
       <section class="space-y-3 border-y border-gray-200 py-4">
-        <div class="grid gap-3 lg:grid-cols-[minmax(18rem,1fr)_repeat(3,minmax(10rem,12rem))]">
+        <div class="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_repeat(3,minmax(10rem,12rem))]">
           <UInput
             v-model="searchInput"
             icon="i-lucide-search"
             placeholder="Karten suchen..."
             aria-label="Karten suchen"
+            class="min-w-0"
           />
 
           <select
             v-model="type"
             aria-label="Typ"
-            class="h-10 rounded-md border border-gray-200 bg-white px-3 text-sm text-gray-700 shadow-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+            class="h-10 min-w-0 w-full rounded-md border border-gray-200 bg-white px-3 text-sm text-gray-700 shadow-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
           >
             <option value="">
               Typ
@@ -243,7 +244,7 @@ async function reloadCards() {
           <select
             v-model="attribute"
             aria-label="Attribut"
-            class="h-10 rounded-md border border-gray-200 bg-white px-3 text-sm text-gray-700 shadow-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+            class="h-10 min-w-0 w-full rounded-md border border-gray-200 bg-white px-3 text-sm text-gray-700 shadow-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
           >
             <option value="">
               Attribut
@@ -260,7 +261,7 @@ async function reloadCards() {
           <select
             v-model="level"
             aria-label="Level"
-            class="h-10 rounded-md border border-gray-200 bg-white px-3 text-sm text-gray-700 shadow-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+            class="h-10 min-w-0 w-full rounded-md border border-gray-200 bg-white px-3 text-sm text-gray-700 shadow-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
           >
             <option value="">
               Level
@@ -275,11 +276,11 @@ async function reloadCards() {
           </select>
         </div>
 
-        <div class="grid gap-3 lg:grid-cols-[minmax(16rem,1fr)_minmax(10rem,12rem)_auto]">
+        <div class="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(10rem,12rem)_auto]">
           <select
             v-model="race"
             aria-label="Monsterart"
-            class="h-10 rounded-md border border-gray-200 bg-white px-3 text-sm text-gray-700 shadow-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+            class="h-10 min-w-0 w-full rounded-md border border-gray-200 bg-white px-3 text-sm text-gray-700 shadow-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
           >
             <option value="">
               Monsterart
@@ -296,7 +297,7 @@ async function reloadCards() {
           <select
             v-model="setId"
             aria-label="Set"
-            class="h-10 rounded-md border border-gray-200 bg-white px-3 text-sm text-gray-700 shadow-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+            class="h-10 min-w-0 w-full rounded-md border border-gray-200 bg-white px-3 text-sm text-gray-700 shadow-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
           >
             <option value="">
               Set
@@ -315,7 +316,7 @@ async function reloadCards() {
             label="Zurücksetzen"
             color="neutral"
             variant="outline"
-            class="justify-center"
+            class="min-w-0 justify-center"
             @click="resetFilters"
           />
         </div>

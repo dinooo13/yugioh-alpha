@@ -29,10 +29,10 @@ async function onSubmit() {
   await waitForAuthSession()
 
   const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/'
-  // Nur interne Pfade zulassen; volle Navigation, damit die Session-Prüfung
+  // Nur interne Pfade zulassen; volle Dokumentnavigation, damit die Session-Prüfung
   // der Middleware das frische Cookie garantiert sieht (kein Client-Cache).
   const target = redirect.startsWith('/') && !redirect.startsWith('//') ? redirect : '/'
-  await navigateTo(target, { external: true })
+  window.location.assign(target)
 }
 </script>
 

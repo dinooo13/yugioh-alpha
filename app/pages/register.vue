@@ -28,9 +28,9 @@ async function onSubmit() {
 
   await waitForAuthSession()
 
-  // Volle Navigation, damit die Session-Prüfung der Middleware
+  // Volle Dokumentnavigation, damit die Session-Prüfung der Middleware
   // das frische Cookie garantiert sieht (kein Client-Cache).
-  await navigateTo('/', { external: true })
+  window.location.assign('/')
 }
 </script>
 
