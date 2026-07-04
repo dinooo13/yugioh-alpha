@@ -1,16 +1,16 @@
 ---
 # yugioh-alpha-82gj
 title: Card catalog search and filtering
-status: draft
+status: todo
 type: feature
 priority: normal
 tags:
     - effort:medium
-    - needs-plan-review
     - area:catalog
     - area:ui
+    - agent-ready
 created_at: 2026-07-04T18:26:28Z
-updated_at: 2026-07-04T18:39:13Z
+updated_at: 2026-07-04T18:40:46Z
 parent: yugioh-alpha-brmu
 blocked_by:
     - yugioh-alpha-23wn
@@ -316,3 +316,5 @@ Tags: `effort:medium` (keep — API + one page, read-only), `area:catalog` (keep
 | Q12 | No ADR |
 
 </details>
+
+_Plan promoted by orchestrator on behalf of the user, 2026-07-04._
