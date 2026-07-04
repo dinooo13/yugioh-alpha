@@ -1,19 +1,16 @@
 ---
 # yugioh-alpha-wxy4
 title: Manual inventory entry with owned card quantities
-status: in-progress
+status: completed
 type: feature
 priority: normal
 tags:
-    - area:inventory
     - area:ui
-    - approved
     - effort:large
+    - area:inventory
 created_at: 2026-07-04T18:26:28Z
-updated_at: 2026-07-04T20:48:20Z
+updated_at: 2026-07-04T21:09:29Z
 parent: yugioh-alpha-brmu
-blocked_by:
-    - yugioh-alpha-23wn
 ---
 
 ## Problem
@@ -315,3 +312,7 @@ _Current step: ready for review_
 - [x] Add inventory page, add/edit modal, and catalog picker fallback
 - [x] Add inventory API and page tests
 - [x] Run verification gates and update PR test plan
+
+## Summary of Changes
+
+Merged PR #4, adding the owned-card inventory schema and ADR 0002, inventory APIs, server-side session/inventory helpers, the inventory page, add/edit modal, catalog picker fallback, and regression tests.

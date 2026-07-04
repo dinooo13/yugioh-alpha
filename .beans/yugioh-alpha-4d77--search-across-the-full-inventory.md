@@ -10,10 +10,9 @@ tags:
     - agent-ready
     - effort:medium
 created_at: 2026-07-04T18:26:28Z
-updated_at: 2026-07-04T18:49:52Z
+updated_at: 2026-07-04T21:10:05Z
 parent: yugioh-alpha-brmu
 blocked_by:
-    - yugioh-alpha-wxy4
     - yugioh-alpha-f785
 ---
 

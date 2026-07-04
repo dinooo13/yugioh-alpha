@@ -1,19 +1,16 @@
 ---
 # yugioh-alpha-82gj
 title: Card catalog search and filtering
-status: in-progress
+status: completed
 type: feature
 priority: normal
 tags:
+    - area:catalog
     - area:ui
     - effort:medium
-    - area:catalog
-    - approved
 created_at: 2026-07-04T18:26:28Z
-updated_at: 2026-07-04T21:02:14Z
+updated_at: 2026-07-04T21:09:23Z
 parent: yugioh-alpha-brmu
-blocked_by:
-    - yugioh-alpha-23wn
 ---
 
 ## Problem
@@ -330,3 +327,7 @@ _Current step: ready for review_
 - [x] Add/update tests for query parsing, APIs, and page behavior
 - [x] Update README catalog search note if relevant
 - [x] Run verification gates and update PR test plan
+
+## Summary of Changes
+
+Merged PR #3, adding authenticated catalog search/detail/facet APIs, the German /katalog UI with filters, pagination and detail slideover, regression e2e coverage, and README notes.

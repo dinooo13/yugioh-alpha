@@ -5,15 +5,13 @@ status: todo
 type: feature
 priority: normal
 tags:
-    - blocked
+    - agent-ready
     - effort:medium
     - area:inventory
     - area:ui
 created_at: 2026-07-04T18:26:28Z
-updated_at: 2026-07-04T19:19:23Z
+updated_at: 2026-07-04T21:10:00Z
 parent: yugioh-alpha-brmu
-blocked_by:
-    - yugioh-alpha-wxy4
 ---
 
 ## Problem
@@ -295,10 +293,14 @@ _Plan promoted by orchestrator on behalf of the user, 2026-07-04._
 
 ## Progress
 
-_Current step: blocked on yugioh-alpha-wxy4_
+_Current step: ready for implementation_
 
 - [ ] Implement collection/storage-location schema, API, UI, tests, and docs after the owned-card inventory model lands.
 
-### Blocker
+### Previous Blocker
 
-Implementation cannot start safely because the planned dependency from yugioh-alpha-wxy4 is not present on origin/main: server/db/schema.ts has no owned_card table, server/utils/session.ts requireUser is absent, server/utils/inventory.ts is absent, and the inventory API/UI hooks this bean must extend do not exist yet. Per the f785 plan and implementer instructions, this bean is blocked rather than inventing conflicting owned-card storage.
+Resolved: yugioh-alpha-wxy4 has merged and the owned-card inventory model is available on main.
+
+## Unblocked
+
+The owned-card inventory foundation (yugioh-alpha-wxy4) has merged and is now completed, so this bean is ready for implementation.

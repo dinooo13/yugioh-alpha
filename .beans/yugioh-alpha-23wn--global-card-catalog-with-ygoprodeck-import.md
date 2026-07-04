@@ -1,16 +1,15 @@
 ---
 # yugioh-alpha-23wn
 title: Global card catalog with YGOPRODeck import
-status: in-progress
+status: completed
 type: feature
 priority: normal
 tags:
-    - area:catalog
     - area:infra
     - effort:large
-    - approved
+    - area:catalog
 created_at: 2026-07-04T18:26:28Z
-updated_at: 2026-07-04T19:07:28Z
+updated_at: 2026-07-04T21:09:18Z
 parent: yugioh-alpha-brmu
 ---
 
@@ -320,3 +319,7 @@ _Current step: ready for review — PR marked ready_
 - [x] Unit tests: syncCatalog idempotency, success run log, error run log/re-raise
 - [x] Gates green: pnpm test, pnpm typecheck, pnpm lint, pnpm build
 - [x] Draft PR opened
+
+## Summary of Changes
+
+Merged PR #2, adding the global catalog schema, YGOPRODeck import/sync task and endpoint, ADR 0001, README sync docs, and catalog import tests.
