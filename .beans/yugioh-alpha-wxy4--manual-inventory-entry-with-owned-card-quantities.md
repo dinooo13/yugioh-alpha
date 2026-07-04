@@ -8,8 +8,9 @@ tags:
     - area:ui
     - effort:large
     - area:inventory
+    - needs-review
 created_at: 2026-07-04T18:26:28Z
-updated_at: 2026-07-04T19:20:00Z
+updated_at: 2026-07-04T19:38:51Z
 parent: yugioh-alpha-brmu
 blocked_by:
     - yugioh-alpha-23wn
@@ -308,9 +309,9 @@ _Plan promoted by orchestrator on behalf of the user, 2026-07-04._
 - PR: https://github.com/dinooo13/yugioh-alpha/pull/4
 
 ## Progress
-_Current step: implementing inventory schema/API/UI_
-- [ ] Add owned-card schema, migration, and ADR
-- [ ] Add server-side session helper, inventory validation, upsert/list/update/delete helpers, and API routes
-- [ ] Add inventory page, add/edit modal, and catalog picker fallback
-- [ ] Add inventory API and page tests
-- [ ] Run verification gates and update PR test plan
+_Current step: ready for review_
+- [x] Add owned-card schema, migration, and ADR
+- [x] Add server-side session helper, inventory validation, upsert/list/update/delete helpers, and API routes
+- [x] Add inventory page, add/edit modal, and catalog picker fallback
+- [x] Add inventory API and page tests
+- [x] Run verification gates and update PR test plan
