@@ -8,9 +8,9 @@ tags:
     - area:catalog
     - area:infra
     - effort:large
-    - needs-review
+    - needs-qa
 created_at: 2026-07-04T18:26:28Z
-updated_at: 2026-07-04T18:52:03Z
+updated_at: 2026-07-04T18:57:24Z
 parent: yugioh-alpha-brmu
 ---
 
