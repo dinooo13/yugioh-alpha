@@ -1,16 +1,15 @@
 ---
 # yugioh-alpha-wxy4
 title: Manual inventory entry with owned card quantities
-status: todo
+status: in-progress
 type: feature
 priority: normal
 tags:
     - area:ui
-    - agent-ready
     - effort:large
     - area:inventory
 created_at: 2026-07-04T18:26:28Z
-updated_at: 2026-07-04T18:40:46Z
+updated_at: 2026-07-04T19:20:00Z
 parent: yugioh-alpha-brmu
 blocked_by:
     - yugioh-alpha-23wn
@@ -303,3 +302,15 @@ Tags: `effort:large` (keep — new schema + 4 endpoints + auth util + page + mod
 </details>
 
 _Plan promoted by orchestrator on behalf of the user, 2026-07-04._
+
+## Delivery
+- Branch: claude/wxy4-manual-inventory-entry
+- PR: https://github.com/dinooo13/yugioh-alpha/pull/4
+
+## Progress
+_Current step: implementing inventory schema/API/UI_
+- [ ] Add owned-card schema, migration, and ADR
+- [ ] Add server-side session helper, inventory validation, upsert/list/update/delete helpers, and API routes
+- [ ] Add inventory page, add/edit modal, and catalog picker fallback
+- [ ] Add inventory API and page tests
+- [ ] Run verification gates and update PR test plan
