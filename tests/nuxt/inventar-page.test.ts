@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
+import { nextTick } from 'vue'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
+import AddToInventoryModal from '~/components/inventory/AddToInventoryModal.vue'
 import InventarPage from '~/pages/inventar.vue'
 
 const inventoryState = vi.hoisted(() => ({
@@ -55,5 +57,40 @@ describe('inventar page', () => {
     expect(component.text()).toContain('Normal Monster')
     expect(component.text()).toContain('×3')
     expect(component.text()).toContain('NM')
+  })
+})
+
+describe('add to inventory modal', () => {
+  it('opens repeatedly without logging select errors', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const component = await mountSuspended(AddToInventoryModal, {
+      props: {
+        open: false,
+        card: {
+          id: 46986414,
+          name: 'Dark Magician',
+          type: 'Normal Monster',
+          printings: [
+            {
+              id: 'LOB-005',
+              setName: 'Legend of Blue Eyes White Dragon',
+              rarity: 'Ultra Rare',
+            },
+          ],
+        },
+      },
+    })
+
+    await component.setProps({ open: true })
+    await nextTick()
+    await component.setProps({ open: false })
+    await nextTick()
+    await component.setProps({ open: true })
+    await nextTick()
+
+    expect(consoleError).not.toHaveBeenCalled()
+
+    consoleError.mockRestore()
   })
 })

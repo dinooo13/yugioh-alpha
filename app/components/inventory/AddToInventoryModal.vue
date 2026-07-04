@@ -61,12 +61,14 @@ const editionItems = [
   { label: 'Limited', value: 'limited' },
 ]
 
+const noPrintingValue = '__no_printing__'
+
 const form = reactive({
   quantity: 1,
   language: 'en',
   condition: 'near_mint',
   edition: 'unlimited',
-  printingId: '',
+  printingId: noPrintingValue,
   note: '',
 })
 
@@ -76,7 +78,7 @@ const errorMessage = ref('')
 const isEditing = computed(() => Boolean(props.initialValues?.id))
 const title = computed(() => isEditing.value ? 'Karte bearbeiten' : 'Karte hinzufügen')
 const printingItems = computed(() => [
-  { label: 'Keine bestimmte Edition', value: '' },
+  { label: 'Keine bestimmte Edition', value: noPrintingValue },
   ...(props.card?.printings ?? []).map(printing => ({
     label: `${printing.id}${printing.setName ? ` · ${printing.setName}` : ''}${printing.rarity ? ` · ${printing.rarity}` : ''}`,
     value: printing.id,
@@ -99,7 +101,7 @@ watch(
     form.language = props.initialValues?.language ?? 'en'
     form.condition = props.initialValues?.condition ?? 'near_mint'
     form.edition = props.initialValues?.edition ?? 'unlimited'
-    form.printingId = props.initialValues?.printingId ?? ''
+    form.printingId = props.initialValues?.printingId ?? noPrintingValue
     form.note = props.initialValues?.note ?? ''
     errorMessage.value = ''
   },
@@ -118,7 +120,7 @@ async function save() {
 
   const payload = {
     catalog_card_id: catalogCardId,
-    printing_id: form.printingId || null,
+    printing_id: form.printingId === noPrintingValue ? null : form.printingId,
     quantity: form.quantity,
     language: form.language,
     condition: form.condition,
