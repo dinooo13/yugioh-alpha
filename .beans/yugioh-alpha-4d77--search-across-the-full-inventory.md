@@ -1,16 +1,16 @@
 ---
 # yugioh-alpha-4d77
 title: Search across the full inventory
-status: draft
+status: todo
 type: feature
 priority: normal
 tags:
-    - effort:medium
     - area:inventory
-    - needs-plan-review
     - area:ui
+    - agent-ready
+    - effort:medium
 created_at: 2026-07-04T18:26:28Z
-updated_at: 2026-07-04T18:48:31Z
+updated_at: 2026-07-04T18:49:52Z
 parent: yugioh-alpha-brmu
 blocked_by:
     - yugioh-alpha-wxy4
@@ -362,3 +362,5 @@ Tags: `effort:medium` (keep — one aggregating endpoint + a facets endpoint + a
 | Q12 | No ADR |
 
 </details>
+
+_Plan promoted by orchestrator on behalf of the user, 2026-07-04._
