@@ -1,16 +1,16 @@
 ---
 # yugioh-alpha-23wn
 title: Global card catalog with YGOPRODeck import
-status: draft
+status: todo
 type: feature
 priority: normal
 tags:
-    - needs-plan-review
-    - area:infra
     - effort:large
     - area:catalog
+    - agent-ready
+    - area:infra
 created_at: 2026-07-04T18:26:28Z
-updated_at: 2026-07-04T18:33:46Z
+updated_at: 2026-07-04T18:35:16Z
 parent: yugioh-alpha-brmu
 ---
 
@@ -298,3 +298,5 @@ Tags: `effort:large` (keep), `area:catalog` (keep), add `area:infra` (schema + i
 | Q11 | New ADR |
 
 </details>
+
+_Plan promoted by orchestrator on behalf of the user, 2026-07-04._
