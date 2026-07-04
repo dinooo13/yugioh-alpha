@@ -8,8 +8,9 @@ tags:
     - area:catalog
     - area:infra
     - effort:large
+    - needs-review
 created_at: 2026-07-04T18:26:28Z
-updated_at: 2026-07-04T18:51:09Z
+updated_at: 2026-07-04T18:52:03Z
 parent: yugioh-alpha-brmu
 ---
 
@@ -305,7 +306,8 @@ _Plan promoted by orchestrator on behalf of the user, 2026-07-04._
 - PR: https://github.com/dinooo13/yugioh-alpha/pull/2
 
 ## Progress
-_Current step: gates green, PR opened as draft_
+_Current step: ready for review — PR marked ready_
+- [x] Mark PR ready for review
 - [x] Extend `server/db/schema.ts` with catalog_card/catalog_set/catalog_printing/catalog_card_image/catalog_sync tables + indexes
 - [x] Generate Drizzle migration (`0001_smart_speedball.sql`)
 - [x] `server/utils/ygoprodeck.ts` — typed client + pure mappers (mapCardToRows, slugifySetName)
