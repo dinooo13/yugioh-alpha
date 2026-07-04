@@ -7,10 +7,10 @@ priority: normal
 tags:
     - area:ui
     - effort:medium
-    - needs-qa
     - area:catalog
+    - approved
 created_at: 2026-07-04T18:26:28Z
-updated_at: 2026-07-04T20:49:49Z
+updated_at: 2026-07-04T21:02:14Z
 parent: yugioh-alpha-brmu
 blocked_by:
     - yugioh-alpha-23wn
