@@ -1,10 +1,16 @@
 ---
 # yugioh-alpha-82gj
 title: Card catalog search and filtering
-status: todo
+status: draft
 type: feature
+priority: normal
+tags:
+    - area:catalog
+    - area:ui
+    - needs-plan
+    - effort:medium
 created_at: 2026-07-04T18:26:28Z
-updated_at: 2026-07-04T18:26:28Z
+updated_at: 2026-07-04T18:28:55Z
 parent: yugioh-alpha-brmu
 blocked_by:
     - yugioh-alpha-23wn
