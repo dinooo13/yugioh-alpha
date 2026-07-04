@@ -1,3 +1,4 @@
+import { relations } from 'drizzle-orm'
 import { sqliteTable, text, integer, index } from 'drizzle-orm/sqlite-core'
 
 // Better Auth core tables (email/password only).
@@ -161,3 +162,44 @@ export const catalogSync = sqliteTable('catalog_sync', {
   cardCount: integer('card_count'),
   error: text('error'),
 })
+
+export const ownedCard = sqliteTable(
+  'owned_card',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    catalogCardId: integer('catalog_card_id')
+      .notNull()
+      .references(() => catalogCard.id, { onDelete: 'cascade' }),
+    printingId: text('printing_id')
+      .references(() => catalogPrinting.id, { onDelete: 'set null' }),
+    quantity: integer('quantity').notNull().default(1),
+    language: text('language').notNull().default('en'),
+    condition: text('condition').notNull().default('near_mint'),
+    edition: text('edition').notNull().default('unlimited'),
+    note: text('note'),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+  },
+  table => [
+    index('idx_owned_card_user').on(table.userId),
+    index('idx_owned_card_user_card').on(table.userId, table.catalogCardId),
+  ],
+)
+
+export const ownedCardRelations = relations(ownedCard, ({ one }) => ({
+  user: one(user, {
+    fields: [ownedCard.userId],
+    references: [user.id],
+  }),
+  catalogCard: one(catalogCard, {
+    fields: [ownedCard.catalogCardId],
+    references: [catalogCard.id],
+  }),
+  printing: one(catalogPrinting, {
+    fields: [ownedCard.printingId],
+    references: [catalogPrinting.id],
+  }),
+}))

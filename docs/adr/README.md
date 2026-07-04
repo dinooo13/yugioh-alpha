@@ -9,3 +9,4 @@ mark the old as superseded.
 | # | Title | Status |
 |---|-------|--------|
 | [0001](0001-card-catalog-data-model.md) | Card catalog data model and YGOPRODeck import | Accepted |
+| [0002](0002-owned-card-inventory-data-model.md) | Owned-card inventory data model | Accepted |
