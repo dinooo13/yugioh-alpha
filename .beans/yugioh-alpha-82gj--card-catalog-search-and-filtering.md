@@ -5,11 +5,12 @@ status: in-progress
 type: feature
 priority: normal
 tags:
+    - area:ui
+    - needs-review
     - effort:medium
     - area:catalog
-    - area:ui
 created_at: 2026-07-04T18:26:28Z
-updated_at: 2026-07-04T19:47:09Z
+updated_at: 2026-07-04T19:55:28Z
 parent: yugioh-alpha-brmu
 blocked_by:
     - yugioh-alpha-23wn
