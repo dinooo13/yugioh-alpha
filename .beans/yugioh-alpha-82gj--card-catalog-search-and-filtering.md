@@ -1,16 +1,15 @@
 ---
 # yugioh-alpha-82gj
 title: Card catalog search and filtering
-status: todo
+status: in-progress
 type: feature
 priority: normal
 tags:
     - effort:medium
     - area:catalog
     - area:ui
-    - agent-ready
 created_at: 2026-07-04T18:26:28Z
-updated_at: 2026-07-04T18:40:46Z
+updated_at: 2026-07-04T19:20:04Z
 parent: yugioh-alpha-brmu
 blocked_by:
     - yugioh-alpha-23wn
@@ -318,3 +317,15 @@ Tags: `effort:medium` (keep — API + one page, read-only), `area:catalog` (keep
 </details>
 
 _Plan promoted by orchestrator on behalf of the user, 2026-07-04._
+
+## Delivery
+- Branch: claude/82gj-card-catalog-search
+- PR: https://github.com/dinooo13/yugioh-alpha/pull/3
+
+## Progress
+_Current step: implementing API and UI_
+- [ ] Add authenticated catalog search, detail, and facets APIs
+- [ ] Add German /katalog UI with search, filters, pagination, and detail slideover
+- [ ] Add/update tests for query parsing, APIs, and page behavior
+- [ ] Update README catalog search note if relevant
+- [ ] Run verification gates and update PR test plan
