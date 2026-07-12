@@ -8,8 +8,9 @@ tags:
     - effort:medium
     - area:inventory
     - area:ui
+    - needs-review
 created_at: 2026-07-04T18:26:28Z
-updated_at: 2026-07-12T12:19:39Z
+updated_at: 2026-07-12T12:21:47Z
 parent: yugioh-alpha-brmu
 ---
 
@@ -304,4 +305,4 @@ _Current step: gates green, PR opened as draft_
 - [x] `/inventar` collection filter, header, per-row assign select, add-time collection select
 - [x] Tests: `tests/nuxt/collections-api.test.ts`, `tests/nuxt/collections-ui.test.ts`
 - [x] Verification gates: `pnpm test` (37/37), `pnpm typecheck`, `pnpm lint`, `pnpm build` all green
-- [ ] Human review + QA (PR left in draft until a human/reviewer agent picks it up)
+- [ ] Human review + QA (PR marked ready for review; needs-review tag added)
