@@ -3,6 +3,7 @@ interface InventoryItem {
   id: string
   catalogCardId: number
   printingId: string | null
+  collectionId: string | null
   quantity: number
   language: string
   condition: string
@@ -28,8 +29,15 @@ interface CatalogCard {
   }>
 }
 
+interface CollectionOption {
+  id: string
+  name: string
+  cardCount: number
+}
+
 useHead({ title: 'Inventar – yugioh alpha' })
 
+const route = useRoute()
 const search = ref('')
 const page = ref(1)
 const pageSize = 20
@@ -39,19 +47,60 @@ const selectedCard = ref<CatalogCard | null>(null)
 const editingItem = ref<InventoryItem | null>(null)
 const errorMessage = ref('')
 
+const collectionId = computed(() => {
+  const value = route.query.collectionId
+  return typeof value === 'string' ? value : undefined
+})
+
 const { data, pending, refresh } = await useFetch<{ items: InventoryItem[], total: number }>('/api/inventory', {
   query: {
     q: search,
     page,
     pageSize,
+    collectionId,
   },
   default: () => ({ items: [], total: 0 }),
-  watch: [search, page],
+  watch: [search, page, collectionId],
 })
 
 const items = computed(() => data.value.items)
 const total = computed(() => data.value.total)
 const pageCount = computed(() => Math.max(1, Math.ceil(total.value / pageSize)))
+
+const collectionOptions = ref<CollectionOption[]>([])
+const allCardsCount = ref(0)
+
+async function loadCollections() {
+  const response = await $fetch<{ items: CollectionOption[], allCount: number }>('/api/collections').catch(() => ({ items: [], allCount: 0 }))
+  collectionOptions.value = response.items
+  allCardsCount.value = response.allCount
+}
+
+await loadCollections()
+
+const activeCollection = computed(() => collectionOptions.value.find(c => c.id === collectionId.value) ?? null)
+const headerTitle = computed(() => activeCollection.value?.name ?? 'Alle Karten')
+const headerCount = computed(() => activeCollection.value ? activeCollection.value.cardCount : allCardsCount.value)
+
+const noAssignmentValue = '__no_collection__'
+const assignItems = computed(() => [
+  { label: '— (keine)', value: noAssignmentValue },
+  ...collectionOptions.value.map(c => ({ label: c.name, value: c.id })),
+])
+
+async function assignToCollection(item: InventoryItem, value: string) {
+  errorMessage.value = ''
+  try {
+    await $fetch(`/api/inventory/${item.id}`, {
+      method: 'PATCH',
+      body: { collectionId: value === noAssignmentValue ? null : value },
+    })
+    await Promise.all([refresh(), loadCollections()])
+  }
+  catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'Die Sammlung konnte nicht geändert werden.'
+  }
+}
 
 const editionLabels: Record<string, string> = {
   first: '1st',
@@ -103,7 +152,7 @@ async function removeItem(item: InventoryItem) {
 
   try {
     await $fetch(`/api/inventory/${item.id}`, { method: 'DELETE' })
-    await refresh()
+    await Promise.all([refresh(), loadCollections()])
   }
   catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'Die Karte konnte nicht entfernt werden.'
@@ -111,7 +160,7 @@ async function removeItem(item: InventoryItem) {
 }
 
 async function onSaved() {
-  await refresh()
+  await Promise.all([refresh(), loadCollections()])
 }
 </script>
 
@@ -120,10 +169,10 @@ async function onSaved() {
     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
       <div>
         <h1 class="text-2xl font-semibold text-gray-900">
-          Inventar
+          {{ headerTitle }}
         </h1>
         <p class="mt-1 text-sm text-gray-500">
-          Alle Karten, die du besitzt, mit Anzahl und Zustand.
+          {{ headerCount }} Karte<span v-if="headerCount !== 1">n</span>
         </p>
       </div>
 
@@ -170,7 +219,7 @@ async function onSaved() {
           />
         </div>
         <h2 class="mt-4 text-base font-semibold text-gray-900">
-          Keine Karten im Inventar
+          {{ collectionId ? 'Noch keine Karten in dieser Sammlung' : 'Keine Karten im Inventar' }}
         </h2>
         <p class="mt-1 max-w-sm text-sm text-gray-500">
           Suche eine Karte im Katalog und füge deine ersten Exemplare hinzu.
@@ -206,6 +255,9 @@ async function onSaved() {
             </th>
             <th class="w-20 px-4 py-3 text-right">
               Anzahl
+            </th>
+            <th class="w-40 px-4 py-3">
+              Sammlung
             </th>
             <th class="w-24 px-4 py-3 text-right">
               Aktionen
@@ -251,6 +303,14 @@ async function onSaved() {
             </td>
             <td class="px-4 py-3 text-right font-semibold tabular-nums text-gray-900">
               ×{{ item.quantity }}
+            </td>
+            <td class="px-4 py-3">
+              <USelect
+                :model-value="item.collectionId ?? noAssignmentValue"
+                :items="assignItems"
+                :aria-label="`Sammlung für ${item.cardName}`"
+                @update:model-value="(value: string) => assignToCollection(item, value)"
+              />
             </td>
             <td class="px-4 py-3">
               <div class="flex justify-end gap-1">
@@ -299,10 +359,13 @@ async function onSaved() {
     <InventoryAddToInventoryModal
       v-model:open="isEntryOpen"
       :card="selectedCard"
+      :collections="collectionOptions"
+      :preset-collection-id="collectionId ?? null"
       :initial-values="editingItem && {
         id: editingItem.id,
         catalogCardId: editingItem.catalogCardId,
         printingId: editingItem.printingId,
+        collectionId: editingItem.collectionId,
         quantity: editingItem.quantity,
         language: editingItem.language,
         condition: editingItem.condition,

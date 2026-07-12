@@ -9,6 +9,7 @@ import {
   catalogSet,
   ownedCard,
 } from '../db/schema'
+import { assertCollectionOwnedByUser } from './collections'
 
 type Db = ReturnType<typeof useDb>
 
@@ -23,6 +24,7 @@ export type InventoryEdition = typeof EDITIONS[number]
 export interface InventoryInput {
   catalogCardId: number
   printingId: string | null
+  collectionId: string | null
   quantity: number
   language: InventoryLanguage
   condition: InventoryCondition
@@ -34,6 +36,7 @@ export interface InventoryListOptions {
   q?: string
   page?: number
   pageSize?: number
+  collectionId?: string
 }
 
 function badRequest(message: string): never {
@@ -95,6 +98,7 @@ export function validateInventoryInput(body: unknown): InventoryInput {
   return {
     catalogCardId: normalizePositiveInteger(body.catalog_card_id ?? body.catalogCardId, 'catalog_card_id'),
     printingId: normalizeOptionalString(body.printing_id ?? body.printingId, 'printing_id'),
+    collectionId: normalizeOptionalString(body.collection_id ?? body.collectionId, 'collection_id'),
     quantity: normalizePositiveInteger(body.quantity, 'quantity', 1),
     language: normalizeEnum(body.language, 'language', LANGUAGES, 'en'),
     condition: normalizeEnum(body.condition, 'condition', CONDITIONS, 'near_mint'),
@@ -114,6 +118,9 @@ export function validateInventoryUpdateInput(body: unknown): Partial<InventoryIn
   }
   if (body.printing_id !== undefined || body.printingId !== undefined) {
     input.printingId = normalizeOptionalString(body.printing_id ?? body.printingId, 'printing_id')
+  }
+  if (body.collection_id !== undefined || body.collectionId !== undefined) {
+    input.collectionId = normalizeOptionalString(body.collection_id ?? body.collectionId, 'collection_id')
   }
   if (body.quantity !== undefined) {
     input.quantity = normalizePositiveInteger(body.quantity, 'quantity')
@@ -157,6 +164,7 @@ function sameTupleWhere(userId: string, input: InventoryInput, exceptId?: string
     eq(ownedCard.userId, userId),
     eq(ownedCard.catalogCardId, input.catalogCardId),
     input.printingId ? eq(ownedCard.printingId, input.printingId) : isNull(ownedCard.printingId),
+    input.collectionId ? eq(ownedCard.collectionId, input.collectionId) : isNull(ownedCard.collectionId),
     eq(ownedCard.language, input.language),
     eq(ownedCard.condition, input.condition),
     eq(ownedCard.edition, input.edition),
@@ -171,6 +179,9 @@ function sameTupleWhere(userId: string, input: InventoryInput, exceptId?: string
 
 export async function addOwnedCard(db: Db, userId: string, input: InventoryInput) {
   await ensureCatalogCardExists(db, input.catalogCardId, input.printingId)
+  if (input.collectionId) {
+    assertCollectionOwnedByUser(db, userId, input.collectionId)
+  }
 
   const now = new Date()
   const existing = db.select().from(ownedCard).where(sameTupleWhere(userId, input)).get()
@@ -196,6 +207,7 @@ export async function addOwnedCard(db: Db, userId: string, input: InventoryInput
       userId,
       catalogCardId: input.catalogCardId,
       printingId: input.printingId,
+      collectionId: input.collectionId,
       quantity: input.quantity,
       language: input.language,
       condition: input.condition,
@@ -233,6 +245,7 @@ export async function updateOwnedCard(
   const input: InventoryInput = {
     catalogCardId: patch.catalogCardId ?? current.catalogCardId,
     printingId: patch.printingId !== undefined ? patch.printingId : current.printingId,
+    collectionId: patch.collectionId !== undefined ? patch.collectionId : current.collectionId,
     quantity: patch.quantity ?? current.quantity,
     language: patch.language ?? (current.language as InventoryLanguage),
     condition: patch.condition ?? (current.condition as InventoryCondition),
@@ -241,6 +254,9 @@ export async function updateOwnedCard(
   }
 
   await ensureCatalogCardExists(db, input.catalogCardId, input.printingId)
+  if (input.collectionId) {
+    assertCollectionOwnedByUser(db, userId, input.collectionId)
+  }
 
   const colliding = db.select().from(ownedCard).where(sameTupleWhere(userId, input, id)).get()
   const now = new Date()
@@ -265,6 +281,7 @@ export async function updateOwnedCard(
     .set({
       catalogCardId: input.catalogCardId,
       printingId: input.printingId,
+      collectionId: input.collectionId,
       quantity: input.quantity,
       language: input.language,
       condition: input.condition,
@@ -295,15 +312,21 @@ export function listOwnedCards(db: Db, userId: string, options: InventoryListOpt
   const page = Math.max(1, options.page ?? 1)
   const pageSize = Math.min(100, Math.max(1, options.pageSize ?? 20))
   const q = options.q?.trim()
-  const where = q
-    ? and(eq(ownedCard.userId, userId), like(catalogCard.name, `%${q}%`))
-    : eq(ownedCard.userId, userId)
+  const clauses = [eq(ownedCard.userId, userId)]
+  if (q) {
+    clauses.push(like(catalogCard.name, `%${q}%`))
+  }
+  if (options.collectionId) {
+    clauses.push(eq(ownedCard.collectionId, options.collectionId))
+  }
+  const where = and(...clauses)
 
   const rows = db
     .select({
       id: ownedCard.id,
       catalogCardId: ownedCard.catalogCardId,
       printingId: ownedCard.printingId,
+      collectionId: ownedCard.collectionId,
       quantity: ownedCard.quantity,
       language: ownedCard.language,
       condition: ownedCard.condition,
