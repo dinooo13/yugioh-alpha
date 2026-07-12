@@ -56,6 +56,10 @@ const activeCollectionId = computed(() => {
   return typeof value === 'string' ? value : null
 })
 
+// Collections are an inventory-scoped concept: only surface them while the
+// user is in their own inventory, not on unrelated pages (decks, tournaments…).
+const showCollections = computed(() => route.path === '/inventar')
+
 const isFormOpen = ref(false)
 const editingCollection = ref<CollectionItem | null>(null)
 
@@ -131,7 +135,10 @@ async function onLogout() {
         />
       </nav>
 
-      <div class="mt-6 flex-1 overflow-y-auto px-3">
+      <div
+        v-if="showCollections"
+        class="mt-6 flex-1 overflow-y-auto px-3"
+      >
         <p class="px-2.5 text-xs font-semibold tracking-wider text-gray-400">
           SAMMLUNGEN
         </p>
@@ -178,7 +185,10 @@ async function onLogout() {
         </ul>
       </div>
 
-      <div class="border-t border-gray-200 p-3">
+      <div
+        v-if="showCollections"
+        class="border-t border-gray-200 p-3"
+      >
         <UButton
           icon="i-lucide-plus"
           label="Neue Sammlung"
@@ -189,6 +199,11 @@ async function onLogout() {
           @click="openCreate"
         />
       </div>
+
+      <div
+        v-else
+        class="flex-1"
+      />
 
       <div
         v-if="session"

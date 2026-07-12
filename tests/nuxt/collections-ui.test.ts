@@ -8,6 +8,7 @@ const fetchState = vi.hoisted(() => ({
     items: [] as Array<{ id: string, name: string, description: string | null, cardCount: number }>,
     allCount: 0,
   },
+  routePath: '/inventar',
 }))
 
 mockNuxtImport('useFetch', () => {
@@ -18,9 +19,17 @@ mockNuxtImport('useFetch', () => {
   })
 })
 
+mockNuxtImport('useRoute', () => {
+  return () => ({
+    path: fetchState.routePath,
+    query: {},
+  })
+})
+
 describe('default layout collection sidebar', () => {
   it('renders "Alle Karten" plus the empty state when there are no collections', async () => {
     fetchState.collections = { items: [], allCount: 0 }
+    fetchState.routePath = '/inventar'
 
     const component = await mountSuspended(DefaultLayout)
 
@@ -37,6 +46,7 @@ describe('default layout collection sidebar', () => {
       ],
       allCount: 701,
     }
+    fetchState.routePath = '/inventar'
 
     const component = await mountSuspended(DefaultLayout)
 
@@ -46,8 +56,23 @@ describe('default layout collection sidebar', () => {
     expect(component.text()).toContain('701')
   })
 
+  it('hides the collection sidebar outside the inventory', async () => {
+    fetchState.collections = {
+      items: [{ id: 'col-1', name: 'Box 1', description: null, cardCount: 412 }],
+      allCount: 412,
+    }
+    fetchState.routePath = '/decks'
+
+    const component = await mountSuspended(DefaultLayout)
+
+    expect(component.text()).not.toContain('SAMMLUNGEN')
+    expect(component.text()).not.toContain('Neue Sammlung')
+    expect(component.text()).not.toContain('Box 1')
+  })
+
   it('opens the create-collection dialog from the sidebar button', async () => {
     fetchState.collections = { items: [], allCount: 0 }
+    fetchState.routePath = '/inventar'
 
     const component = await mountSuspended(DefaultLayout)
     const createButton = component.findAll('button').find(btn => btn.text().includes('Neue Sammlung'))
