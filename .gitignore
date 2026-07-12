@@ -19,6 +19,10 @@ e2e-data/
 
 # Node dependencies
 node_modules
+.pnpm-store
+
+# Local card image assets (large, generated/copied from YGO Omega)
+public/assets
 
 # Logs
 logs

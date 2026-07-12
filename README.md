@@ -68,6 +68,20 @@ curl -X POST http://localhost:3000/api/admin/catalog/sync \
 
 The sync is idempotent (upsert-based) and safe to re-run at any time to pick up new or updated cards. Card images are currently stored as remote YGOPRODeck URLs; a local image proxy/cache is planned as follow-up work (see the ADR).
 
+### Local Card Images
+
+YGO Omega card assets copied into `public/assets/ygo-omega/de` are Unity bundle
+payloads, not browser-ready images. Extract them into stable web assets with:
+
+```bash
+python3 -m pip install UnityPy Pillow
+pnpm assets:extract:omega
+```
+
+The extractor writes images to `public/assets/cards/de` and creates
+`public/assets/cards/de/manifest.json`, keyed by card id when the Unity texture
+name contains a known id from Omega's copied `db.sqlite`.
+
 ## Quality Checks
 
 ```bash
