@@ -4,8 +4,13 @@ title: Re-land orphaned catalog search into main
 status: in-progress
 type: bug
 priority: high
+tags:
+    - area:ui
+    - effort:medium
+    - needs-review
+    - area:catalog
 created_at: 2026-07-12T14:23:37Z
-updated_at: 2026-07-12T14:23:57Z
+updated_at: 2026-07-12T14:34:42Z
 ---
 
 ## Problem
@@ -28,3 +33,12 @@ Reconcile auth with the current `server/utils/session.ts` `requireUser` conventi
 Reads only catalog tables (from 23wn, already in main). Distinct from yugioh-alpha-4d77 (inventory search over owned cards).
 
 Relates to yugioh-alpha-82gj (original, mis-merged) and is independent of yugioh-alpha-4d77 (inventory search).
+
+## Delivery
+
+Branch: `claude/1ga6-catalog-search-reland`
+PR: https://github.com/dinooo13/yugioh-alpha/pull/7
+
+## Summary of Changes
+
+Re-landed the orphaned 82gj catalog-search surface onto current main: `/katalog` page, `/api/catalog/*` endpoints, and query helpers, plus the Katalog nav link and tests. Reconciled auth to `requireUser` (dropped `require-session.ts`) and renamed `searchCatalogCards`→`searchCatalog` to avoid an auto-import clash with wxy4's inventory helper. Gates green (typecheck/lint/build; 49 tests) and verified end-to-end in the browser against the real 14k-card catalog.
