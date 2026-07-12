@@ -1,16 +1,16 @@
 ---
 # yugioh-alpha-4d77
 title: Search across the full inventory
-status: todo
+status: in-progress
 type: feature
 priority: normal
 tags:
+    - effort:medium
+    - needs-review
     - area:inventory
     - area:ui
-    - agent-ready
-    - effort:medium
 created_at: 2026-07-04T18:26:28Z
-updated_at: 2026-07-04T21:10:05Z
+updated_at: 2026-07-12T13:51:28Z
 parent: yugioh-alpha-brmu
 blocked_by:
     - yugioh-alpha-f785
@@ -363,3 +363,18 @@ Tags: `effort:medium` (keep — one aggregating endpoint + a facets endpoint + a
 </details>
 
 _Plan promoted by orchestrator on behalf of the user, 2026-07-04._
+
+## Delivery
+
+Branch: `claude/4d77-inventory-search`
+PR: https://github.com/dinooo13/yugioh-alpha/pull/6
+
+## Todo
+
+- [x] Backend: `server/utils/inventory-search.ts` (parse + where builders)
+- [x] Backend: `GET /api/inventory/search` (aggregated, faceted)
+- [x] Backend: `GET /api/inventory/search/facets` (inventory-scoped facets)
+- [x] Frontend: search/filter panel + aggregated "Übersicht" view on `inventar.vue`
+- [x] Tests: unit (parse/where) + nuxt (aggregation, filters, breakdown, auth) + UI
+- [x] Verification: pnpm test, typecheck, lint, build + browser walkthrough
+- [x] PR opened, bean summary added
