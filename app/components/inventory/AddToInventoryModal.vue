@@ -16,6 +16,7 @@ interface OwnedCardInitialValues {
   id?: string
   catalogCardId: number
   printingId: string | null
+  collectionId: string | null
   quantity: number
   language: string
   condition: string
@@ -23,10 +24,17 @@ interface OwnedCardInitialValues {
   note: string | null
 }
 
+interface CollectionOption {
+  id: string
+  name: string
+}
+
 const props = defineProps<{
   open: boolean
   card: CatalogCardOption | null
   initialValues?: OwnedCardInitialValues | null
+  collections?: CollectionOption[]
+  presetCollectionId?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -62,6 +70,7 @@ const editionItems = [
 ]
 
 const noPrintingValue = '__no_printing__'
+const noCollectionValue = '__no_collection__'
 
 const form = reactive({
   quantity: 1,
@@ -69,6 +78,7 @@ const form = reactive({
   condition: 'near_mint',
   edition: 'unlimited',
   printingId: noPrintingValue,
+  collectionId: noCollectionValue,
   note: '',
 })
 
@@ -82,6 +92,13 @@ const printingItems = computed(() => [
   ...(props.card?.printings ?? []).map(printing => ({
     label: `${printing.id}${printing.setName ? ` · ${printing.setName}` : ''}${printing.rarity ? ` · ${printing.rarity}` : ''}`,
     value: printing.id,
+  })),
+])
+const collectionItems = computed(() => [
+  { label: '— (keine)', value: noCollectionValue },
+  ...(props.collections ?? []).map(collection => ({
+    label: collection.name,
+    value: collection.id,
   })),
 ])
 
@@ -102,6 +119,9 @@ watch(
     form.condition = props.initialValues?.condition ?? 'near_mint'
     form.edition = props.initialValues?.edition ?? 'unlimited'
     form.printingId = props.initialValues?.printingId ?? noPrintingValue
+    form.collectionId = props.initialValues
+      ? (props.initialValues.collectionId ?? noCollectionValue)
+      : (props.presetCollectionId ?? noCollectionValue)
     form.note = props.initialValues?.note ?? ''
     errorMessage.value = ''
   },
@@ -121,6 +141,7 @@ async function save() {
   const payload = {
     catalog_card_id: catalogCardId,
     printing_id: form.printingId === noPrintingValue ? null : form.printingId,
+    collection_id: form.collectionId === noCollectionValue ? null : form.collectionId,
     quantity: form.quantity,
     language: form.language,
     condition: form.condition,
@@ -209,6 +230,13 @@ async function save() {
           <USelect
             v-model="form.printingId"
             :items="printingItems"
+          />
+        </UFormField>
+
+        <UFormField label="Sammlung">
+          <USelect
+            v-model="form.collectionId"
+            :items="collectionItems"
           />
         </UFormField>
 

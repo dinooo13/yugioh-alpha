@@ -163,6 +163,35 @@ export const catalogSync = sqliteTable('catalog_sync', {
   error: text('error'),
 })
 
+// A user-owned storage location (Box 1, binder, trade pile, ...) that owned
+// cards can be assigned to. "Alle Karten" (all cards) is not a stored row —
+// it is simply the unfiltered inventory — so only real, user-created
+// collections live here. See docs/adr/0002 (additive extension, no new ADR).
+export const collection = sqliteTable(
+  'collection',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    description: text('description'),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+  },
+  table => [
+    index('idx_collection_user').on(table.userId),
+  ],
+)
+
+export const collectionRelations = relations(collection, ({ one, many }) => ({
+  user: one(user, {
+    fields: [collection.userId],
+    references: [user.id],
+  }),
+  ownedCards: many(ownedCard),
+}))
+
 export const ownedCard = sqliteTable(
   'owned_card',
   {
@@ -175,6 +204,10 @@ export const ownedCard = sqliteTable(
       .references(() => catalogCard.id, { onDelete: 'cascade' }),
     printingId: text('printing_id')
       .references(() => catalogPrinting.id, { onDelete: 'set null' }),
+    // Owning storage location, or NULL = unassigned ("Alle Karten" only).
+    // Deleting a collection sets this back to NULL so owned cards survive.
+    collectionId: text('collection_id')
+      .references(() => collection.id, { onDelete: 'set null' }),
     quantity: integer('quantity').notNull().default(1),
     language: text('language').notNull().default('en'),
     condition: text('condition').notNull().default('near_mint'),
@@ -186,6 +219,7 @@ export const ownedCard = sqliteTable(
   table => [
     index('idx_owned_card_user').on(table.userId),
     index('idx_owned_card_user_card').on(table.userId, table.catalogCardId),
+    index('idx_owned_card_collection').on(table.collectionId),
   ],
 )
 
@@ -201,5 +235,9 @@ export const ownedCardRelations = relations(ownedCard, ({ one }) => ({
   printing: one(catalogPrinting, {
     fields: [ownedCard.printingId],
     references: [catalogPrinting.id],
+  }),
+  collection: one(collection, {
+    fields: [ownedCard.collectionId],
+    references: [collection.id],
   }),
 }))
