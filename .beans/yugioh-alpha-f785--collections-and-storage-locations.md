@@ -1,16 +1,15 @@
 ---
 # yugioh-alpha-f785
 title: Collections and storage locations
-status: todo
+status: in-progress
 type: feature
 priority: normal
 tags:
-    - agent-ready
     - effort:medium
     - area:inventory
     - area:ui
 created_at: 2026-07-04T18:26:28Z
-updated_at: 2026-07-04T21:10:00Z
+updated_at: 2026-07-12T12:19:39Z
 parent: yugioh-alpha-brmu
 ---
 
@@ -291,16 +290,18 @@ Tags: `effort:medium`, `area:inventory` (both already present and correct — co
 
 _Plan promoted by orchestrator on behalf of the user, 2026-07-04._
 
+## Delivery
+- Branch: claude/f785-collections-and-storage-locations
+- PR: https://github.com/dinooo13/yugioh-alpha/pull/5
+
 ## Progress
-
-_Current step: ready for implementation_
-
-- [ ] Implement collection/storage-location schema, API, UI, tests, and docs after the owned-card inventory model lands.
-
-### Previous Blocker
-
-Resolved: yugioh-alpha-wxy4 has merged and the owned-card inventory model is available on main.
-
-## Unblocked
-
-The owned-card inventory foundation (yugioh-alpha-wxy4) has merged and is now completed, so this bean is ready for implementation.
+_Current step: gates green, PR opened as draft_
+- [x] `collection` table + nullable `owned_card.collection_id` (schema, migration 0003) with additive `ON DELETE SET NULL`
+- [x] `server/utils/collections.ts` validators + ownership assertions (400 for writes, 404 for the list filter)
+- [x] `server/api/collections/*` CRUD endpoints (list w/ SUM(quantity) counts, create, rename, delete-unassigns)
+- [x] Extend `server/utils/inventory.ts` + inventory API: `collectionId` in the upsert-match tuple, add/update validation, `?collectionId=` list filter
+- [x] Sidebar (`app/layouts/default.vue`) wired to real `GET /api/collections`, create/rename/delete UI
+- [x] `/inventar` collection filter, header, per-row assign select, add-time collection select
+- [x] Tests: `tests/nuxt/collections-api.test.ts`, `tests/nuxt/collections-ui.test.ts`
+- [x] Verification gates: `pnpm test` (37/37), `pnpm typecheck`, `pnpm lint`, `pnpm build` all green
+- [ ] Human review + QA (PR left in draft until a human/reviewer agent picks it up)
