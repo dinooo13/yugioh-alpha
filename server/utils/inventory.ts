@@ -16,6 +16,9 @@ type Db = ReturnType<typeof useDb>
 export const LANGUAGES = ['en', 'de', 'fr', 'it', 'es', 'pt', 'ja', 'ko'] as const
 export const CONDITIONS = ['mint', 'near_mint', 'excellent', 'good', 'light_played', 'played', 'poor'] as const
 export const EDITIONS = ['first', 'unlimited', 'limited'] as const
+// Upper bound for a single owned-card stack. Guards against a typo (or a
+// misparsed entry line) turning into a five-digit quantity.
+export const MAX_QUANTITY = 999
 
 export type InventoryLanguage = typeof LANGUAGES[number]
 export type InventoryCondition = typeof CONDITIONS[number]
@@ -47,7 +50,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
-function normalizePositiveInteger(value: unknown, field: string, fallback?: number): number {
+function normalizePositiveInteger(value: unknown, field: string, fallback?: number, max?: number): number {
   if (value === undefined || value === null || value === '') {
     if (fallback !== undefined) {
       return fallback
@@ -58,6 +61,9 @@ function normalizePositiveInteger(value: unknown, field: string, fallback?: numb
   const numberValue = typeof value === 'number' ? value : Number(value)
   if (!Number.isInteger(numberValue) || numberValue < 1) {
     badRequest(`${field} must be a positive integer`)
+  }
+  if (max !== undefined && numberValue > max) {
+    badRequest(`${field} must be at most ${max}`)
   }
 
   return numberValue
@@ -99,7 +105,7 @@ export function validateInventoryInput(body: unknown): InventoryInput {
     catalogCardId: normalizePositiveInteger(body.catalog_card_id ?? body.catalogCardId, 'catalog_card_id'),
     printingId: normalizeOptionalString(body.printing_id ?? body.printingId, 'printing_id'),
     collectionId: normalizeOptionalString(body.collection_id ?? body.collectionId, 'collection_id'),
-    quantity: normalizePositiveInteger(body.quantity, 'quantity', 1),
+    quantity: normalizePositiveInteger(body.quantity, 'quantity', 1, MAX_QUANTITY),
     language: normalizeEnum(body.language, 'language', LANGUAGES, 'en'),
     condition: normalizeEnum(body.condition, 'condition', CONDITIONS, 'near_mint'),
     edition: normalizeEnum(body.edition, 'edition', EDITIONS, 'unlimited'),
@@ -123,7 +129,7 @@ export function validateInventoryUpdateInput(body: unknown): Partial<InventoryIn
     input.collectionId = normalizeOptionalString(body.collection_id ?? body.collectionId, 'collection_id')
   }
   if (body.quantity !== undefined) {
-    input.quantity = normalizePositiveInteger(body.quantity, 'quantity')
+    input.quantity = normalizePositiveInteger(body.quantity, 'quantity', undefined, MAX_QUANTITY)
   }
   if (body.language !== undefined) {
     input.language = normalizeEnum(body.language, 'language', LANGUAGES, 'en')
@@ -252,17 +258,24 @@ export interface InventoryBulkResult {
   items: OwnedCardRow[]
 }
 
-function errorMessageOf(error: unknown, fallback: string): string {
-  if (error && typeof error === 'object') {
-    const candidate = error as { statusMessage?: unknown, message?: unknown }
-    if (typeof candidate.statusMessage === 'string' && candidate.statusMessage !== '') {
-      return candidate.statusMessage
-    }
-    if (typeof candidate.message === 'string' && candidate.message !== '') {
-      return candidate.message
-    }
+/**
+ * Per-item validation failures are client errors and get reported with their
+ * index. Anything else (a bug, a database failure) is not the caller's fault
+ * and must not be flattened into a 400 with a leaked internal message.
+ */
+function clientErrorMessage(error: unknown): string | undefined {
+  if (!error || typeof error !== 'object') {
+    return undefined
   }
-  return fallback
+
+  const candidate = error as { statusCode?: unknown, statusMessage?: unknown }
+  if (typeof candidate.statusCode !== 'number' || candidate.statusCode < 400 || candidate.statusCode >= 500) {
+    return undefined
+  }
+
+  return typeof candidate.statusMessage === 'string' && candidate.statusMessage !== ''
+    ? candidate.statusMessage
+    : 'Invalid item'
 }
 
 /**
@@ -300,7 +313,11 @@ export function validateInventoryBulkInput(db: Db, userId: string, body: unknown
       inputs.push(input)
     }
     catch (error) {
-      errors.push({ index, message: errorMessageOf(error, 'Invalid item') })
+      const message = clientErrorMessage(error)
+      if (message === undefined) {
+        throw error
+      }
+      errors.push({ index, message })
     }
   })
 

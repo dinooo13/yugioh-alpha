@@ -370,7 +370,7 @@ async function onSaved() {
 
       <div class="flex flex-wrap items-center gap-2">
         <UButton
-          to="/inventar/erfassen"
+          :to="{ path: '/inventar/erfassen', query: collectionId ? { collectionId } : undefined }"
           icon="i-lucide-zap"
           color="neutral"
           variant="outline"

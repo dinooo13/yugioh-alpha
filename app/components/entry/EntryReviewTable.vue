@@ -4,7 +4,10 @@ import {
   ENTRY_EDITION_ITEMS,
   ENTRY_LANGUAGE_ITEMS,
   NO_COLLECTION_VALUE,
-  buildBulkItems,
+  apiErrorMessage,
+  apiItemErrors,
+  buildBulkEntries,
+  chunkBulkEntries,
   isEntryRowResolved,
   summarizeEntryRows,
 } from '~/utils/card-entry'
@@ -22,6 +25,7 @@ interface BulkResponse {
 
 const props = defineProps<{
   collections?: CollectionOption[]
+  presetCollectionId?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -36,6 +40,16 @@ const defaults = reactive<EntryDefaults>({
   edition: 'unlimited',
   collectionId: NO_COLLECTION_VALUE,
 })
+
+// Coming from /inventar?collectionId=… the user is working on that box, so
+// preselect it instead of making them pick it again.
+watch(
+  () => props.presetCollectionId,
+  (value) => {
+    defaults.collectionId = value ?? NO_COLLECTION_VALUE
+  },
+  { immediate: true },
+)
 
 const collections = computed(() => props.collections ?? [])
 const collectionItems = computed(() => [
@@ -66,9 +80,19 @@ function clearAll() {
   itemErrors.value = []
 }
 
-async function save(keepUnresolved: boolean) {
-  const items = buildBulkItems(rows.value, defaults)
-  if (items.length === 0) {
+function rowLabel(rowId: string): string {
+  const row = rows.value.find(entry => entry.id === rowId)
+  return row ? row.raw : rowId
+}
+
+/**
+ * Saves in server-sized batches, sequentially: every batch that succeeds is
+ * removed from the queue, and the first failing batch stops the run and is
+ * reported per row, so nothing is silently lost or written twice.
+ */
+async function save() {
+  const entries = buildBulkEntries(rows.value, defaults)
+  if (entries.length === 0) {
     errorMessage.value = 'Es gibt keine aufgelösten Zeilen zum Speichern.'
     return
   }
@@ -77,26 +101,40 @@ async function save(keepUnresolved: boolean) {
   errorMessage.value = ''
   itemErrors.value = []
 
-  try {
-    const response = await $fetch<BulkResponse>('/api/inventory/bulk', {
-      method: 'POST',
-      body: { items },
-    })
+  const savedRowIds = new Set<string>()
+  let created = 0
+  let merged = 0
 
-    // Saved rows disappear; unresolved ones stay so the user can finish them.
-    rows.value = keepUnresolved ? rows.value.filter(row => !isEntryRowResolved(row)) : []
-    emit('saved', response)
-  }
-  catch (error) {
-    const data = (error as { data?: { data?: { errors?: Array<{ index: number, message: string }> } } }).data
-    const errors = data?.data?.errors
-    if (errors?.length) {
-      itemErrors.value = errors.map(entry => `Zeile ${entry.index + 1}: ${entry.message}`)
+  for (const chunk of chunkBulkEntries(entries)) {
+    try {
+      const response = await $fetch<BulkResponse>('/api/inventory/bulk', {
+        method: 'POST',
+        body: { items: chunk.map(entry => entry.item) },
+      })
+
+      created += response.created
+      merged += response.merged
+      for (const entry of chunk) {
+        savedRowIds.add(entry.rowId)
+      }
     }
-    errorMessage.value = error instanceof Error ? error.message : 'Die Karten konnten nicht gespeichert werden.'
+    catch (error) {
+      itemErrors.value = apiItemErrors(error).map((itemError) => {
+        const failed = chunk[itemError.index]
+        return `„${failed ? rowLabel(failed.rowId) : `#${itemError.index + 1}`}“: ${itemError.message}`
+      })
+      errorMessage.value = apiErrorMessage(error, 'Die Karten konnten nicht gespeichert werden.')
+      break
+    }
   }
-  finally {
-    isSaving.value = false
+
+  // Saved rows disappear; unresolved (and failed) ones stay so the user can
+  // finish them.
+  rows.value = rows.value.filter(row => !savedRowIds.has(row.id))
+  isSaving.value = false
+
+  if (created + merged > 0) {
+    emit('saved', { created, merged })
   }
 }
 
@@ -183,14 +221,14 @@ defineExpose({ defaults, summary, canSaveAll })
           label="Nur aufgelöste speichern"
           :loading="isSaving"
           :disabled="resolvedCount === 0"
-          @click="save(true)"
+          @click="save"
         />
         <UButton
           icon="i-lucide-save"
           label="Alle speichern"
           :loading="isSaving"
           :disabled="!canSaveAll"
-          @click="save(false)"
+          @click="save"
         />
       </div>
     </div>

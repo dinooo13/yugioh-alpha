@@ -12,4 +12,10 @@ test.describe('protected routes', () => {
     await expect(page).toHaveURL(/\/login/)
     await expect(page.getByRole('button', { name: 'Anmelden' })).toBeVisible()
   })
+
+  test('visiting /inventar/erfassen unauthenticated redirects to /login', async ({ page }) => {
+    await page.goto('/inventar/erfassen')
+    await expect(page).toHaveURL(/\/login\?redirect=\/inventar\/erfassen/)
+    await expect(page.getByRole('button', { name: 'Anmelden' })).toBeVisible()
+  })
 })

@@ -81,8 +81,13 @@ ranking live in `server/utils/card-entry.ts`, next to the catalog they query.
 
 Consequences:
 
-- The 14k-card catalog is never shipped to the client; matching is a single
-  indexed/prefiltered SQL pass plus in-memory scoring.
+- The 14k-card catalog is never shipped to the client. Matching is a
+  prefilter plus in-memory scoring: exact identifiers (passcode, set code)
+  are looked up directly, name lookups run bounded `LIKE` prefilters (the
+  whole query first, ordered so the closest names win, then per-token
+  patterns to fill a capped candidate pool), and only that pool is scored
+  with the bigram similarity. Display data (images, printings) is fetched
+  for the final ranked ids only, so no scan carries a join.
 - One ranking implementation serves every input mode — improving fuzzy
   matching for OCR automatically improves it for speech and typing.
 - Suggesting is read-only. Cards are written only when the user confirms the
@@ -102,6 +107,10 @@ Consequences:
   recognition", but it needs locally cached card images (still an open
   follow-up from ADR 0001) and an index that does not exist yet. Not part of
   this decision; OCR of the card name/set code covers the phase goal today.
+
+- A photo is treated as *one card*: every string the OCR pass extracts (set
+  code, passcode, name lines) is looked up, but the results are merged into a
+  single reviewable row whose alternatives are the union of those lookups.
 
 ## Notes
 

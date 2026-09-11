@@ -1,19 +1,18 @@
 import { readBody } from 'h3'
 import { useDb } from '../../../db'
-import { parseSuggestInput, parseSuggestLimit, suggestEntryMatches } from '../../../utils/card-entry'
+import { parseSuggestRequest, suggestForRequest } from '../../../utils/card-entry'
 import { requireUser } from '../../../utils/session'
 
 /**
  * Ranks catalog candidates for freely typed, dictated, or OCR'd card lines.
- * Read-only: nothing is written until the review flow posts to
- * `/api/inventory/bulk`.
+ * One typed line is one result; one photo (`ocrText`) is at most one result,
+ * since a single image shows a single card. Read-only: nothing is written
+ * until the review flow posts to `/api/inventory/bulk`.
  */
 export default defineEventHandler(async (event) => {
   await requireUser(event)
 
-  const body = await readBody(event)
-  const lines = parseSuggestInput(body)
-  const limit = parseSuggestLimit(body)
+  const request = parseSuggestRequest(await readBody(event))
 
-  return { results: suggestEntryMatches(useDb(), lines, limit) }
+  return { results: suggestForRequest(useDb(), request) }
 })

@@ -1,5 +1,10 @@
 <script setup lang="ts">
-import { createEntryRows } from '~/utils/card-entry'
+import {
+  MAX_ENTRY_LINES,
+  MAX_ENTRY_ROWS,
+  apiErrorMessage,
+  createEntryRows,
+} from '~/utils/card-entry'
 import type { EntryRow, EntrySuggestResult } from '~/utils/card-entry'
 
 interface CollectionOption {
@@ -40,11 +45,20 @@ type SpeechRecognitionCtor = new () => SpeechRecognitionLike
 useHead({ title: 'Schnellerfassung – yugioh alpha' })
 
 const toast = useToast()
+const route = useRoute()
 
 const mode = ref<'liste' | 'foto' | 'sprache'>('liste')
 const rows = ref<EntryRow[]>([])
 const isSuggesting = ref(false)
 const errorMessage = ref('')
+const warningMessage = ref('')
+
+// Deep-link from /inventar?collectionId=… so the Standardwerte panel starts
+// on the collection the user was just looking at.
+const presetCollectionId = computed(() => {
+  const value = route.query.collectionId
+  return typeof value === 'string' && value !== '' ? value : null
+})
 
 const { data: collectionsData } = await useFetch<{ items: CollectionOption[], allCount: number }>('/api/collections', {
   default: () => ({ items: [], allCount: 0 }),
@@ -54,17 +68,27 @@ const collections = computed(() => collectionsData.value?.items ?? [])
 async function requestSuggestions(body: { text?: string, items?: string[], ocrText?: string }) {
   isSuggesting.value = true
   errorMessage.value = ''
+  warningMessage.value = ''
 
   try {
     const response = await $fetch<{ results: EntrySuggestResult[] }>('/api/inventory/entry/suggest', {
       method: 'POST',
       body,
     })
-    rows.value = [...rows.value, ...createEntryRows(response.results)]
-    return response.results.length
+
+    const free = Math.max(0, MAX_ENTRY_ROWS - rows.value.length)
+    const accepted = response.results.slice(0, free)
+    if (accepted.length < response.results.length) {
+      warningMessage.value = `Die Prüfliste fasst ${MAX_ENTRY_ROWS} Zeilen — `
+        + `${response.results.length - accepted.length} Zeile(n) wurden nicht übernommen. `
+        + 'Speichere zuerst die vorhandenen Zeilen.'
+    }
+
+    rows.value = [...rows.value, ...createEntryRows(accepted)]
+    return accepted.length
   }
   catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : 'Die Vorschläge konnten nicht geladen werden.'
+    errorMessage.value = apiErrorMessage(error, 'Die Vorschläge konnten nicht geladen werden.')
     return 0
   }
   finally {
@@ -76,9 +100,16 @@ async function requestSuggestions(body: { text?: string, items?: string[], ocrTe
 
 const listText = ref('')
 
+const listLineCount = computed(() => listText.value.split(/\r?\n/).filter(line => line.trim() !== '').length)
+const tooManyLines = computed(() => listLineCount.value > MAX_ENTRY_LINES)
+
 async function submitList() {
   if (listText.value.trim() === '') {
     errorMessage.value = 'Bitte zuerst mindestens eine Karte eintragen.'
+    return
+  }
+  if (tooManyLines.value) {
+    errorMessage.value = `Bitte höchstens ${MAX_ENTRY_LINES} Zeilen auf einmal auswerten.`
     return
   }
 
@@ -186,9 +217,21 @@ onMounted(() => {
   speechSupported.value = Boolean(speechRecognitionCtor())
 })
 
+// Detaching the handlers (and dropping the instance) keeps a stopped
+// recognition from writing into a page the user already moved on from.
+function teardownRecognition() {
+  if (recognition) {
+    recognition.onresult = null
+    recognition.onerror = null
+    recognition.onend = null
+    recognition = null
+  }
+  isListening.value = false
+}
+
 function stopListening() {
   recognition?.stop()
-  isListening.value = false
+  teardownRecognition()
 }
 
 function startListening() {
@@ -215,12 +258,15 @@ function startListening() {
       }
     }
   }
-  recognition.onerror = () => {
-    errorMessage.value = 'Die Spracherkennung wurde abgebrochen. Prüfe die Mikrofon-Freigabe.'
-    isListening.value = false
+  recognition.onerror = (event) => {
+    // "no-speech" (a pause) and "aborted" (our own stop) are not failures.
+    if (event.error !== 'no-speech' && event.error !== 'aborted') {
+      errorMessage.value = 'Die Spracherkennung wurde abgebrochen. Prüfe die Mikrofon-Freigabe.'
+    }
+    teardownRecognition()
   }
   recognition.onend = () => {
-    isListening.value = false
+    teardownRecognition()
   }
 
   recognition.start()
@@ -235,7 +281,7 @@ watch(speechLanguage, () => {
 
 onBeforeUnmount(() => {
   recognition?.stop()
-  recognition = null
+  teardownRecognition()
 })
 
 async function submitTranscript() {
@@ -334,10 +380,18 @@ function onSaved(result: { created: number, merged: number }) {
           <span class="font-mono">46986414</span>
         </p>
 
+        <p
+          v-if="tooManyLines"
+          class="text-xs text-amber-700"
+        >
+          {{ listLineCount }} Zeilen — bitte höchstens {{ MAX_ENTRY_LINES }} auf einmal auswerten.
+        </p>
+
         <UButton
           icon="i-lucide-wand-sparkles"
           label="Vorschläge laden"
           :loading="isSuggesting"
+          :disabled="tooManyLines"
           @click="submitList"
         />
       </div>
@@ -489,6 +543,14 @@ function onSaved(result: { created: number, merged: number }) {
       :description="errorMessage"
     />
 
+    <UAlert
+      v-if="warningMessage"
+      color="warning"
+      variant="subtle"
+      title="Prüfliste ist voll"
+      :description="warningMessage"
+    />
+
     <div
       v-if="rows.length > 0"
       class="space-y-4"
@@ -499,6 +561,7 @@ function onSaved(result: { created: number, merged: number }) {
       <EntryReviewTable
         v-model:rows="rows"
         :collections="collections"
+        :preset-collection-id="presetCollectionId"
         @saved="onSaved"
       />
     </div>

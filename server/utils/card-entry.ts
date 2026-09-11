@@ -10,8 +10,12 @@ type Db = ReturnType<typeof useDb>
 /** Upper bound for a single parsed quantity ("99x Kuriboh" is already absurd). */
 export const MAX_ENTRY_QUANTITY = 99
 /** Upper bound for how many lines one suggest request may carry. */
-export const MAX_ENTRY_LINES = 200
-/** How many candidate rows the SQL prefilter may return before scoring. */
+export const MAX_ENTRY_LINES = 50
+/** Upper bound for a single free-text field (textarea or OCR dump). */
+export const MAX_ENTRY_TEXT_LENGTH = 20_000
+/** How many extracted OCR strings are looked up for a single photo. */
+const MAX_OCR_LOOKUPS = 6
+/** Candidate rows the name prefilter may return before scoring. */
 const CANDIDATE_POOL_LIMIT = 200
 /** Fuzzy candidates below this similarity are noise and get dropped. */
 const MIN_FUZZY_SCORE = 0.3
@@ -26,6 +30,8 @@ const SET_CODE_PARENTHESIZED = new RegExp(`\\((${SET_CODE_SOURCE})\\)`, 'i')
 // YGOPRODeck passcodes are 8 digits (the catalog card id).
 const PASSCODE_EXACT = /^\d{8}$/
 const PASSCODE_ANYWHERE = /\b\d{8}\b/g
+// A line that is only a quantity ("3", "3x") names no card at all.
+const QUANTITY_ONLY = /^\d{1,3}\s*[x×*]?$/i
 
 export type EntryMatchedBy = 'passcode' | 'set_code' | 'exact' | 'prefix' | 'contains' | 'fuzzy'
 
@@ -76,6 +82,16 @@ export function normalizeCardName(value: string): string {
     .replace(/[^a-z0-9]+/g, '')
 }
 
+/**
+ * Comparison key for scoring. Falls back to a plain lowercased/trimmed form
+ * when the strict normalization empties the string, so non-ASCII input
+ * (CJK, "ß"-only, …) is still compared instead of silently matching nothing.
+ */
+function fold(value: string): string {
+  const normalized = normalizeCardName(value)
+  return normalized === '' ? value.trim().toLowerCase() : normalized
+}
+
 function bigrams(value: string): Map<string, number> {
   const counts = new Map<string, number>()
   for (let i = 0; i < value.length - 1; i += 1) {
@@ -124,9 +140,20 @@ function clampQuantity(value: number): number {
  * searchable remainder. Recognized shapes:
  * `3x Dark Magician`, `Dark Magician x3`, `3 Dark Magician`,
  * `Dark Magician (SDY-006)`, `SDY-006`, `46986414`.
+ *
+ * Purely syntactic: a leading bare number is ambiguous ("7 Colored Fish" is
+ * a card, "7 Kuriboh" is a count), so `resolveEntryLine` re-checks the
+ * untouched line against the catalog before the line is looked up.
  */
 export function parseEntryLine(line: string): ParsedEntryLine {
   const raw = line
+  const collapsed = line.replace(/\s+/g, ' ').trim()
+
+  if (QUANTITY_ONLY.test(collapsed)) {
+    // "3" / "3x" alone names no card — parseEntryText drops it.
+    return { raw, quantity: 1, query: '' }
+  }
+
   // Tabs and commas act as field separators (pasted spreadsheet columns),
   // never as part of a card name.
   let rest = line.replace(/[\t,;]+/g, ' ').replace(/\s+/g, ' ').trim()
@@ -244,9 +271,13 @@ interface CandidateRow {
   name: string
   type: string
   frameType: string | null
-  imageSmall: string | null
 }
 
+/**
+ * Prefilter query: no joins, no grouping, and only a bounded sort, so a
+ * 14k-card catalog scan stays in the single-digit millisecond range. Display
+ * data (images, printings) is fetched for the final ranked ids only.
+ */
 function selectCards(db: Db, where: SQL, limit: number, orderBy?: SQL): CandidateRow[] {
   const query = db
     .select({
@@ -254,23 +285,34 @@ function selectCards(db: Db, where: SQL, limit: number, orderBy?: SQL): Candidat
       name: catalogCard.name,
       type: catalogCard.type,
       frameType: catalogCard.frameType,
-      imageSmall: sql<string | null>`min(${catalogCardImage.imageUrlSmall})`,
     })
     .from(catalogCard)
-    .leftJoin(catalogCardImage, eq(catalogCardImage.cardId, catalogCard.id))
     .where(where)
-    .groupBy(catalogCard.id)
 
   return (orderBy ? query.orderBy(orderBy) : query).limit(limit).all()
 }
 
-function tokenize(query: string): string[] {
-  const tokens = query
-    .split(/[^\p{L}\p{N}]+/u)
-    .map(token => token.trim())
-    .filter(token => token.length >= 3)
+function imagesByCardId(db: Db, cardIds: number[]): Map<number, string | null> {
+  const byCardId = new Map<number, string | null>()
+  if (cardIds.length === 0) {
+    return byCardId
+  }
 
-  return [...new Set(tokens.map(token => token.toLowerCase()))].slice(0, 5)
+  const rows = db
+    .select({
+      cardId: catalogCardImage.cardId,
+      imageSmall: sql<string | null>`min(${catalogCardImage.imageUrlSmall})`,
+    })
+    .from(catalogCardImage)
+    .where(inArray(catalogCardImage.cardId, cardIds))
+    .groupBy(catalogCardImage.cardId)
+    .all()
+
+  for (const row of rows) {
+    byCardId.set(row.cardId, row.imageSmall)
+  }
+
+  return byCardId
 }
 
 function printingsByCardId(db: Db, cardIds: number[]): Map<number, EntryCandidatePrinting[]> {
@@ -302,6 +344,15 @@ function printingsByCardId(db: Db, cardIds: number[]): Map<number, EntryCandidat
   return byCardId
 }
 
+function tokenize(query: string): string[] {
+  const tokens = query
+    .split(/[^\p{L}\p{N}]+/u)
+    .map(token => token.trim())
+    .filter(token => token.length >= 3)
+
+  return [...new Set(tokens.map(token => token.toLowerCase()))].slice(0, 3)
+}
+
 const TIER_RANK: Record<EntryMatchedBy, number> = {
   passcode: 5,
   set_code: 4,
@@ -316,26 +367,51 @@ interface ScoredCandidate extends CandidateRow {
   matchedBy: EntryMatchedBy
 }
 
-/**
- * Ranks catalog cards for one parsed line. Exact identifiers win outright
- * (passcode, set code, exact name); everything else is prefiltered in SQL
- * (whole query first, then per-token LIKE, capped at CANDIDATE_POOL_LIMIT so
- * a 14k-card catalog stays cheap) and then scored with a bigram similarity
- * so misspellings from OCR/speech still surface the right card.
- */
-export function suggestCatalogMatches(
-  db: Db,
-  parsed: ParsedEntryLine,
-  options: { limit?: number } = {},
-): EntryCandidate[] {
-  const limit = Math.min(MAX_SUGGEST_LIMIT, Math.max(1, options.limit ?? DEFAULT_SUGGEST_LIMIT))
+function betterCandidate(a: ScoredCandidate, b: ScoredCandidate): ScoredCandidate {
+  if (TIER_RANK[a.matchedBy] !== TIER_RANK[b.matchedBy]) {
+    return TIER_RANK[a.matchedBy] > TIER_RANK[b.matchedBy] ? a : b
+  }
+  return a.score >= b.score ? a : b
+}
+
+function rankCandidates(candidates: ScoredCandidate[], limit: number): ScoredCandidate[] {
+  return [...candidates]
+    .sort((a, b) => (
+      b.score - a.score
+      || TIER_RANK[b.matchedBy] - TIER_RANK[a.matchedBy]
+      || a.name.length - b.name.length
+      || a.name.localeCompare(b.name)
+    ))
+    .slice(0, limit)
+}
+
+function withDisplayData(db: Db, ranked: ScoredCandidate[]): EntryCandidate[] {
+  const cardIds = ranked.map(candidate => candidate.cardId)
+  const images = imagesByCardId(db, cardIds)
+  const printings = printingsByCardId(db, cardIds)
+
+  return ranked.map(candidate => ({
+    cardId: candidate.cardId,
+    name: candidate.name,
+    type: candidate.type,
+    frameType: candidate.frameType,
+    imageSmall: images.get(candidate.cardId) ?? null,
+    score: Math.round(candidate.score * 1000) / 1000,
+    matchedBy: candidate.matchedBy,
+    printings: printings.get(candidate.cardId) ?? [],
+  }))
+}
+
+function normalizeLimit(limit: number | undefined): number {
+  return Math.min(MAX_SUGGEST_LIMIT, Math.max(1, limit ?? DEFAULT_SUGGEST_LIMIT))
+}
+
+function collectScoredCandidates(db: Db, parsed: ParsedEntryLine, limit: number): Map<number, ScoredCandidate> {
   const byCardId = new Map<number, ScoredCandidate>()
 
   function remember(candidate: ScoredCandidate) {
     const existing = byCardId.get(candidate.cardId)
-    if (!existing || TIER_RANK[candidate.matchedBy] > TIER_RANK[existing.matchedBy]) {
-      byCardId.set(candidate.cardId, candidate)
-    }
+    byCardId.set(candidate.cardId, existing ? betterCandidate(existing, candidate) : candidate)
   }
 
   if (parsed.passcode !== undefined) {
@@ -357,110 +433,223 @@ export function suggestCatalogMatches(
   }
 
   const query = parsed.query.trim()
-  const normalizedQuery = normalizeCardName(query)
   // A bare passcode/set code carries no name information — skip the name
   // search entirely instead of scanning the catalog for "SDY-006".
-  const skipNameSearch = normalizedQuery === ''
+  const skipNameSearch = query === ''
     || parsed.passcode !== undefined
     || (parsed.setCode !== undefined && SET_CODE_EXACT.test(query))
 
-  if (!skipNameSearch) {
-    const escaped = escapeLikeTerm(query)
-    const patterns: SQL[] = [
-      sql`lower(${catalogCard.name}) = ${query.toLowerCase()}`,
-      likeCondition(catalogCard.name, `${escaped}%`),
-      likeCondition(catalogCard.name, `%${escaped}%`),
-      ...tokenize(query).map(token => likeCondition(catalogCard.name, `%${escapeLikeTerm(token)}%`)),
-    ]
+  if (skipNameSearch) {
+    return byCardId
+  }
 
-    // Whole-query hits must make it into the (capped) pool before the much
-    // broader per-token hits, otherwise a common token like "dark" could
-    // push the real match out of the candidate window.
-    const poolOrder = sql`
+  const foldedQuery = fold(query)
+  const lowerQuery = query.toLowerCase()
+  const escaped = escapeLikeTerm(query)
+  const prefixPattern = `${escaped}%`
+  const containsPattern = `%${escaped}%`
+
+  // One scan per line: whole-query patterns plus a few token patterns. The
+  // ordering keeps the pool useful rather than arbitrary — whole-query hits
+  // first, then the names closest in length to the query, which is what a
+  // bigram-similar name looks like. No join and no grouping, so this stays
+  // a plain table scan; display data is fetched for the ranked ids only.
+  const patterns: SQL[] = [
+    sql`lower(${catalogCard.name}) = ${lowerQuery}`,
+    likeCondition(catalogCard.name, prefixPattern),
+    likeCondition(catalogCard.name, containsPattern),
+    ...tokenize(query).map(token => likeCondition(catalogCard.name, `%${escapeLikeTerm(token)}%`)),
+  ]
+
+  const pool = selectCards(
+    db,
+    or(...patterns) as SQL,
+    CANDIDATE_POOL_LIMIT,
+    sql`
       case
-        when lower(${catalogCard.name}) = ${query.toLowerCase()} then 0
-        when ${catalogCard.name} LIKE ${`${escaped}%`} ESCAPE '\\' then 1
-        when ${catalogCard.name} LIKE ${`%${escaped}%`} ESCAPE '\\' then 2
+        when lower(${catalogCard.name}) = ${lowerQuery} then 0
+        when ${catalogCard.name} LIKE ${prefixPattern} ESCAPE '\\' then 1
+        when ${catalogCard.name} LIKE ${containsPattern} ESCAPE '\\' then 2
         else 3
-      end, length(${catalogCard.name})`
+      end, abs(length(${catalogCard.name}) - ${query.length})`,
+  )
 
-    for (const row of selectCards(db, or(...patterns) as SQL, CANDIDATE_POOL_LIMIT, poolOrder)) {
-      if (byCardId.has(row.cardId)) {
-        continue
-      }
+  for (const row of pool) {
+    if (byCardId.has(row.cardId)) {
+      continue
+    }
 
-      const normalizedName = normalizeCardName(row.name)
-      const sim = similarity(normalizedQuery, normalizedName)
+    const foldedName = fold(row.name)
+    const sim = similarity(foldedQuery, foldedName)
 
-      if (normalizedName === normalizedQuery) {
-        remember({ ...row, score: 1, matchedBy: 'exact' })
-      }
-      else if (normalizedName.startsWith(normalizedQuery)) {
-        remember({ ...row, score: Math.max(0.8, sim), matchedBy: 'prefix' })
-      }
-      else if (normalizedName.includes(normalizedQuery)) {
-        remember({ ...row, score: Math.max(0.6, sim), matchedBy: 'contains' })
-      }
-      else if (sim >= MIN_FUZZY_SCORE) {
-        remember({ ...row, score: sim, matchedBy: 'fuzzy' })
-      }
+    if (foldedName === foldedQuery) {
+      remember({ ...row, score: 1, matchedBy: 'exact' })
+    }
+    else if (foldedName.startsWith(foldedQuery)) {
+      remember({ ...row, score: Math.max(0.8, sim), matchedBy: 'prefix' })
+    }
+    else if (foldedName.includes(foldedQuery)) {
+      remember({ ...row, score: Math.max(0.6, sim), matchedBy: 'contains' })
+    }
+    else if (sim >= MIN_FUZZY_SCORE) {
+      remember({ ...row, score: sim, matchedBy: 'fuzzy' })
     }
   }
 
-  const ranked = [...byCardId.values()]
-    .sort((a, b) => (
-      b.score - a.score
-      || TIER_RANK[b.matchedBy] - TIER_RANK[a.matchedBy]
-      || a.name.length - b.name.length
-      || a.name.localeCompare(b.name)
-    ))
-    .slice(0, limit)
+  return byCardId
+}
 
-  const printings = printingsByCardId(db, ranked.map(candidate => candidate.cardId))
+/**
+ * Ranks catalog cards for one parsed line. Exact identifiers win outright
+ * (passcode, set code, exact name); everything else is prefiltered in SQL
+ * (whole query first, then per-token LIKE, both bounded) and then scored
+ * in memory with a bigram similarity, so misspellings from OCR/speech still
+ * surface the right card.
+ */
+export function suggestCatalogMatches(
+  db: Db,
+  parsed: ParsedEntryLine,
+  options: { limit?: number } = {},
+): EntryCandidate[] {
+  const limit = normalizeLimit(options.limit)
+  const ranked = rankCandidates([...collectScoredCandidates(db, parsed, limit).values()], limit)
 
-  return ranked.map(candidate => ({
-    cardId: candidate.cardId,
-    name: candidate.name,
-    type: candidate.type,
-    frameType: candidate.frameType,
-    imageSmall: candidate.imageSmall,
-    score: Math.round(candidate.score * 1000) / 1000,
-    matchedBy: candidate.matchedBy,
-    printings: printings.get(candidate.cardId) ?? [],
-  }))
+  return withDisplayData(db, ranked)
+}
+
+/**
+ * Re-checks a parsed line against the catalog before it is looked up: when
+ * the untouched line is itself a card name ("7 Colored Fish",
+ * "30,000-Year White Turtle"), the stripped quantity was a false positive.
+ */
+export function resolveEntryLine(db: Db, parsed: ParsedEntryLine): ParsedEntryLine {
+  const rawLine = parsed.raw.replace(/\s+/g, ' ').trim()
+  if (rawLine === '' || (parsed.quantity === 1 && rawLine.toLowerCase() === parsed.query.toLowerCase())) {
+    return parsed
+  }
+
+  const exact = db
+    .select({ id: catalogCard.id })
+    .from(catalogCard)
+    .where(sql`lower(${catalogCard.name}) = ${rawLine.toLowerCase()}`)
+    .limit(1)
+    .get()
+
+  return exact ? { raw: parsed.raw, quantity: 1, query: rawLine } : parsed
+}
+
+/**
+ * One photo is one card. The extracted strings (set code, passcode, name
+ * lines) are looked up individually and merged into a single result: the
+ * best identifier becomes the row, every other lookup only contributes
+ * alternative candidates.
+ */
+export function suggestFromOcrText(
+  db: Db,
+  text: string,
+  options: { limit?: number } = {},
+): EntrySuggestResult | null {
+  const limit = normalizeLimit(options.limit)
+  const parsedLines = extractCardCandidatesFromOcrText(text)
+    .slice(0, MAX_OCR_LOOKUPS)
+    .map(candidate => parseEntryLine(candidate))
+    .filter(parsed => parsed.query !== '')
+
+  if (parsedLines.length === 0) {
+    return null
+  }
+
+  const primary = parsedLines.find(parsed => parsed.setCode)
+    ?? parsedLines.find(parsed => parsed.passcode !== undefined)
+    ?? parsedLines[0]!
+
+  const merged = new Map<number, ScoredCandidate>()
+  for (const parsed of parsedLines) {
+    for (const [cardId, candidate] of collectScoredCandidates(db, parsed, limit)) {
+      const existing = merged.get(cardId)
+      merged.set(cardId, existing ? betterCandidate(existing, candidate) : candidate)
+    }
+  }
+
+  const input: ParsedEntryLine = { raw: primary.raw, quantity: 1, query: primary.query }
+  if (primary.setCode) {
+    input.setCode = primary.setCode
+  }
+  if (primary.passcode !== undefined) {
+    input.passcode = primary.passcode
+  }
+
+  return { input, candidates: withDisplayData(db, rankCandidates([...merged.values()], limit)) }
 }
 
 function badRequest(message: string): never {
   throw createError({ statusCode: 400, statusMessage: message })
 }
 
-export interface EntrySuggestBody {
-  text?: unknown
-  items?: unknown
-  ocrText?: unknown
-  limit?: unknown
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+export interface SuggestRequest {
+  lines: ParsedEntryLine[]
+  ocrText?: string
+  limit: number
+}
+
+function countLines(text: string): number {
+  return text.split(/\r?\n/).filter(line => line.trim() !== '').length
+}
+
+export function parseSuggestLimit(limit: unknown): number {
+  if (limit === undefined || limit === null || limit === '') {
+    return DEFAULT_SUGGEST_LIMIT
+  }
+  const value = typeof limit === 'number' ? limit : Number(limit)
+  if (!Number.isInteger(value) || value < 1) {
+    badRequest('limit must be a positive integer')
+  }
+  return Math.min(MAX_SUGGEST_LIMIT, value)
 }
 
 /**
- * Normalizes the three input modes (Liste textarea, per-item list, raw OCR
- * text) into one parsed line list, capped at MAX_ENTRY_LINES.
+ * Validates and normalizes the three input modes (Liste textarea, per-item
+ * list, raw OCR text). Sizes and line counts are checked *before* anything is
+ * parsed, so an oversized payload is rejected instead of being tokenized.
  */
-export function parseSuggestInput(body: unknown): ParsedEntryLine[] {
-  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+export function parseSuggestRequest(body: unknown): SuggestRequest {
+  if (!isRecord(body)) {
     badRequest('Request body must be an object')
   }
 
-  const { text, items, ocrText } = body as EntrySuggestBody
-  const lines: ParsedEntryLine[] = []
+  const { text, items, ocrText } = body
 
+  if (text !== undefined && typeof text !== 'string') {
+    badRequest('text must be a string')
+  }
+  if (ocrText !== undefined && typeof ocrText !== 'string') {
+    badRequest('ocrText must be a string')
+  }
+  if (items !== undefined && !Array.isArray(items)) {
+    badRequest('items must be an array of strings')
+  }
+
+  if (typeof text === 'string' && text.length > MAX_ENTRY_TEXT_LENGTH) {
+    badRequest(`text must be at most ${MAX_ENTRY_TEXT_LENGTH} characters`)
+  }
+  if (typeof ocrText === 'string' && ocrText.length > MAX_ENTRY_TEXT_LENGTH) {
+    badRequest(`ocrText must be at most ${MAX_ENTRY_TEXT_LENGTH} characters`)
+  }
+
+  const lineCount = (typeof text === 'string' ? countLines(text) : 0) + (Array.isArray(items) ? items.length : 0)
+  if (lineCount > MAX_ENTRY_LINES) {
+    badRequest(`A request may contain at most ${MAX_ENTRY_LINES} lines`)
+  }
+
+  const lines: ParsedEntryLine[] = []
   if (typeof text === 'string') {
     lines.push(...parseEntryText(text))
   }
-
-  if (items !== undefined) {
-    if (!Array.isArray(items)) {
-      badRequest('items must be an array of strings')
-    }
+  if (Array.isArray(items)) {
     for (const item of items) {
       if (typeof item !== 'string') {
         badRequest('items must be an array of strings')
@@ -472,42 +661,46 @@ export function parseSuggestInput(body: unknown): ParsedEntryLine[] {
     }
   }
 
-  if (typeof ocrText === 'string') {
-    for (const candidate of extractCardCandidatesFromOcrText(ocrText)) {
-      const parsed = parseEntryLine(candidate)
-      if (parsed.query !== '') {
-        lines.push(parsed)
-      }
-    }
-  }
-
-  if (lines.length === 0) {
+  const trimmedOcrText = typeof ocrText === 'string' ? ocrText.trim() : ''
+  if (lines.length === 0 && trimmedOcrText === '') {
     badRequest('No card lines to look up')
   }
 
-  return lines.slice(0, MAX_ENTRY_LINES)
+  const request: SuggestRequest = { lines, limit: parseSuggestLimit(body.limit) }
+  if (trimmedOcrText !== '') {
+    request.ocrText = ocrText as string
+  }
+
+  return request
 }
 
-export function parseSuggestLimit(body: unknown): number {
-  const raw = (body as EntrySuggestBody | null | undefined)?.limit
-  if (raw === undefined || raw === null || raw === '') {
-    return DEFAULT_SUGGEST_LIMIT
-  }
-  const value = typeof raw === 'number' ? raw : Number(raw)
-  if (!Number.isInteger(value) || value < 1) {
-    badRequest('limit must be a positive integer')
-  }
-  return Math.min(MAX_SUGGEST_LIMIT, value)
-}
+/**
+ * Runs the catalog lookup for a validated request: one result per typed /
+ * dictated line, plus at most one result for an OCR'd photo.
+ */
+export function suggestForRequest(db: Db, request: SuggestRequest): EntrySuggestResult[] {
+  // Repeated lines ("3x Kuriboh" twice, a pasted list with duplicates) are a
+  // common case and each lookup scans the catalog — do it once per query.
+  const cache = new Map<string, EntryCandidate[]>()
 
-/** Runs `suggestCatalogMatches` for every parsed line. */
-export function suggestEntryMatches(
-  db: Db,
-  lines: ParsedEntryLine[],
-  limit = DEFAULT_SUGGEST_LIMIT,
-): EntrySuggestResult[] {
-  return lines.map(input => ({
-    input,
-    candidates: suggestCatalogMatches(db, input, { limit }),
-  }))
+  const results: EntrySuggestResult[] = request.lines.map((line) => {
+    const input = resolveEntryLine(db, line)
+    const cacheKey = `${input.query.toLowerCase()}|${input.setCode ?? ''}|${input.passcode ?? ''}`
+    const cached = cache.get(cacheKey)
+    const candidates = cached ?? suggestCatalogMatches(db, input, { limit: request.limit })
+    if (!cached) {
+      cache.set(cacheKey, candidates)
+    }
+
+    return { input, candidates }
+  })
+
+  if (request.ocrText) {
+    const ocrResult = suggestFromOcrText(db, request.ocrText, { limit: request.limit })
+    if (ocrResult) {
+      results.push(ocrResult)
+    }
+  }
+
+  return results
 }

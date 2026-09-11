@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
   DEFAULT_VALUE,
+  MAX_ENTRY_QUANTITY,
   ENTRY_CONDITION_ITEMS,
   ENTRY_EDITION_ITEMS,
   ENTRY_LANGUAGE_ITEMS,
@@ -64,6 +65,8 @@ const candidateValue = computed({
       printingId: candidate?.printings.find(
         printing => printing.setCode.toLowerCase() === (props.row.setCode ?? '').toLowerCase(),
       )?.id ?? null,
+      // The user just decided which card this line is.
+      conflict: false,
     })
   },
 })
@@ -83,7 +86,9 @@ const printingValue = computed({
 
 const quantityValue = computed({
   get: () => props.row.quantity,
-  set: (value: number) => emit('update', { quantity: Math.min(99, Math.max(1, Math.floor(Number(value) || 1))) }),
+  set: (value: number) => emit('update', {
+    quantity: Math.min(MAX_ENTRY_QUANTITY, Math.max(1, Math.floor(Number(value) || 1))),
+  }),
 })
 
 function overrideItems(items: Array<{ label: string, value: string }>) {
@@ -133,6 +138,10 @@ function onPicked(card: PickedCatalogCard) {
     candidates: [candidate, ...props.row.candidates.filter(entry => entry.cardId !== candidate.cardId)],
     selectedCardId: candidate.cardId,
     printingId: null,
+    // The parsed set code belonged to the old guess, not to the card the
+    // user just pointed this row at.
+    setCode: null,
+    conflict: false,
   })
   isPickerOpen.value = false
 }
@@ -178,6 +187,12 @@ function onPicked(card: PickedCatalogCard) {
         <p class="truncate text-xs text-gray-500">
           <span v-if="selected">{{ selected.type }} · </span>{{ valuesLabel }}
         </p>
+        <p
+          v-if="row.conflict"
+          class="mt-1 text-xs text-amber-700"
+        >
+          Set-Code und Name zeigen auf verschiedene Karten — bitte auswählen.
+        </p>
       </div>
 
       <UFormField
@@ -189,7 +204,7 @@ function onPicked(card: PickedCatalogCard) {
           v-model.number="quantityValue"
           type="number"
           min="1"
-          max="99"
+          :max="MAX_ENTRY_QUANTITY"
           :aria-label="`Anzahl für ${row.raw}`"
         />
       </UFormField>

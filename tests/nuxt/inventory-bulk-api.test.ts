@@ -4,7 +4,7 @@ import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { CATALOG_FIXTURE_IDS, seedCatalogFixture } from '../../server/db/fixtures/catalog-fixture'
 import * as schema from '../../server/db/schema'
-import { parseSuggestInput, parseSuggestLimit, suggestEntryMatches } from '../../server/utils/card-entry'
+import { parseSuggestLimit, parseSuggestRequest, suggestForRequest } from '../../server/utils/card-entry'
 import {
   addOwnedCardsBulk,
   validateInventoryBulkInput,
@@ -80,6 +80,30 @@ describe('bulk inventory validation', () => {
     expect(() => validateInventoryBulkInput(db, 'user-a', {
       items: Array.from({ length: 201 }, () => item()),
     })).toThrow()
+  })
+
+  it('rejects a quantity above the per-stack maximum', () => {
+    let thrown: { statusCode?: number, data?: { errors?: Array<{ index: number, message: string }> } } | undefined
+    try {
+      validateInventoryBulkInput(db, 'user-a', { items: [item({ quantity: 1000 })] })
+    }
+    catch (error) {
+      thrown = error as typeof thrown
+    }
+
+    expect(thrown?.data?.errors?.[0]).toMatchObject({ index: 0 })
+    expect(thrown?.data?.errors?.[0]?.message).toContain('999')
+    expect(validateInventoryBulkInput(db, 'user-a', { items: [item({ quantity: 999 })] })[0]?.quantity).toBe(999)
+  })
+
+  it('does not translate infrastructure failures into per-item 400s', () => {
+    const brokenDb = {
+      select: () => {
+        throw new Error('database is locked')
+      },
+    } as unknown as TestDb
+
+    expect(() => validateInventoryBulkInput(brokenDb, 'user-a', { items: [item()] })).toThrow('database is locked')
   })
 
   it('reports every invalid item with its index', () => {
@@ -215,8 +239,7 @@ describe('entry suggest handler logic', () => {
   })
 
   it('returns one result per parsed line, each with its candidates', () => {
-    const lines = parseSuggestInput({ text: '2x Dark Magician\nPot of Greed\nSDY-006' })
-    const results = suggestEntryMatches(db, lines, parseSuggestLimit({}))
+    const results = suggestForRequest(db, parseSuggestRequest({ text: '2x Dark Magician\nPot of Greed\nSDY-006' }))
 
     expect(results).toHaveLength(3)
     expect(results[0]!.input).toMatchObject({ raw: '2x Dark Magician', quantity: 2, query: 'Dark Magician' })
@@ -227,16 +250,16 @@ describe('entry suggest handler logic', () => {
   })
 
   it('returns an empty candidate list instead of failing for unknown cards', () => {
-    const results = suggestEntryMatches(db, parseSuggestInput({ items: ['Völlig unbekannte Karte'] }), 5)
+    const results = suggestForRequest(db, parseSuggestRequest({ items: ['Völlig unbekannte Karte'] }))
 
     expect(results).toHaveLength(1)
     expect(results[0]!.candidates).toEqual([])
   })
 
   it('clamps the requested limit', () => {
-    expect(parseSuggestLimit({})).toBe(5)
-    expect(parseSuggestLimit({ limit: 3 })).toBe(3)
-    expect(parseSuggestLimit({ limit: 500 })).toBe(20)
-    expect(() => parseSuggestLimit({ limit: 0 })).toThrow()
+    expect(parseSuggestLimit(undefined)).toBe(5)
+    expect(parseSuggestRequest({ items: ['Dark Magician'], limit: 3 }).limit).toBe(3)
+    expect(parseSuggestRequest({ items: ['Dark Magician'], limit: 500 }).limit).toBe(20)
+    expect(() => parseSuggestRequest({ items: ['Dark Magician'], limit: 0 })).toThrow()
   })
 })
