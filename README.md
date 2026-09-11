@@ -103,6 +103,13 @@ End-to-end tests (Playwright, Chromium, `e2e/`) build the app and start it again
 pnpm test:e2e
 ```
 
+The Playwright `webServer` boots with `NUXT_E2E_SEED_CATALOG=1`, which makes `server/plugins/migrate.ts`
+upsert a small, deterministic set of ~14 real cards (`server/db/fixtures/catalog-fixture.ts`) after
+migrations — this never happens outside of E2E runs. Specs can register a user (see
+`e2e/helpers/auth.ts`) and search/filter the catalog (e.g. `/katalog`) against known cards instead of
+depending on a full `catalog:sync` import. Set `E2E_PORT` to run the E2E server on a port other than the
+default `3300` (useful when running `pnpm test:e2e` alongside `pnpm dev`).
+
 ## Production
 
 ```bash
