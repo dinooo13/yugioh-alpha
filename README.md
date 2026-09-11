@@ -82,6 +82,33 @@ The extractor writes images to `public/assets/cards/de` and creates
 `public/assets/cards/de/manifest.json`, keyed by card id when the Unity texture
 name contains a known id from Omega's copied `db.sqlite`.
 
+## Decks
+
+Decks live under `/decks`: the list page searches by deck name *or* by a card
+contained in the deck, and the editor at `/decks/<id>` manages the Main, Extra,
+and Side Deck of a single deck. Cards are added from the card source panel,
+which searches the user's inventory by default and, with "Auch Katalogkarten
+anzeigen", the whole catalog — so a deck can be planned with cards that aren't
+owned yet. Fusion/Synchro/XYZ/Link monsters can only go into the Extra or Side
+Deck; every other card only into the Main or Side Deck.
+
+A deck references **catalog** cards, not owned-card rows (see
+[`docs/adr/0004-deck-data-model.md`](./docs/adr/0004-deck-data-model.md)).
+Availability is therefore derived on every read:
+
+- `owned` is the sum of `owned_card.quantity` for that catalog card across all
+  collections, conditions, languages, and editions.
+- `usedInDeck` counts the copies used across *all* sections of that deck, and
+  `shortfall = max(0, usedInDeck - owned)` is shown as a red `used/owned`
+  indicator; the deck list shows "Vollständig" or "n fehlen".
+- Owned copies are **not** reserved across decks: the same physical card may
+  appear in any number of saved decks, and each deck reports its own shortfall.
+
+Deck sizes (40–60 main, 15 extra, 15 side) and the 3-copies-per-card rule are
+returned as `warnings` rather than enforced — Phase 4 rule formats will make
+them configurable. Only structurally invalid writes (unknown card, unknown
+section, negative quantity, card in a forbidden section) are rejected.
+
 ## Quality Checks
 
 ```bash
