@@ -368,11 +368,20 @@ async function onSaved() {
         </p>
       </div>
 
-      <UButton
-        icon="i-lucide-plus"
-        label="Karte hinzufügen"
-        @click="() => { isPickerOpen = true }"
-      />
+      <div class="flex flex-wrap items-center gap-2">
+        <UButton
+          :to="{ path: '/inventar/erfassen', query: collectionId ? { collectionId } : undefined }"
+          icon="i-lucide-zap"
+          color="neutral"
+          variant="outline"
+          label="Schnellerfassung"
+        />
+        <UButton
+          icon="i-lucide-plus"
+          label="Karte hinzufügen"
+          @click="() => { isPickerOpen = true }"
+        />
+      </div>
     </div>
 
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

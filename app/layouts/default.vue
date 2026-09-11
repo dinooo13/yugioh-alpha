@@ -17,11 +17,12 @@ interface CollectionsResponse {
 
 const route = useRoute()
 
-// `Decks` stays highlighted inside the deck editor (`/decks/:id`), which is a
-// child route rather than a separate nav destination.
+// A nav entry stays highlighted on its sub-pages — the Schnellerfassung at
+// `/inventar/erfassen` and the deck editor at `/decks/:id` are child routes,
+// not separate destinations, which an exact link match misses.
 const navItems = computed<NavigationMenuItem[]>(() => [
   { label: 'Dashboard', icon: 'i-lucide-layout-dashboard', to: '/' },
-  { label: 'Inventar', icon: 'i-lucide-archive', to: '/inventar' },
+  { label: 'Inventar', icon: 'i-lucide-archive', to: '/inventar', active: route.path.startsWith('/inventar') },
   { label: 'Katalog', icon: 'i-lucide-book-open', to: '/katalog' },
   { label: 'Decks', icon: 'i-lucide-layers', to: '/decks', active: route.path.startsWith('/decks') },
   { label: 'Formate', icon: 'i-lucide-scroll-text', to: '/formate' },
