@@ -1,5 +1,5 @@
 import { relations } from 'drizzle-orm'
-import { sqliteTable, text, integer, index } from 'drizzle-orm/sqlite-core'
+import { sqliteTable, text, integer, index, uniqueIndex } from 'drizzle-orm/sqlite-core'
 
 // Better Auth core tables (email/password only).
 // Generated to match Better Auth's expected schema for the Drizzle adapter (provider: "sqlite").
@@ -239,5 +239,72 @@ export const ownedCardRelations = relations(ownedCard, ({ one }) => ({
   collection: one(collection, {
     fields: [ownedCard.collectionId],
     references: [collection.id],
+  }),
+}))
+
+// Saved deck constructions (see docs/adr/0004-deck-data-model.md).
+//
+// A deck is a *construction*, not a set of physical cards: its rows point at
+// catalog cards, never at `owned_card` rows. Availability ("do I own enough
+// copies?") is derived at read time by summing the user's `owned_card`
+// quantities per catalog card, so inventory edits never invalidate a deck.
+
+export const deck = sqliteTable(
+  'deck',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    description: text('description'),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+  },
+  table => [
+    index('idx_deck_user').on(table.userId),
+  ],
+)
+
+// One row per (deck, catalog card, section) with a `quantity` count, mirroring
+// the `owned_card` stacking grain instead of one row per physical copy.
+export const deckCard = sqliteTable(
+  'deck_card',
+  {
+    id: text('id').primaryKey(),
+    deckId: text('deck_id')
+      .notNull()
+      .references(() => deck.id, { onDelete: 'cascade' }),
+    catalogCardId: integer('catalog_card_id')
+      .notNull()
+      .references(() => catalogCard.id, { onDelete: 'cascade' }),
+    // 'main' | 'extra' | 'side' (see shared/deck-sections.ts).
+    section: text('section').notNull().$type<'main' | 'extra' | 'side'>(),
+    quantity: integer('quantity').notNull().default(1),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+  },
+  table => [
+    uniqueIndex('idx_deck_card_unique').on(table.deckId, table.catalogCardId, table.section),
+    index('idx_deck_card_deck').on(table.deckId),
+  ],
+)
+
+export const deckRelations = relations(deck, ({ one, many }) => ({
+  user: one(user, {
+    fields: [deck.userId],
+    references: [user.id],
+  }),
+  cards: many(deckCard),
+}))
+
+export const deckCardRelations = relations(deckCard, ({ one }) => ({
+  deck: one(deck, {
+    fields: [deckCard.deckId],
+    references: [deck.id],
+  }),
+  catalogCard: one(catalogCard, {
+    fields: [deckCard.catalogCardId],
+    references: [catalogCard.id],
   }),
 }))
