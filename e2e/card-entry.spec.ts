@@ -23,16 +23,17 @@ test.describe('Schnellerfassung', () => {
     await expect(saveAll).toBeEnabled()
     await saveAll.click()
 
-    await expect(page.getByText('Karten gespeichert')).toBeVisible()
+    // The toast title is also announced in an aria-live region, so match the first occurrence.
+    await expect(page.getByText('Karten gespeichert').first()).toBeVisible()
     await expect(page.getByText('Noch nichts zu prüfen')).toBeVisible()
 
     await page.goto('/inventar')
     await page.getByRole('button', { name: 'Übersicht' }).click()
 
     // 2 loose copies + 1 from the SDY-006 printing row.
-    await expect(page.getByText('Dark Magician')).toBeVisible()
+    await expect(page.getByText('Dark Magician').first()).toBeVisible()
     await expect(page.getByText('×3 ges.')).toBeVisible()
-    await expect(page.getByText('Pot of Greed')).toBeVisible()
+    await expect(page.getByText('Pot of Greed').first()).toBeVisible()
   })
 
   test('offers photo and speech input modes', async ({ page }) => {
