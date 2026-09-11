@@ -15,14 +15,18 @@ interface CollectionsResponse {
   allCount: number
 }
 
-const navItems: NavigationMenuItem[] = [
+const route = useRoute()
+
+// `Decks` stays highlighted inside the deck editor (`/decks/:id`), which is a
+// child route rather than a separate nav destination.
+const navItems = computed<NavigationMenuItem[]>(() => [
   { label: 'Dashboard', icon: 'i-lucide-layout-dashboard', to: '/' },
   { label: 'Inventar', icon: 'i-lucide-archive', to: '/inventar' },
   { label: 'Katalog', icon: 'i-lucide-book-open', to: '/katalog' },
-  { label: 'Decks', icon: 'i-lucide-layers', to: '/decks' },
+  { label: 'Decks', icon: 'i-lucide-layers', to: '/decks', active: route.path.startsWith('/decks') },
   { label: 'Formate', icon: 'i-lucide-scroll-text', to: '/formate' },
   { label: 'Turniere', icon: 'i-lucide-trophy', to: '/turniere' },
-]
+])
 
 // Deterministic cosmetic color per collection, since collections have no
 // stored color attribute (see docs/adr/0002 – additive collection extension).
@@ -51,7 +55,6 @@ onMounted(async () => {
   await refreshCollections()
 })
 
-const route = useRoute()
 const activeCollectionId = computed(() => {
   const value = route.query.collectionId
   return typeof value === 'string' ? value : null
