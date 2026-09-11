@@ -1,0 +1,795 @@
+import { randomUUID } from 'node:crypto'
+import { and, asc, desc, eq, inArray, or, sql } from 'drizzle-orm'
+import type { SQL } from 'drizzle-orm'
+import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core'
+import { createError } from 'h3'
+import type { useDb } from '../db'
+import { catalogCard, catalogCardImage, deck, deckCard, ownedCard } from '../db/schema'
+import {
+  allowedSectionsForCard,
+  DECK_LIMITS,
+  DECK_SECTIONS,
+  defaultSectionForCard,
+  isExtraDeckCard,
+  isSectionAllowedForCard,
+} from '../../shared/deck-sections'
+import type { DeckSection, DeckSectionCard } from '../../shared/deck-sections'
+
+type Db = ReturnType<typeof useDb>
+
+export {
+  allowedSectionsForCard,
+  DECK_LIMITS,
+  DECK_SECTIONS,
+  defaultSectionForCard,
+  isExtraDeckCard,
+  isSectionAllowedForCard,
+}
+export type { DeckSection, DeckSectionCard }
+
+export const DECK_NAME_MAX_LENGTH = 80
+export const DECK_DESCRIPTION_MAX_LENGTH = 500
+
+const DEFAULT_PAGE_SIZE = 20
+const MAX_PAGE_SIZE = 60
+
+export type DeckListSort = 'name' | '-name' | 'newest' | 'updated'
+
+const DECK_LIST_SORTS: readonly DeckListSort[] = ['name', '-name', 'newest', 'updated']
+
+export interface DeckInput {
+  name: string
+  description: string | null
+}
+
+export interface DeckCardInput {
+  catalogCardId: number
+  section: DeckSection
+  // 0 removes the row (see upsertDeckCard).
+  quantity: number
+}
+
+export interface DeckCardMoveInput {
+  catalogCardId: number
+  from: DeckSection
+  to: DeckSection
+  quantity?: number
+}
+
+export interface DeckListOptions {
+  q?: string
+  sort?: DeckListSort
+  page?: number
+  pageSize?: number
+  contains?: number
+}
+
+export interface DeckCardRow {
+  catalogCardId: number
+  name: string
+  type: string
+  frameType: string | null
+  attribute: string | null
+  race: string | null
+  level: number | null
+  atk: number | null
+  def: number | null
+  imageSmall: string | null
+  section: DeckSection
+  quantity: number
+  /** Copies the user owns in total (all collections/conditions/languages). */
+  owned: number
+  /** Copies used across all sections of *this* deck. */
+  usedInDeck: number
+  shortfall: number
+}
+
+export interface DeckWarning {
+  code: string
+  message: string
+  cardId?: number
+}
+
+export interface DeckDetail {
+  id: string
+  name: string
+  description: string | null
+  createdAt: Date
+  updatedAt: Date
+  sections: Record<DeckSection, DeckCardRow[]>
+  counts: { main: number, extra: number, side: number, total: number }
+  limits: typeof DECK_LIMITS
+  warnings: DeckWarning[]
+}
+
+function badRequest(message: string): never {
+  throw createError({ statusCode: 400, statusMessage: message })
+}
+
+function notFound(message = 'Deck not found'): never {
+  throw createError({ statusCode: 404, statusMessage: message })
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+// Escapes SQLite LIKE wildcards so a user's search term matches literally.
+function escapeLikeTerm(term: string): string {
+  return term.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_')
+}
+
+function likeCondition(column: AnySQLiteColumn, pattern: string): SQL {
+  return sql`${column} like ${pattern} escape '\\'`
+}
+
+export function validateDeckInput(body: unknown): DeckInput {
+  if (!isRecord(body)) {
+    badRequest('Request body must be an object')
+  }
+
+  const rawName = body.name
+  if (typeof rawName !== 'string') {
+    badRequest('name is required')
+  }
+
+  const name = rawName.trim()
+  if (name === '') {
+    badRequest('name is required')
+  }
+  if (name.length > DECK_NAME_MAX_LENGTH) {
+    badRequest(`name must be at most ${DECK_NAME_MAX_LENGTH} characters`)
+  }
+
+  let description: string | null = null
+  if (body.description !== undefined && body.description !== null) {
+    if (typeof body.description !== 'string') {
+      badRequest('description must be a string')
+    }
+    const trimmed = body.description.trim()
+    if (trimmed.length > DECK_DESCRIPTION_MAX_LENGTH) {
+      badRequest(`description must be at most ${DECK_DESCRIPTION_MAX_LENGTH} characters`)
+    }
+    description = trimmed === '' ? null : trimmed
+  }
+
+  return { name, description }
+}
+
+export function validateDeckUpdateInput(body: unknown): Partial<DeckInput> {
+  if (!isRecord(body)) {
+    badRequest('Request body must be an object')
+  }
+
+  const input: Partial<DeckInput> = {}
+  if (body.name !== undefined) {
+    input.name = validateDeckInput({ name: body.name }).name
+  }
+  if (body.description !== undefined) {
+    input.description = validateDeckInput({ name: 'placeholder', description: body.description }).description
+  }
+
+  return input
+}
+
+function normalizeCatalogCardId(value: unknown): number {
+  const numberValue = typeof value === 'number' ? value : Number(value)
+  if (!Number.isInteger(numberValue) || numberValue < 1) {
+    badRequest('catalog_card_id must be a positive integer')
+  }
+  return numberValue
+}
+
+function normalizeSection(value: unknown, field = 'section'): DeckSection {
+  if (typeof value !== 'string' || !(DECK_SECTIONS as readonly string[]).includes(value)) {
+    badRequest(`${field} must be one of ${DECK_SECTIONS.join(', ')}`)
+  }
+  return value as DeckSection
+}
+
+function normalizeQuantity(value: unknown, { allowZero }: { allowZero: boolean }): number {
+  const numberValue = typeof value === 'number' ? value : Number(value)
+  if (!Number.isInteger(numberValue) || numberValue < (allowZero ? 0 : 1)) {
+    badRequest(allowZero
+      ? 'quantity must be a non-negative integer'
+      : 'quantity must be a positive integer')
+  }
+  return numberValue
+}
+
+export function validateDeckCardInput(body: unknown): DeckCardInput {
+  if (!isRecord(body)) {
+    badRequest('Request body must be an object')
+  }
+
+  const rawQuantity = body.quantity
+  return {
+    catalogCardId: normalizeCatalogCardId(body.catalog_card_id ?? body.catalogCardId),
+    section: normalizeSection(body.section),
+    // `quantity` is optional and defaults to 1; 0 removes the row.
+    quantity: rawQuantity === undefined || rawQuantity === null || rawQuantity === ''
+      ? 1
+      : normalizeQuantity(rawQuantity, { allowZero: true }),
+  }
+}
+
+export function validateDeckCardMoveInput(body: unknown): DeckCardMoveInput {
+  if (!isRecord(body)) {
+    badRequest('Request body must be an object')
+  }
+
+  const from = normalizeSection(body.from, 'from')
+  const to = normalizeSection(body.to, 'to')
+  if (from === to) {
+    badRequest('from and to must be different sections')
+  }
+
+  const rawQuantity = body.quantity
+  return {
+    catalogCardId: normalizeCatalogCardId(body.catalog_card_id ?? body.catalogCardId),
+    from,
+    to,
+    quantity: rawQuantity === undefined || rawQuantity === null || rawQuantity === ''
+      ? undefined
+      : normalizeQuantity(rawQuantity, { allowZero: false }),
+  }
+}
+
+export function parseDeckListQuery(rawQuery: Record<string, unknown>): DeckListOptions {
+  const first = (value: unknown) => (Array.isArray(value) ? value[0] : value)
+
+  const rawSort = first(rawQuery.sort)
+  const sort = typeof rawSort === 'string' && (DECK_LIST_SORTS as readonly string[]).includes(rawSort)
+    ? rawSort as DeckListSort
+    : undefined
+
+  const rawQ = first(rawQuery.q)
+  const rawContains = Number(first(rawQuery.contains ?? rawQuery.containsCardId))
+  const page = Number(first(rawQuery.page))
+  const pageSize = Number(first(rawQuery.pageSize))
+
+  return {
+    q: typeof rawQ === 'string' && rawQ.trim() !== '' ? rawQ.trim() : undefined,
+    sort,
+    contains: Number.isInteger(rawContains) && rawContains > 0 ? rawContains : undefined,
+    page: Number.isInteger(page) && page > 0 ? page : undefined,
+    pageSize: Number.isInteger(pageSize) && pageSize > 0 ? pageSize : undefined,
+  }
+}
+
+function requireDeckRow(db: Db, userId: string, deckId: string) {
+  const row = db
+    .select()
+    .from(deck)
+    .where(and(eq(deck.id, deckId), eq(deck.userId, userId)))
+    .get()
+
+  // A deck the caller doesn't own is indistinguishable from a missing one
+  // (ownership boundary, see docs/adr/0002 and 0004).
+  if (!row) {
+    notFound()
+  }
+
+  return row
+}
+
+function requireCatalogCard(db: Db, catalogCardId: number) {
+  const card = db
+    .select({ id: catalogCard.id, name: catalogCard.name, type: catalogCard.type, frameType: catalogCard.frameType })
+    .from(catalogCard)
+    .where(eq(catalogCard.id, catalogCardId))
+    .get()
+
+  if (!card) {
+    badRequest('catalog_card_id does not exist')
+  }
+
+  return card
+}
+
+function assertSectionAllowed(card: DeckSectionCard, section: DeckSection) {
+  if (!isSectionAllowedForCard(card, section)) {
+    badRequest(isExtraDeckCard(card)
+      ? 'Extra deck cards can only be placed in the extra or side section'
+      : 'Main deck cards can only be placed in the main or side section')
+  }
+}
+
+// Monsters first, then spells, then traps — the conventional deck-list order.
+function cardCategoryRank(type: string): number {
+  if (type.toLowerCase().includes('spell')) {
+    return 1
+  }
+  if (type.toLowerCase().includes('trap')) {
+    return 2
+  }
+  return 0
+}
+
+function ownedQuantitiesByCard(db: Db, userId: string, catalogCardIds: number[]): Map<number, number> {
+  if (catalogCardIds.length === 0) {
+    return new Map()
+  }
+
+  const rows = db
+    .select({
+      catalogCardId: ownedCard.catalogCardId,
+      owned: sql<number>`sum(${ownedCard.quantity})`,
+    })
+    .from(ownedCard)
+    .where(and(eq(ownedCard.userId, userId), inArray(ownedCard.catalogCardId, catalogCardIds)))
+    .groupBy(ownedCard.catalogCardId)
+    .all()
+
+  return new Map(rows.map(row => [row.catalogCardId, row.owned ?? 0]))
+}
+
+function buildWarnings(
+  counts: { main: number, extra: number, side: number },
+  rows: DeckCardRow[],
+): DeckWarning[] {
+  const warnings: DeckWarning[] = []
+
+  if (counts.main < DECK_LIMITS.mainMin) {
+    warnings.push({
+      code: 'main_below_min',
+      message: `Das Main Deck hat ${counts.main} Karten, mindestens ${DECK_LIMITS.mainMin} sind üblich.`,
+    })
+  }
+  if (counts.main > DECK_LIMITS.mainMax) {
+    warnings.push({
+      code: 'main_above_max',
+      message: `Das Main Deck hat ${counts.main} Karten, höchstens ${DECK_LIMITS.mainMax} sind üblich.`,
+    })
+  }
+  if (counts.extra > DECK_LIMITS.extraMax) {
+    warnings.push({
+      code: 'extra_above_max',
+      message: `Das Extra Deck hat ${counts.extra} Karten, höchstens ${DECK_LIMITS.extraMax} sind üblich.`,
+    })
+  }
+  if (counts.side > DECK_LIMITS.sideMax) {
+    warnings.push({
+      code: 'side_above_max',
+      message: `Das Side Deck hat ${counts.side} Karten, höchstens ${DECK_LIMITS.sideMax} sind üblich.`,
+    })
+  }
+
+  // Copy limit counts main + side combined (the Extra Deck is separate).
+  const copiesByCard = new Map<number, { name: string, copies: number }>()
+  for (const row of rows) {
+    if (row.section === 'extra') {
+      continue
+    }
+    const entry = copiesByCard.get(row.catalogCardId) ?? { name: row.name, copies: 0 }
+    entry.copies += row.quantity
+    copiesByCard.set(row.catalogCardId, entry)
+  }
+
+  for (const [cardId, entry] of copiesByCard) {
+    if (entry.copies > DECK_LIMITS.maxCopies) {
+      warnings.push({
+        code: 'copies_above_max',
+        cardId,
+        message: `${entry.name}: ${entry.copies} Kopien in Main + Side, höchstens ${DECK_LIMITS.maxCopies} sind üblich.`,
+      })
+    }
+  }
+
+  return warnings
+}
+
+function loadDeckCardRows(db: Db, userId: string, deckId: string): DeckCardRow[] {
+  const rows = db
+    .select({
+      catalogCardId: deckCard.catalogCardId,
+      section: deckCard.section,
+      quantity: deckCard.quantity,
+      name: catalogCard.name,
+      type: catalogCard.type,
+      frameType: catalogCard.frameType,
+      attribute: catalogCard.attribute,
+      race: catalogCard.race,
+      level: catalogCard.level,
+      atk: catalogCard.atk,
+      def: catalogCard.def,
+      imageSmall: sql<string | null>`min(${catalogCardImage.imageUrlSmall})`,
+    })
+    .from(deckCard)
+    .innerJoin(catalogCard, eq(deckCard.catalogCardId, catalogCard.id))
+    .leftJoin(catalogCardImage, eq(catalogCardImage.cardId, catalogCard.id))
+    .where(eq(deckCard.deckId, deckId))
+    .groupBy(deckCard.id)
+    .all()
+
+  const owned = ownedQuantitiesByCard(db, userId, rows.map(row => row.catalogCardId))
+
+  const usedByCard = new Map<number, number>()
+  for (const row of rows) {
+    usedByCard.set(row.catalogCardId, (usedByCard.get(row.catalogCardId) ?? 0) + row.quantity)
+  }
+
+  return rows.map((row) => {
+    const ownedQuantity = owned.get(row.catalogCardId) ?? 0
+    const usedInDeck = usedByCard.get(row.catalogCardId) ?? 0
+    return {
+      ...row,
+      section: row.section as DeckSection,
+      owned: ownedQuantity,
+      usedInDeck,
+      shortfall: Math.max(0, usedInDeck - ownedQuantity),
+    }
+  })
+}
+
+function buildDeckDetail(db: Db, userId: string, deckRow: typeof deck.$inferSelect): DeckDetail {
+  const rows = loadDeckCardRows(db, userId, deckRow.id)
+
+  const sections: Record<DeckSection, DeckCardRow[]> = { main: [], extra: [], side: [] }
+  for (const row of rows) {
+    sections[row.section].push(row)
+  }
+
+  sections.main.sort((a, b) =>
+    cardCategoryRank(a.type) - cardCategoryRank(b.type) || a.name.localeCompare(b.name))
+  sections.extra.sort((a, b) => a.name.localeCompare(b.name))
+  sections.side.sort((a, b) => a.name.localeCompare(b.name))
+
+  const sum = (section: DeckSection) =>
+    sections[section].reduce((total, row) => total + row.quantity, 0)
+
+  const counts = { main: sum('main'), extra: sum('extra'), side: sum('side'), total: 0 }
+  counts.total = counts.main + counts.extra + counts.side
+
+  return {
+    id: deckRow.id,
+    name: deckRow.name,
+    description: deckRow.description,
+    createdAt: deckRow.createdAt,
+    updatedAt: deckRow.updatedAt,
+    sections,
+    counts,
+    limits: DECK_LIMITS,
+    warnings: buildWarnings(counts, rows),
+  }
+}
+
+export function getDeckDetail(db: Db, userId: string, deckId: string): DeckDetail {
+  return buildDeckDetail(db, userId, requireDeckRow(db, userId, deckId))
+}
+
+export function createDeck(db: Db, userId: string, input: DeckInput): DeckDetail {
+  const now = new Date()
+  const [created] = db
+    .insert(deck)
+    .values({
+      id: randomUUID(),
+      userId,
+      name: input.name,
+      description: input.description,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .returning()
+    .all()
+
+  return buildDeckDetail(db, userId, created!)
+}
+
+export function updateDeck(db: Db, userId: string, deckId: string, patch: Partial<DeckInput>): DeckDetail {
+  const current = requireDeckRow(db, userId, deckId)
+
+  const [updated] = db
+    .update(deck)
+    .set({
+      name: patch.name ?? current.name,
+      description: patch.description !== undefined ? patch.description : current.description,
+      updatedAt: new Date(),
+    })
+    .where(eq(deck.id, deckId))
+    .returning()
+    .all()
+
+  return buildDeckDetail(db, userId, updated!)
+}
+
+export function deleteDeck(db: Db, userId: string, deckId: string) {
+  const deleted = db
+    .delete(deck)
+    .where(and(eq(deck.id, deckId), eq(deck.userId, userId)))
+    .returning({ id: deck.id })
+    .all()
+
+  if (deleted.length === 0) {
+    notFound()
+  }
+}
+
+export function duplicateDeck(db: Db, userId: string, deckId: string): DeckDetail {
+  const source = requireDeckRow(db, userId, deckId)
+  const now = new Date()
+
+  const [copy] = db
+    .insert(deck)
+    .values({
+      id: randomUUID(),
+      userId,
+      name: `${source.name} (Kopie)`.slice(0, DECK_NAME_MAX_LENGTH),
+      description: source.description,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .returning()
+    .all()
+
+  const sourceCards = db.select().from(deckCard).where(eq(deckCard.deckId, deckId)).all()
+  if (sourceCards.length > 0) {
+    db.insert(deckCard).values(sourceCards.map(row => ({
+      id: randomUUID(),
+      deckId: copy!.id,
+      catalogCardId: row.catalogCardId,
+      section: row.section,
+      quantity: row.quantity,
+      createdAt: now,
+      updatedAt: now,
+    }))).run()
+  }
+
+  return buildDeckDetail(db, userId, copy!)
+}
+
+function touchDeck(db: Db, deckId: string, now: Date) {
+  db.update(deck).set({ updatedAt: now }).where(eq(deck.id, deckId)).run()
+}
+
+function findDeckCard(db: Db, deckId: string, catalogCardId: number, section: DeckSection) {
+  return db
+    .select()
+    .from(deckCard)
+    .where(and(
+      eq(deckCard.deckId, deckId),
+      eq(deckCard.catalogCardId, catalogCardId),
+      eq(deckCard.section, section),
+    ))
+    .get()
+}
+
+/**
+ * Sets the quantity of one catalog card in one section of a deck.
+ * `quantity: 0` removes the row. Returns the refreshed deck detail so the
+ * client never has to re-read after a write.
+ */
+export function upsertDeckCard(db: Db, userId: string, deckId: string, input: DeckCardInput): DeckDetail {
+  const deckRow = requireDeckRow(db, userId, deckId)
+  const card = requireCatalogCard(db, input.catalogCardId)
+  assertSectionAllowed(card, input.section)
+
+  const now = new Date()
+  const existing = findDeckCard(db, deckId, input.catalogCardId, input.section)
+
+  if (input.quantity === 0) {
+    if (existing) {
+      db.delete(deckCard).where(eq(deckCard.id, existing.id)).run()
+    }
+  }
+  else if (existing) {
+    db.update(deckCard)
+      .set({ quantity: input.quantity, updatedAt: now })
+      .where(eq(deckCard.id, existing.id))
+      .run()
+  }
+  else {
+    db.insert(deckCard).values({
+      id: randomUUID(),
+      deckId,
+      catalogCardId: input.catalogCardId,
+      section: input.section,
+      quantity: input.quantity,
+      createdAt: now,
+      updatedAt: now,
+    }).run()
+  }
+
+  touchDeck(db, deckId, now)
+  return buildDeckDetail(db, userId, { ...deckRow, updatedAt: now })
+}
+
+export function moveDeckCard(db: Db, userId: string, deckId: string, input: DeckCardMoveInput): DeckDetail {
+  const deckRow = requireDeckRow(db, userId, deckId)
+  const card = requireCatalogCard(db, input.catalogCardId)
+  assertSectionAllowed(card, input.to)
+
+  const source = findDeckCard(db, deckId, input.catalogCardId, input.from)
+  if (!source) {
+    notFound('Deck card not found')
+  }
+
+  const quantity = input.quantity ?? source.quantity
+  if (quantity > source.quantity) {
+    badRequest('quantity exceeds the copies in the source section')
+  }
+
+  const now = new Date()
+  if (quantity === source.quantity) {
+    db.delete(deckCard).where(eq(deckCard.id, source.id)).run()
+  }
+  else {
+    db.update(deckCard)
+      .set({ quantity: source.quantity - quantity, updatedAt: now })
+      .where(eq(deckCard.id, source.id))
+      .run()
+  }
+
+  const target = findDeckCard(db, deckId, input.catalogCardId, input.to)
+  if (target) {
+    db.update(deckCard)
+      .set({ quantity: target.quantity + quantity, updatedAt: now })
+      .where(eq(deckCard.id, target.id))
+      .run()
+  }
+  else {
+    db.insert(deckCard).values({
+      id: randomUUID(),
+      deckId,
+      catalogCardId: input.catalogCardId,
+      section: input.to,
+      quantity,
+      createdAt: now,
+      updatedAt: now,
+    }).run()
+  }
+
+  touchDeck(db, deckId, now)
+  return buildDeckDetail(db, userId, { ...deckRow, updatedAt: now })
+}
+
+export function removeDeckCard(
+  db: Db,
+  userId: string,
+  deckId: string,
+  catalogCardId: number,
+  section: DeckSection,
+): DeckDetail {
+  const deckRow = requireDeckRow(db, userId, deckId)
+
+  const deleted = db
+    .delete(deckCard)
+    .where(and(
+      eq(deckCard.deckId, deckId),
+      eq(deckCard.catalogCardId, catalogCardId),
+      eq(deckCard.section, section),
+    ))
+    .returning({ id: deckCard.id })
+    .all()
+
+  if (deleted.length === 0) {
+    notFound('Deck card not found')
+  }
+
+  const now = new Date()
+  touchDeck(db, deckId, now)
+  return buildDeckDetail(db, userId, { ...deckRow, updatedAt: now })
+}
+
+export interface DeckListItem {
+  id: string
+  name: string
+  description: string | null
+  mainCount: number
+  extraCount: number
+  sideCount: number
+  cardCount: number
+  /** True when every card in the deck is fully covered by owned copies. */
+  complete: boolean
+  missingCount: number
+  createdAt: Date
+  updatedAt: Date
+}
+
+export function listDecks(db: Db, userId: string, options: DeckListOptions = {}) {
+  const page = Math.max(1, options.page ?? 1)
+  const pageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, options.pageSize ?? DEFAULT_PAGE_SIZE))
+  const clauses: SQL[] = [eq(deck.userId, userId)]
+
+  const q = options.q?.trim()
+  if (q) {
+    const pattern = `%${escapeLikeTerm(q)}%`
+    // Matches the deck name or the name of any card contained in the deck.
+    clauses.push(or(
+      likeCondition(deck.name, pattern),
+      sql`exists (
+        select 1 from ${deckCard}
+        inner join ${catalogCard} on ${catalogCard.id} = ${deckCard.catalogCardId}
+        where ${deckCard.deckId} = ${deck.id}
+          and ${catalogCard.name} like ${pattern} escape '\\'
+      )`,
+    ) as SQL)
+  }
+
+  if (options.contains) {
+    clauses.push(sql`exists (
+      select 1 from ${deckCard}
+      where ${deckCard.deckId} = ${deck.id}
+        and ${deckCard.catalogCardId} = ${options.contains}
+    )`)
+  }
+
+  const where = and(...clauses) as SQL
+
+  const orderBy = options.sort === 'name'
+    ? [asc(deck.name)]
+    : options.sort === '-name'
+      ? [desc(deck.name)]
+      : options.sort === 'newest'
+        ? [desc(deck.createdAt), asc(deck.name)]
+        : [desc(deck.updatedAt), asc(deck.name)]
+
+  const deckRows = db
+    .select()
+    .from(deck)
+    .where(where)
+    .orderBy(...orderBy)
+    .limit(pageSize)
+    .offset((page - 1) * pageSize)
+    .all()
+
+  const total = db
+    .select({ count: sql<number>`count(*)` })
+    .from(deck)
+    .where(where)
+    .get()?.count ?? 0
+
+  const deckIds = deckRows.map(row => row.id)
+  const cardRows = deckIds.length > 0
+    ? db
+        .select({
+          deckId: deckCard.deckId,
+          catalogCardId: deckCard.catalogCardId,
+          section: deckCard.section,
+          quantity: deckCard.quantity,
+        })
+        .from(deckCard)
+        .where(inArray(deckCard.deckId, deckIds))
+        .all()
+    : []
+
+  const owned = ownedQuantitiesByCard(db, userId, [...new Set(cardRows.map(row => row.catalogCardId))])
+
+  const usedByDeck = new Map<string, Map<number, number>>()
+  const countsByDeck = new Map<string, { main: number, extra: number, side: number }>()
+  for (const row of cardRows) {
+    const counts = countsByDeck.get(row.deckId) ?? { main: 0, extra: 0, side: 0 }
+    counts[row.section as DeckSection] += row.quantity
+    countsByDeck.set(row.deckId, counts)
+
+    const used = usedByDeck.get(row.deckId) ?? new Map<number, number>()
+    used.set(row.catalogCardId, (used.get(row.catalogCardId) ?? 0) + row.quantity)
+    usedByDeck.set(row.deckId, used)
+  }
+
+  const items: DeckListItem[] = deckRows.map((row) => {
+    const counts = countsByDeck.get(row.id) ?? { main: 0, extra: 0, side: 0 }
+    const used = usedByDeck.get(row.id) ?? new Map<number, number>()
+
+    let missingCount = 0
+    for (const [catalogCardId, usedInDeck] of used) {
+      missingCount += Math.max(0, usedInDeck - (owned.get(catalogCardId) ?? 0))
+    }
+
+    return {
+      id: row.id,
+      name: row.name,
+      description: row.description,
+      mainCount: counts.main,
+      extraCount: counts.extra,
+      sideCount: counts.side,
+      cardCount: counts.main + counts.extra + counts.side,
+      complete: missingCount === 0,
+      missingCount,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    }
+  })
+
+  return { items, total, page, pageSize }
+}
