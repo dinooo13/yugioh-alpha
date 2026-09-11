@@ -6,6 +6,8 @@ import {
   isSectionAllowedForCard,
 } from '~~/shared/deck-sections'
 import type { DeckSection } from '~~/shared/deck-sections'
+import { CARD_STATUS_LABELS } from '~~/shared/rule-formats'
+import type { DeckValidation } from '~~/shared/rule-formats'
 
 interface DeckCardRow {
   catalogCardId: number
@@ -35,6 +37,14 @@ interface DeckDetail {
   counts: { main: number, extra: number, side: number, total: number }
   limits: { mainMin: number, mainMax: number, extraMax: number, sideMax: number, maxCopies: number }
   warnings: Array<{ code: string, message: string, cardId?: number }>
+  format: { id: string, name: string, isBuiltin: boolean } | null
+  validation: DeckValidation | null
+}
+
+interface RuleFormatListItem {
+  id: string
+  name: string
+  isBuiltin: boolean
 }
 
 interface SourceCard {
@@ -155,6 +165,64 @@ const { data: ownedQuantities } = await useFetch<Record<string, number>>('/api/i
 const { data: facets } = await useFetch<SearchFacets>('/api/inventory/search/facets', {
   headers: import.meta.server ? useRequestHeaders(['cookie']) : undefined,
   default: () => ({ types: [], attributes: [] }),
+})
+
+// --- Rule format + live validation ----------------------------------------
+
+const { data: formatsData } = await useFetch<{ items: RuleFormatListItem[] }>('/api/formats', {
+  headers: import.meta.server ? useRequestHeaders(['cookie']) : undefined,
+  default: () => ({ items: [] }),
+})
+
+// reka-ui reserves the empty string for "clear selection", so "no format" uses
+// a sentinel that maps back to `null` on the wire.
+const NO_FORMAT = '__no_format__'
+
+const formatItems = computed(() => [
+  { label: 'Kein Format', value: NO_FORMAT },
+  ...(formatsData.value?.items ?? []).map(format => ({
+    label: format.isBuiltin ? format.name : `${format.name} (eigenes)`,
+    value: format.id,
+  })),
+])
+
+const validation = computed(() => deck.value?.validation ?? null)
+
+const issueCardIds = computed(() => new Set(
+  (validation.value?.issues ?? []).flatMap(issue => (issue.cardId ? [issue.cardId] : [])),
+))
+
+function cardStatusFor(catalogCardId: number) {
+  const entry = validation.value?.cards?.[catalogCardId]
+  return entry && entry.status !== 'unrestricted' ? entry : null
+}
+
+function statusLabelFor(catalogCardId: number): string | null {
+  const entry = cardStatusFor(catalogCardId)
+  return entry ? CARD_STATUS_LABELS[entry.status] : null
+}
+
+function statusColorFor(catalogCardId: number) {
+  const entry = cardStatusFor(catalogCardId)
+  return entry?.status === 'forbidden' ? ('error' as const) : ('warning' as const)
+}
+
+const validationBadge = computed(() => {
+  if (!deck.value?.format) {
+    return { label: 'Kein Format gewählt', color: 'neutral' as const }
+  }
+  const current = validation.value
+  if (!current) {
+    return { label: 'Kein Format gewählt', color: 'neutral' as const }
+  }
+  if (current.legal) {
+    return { label: 'Legal', color: 'success' as const }
+  }
+  const count = current.issues.length
+  return {
+    label: `Nicht legal – ${count} Problem${count === 1 ? '' : 'e'}`,
+    color: 'error' as const,
+  }
 })
 
 // reka-ui reserves the empty string for "clear selection", so the "no filter"
@@ -301,6 +369,26 @@ async function setQuantity(catalogCardId: number, section: DeckSection, quantity
   }))
 }
 
+const formatSelection = computed({
+  get: () => deck.value?.format?.id ?? NO_FORMAT,
+  set: (value: string) => {
+    changeFormat(value === NO_FORMAT ? null : value)
+  },
+})
+
+// The PATCH answers with the recomputed deck detail, so assigning a format
+// renders its validation without a reload.
+async function changeFormat(formatId: string | null) {
+  if (isMutating.value || (deck.value?.format?.id ?? null) === formatId) {
+    return
+  }
+
+  await applyDeck($fetch<DeckDetail>(`/api/decks/${deckId.value}`, {
+    method: 'PATCH',
+    body: { formatId },
+  }))
+}
+
 async function addCard(card: SourceCard, section: DeckSection) {
   await setQuantity(card.catalogCardId, section, quantityInSection(card.catalogCardId, section) + 1)
 }
@@ -429,7 +517,14 @@ async function deleteDeck() {
           </p>
         </div>
 
-        <div class="flex shrink-0 gap-2">
+        <div class="flex shrink-0 flex-wrap items-center gap-2">
+          <USelect
+            v-model="formatSelection"
+            :items="formatItems"
+            :disabled="isMutating"
+            class="w-56"
+            aria-label="Format"
+          />
           <UButton
             icon="i-lucide-pencil"
             color="neutral"
@@ -446,6 +541,44 @@ async function deleteDeck() {
           />
         </div>
       </div>
+
+      <section class="rounded-md border border-gray-200 bg-white p-4">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <h2 class="text-base font-semibold text-gray-900">
+            Regelprüfung
+          </h2>
+          <UBadge
+            :color="validationBadge.color"
+            variant="subtle"
+            :label="validationBadge.label"
+            aria-label="Regelprüfung Status"
+          />
+        </div>
+
+        <p
+          v-if="!deck.format"
+          class="mt-2 text-sm text-gray-500"
+        >
+          Wähle oben ein Format, um dieses Deck automatisch auf Legalität zu prüfen.
+        </p>
+        <p
+          v-else-if="validation?.legal"
+          class="mt-2 text-sm text-gray-500"
+        >
+          Das Deck erfüllt alle Regeln von "{{ deck.format.name }}".
+        </p>
+        <ul
+          v-else
+          class="mt-2 list-inside list-disc space-y-0.5 text-sm text-red-700"
+        >
+          <li
+            v-for="(issue, index) in validation?.issues ?? []"
+            :key="`${issue.code}-${issue.cardId ?? issue.section ?? index}`"
+          >
+            {{ issue.message }}
+          </li>
+        </ul>
+      </section>
 
       <UAlert
         v-if="warnings.length > 0"
@@ -558,6 +691,16 @@ async function deleteDeck() {
                   <p class="truncate text-xs text-gray-500">
                     {{ cardMetaLine(card) }}
                   </p>
+                  <!-- Only cards already in the deck have a known status: the
+                       whole inventory is never validated. -->
+                  <UBadge
+                    v-if="statusLabelFor(card.catalogCardId)"
+                    class="mt-0.5"
+                    size="sm"
+                    variant="subtle"
+                    :color="statusColorFor(card.catalogCardId)"
+                    :label="statusLabelFor(card.catalogCardId) ?? ''"
+                  />
                   <p class="mt-0.5 text-xs text-gray-500">
                     Besitz: <span class="font-semibold tabular-nums">{{ card.owned }}</span>
                     · im Deck: <span class="font-semibold tabular-nums">{{ usedByCard.get(card.catalogCardId) ?? 0 }}</span>
@@ -619,6 +762,7 @@ async function deleteDeck() {
                 v-for="row in sections[section]"
                 :key="`${section}-${row.catalogCardId}`"
                 class="flex items-center gap-3 px-4 py-2"
+                :class="issueCardIds.has(row.catalogCardId) ? 'bg-red-50' : undefined"
               >
                 <img
                   v-if="row.imageSmall"
@@ -640,6 +784,15 @@ async function deleteDeck() {
                   <p class="truncate text-xs text-gray-500">
                     {{ cardMetaLine(row) }}
                   </p>
+                  <UBadge
+                    v-if="statusLabelFor(row.catalogCardId)"
+                    class="mt-0.5"
+                    size="sm"
+                    variant="subtle"
+                    :color="statusColorFor(row.catalogCardId)"
+                    :label="statusLabelFor(row.catalogCardId) ?? ''"
+                    :title="cardStatusFor(row.catalogCardId)?.reasons.join(' · ')"
+                  />
                 </div>
 
                 <span

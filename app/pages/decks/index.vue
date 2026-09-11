@@ -9,6 +9,9 @@ interface DeckListItem {
   cardCount: number
   complete: boolean
   missingCount: number
+  formatId: string | null
+  formatName: string | null
+  legal: boolean | null
   createdAt: string
   updatedAt: string
 }
@@ -27,6 +30,10 @@ useHead({ title: 'Decks – yugioh alpha' })
 const searchInput = ref('')
 const debouncedSearch = ref('')
 const sort = ref<'updated' | 'name' | '-name' | 'newest'>('updated')
+// reka-ui reserves the empty string for "clear selection", so "no filter" uses
+// a sentinel that is dropped from the query.
+const ALL_FORMATS = '__all_formats__'
+const formatFilter = ref(ALL_FORMATS)
 const page = ref(1)
 const errorMessage = ref('')
 
@@ -39,13 +46,14 @@ watch(searchInput, (value) => {
   }, 300)
 })
 
-watch(sort, () => {
+watch([sort, formatFilter], () => {
   page.value = 1
 })
 
 const deckQuery = computed(() => ({
   q: debouncedSearch.value || undefined,
   sort: sort.value,
+  formatId: formatFilter.value === ALL_FORMATS ? undefined : formatFilter.value,
   page: page.value,
   pageSize: PAGE_SIZE,
 }))
@@ -59,6 +67,17 @@ const { data, pending, refresh } = await useFetch<DeckListResponse>('/api/decks'
 
 const decks = computed(() => data.value?.items ?? [])
 const total = computed(() => data.value?.total ?? 0)
+
+const { data: formatsData } = await useFetch<{ items: Array<{ id: string, name: string, isBuiltin: boolean }> }>('/api/formats', {
+  headers: import.meta.server ? useRequestHeaders(['cookie']) : undefined,
+  default: () => ({ items: [] }),
+})
+
+const formatFilterItems = computed(() => [
+  { label: 'Alle Formate', value: ALL_FORMATS },
+  { label: 'Ohne Format', value: 'none' },
+  ...(formatsData.value?.items ?? []).map(format => ({ label: format.name, value: format.id })),
+])
 
 const sortItems = [
   { label: 'Zuletzt bearbeitet', value: 'updated' },
@@ -194,6 +213,12 @@ function statusColor(deck: DeckListItem) {
         aria-label="Sortierung"
         class="w-52"
       />
+      <USelect
+        v-model="formatFilter"
+        :items="formatFilterItems"
+        aria-label="Format"
+        class="w-52"
+      />
     </div>
 
     <p
@@ -313,13 +338,26 @@ function statusColor(deck: DeckListItem) {
           </div>
         </dl>
 
-        <div class="mt-4 flex items-center justify-between">
+        <div class="mt-4 flex flex-wrap items-center gap-2">
           <UBadge
             :color="statusColor(deck)"
             variant="subtle"
             :label="statusLabel(deck)"
           />
-          <span class="text-xs text-gray-400">{{ deck.cardCount }} Karten</span>
+          <UBadge
+            v-if="deck.formatName"
+            color="neutral"
+            variant="subtle"
+            icon="i-lucide-scroll-text"
+            :label="deck.formatName"
+          />
+          <UBadge
+            v-if="deck.legal !== null"
+            :color="deck.legal ? 'success' : 'error'"
+            variant="subtle"
+            :label="deck.legal ? 'Legal' : 'Nicht legal'"
+          />
+          <span class="ml-auto text-xs text-gray-400">{{ deck.cardCount }} Karten</span>
         </div>
       </li>
     </ul>
