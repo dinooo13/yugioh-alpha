@@ -165,6 +165,13 @@ Product outcome:
 
 Users can add cards quickly without relying only on manual search and entry.
 
+Note: "photo-based card recognition" is currently covered by reading the card
+name / set code from a photo (client-side OCR, see
+[ADR 0003](adr/0003-client-side-ocr-and-speech-entry.md)). Recognizing a card
+from its artwork alone (perceptual hashing or embeddings against catalog
+images) is still open and depends on the locally cached card images that
+[ADR 0001](adr/0001-card-catalog-data-model.md) lists as follow-up work.
+
 ### Phase 3: Deckbuilder
 
 Goal: Let users build and save decks from their own cards.
