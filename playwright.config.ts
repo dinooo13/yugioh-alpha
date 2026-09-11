@@ -1,7 +1,7 @@
 import { defineConfig, devices } from '@playwright/test'
 import { fileURLToPath } from 'node:url'
 
-const PORT = 3300
+const PORT = Number(process.env.E2E_PORT) || 3300
 const baseURL = `http://localhost:${PORT}`
 const e2eDbFile = fileURLToPath(new URL('./e2e-data/e2e.db', import.meta.url))
 
@@ -32,6 +32,7 @@ export default defineConfig({
       NUXT_DB_FILE_PATH: e2eDbFile,
       NUXT_BETTER_AUTH_SECRET: 'e2e-test-secret-not-for-production-use-only',
       NUXT_PUBLIC_BETTER_AUTH_URL: baseURL,
+      NUXT_E2E_SEED_CATALOG: '1',
     },
   },
 })
