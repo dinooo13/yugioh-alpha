@@ -1,5 +1,6 @@
 import { relations } from 'drizzle-orm'
 import { sqliteTable, text, integer, index, uniqueIndex } from 'drizzle-orm/sqlite-core'
+import type { RuleSet } from '../../shared/rule-formats'
 
 // Better Auth core tables (email/password only).
 // Generated to match Better Auth's expected schema for the Drizzle adapter (provider: "sqlite").
@@ -242,6 +243,41 @@ export const ownedCardRelations = relations(ownedCard, ({ one }) => ({
   }),
 }))
 
+// Rule formats (see docs/adr/0005-rule-format-model.md).
+//
+// A format is a named list of typed rule predicates stored as JSON and
+// evaluated in code (shared/rule-formats.ts). `userId` NULL marks a built-in,
+// globally visible format seeded at boot (`seedBuiltinFormats`); a row with a
+// `userId` is that user's custom format. Legality is never stored — it is
+// computed at read time from the deck, the format's rules, and catalog data.
+
+export const ruleFormat = sqliteTable(
+  'rule_format',
+  {
+    // Fixed slug for built-ins ('tcg-advanced', ...), UUID for custom formats.
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .references(() => user.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    description: text('description'),
+    rules: text('rules', { mode: 'json' }).notNull().$type<RuleSet>(),
+    isBuiltin: integer('is_builtin', { mode: 'boolean' }).notNull().default(false),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+  },
+  table => [
+    index('idx_rule_format_user').on(table.userId),
+  ],
+)
+
+export const ruleFormatRelations = relations(ruleFormat, ({ one, many }) => ({
+  user: one(user, {
+    fields: [ruleFormat.userId],
+    references: [user.id],
+  }),
+  decks: many(deck),
+}))
+
 // Saved deck constructions (see docs/adr/0004-deck-data-model.md).
 //
 // A deck is a *construction*, not a set of physical cards: its rows point at
@@ -258,11 +294,16 @@ export const deck = sqliteTable(
       .references(() => user.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     description: text('description'),
+    // Selected rule format, or NULL for "no format" (deck validation off).
+    // Deleting a format un-assigns it instead of deleting decks.
+    formatId: text('format_id')
+      .references(() => ruleFormat.id, { onDelete: 'set null' }),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
     updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
   },
   table => [
     index('idx_deck_user').on(table.userId),
+    index('idx_deck_format').on(table.formatId),
   ],
 )
 
@@ -294,6 +335,10 @@ export const deckRelations = relations(deck, ({ one, many }) => ({
   user: one(user, {
     fields: [deck.userId],
     references: [user.id],
+  }),
+  format: one(ruleFormat, {
+    fields: [deck.formatId],
+    references: [ruleFormat.id],
   }),
   cards: many(deckCard),
 }))

@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
+import { USelect } from '#components'
 import DeckEditorPage from '~/pages/decks/[id].vue'
+import { optionLabels, selectWithOption } from './fixtures/select-wrapper'
+import type { DeckValidation } from '~~/shared/rule-formats'
 
 type DeckSection = 'main' | 'extra' | 'side'
 
@@ -47,6 +50,12 @@ const state = vi.hoisted(() => ({
   source: { items: [] as Array<Record<string, unknown>>, total: 0 },
   facets: { types: [] as string[], attributes: [] as string[] },
   ownedQuantities: {} as Record<string, number>,
+  formats: {
+    items: [
+      { id: 'tcg-advanced', name: 'TCG Advanced', isBuiltin: true },
+      { id: 'own-1', name: 'Nur alte Karten', isBuiltin: false },
+    ],
+  },
 }))
 
 mockNuxtImport('useFetch', () => {
@@ -62,6 +71,9 @@ mockNuxtImport('useFetch', () => {
     if (resolvedUrl === '/api/inventory/owned-quantities') {
       return { data: ref(state.ownedQuantities), pending: ref(false), error: ref(null), refresh: vi.fn() }
     }
+    if (resolvedUrl === '/api/formats') {
+      return { data: ref(state.formats), pending: ref(false), error: ref(null), refresh: vi.fn() }
+    }
     return { data: ref(state.deck), pending: ref(false), error: ref(null), refresh: vi.fn() }
   }
 })
@@ -70,11 +82,18 @@ mockNuxtImport('useRoute', () => {
   return () => ({ path: '/decks/deck-1', params: { id: 'deck-1' }, query: {} })
 })
 
-function deckDetail(sections: Partial<Record<DeckSection, DeckCardRow[]>>, warnings: Array<{ code: string, message: string }> = []) {
+function deckDetail(
+  sections: Partial<Record<DeckSection, DeckCardRow[]>>,
+  warnings: Array<{ code: string, message: string }> = [],
+  format: { id: string, name: string, isBuiltin: boolean } | null = null,
+  validation: DeckValidation | null = null,
+) {
   const full = { main: [], extra: [], side: [], ...sections } as Record<DeckSection, DeckCardRow[]>
   const count = (section: DeckSection) => full[section].reduce((total, card) => total + card.quantity, 0)
 
   return {
+    format,
+    validation,
     id: 'deck-1',
     name: 'Test Deck',
     description: 'Meine Notizen',
@@ -403,5 +422,137 @@ describe('deck editor mutations', () => {
 
     expect(component.text()).toContain('Auch Katalogkarten anzeigen')
     expect(component.text()).toContain('Besitz: 4')
+  })
+})
+
+describe('deck editor rule validation', () => {
+  function validation(overrides: Partial<DeckValidation> = {}): DeckValidation {
+    return {
+      legal: true,
+      issues: [],
+      cards: {},
+      ...overrides,
+    }
+  }
+
+  it('shows a neutral state while no format is assigned', async () => {
+    state.source = { items: [], total: 0 }
+    state.deck = deckDetail({ main: [row({ name: 'Dark Magician', section: 'main' })] })
+
+    const component = await mountSuspended(DeckEditorPage)
+
+    expect(component.text()).toContain('Regelprüfung')
+    expect(component.text()).toContain('Kein Format gewählt')
+    expect(component.text()).toContain('Wähle oben ein Format')
+  })
+
+  it('renders the legality badge, the issue list, and per-row status badges', async () => {
+    state.source = {
+      items: [{
+        catalogCardId: 55144522,
+        name: 'Pot of Greed',
+        type: 'Spell Card',
+        attribute: null,
+        race: 'Normal',
+        level: null,
+        imageSmall: null,
+        totalQuantity: 1,
+      }],
+      total: 1,
+    }
+    state.deck = deckDetail(
+      {
+        main: [
+          row({ name: 'Pot of Greed', section: 'main', catalogCardId: 55144522, type: 'Spell Card' }),
+          row({ name: 'Dark Magician', section: 'main', quantity: 2, owned: 2, usedInDeck: 2 }),
+        ],
+      },
+      [],
+      { id: 'tcg-advanced', name: 'TCG Advanced', isBuiltin: true },
+      validation({
+        legal: false,
+        issues: [
+          { severity: 'error', code: 'card_forbidden', cardId: 55144522, message: 'Pot of Greed ist in diesem Format verboten.' },
+          { severity: 'error', code: 'deck_size_min', section: 'main', message: 'Das Main Deck hat 3 Karten, mindestens 40 sind erforderlich.' },
+        ],
+        cards: {
+          55144522: { maxCopies: 0, status: 'forbidden', reasons: ['TCG-Banliste: Forbidden'] },
+          46986414: { maxCopies: 3, status: 'unrestricted', reasons: [] },
+        },
+      }),
+    )
+
+    const component = await mountSuspended(DeckEditorPage)
+    const text = component.text()
+
+    expect(component.find('[aria-label="Regelprüfung Status"]').text()).toBe('Nicht legal – 2 Probleme')
+    expect(text).toContain('Pot of Greed ist in diesem Format verboten.')
+    expect(text).toContain('Das Main Deck hat 3 Karten, mindestens 40 sind erforderlich.')
+
+    // The forbidden card is badged (in the deck list *and* the card picker)
+    // and its row is highlighted; the legal card is not.
+    expect(text).toContain('Verboten')
+    const forbiddenRows = component.findAll('li').filter(item => item.classes().includes('bg-red-50'))
+    expect(forbiddenRows).toHaveLength(1)
+    expect(forbiddenRows[0]!.text()).toContain('Pot of Greed')
+  })
+
+  it('shows a green badge for a legal deck', async () => {
+    state.source = { items: [], total: 0 }
+    state.deck = deckDetail(
+      { main: [row({ name: 'Dark Magician', section: 'main' })] },
+      [],
+      { id: 'own-1', name: 'Nur alte Karten', isBuiltin: false },
+      validation({ legal: true, cards: { 46986414: { maxCopies: 3, status: 'unrestricted', reasons: [] } } }),
+    )
+
+    const component = await mountSuspended(DeckEditorPage)
+
+    expect(component.find('[aria-label="Regelprüfung Status"]').text()).toBe('Legal')
+    expect(component.text()).toContain('Das Deck erfüllt alle Regeln von "Nur alte Karten".')
+  })
+
+  it('PATCHes the deck when another format is selected and renders the response', async () => {
+    state.source = { items: [], total: 0 }
+    state.deck = deckDetail({ main: [row({ name: 'Dark Magician', section: 'main' })] })
+
+    const patched = deckDetail(
+      { main: [row({ name: 'Dark Magician', section: 'main' })] },
+      [],
+      { id: 'tcg-advanced', name: 'TCG Advanced', isBuiltin: true },
+      validation({
+        legal: false,
+        issues: [{ severity: 'error', code: 'deck_size_min', section: 'main', message: 'Das Main Deck hat 1 Karten, mindestens 40 sind erforderlich.' }],
+        cards: {},
+      }),
+    )
+
+    const fetchMock = vi.fn((url: string) => (
+      url.startsWith('/api/decks/') ? Promise.resolve(patched) : Promise.resolve(null)
+    ))
+    vi.stubGlobal('$fetch', fetchMock)
+
+    const component = await mountSuspended(DeckEditorPage)
+
+    // The format select teleports its listbox, so drive its v-model directly.
+    const formatSelect = selectWithOption(component.findAllComponents(USelect), '__no_format__')
+    expect(formatSelect).toBeTruthy()
+    expect(optionLabels(formatSelect!)).toEqual([
+      'Kein Format',
+      'TCG Advanced',
+      'Nur alte Karten (eigenes)',
+    ])
+
+    await formatSelect!.setValue('tcg-advanced')
+    await flushPromises()
+    await component.vm.$nextTick()
+
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).startsWith('/api/decks/'))).toEqual([[
+      '/api/decks/deck-1',
+      { method: 'PATCH', body: { formatId: 'tcg-advanced' } },
+    ]])
+
+    expect(component.find('[aria-label="Regelprüfung Status"]').text()).toBe('Nicht legal – 1 Problem')
+    vi.unstubAllGlobals()
   })
 })

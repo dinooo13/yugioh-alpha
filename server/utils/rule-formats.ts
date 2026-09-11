@@ -1,0 +1,478 @@
+// Rule format persistence: built-in (global) formats plus a user's own
+// formats, both stored in `rule_format` with the rules as a JSON `RuleSet`.
+// See docs/adr/0005-rule-format-model.md.
+
+import { randomUUID } from 'node:crypto'
+import { and, asc, desc, eq, inArray, or } from 'drizzle-orm'
+import type { SQL } from 'drizzle-orm'
+import { createError } from 'h3'
+import type { useDb } from '../db'
+import { ruleFormat } from '../db/schema'
+import {
+  referencedCardIds,
+  RULE_FORMAT_DESCRIPTION_MAX_LENGTH,
+  RULE_FORMAT_NAME_MAX_LENGTH,
+  RuleSetValidationError,
+  validateRuleSet,
+} from '../../shared/rule-formats'
+import type { RuleSet } from '../../shared/rule-formats'
+import { loadCardNames, missingCatalogCardIds } from './deck-validation'
+
+type Db = ReturnType<typeof useDb>
+
+export { RULE_FORMAT_DESCRIPTION_MAX_LENGTH, RULE_FORMAT_NAME_MAX_LENGTH }
+
+export interface RuleFormatInput {
+  name: string
+  description: string | null
+  rules: RuleSet
+}
+
+export interface RuleFormatListItem {
+  id: string
+  name: string
+  description: string | null
+  isBuiltin: boolean
+  ruleCount: number
+  updatedAt: Date
+}
+
+export interface RuleFormatDetail {
+  id: string
+  name: string
+  description: string | null
+  isBuiltin: boolean
+  rules: RuleSet
+  /** Names of every catalog card the rules reference, for the editor UI. */
+  cardNames: Record<number, string>
+  createdAt: Date
+  updatedAt: Date
+}
+
+// --- Built-in formats ------------------------------------------------------
+
+/** Deck sizes every "normal" format shares (40–60 main, 15 extra, 15 side). */
+const STANDARD_DECK_SIZES: RuleSet['rules'] = [
+  { kind: 'deck_size', section: 'main', min: 40, max: 60 },
+  { kind: 'deck_size', section: 'extra', max: 15 },
+  { kind: 'deck_size', section: 'side', max: 15 },
+]
+
+export interface BuiltinFormatDefinition {
+  id: string
+  name: string
+  description: string
+  rules: RuleSet
+}
+
+/**
+ * Globally available formats (`user_id IS NULL`, `is_builtin = 1`). They are
+ * read-only for everyone and re-seeded on every boot, so rule improvements
+ * ship with a deploy instead of needing a data migration.
+ */
+export const BUILTIN_FORMATS: BuiltinFormatDefinition[] = [
+  {
+    id: 'tcg-advanced',
+    name: 'TCG Advanced',
+    description: 'Offizielles Turnierformat des TCG: Standard-Deckgrößen, höchstens 3 Kopien pro Karte und die aktuelle TCG-Verbots- und Beschränkungsliste.',
+    rules: {
+      rules: [
+        ...STANDARD_DECK_SIZES,
+        { kind: 'copies', maxCopies: 3 },
+        { kind: 'banlist', source: 'tcg' },
+      ],
+    },
+  },
+  {
+    id: 'ocg',
+    name: 'OCG',
+    description: 'Japanisches Turnierformat: Standard-Deckgrößen, höchstens 3 Kopien pro Karte und die OCG-Verbots- und Beschränkungsliste.',
+    rules: {
+      rules: [
+        ...STANDARD_DECK_SIZES,
+        { kind: 'copies', maxCopies: 3 },
+        { kind: 'banlist', source: 'ocg' },
+      ],
+    },
+  },
+  {
+    id: 'goat',
+    name: 'GOAT Format',
+    description: 'Retro-Format auf dem Stand von April 2005: nur Karten, die bis Juni 2005 im TCG erschienen sind, plus die GOAT-Banliste.',
+    rules: {
+      rules: [
+        ...STANDARD_DECK_SIZES,
+        { kind: 'copies', maxCopies: 3 },
+        { kind: 'banlist', source: 'goat' },
+        {
+          kind: 'filter',
+          match: 'not_matching',
+          filter: { releasedBefore: '2005-07-01', region: 'tcg' },
+          maxCopies: 0,
+          label: 'Nur Karten bis Juni 2005',
+        },
+      ],
+    },
+  },
+  {
+    id: 'unlimited',
+    name: 'Ohne Banliste',
+    description: 'Standard-Deckgrößen und höchstens 3 Kopien pro Karte, aber keinerlei Verbots- oder Beschränkungsliste.',
+    rules: {
+      rules: [
+        ...STANDARD_DECK_SIZES,
+        { kind: 'copies', maxCopies: 3 },
+      ],
+    },
+  },
+]
+
+/**
+ * Upserts the built-in formats. Idempotent and called from the migrate plugin
+ * on every boot: `name`, `description`, and `rules` are refreshed, while
+ * `created_at` and any deck references stay untouched.
+ */
+export function seedBuiltinFormats(db: Db) {
+  const now = new Date()
+
+  db.transaction((tx) => {
+    for (const format of BUILTIN_FORMATS) {
+      tx.insert(ruleFormat)
+        .values({
+          id: format.id,
+          userId: null,
+          name: format.name,
+          description: format.description,
+          rules: format.rules,
+          isBuiltin: true,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .onConflictDoUpdate({
+          target: ruleFormat.id,
+          set: {
+            userId: null,
+            name: format.name,
+            description: format.description,
+            rules: format.rules,
+            isBuiltin: true,
+            updatedAt: now,
+          },
+        })
+        .run()
+    }
+  })
+}
+
+// --- Errors ----------------------------------------------------------------
+
+function badRequest(message: string): never {
+  throw createError({ statusCode: 400, statusMessage: message })
+}
+
+function notFound(message = 'Format not found'): never {
+  throw createError({ statusCode: 404, statusMessage: message })
+}
+
+function forbidden(message: string): never {
+  throw createError({ statusCode: 403, statusMessage: message })
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+// --- Input validation ------------------------------------------------------
+
+function normalizeName(value: unknown): string {
+  if (typeof value !== 'string') {
+    badRequest('name is required')
+  }
+  const name = value.trim()
+  if (name === '') {
+    badRequest('name is required')
+  }
+  if (name.length > RULE_FORMAT_NAME_MAX_LENGTH) {
+    badRequest(`name must be at most ${RULE_FORMAT_NAME_MAX_LENGTH} characters`)
+  }
+  return name
+}
+
+function normalizeDescription(value: unknown): string | null {
+  if (value === undefined || value === null) {
+    return null
+  }
+  if (typeof value !== 'string') {
+    badRequest('description must be a string')
+  }
+  const trimmed = value.trim()
+  if (trimmed.length > RULE_FORMAT_DESCRIPTION_MAX_LENGTH) {
+    badRequest(`description must be at most ${RULE_FORMAT_DESCRIPTION_MAX_LENGTH} characters`)
+  }
+  return trimmed === '' ? null : trimmed
+}
+
+/** Runs the pure rule validator and maps its error to a 400. */
+export function normalizeRuleSet(value: unknown): RuleSet {
+  try {
+    return validateRuleSet(value)
+  }
+  catch (error) {
+    if (error instanceof RuleSetValidationError) {
+      badRequest(error.message)
+    }
+    throw error
+  }
+}
+
+/**
+ * Rejects `card_status`/`cardIds` rules that point at cards the catalog does
+ * not know — a rule referencing a typo'd passcode would silently never apply.
+ */
+export function assertRuleCardsExist(db: Db, rules: RuleSet) {
+  const missing = missingCatalogCardIds(db, referencedCardIds(rules))
+  if (missing.length > 0) {
+    badRequest(`unknown catalog card ids in rules: ${missing.join(', ')}`)
+  }
+}
+
+export function validateRuleFormatInput(body: unknown): RuleFormatInput {
+  if (!isRecord(body)) {
+    badRequest('Request body must be an object')
+  }
+
+  return {
+    name: normalizeName(body.name),
+    description: normalizeDescription(body.description),
+    rules: normalizeRuleSet(body.rules ?? { rules: [] }),
+  }
+}
+
+export function validateRuleFormatUpdateInput(body: unknown): Partial<RuleFormatInput> {
+  if (!isRecord(body)) {
+    badRequest('Request body must be an object')
+  }
+
+  const input: Partial<RuleFormatInput> = {}
+  if (body.name !== undefined) {
+    input.name = normalizeName(body.name)
+  }
+  if (body.description !== undefined) {
+    input.description = normalizeDescription(body.description)
+  }
+  if (body.rules !== undefined) {
+    input.rules = normalizeRuleSet(body.rules)
+  }
+
+  return input
+}
+
+// --- Reads -----------------------------------------------------------------
+
+/** Built-in formats plus the caller's own — anything else is invisible. */
+function accessibleClause(userId: string): SQL {
+  return or(eq(ruleFormat.isBuiltin, true), eq(ruleFormat.userId, userId)) as SQL
+}
+
+export function listRuleFormats(db: Db, userId: string): { items: RuleFormatListItem[] } {
+  const rows = db
+    .select()
+    .from(ruleFormat)
+    .where(accessibleClause(userId))
+    // Built-ins first, then the user's own formats alphabetically.
+    .orderBy(desc(ruleFormat.isBuiltin), asc(ruleFormat.name))
+    .all()
+
+  return {
+    items: rows.map(row => ({
+      id: row.id,
+      name: row.name,
+      description: row.description,
+      isBuiltin: row.isBuiltin,
+      ruleCount: row.rules?.rules?.length ?? 0,
+      updatedAt: row.updatedAt,
+    })),
+  }
+}
+
+/**
+ * A format the caller may read: a built-in or one of their own. Another
+ * user's format is reported as missing (same ownership boundary as decks).
+ */
+export function requireAccessibleFormat(db: Db, userId: string, formatId: string) {
+  const row = db
+    .select()
+    .from(ruleFormat)
+    .where(and(eq(ruleFormat.id, formatId), accessibleClause(userId)))
+    .get()
+
+  if (!row) {
+    notFound()
+  }
+
+  return row
+}
+
+function requireOwnFormat(db: Db, userId: string, formatId: string) {
+  const row = requireAccessibleFormat(db, userId, formatId)
+
+  if (row.isBuiltin || row.userId === null) {
+    forbidden('Built-in formats are read-only. Clone the format to change its rules.')
+  }
+  if (row.userId !== userId) {
+    notFound()
+  }
+
+  return row
+}
+
+function toDetail(db: Db, row: typeof ruleFormat.$inferSelect): RuleFormatDetail {
+  const rules: RuleSet = row.rules ?? { rules: [] }
+
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description,
+    isBuiltin: row.isBuiltin,
+    rules,
+    cardNames: loadCardNames(db, referencedCardIds(rules)),
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  }
+}
+
+export function getRuleFormat(db: Db, userId: string, formatId: string): RuleFormatDetail {
+  return toDetail(db, requireAccessibleFormat(db, userId, formatId))
+}
+
+// --- Writes ----------------------------------------------------------------
+
+export function createRuleFormat(db: Db, userId: string, input: RuleFormatInput): RuleFormatDetail {
+  assertRuleCardsExist(db, input.rules)
+
+  const now = new Date()
+  const [created] = db
+    .insert(ruleFormat)
+    .values({
+      id: randomUUID(),
+      userId,
+      name: input.name,
+      description: input.description,
+      rules: input.rules,
+      isBuiltin: false,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .returning()
+    .all()
+
+  return toDetail(db, created!)
+}
+
+export function updateRuleFormat(
+  db: Db,
+  userId: string,
+  formatId: string,
+  patch: Partial<RuleFormatInput>,
+): RuleFormatDetail {
+  const current = requireOwnFormat(db, userId, formatId)
+
+  if (patch.name === undefined && patch.description === undefined && patch.rules === undefined) {
+    return toDetail(db, current)
+  }
+  if (patch.rules) {
+    assertRuleCardsExist(db, patch.rules)
+  }
+
+  const [updated] = db
+    .update(ruleFormat)
+    .set({
+      name: patch.name ?? current.name,
+      description: patch.description !== undefined ? patch.description : current.description,
+      rules: patch.rules ?? current.rules,
+      updatedAt: new Date(),
+    })
+    .where(eq(ruleFormat.id, formatId))
+    .returning()
+    .all()
+
+  return toDetail(db, updated!)
+}
+
+export function deleteRuleFormat(db: Db, userId: string, formatId: string) {
+  requireOwnFormat(db, userId, formatId)
+
+  // Decks referencing the format keep existing; `deck.format_id` is reset to
+  // NULL by the FK (ON DELETE SET NULL).
+  db.delete(ruleFormat).where(and(eq(ruleFormat.id, formatId), eq(ruleFormat.userId, userId))).run()
+}
+
+/** Truncates the base name (not the suffix) so the copy stays within 80 chars. */
+export function cloneNameFor(name: string): string {
+  const suffix = ' (Kopie)'
+  return `${name.slice(0, RULE_FORMAT_NAME_MAX_LENGTH - suffix.length).trimEnd()}${suffix}`
+}
+
+export function cloneRuleFormat(db: Db, userId: string, formatId: string): RuleFormatDetail {
+  const source = requireAccessibleFormat(db, userId, formatId)
+  const now = new Date()
+
+  const [copy] = db
+    .insert(ruleFormat)
+    .values({
+      id: randomUUID(),
+      userId,
+      name: cloneNameFor(source.name),
+      description: source.description,
+      rules: source.rules ?? { rules: [] },
+      isBuiltin: false,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .returning()
+    .all()
+
+  return toDetail(db, copy!)
+}
+
+/**
+ * Resolves a `formatId` a deck may be assigned to. Unlike reads this answers
+ * with a 400: the id is part of a deck write, not the addressed resource.
+ */
+export function requireAssignableFormat(db: Db, userId: string, formatId: string) {
+  const row = db
+    .select({ id: ruleFormat.id, name: ruleFormat.name, isBuiltin: ruleFormat.isBuiltin })
+    .from(ruleFormat)
+    .where(and(
+      eq(ruleFormat.id, formatId),
+      or(eq(ruleFormat.isBuiltin, true), eq(ruleFormat.userId, userId)),
+    ))
+    .get()
+
+  if (!row) {
+    badRequest('format_id does not exist')
+  }
+
+  return row
+}
+
+/** Formats visible to the caller, by id — used when validating a deck list. */
+export function ruleFormatsById(db: Db, userId: string, formatIds: string[]) {
+  const unique = [...new Set(formatIds)]
+  const byId = new Map<string, typeof ruleFormat.$inferSelect>()
+  if (unique.length === 0) {
+    return byId
+  }
+
+  const rows = db
+    .select()
+    .from(ruleFormat)
+    .where(and(inArray(ruleFormat.id, unique), accessibleClause(userId)))
+    .all()
+
+  for (const row of rows) {
+    byId.set(row.id, row)
+  }
+
+  return byId
+}

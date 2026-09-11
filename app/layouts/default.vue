@@ -18,14 +18,15 @@ interface CollectionsResponse {
 const route = useRoute()
 
 // A nav entry stays highlighted on its sub-pages — the Schnellerfassung at
-// `/inventar/erfassen` and the deck editor at `/decks/:id` are child routes,
-// not separate destinations, which an exact link match misses.
+// `/inventar/erfassen`, the deck editor at `/decks/:id`, and the format editor
+// at `/formate/:id` are child routes, not separate destinations, which an
+// exact link match misses.
 const navItems = computed<NavigationMenuItem[]>(() => [
   { label: 'Dashboard', icon: 'i-lucide-layout-dashboard', to: '/' },
   { label: 'Inventar', icon: 'i-lucide-archive', to: '/inventar', active: route.path.startsWith('/inventar') },
   { label: 'Katalog', icon: 'i-lucide-book-open', to: '/katalog' },
   { label: 'Decks', icon: 'i-lucide-layers', to: '/decks', active: route.path.startsWith('/decks') },
-  { label: 'Formate', icon: 'i-lucide-scroll-text', to: '/formate' },
+  { label: 'Formate', icon: 'i-lucide-scroll-text', to: '/formate', active: route.path.startsWith('/formate') },
   { label: 'Turniere', icon: 'i-lucide-trophy', to: '/turniere' },
 ])
 

@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
+import { USelect } from '#components'
 import DecksPage from '~/pages/decks/index.vue'
+import { optionLabels, selectWithOption } from './fixtures/select-wrapper'
 
 interface DeckListItem {
   id: string
@@ -12,12 +14,16 @@ interface DeckListItem {
   cardCount: number
   complete: boolean
   missingCount: number
+  formatId: string | null
+  formatName: string | null
+  legal: boolean | null
   createdAt: string
   updatedAt: string
 }
 
 const state = vi.hoisted(() => ({
   decks: { items: [] as DeckListItem[], total: 0, page: 1, pageSize: 20 },
+  formats: { items: [{ id: 'tcg-advanced', name: 'TCG Advanced', isBuiltin: true }] },
 }))
 
 mockNuxtImport('useFetch', () => {
@@ -25,6 +31,9 @@ mockNuxtImport('useFetch', () => {
     const resolvedUrl = typeof url === 'function' ? url() : url
     if (resolvedUrl === '/api/decks') {
       return { data: ref(state.decks), pending: ref(false), error: ref(null), refresh: vi.fn() }
+    }
+    if (resolvedUrl === '/api/formats') {
+      return { data: ref(state.formats), pending: ref(false), error: ref(null), refresh: vi.fn() }
     }
     return { data: ref(null), pending: ref(false), error: ref(null), refresh: vi.fn() }
   }
@@ -41,6 +50,9 @@ function deck(overrides: Partial<DeckListItem> = {}): DeckListItem {
     cardCount: 41,
     complete: true,
     missingCount: 0,
+    formatId: null,
+    formatName: null,
+    legal: null,
     createdAt: '2025-01-01T00:00:00.000Z',
     updatedAt: '2025-01-02T00:00:00.000Z',
     ...overrides,
@@ -122,5 +134,47 @@ describe('decks page', () => {
 
     expect(component.text()).toContain('Noch keine Decks')
     expect(component.text()).not.toContain('Keine Decks gefunden')
+  })
+})
+
+describe('decks page rule formats', () => {
+  it('shows the format name and its legality badge', async () => {
+    state.decks = {
+      items: [
+        deck({ id: 'deck-1', name: 'Legales Deck', formatId: 'tcg-advanced', formatName: 'TCG Advanced', legal: true }),
+        deck({ id: 'deck-2', name: 'Illegales Deck', formatId: 'own-1', formatName: 'Nur alte Karten', legal: false }),
+        deck({ id: 'deck-3', name: 'Formatloses Deck' }),
+      ],
+      total: 3,
+      page: 1,
+      pageSize: 20,
+    }
+
+    const component = await mountSuspended(DecksPage)
+    const text = component.text()
+
+    expect(text).toContain('TCG Advanced')
+    expect(text).toContain('Nur alte Karten')
+    expect(text).toContain('Legal')
+    expect(text).toContain('Nicht legal')
+
+    const cards = component.findAll('li').filter(item => item.text().includes('Formatloses Deck'))
+    expect(cards).toHaveLength(1)
+    expect(cards[0]!.text()).not.toContain('Legal')
+  })
+
+  it('offers a format filter built from the available formats', async () => {
+    state.decks = { items: [deck()], total: 1, page: 1, pageSize: 20 }
+
+    const component = await mountSuspended(DecksPage)
+
+    const formatSelect = selectWithOption(component.findAllComponents(USelect), '__all_formats__')
+
+    expect(formatSelect).toBeTruthy()
+    expect(optionLabels(formatSelect!)).toEqual([
+      'Alle Formate',
+      'Ohne Format',
+      'TCG Advanced',
+    ])
   })
 })
