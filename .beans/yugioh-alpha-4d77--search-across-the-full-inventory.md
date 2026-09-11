@@ -1,16 +1,15 @@
 ---
 # yugioh-alpha-4d77
 title: Search across the full inventory
-status: in-progress
+status: completed
 type: feature
 priority: normal
 tags:
     - effort:medium
-    - needs-review
     - area:inventory
     - area:ui
 created_at: 2026-07-04T18:26:28Z
-updated_at: 2026-07-12T13:51:28Z
+updated_at: 2026-09-11T16:31:12Z
 parent: yugioh-alpha-brmu
 blocked_by:
     - yugioh-alpha-f785
@@ -378,3 +377,7 @@ PR: https://github.com/dinooo13/yugioh-alpha/pull/6
 - [x] Tests: unit (parse/where) + nuxt (aggregation, filters, breakdown, auth) + UI
 - [x] Verification: pnpm test, typecheck, lint, build + browser walkthrough
 - [x] PR opened, bean summary added
+
+## Summary of Changes
+
+Shipped inventory-wide search: `GET /api/inventory/search` (aggregated, faceted) and `GET /api/inventory/search/facets`, plus a search/filter panel and aggregated "Übersicht" view on `app/pages/inventar.vue`. Merged via PR #6 (`claude/4d77-inventory-search`) into `main` as merge commit `8645ff9f48b179d5853c7f2b9736ef6d634beae1`.

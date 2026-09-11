@@ -1,16 +1,15 @@
 ---
 # yugioh-alpha-1ga6
 title: Re-land orphaned catalog search into main
-status: in-progress
+status: completed
 type: bug
 priority: high
 tags:
     - area:ui
     - effort:medium
-    - needs-review
     - area:catalog
 created_at: 2026-07-12T14:23:37Z
-updated_at: 2026-07-12T14:34:42Z
+updated_at: 2026-09-11T16:31:06Z
 ---
 
 ## Problem
@@ -42,3 +41,7 @@ PR: https://github.com/dinooo13/yugioh-alpha/pull/7
 ## Summary of Changes
 
 Re-landed the orphaned 82gj catalog-search surface onto current main: `/katalog` page, `/api/catalog/*` endpoints, and query helpers, plus the Katalog nav link and tests. Reconciled auth to `requireUser` (dropped `require-session.ts`) and renamed `searchCatalogCards`→`searchCatalog` to avoid an auto-import clash with wxy4's inventory helper. Gates green (typecheck/lint/build; 49 tests) and verified end-to-end in the browser against the real 14k-card catalog.
+
+## Summary of Changes
+
+Merged PR #7 (`claude/1ga6-catalog-search-reland`) into `main` via merge commit `8c82aff64f9e49af9969db43493f9a69bf08b40c`. The `/katalog` page and `/api/catalog/*` endpoints are now live on `main`, resolving the orphaned-merge issue from the original 82gj landing.
