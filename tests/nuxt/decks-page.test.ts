@@ -79,8 +79,18 @@ describe('decks page', () => {
           complete: false,
           missingCount: 4,
         }),
+        deck({
+          id: 'deck-4',
+          name: 'Leeres Deck',
+          mainCount: 0,
+          extraCount: 0,
+          sideCount: 0,
+          cardCount: 0,
+          complete: false,
+          missingCount: 0,
+        }),
       ],
-      total: 3,
+      total: 4,
       page: 1,
       pageSize: 20,
     }
@@ -97,6 +107,8 @@ describe('decks page', () => {
     expect(text).toContain('Vollständig')
     expect(text).toContain('1 fehlt')
     expect(text).toContain('4 fehlen')
+    // An empty deck is neither "complete" nor missing anything.
+    expect(text).toContain('Leer')
 
     // Each deck links into its editor.
     const links = component.findAll('a').map(link => link.attributes('href'))

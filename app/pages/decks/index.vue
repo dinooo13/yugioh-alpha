@@ -142,8 +142,22 @@ function menuItemsFor(deck: DeckListItem) {
   ]]
 }
 
-function missingLabel(deck: DeckListItem) {
+// An empty deck is neither complete nor missing anything — it is just empty.
+function statusLabel(deck: DeckListItem) {
+  if (deck.cardCount === 0) {
+    return 'Leer'
+  }
+  if (deck.complete) {
+    return 'Vollständig'
+  }
   return deck.missingCount === 1 ? '1 fehlt' : `${deck.missingCount} fehlen`
+}
+
+function statusColor(deck: DeckListItem) {
+  if (deck.cardCount === 0) {
+    return 'neutral' as const
+  }
+  return deck.complete ? ('success' as const) : ('warning' as const)
 }
 </script>
 
@@ -301,9 +315,9 @@ function missingLabel(deck: DeckListItem) {
 
         <div class="mt-4 flex items-center justify-between">
           <UBadge
-            :color="deck.complete ? 'success' : 'warning'"
+            :color="statusColor(deck)"
             variant="subtle"
-            :label="deck.complete ? 'Vollständig' : missingLabel(deck)"
+            :label="statusLabel(deck)"
           />
           <span class="text-xs text-gray-400">{{ deck.cardCount }} Karten</span>
         </div>

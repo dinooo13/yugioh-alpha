@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { flushPromises } from '@vue/test-utils'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
 import DeckEditorPage from '~/pages/decks/[id].vue'
 
@@ -45,6 +46,7 @@ const state = vi.hoisted(() => ({
   deck: {} as Record<string, unknown>,
   source: { items: [] as Array<Record<string, unknown>>, total: 0 },
   facets: { types: [] as string[], attributes: [] as string[] },
+  ownedQuantities: {} as Record<string, number>,
 }))
 
 mockNuxtImport('useFetch', () => {
@@ -56,6 +58,9 @@ mockNuxtImport('useFetch', () => {
     }
     if (resolvedUrl === '/api/inventory/search/facets') {
       return { data: ref(state.facets), pending: ref(false), error: ref(null), refresh: vi.fn() }
+    }
+    if (resolvedUrl === '/api/inventory/owned-quantities') {
+      return { data: ref(state.ownedQuantities), pending: ref(false), error: ref(null), refresh: vi.fn() }
     }
     return { data: ref(state.deck), pending: ref(false), error: ref(null), refresh: vi.fn() }
   }
@@ -86,6 +91,11 @@ function deckDetail(sections: Partial<Record<DeckSection, DeckCardRow[]>>, warni
     warnings,
   }
 }
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+  state.ownedQuantities = {}
+})
 
 describe('deck editor', () => {
   it('renders the deck header, section counts against their limits, and warnings', async () => {
@@ -226,5 +236,172 @@ describe('deck editor', () => {
     expect(component.find('[aria-label="Eine Kopie von Dark Magician aus dem Main Deck entfernen"]').exists()).toBe(true)
     expect(component.find('[aria-label="Dark Magician aus dem Main Deck entfernen"]').exists()).toBe(true)
     expect(component.find('[aria-label="Dark Magician verschieben"]').exists()).toBe(true)
+  })
+})
+
+describe('deck editor mutations', () => {
+  // The page also runs through Nuxt's session helpers, which use `$fetch`
+  // too — only deck writes go to the handler under test.
+  function stubDeckFetch(handler: (url: string, options?: Record<string, unknown>) => Promise<unknown>) {
+    const mock = vi.fn((url: string, options?: Record<string, unknown>) => (
+      url.startsWith('/api/decks/')
+        ? handler(url, options)
+        : Promise.resolve(null)
+    ))
+    vi.stubGlobal('$fetch', mock)
+    return mock
+  }
+
+  function deckCalls(mock: ReturnType<typeof stubDeckFetch>) {
+    return mock.mock.calls.filter(([url]) => String(url).startsWith('/api/decks/'))
+  }
+
+  function darkMagicianDeck(quantity: number) {
+    return deckDetail({
+      main: [row({ name: 'Dark Magician', section: 'main', quantity, owned: 3, usedInDeck: quantity })],
+    })
+  }
+
+  it('sends the incremented quantity and locks the controls while the write is in flight', async () => {
+    state.source = {
+      items: [{
+        catalogCardId: 46986414,
+        name: 'Dark Magician',
+        type: 'Normal Monster',
+        attribute: 'DARK',
+        race: 'Spellcaster',
+        level: 7,
+        imageSmall: null,
+        totalQuantity: 3,
+      }],
+      total: 1,
+    }
+    state.deck = darkMagicianDeck(1)
+
+    let resolveRequest: ((detail: unknown) => void) | undefined
+    const fetchMock = stubDeckFetch(() => new Promise((resolve) => {
+      resolveRequest = resolve
+    }))
+
+    const component = await mountSuspended(DeckEditorPage)
+    const plusLabel = '[aria-label="Eine Kopie von Dark Magician zum Main Deck hinzufügen"]'
+    const addLabel = '[aria-label="Dark Magician zum Main Deck hinzufügen"]'
+
+    await component.find(plusLabel).trigger('click')
+
+    expect(deckCalls(fetchMock)).toEqual([[
+      '/api/decks/deck-1/cards',
+      { method: 'PUT', body: { catalogCardId: 46986414, section: 'main', quantity: 2 } },
+    ]])
+
+    await component.vm.$nextTick()
+
+    // While the write is in flight every mutating control is locked, so a
+    // second click cannot compute from the stale rendered quantity.
+    expect(component.find(plusLabel).attributes('disabled')).toBeDefined()
+    expect(component.find(addLabel).attributes('disabled')).toBeDefined()
+    expect(component.find('[aria-label="Anzahl von Dark Magician im Main Deck"]').attributes('disabled')).toBeDefined()
+
+    await component.find(plusLabel).trigger('click')
+    expect(deckCalls(fetchMock)).toHaveLength(1)
+
+    resolveRequest!(darkMagicianDeck(2))
+    await flushPromises()
+    await component.vm.$nextTick()
+
+    expect(component.find('[aria-label="Anzahl im Main Deck"]').text()).toBe('2/40–60')
+    expect(component.find(plusLabel).attributes('disabled')).toBeUndefined()
+    expect(component.find(addLabel).attributes('disabled')).toBeUndefined()
+  })
+
+  it('ignores a stale response that a newer write already superseded', async () => {
+    state.source = { items: [], total: 0 }
+    state.deck = darkMagicianDeck(1)
+
+    const resolvers: Array<(detail: unknown) => void> = []
+    stubDeckFetch(() => new Promise((resolve) => {
+      resolvers.push(resolve)
+    }))
+
+    const component = await mountSuspended(DeckEditorPage)
+    const minusLabel = '[aria-label="Eine Kopie von Dark Magician aus dem Main Deck entfernen"]'
+
+    // First write starts, then a second one is issued once the first settled
+    // (the guard only blocks while in flight).
+    await component.find(minusLabel).trigger('click')
+    resolvers[0]!(darkMagicianDeck(0))
+    await flushPromises()
+
+    await component.find('[aria-label="Eine Kopie von Dark Magician zum Main Deck hinzufügen"]').trigger('click')
+    // The *first* request answers late: its result must be dropped.
+    resolvers[0]!(darkMagicianDeck(42))
+    resolvers[1]!(darkMagicianDeck(7))
+    await flushPromises()
+    await component.vm.$nextTick()
+
+    expect(component.find('[aria-label="Anzahl im Main Deck"]').text()).toBe('7/40–60')
+  })
+
+  it('surfaces a rejected write and keeps the deck unchanged', async () => {
+    state.source = { items: [], total: 0 }
+    state.deck = darkMagicianDeck(1)
+
+    stubDeckFetch(() => Promise.reject(new Error('Extra deck cards can only be placed in the extra or side section')))
+
+    const component = await mountSuspended(DeckEditorPage)
+    await component.find('[aria-label="Eine Kopie von Dark Magician zum Main Deck hinzufügen"]').trigger('click')
+    await flushPromises()
+    await component.vm.$nextTick()
+
+    expect(component.text()).toContain('Extra deck cards can only be placed in the extra or side section')
+    expect(component.find('[aria-label="Anzahl im Main Deck"]').text()).toBe('1/40–60')
+    // Controls are usable again after the failure.
+    expect(component.find('[aria-label="Eine Kopie von Dark Magician zum Main Deck hinzufügen"]').attributes('disabled')).toBeUndefined()
+  })
+
+  it('ignores an emptied quantity field instead of deleting the card', async () => {
+    state.source = { items: [], total: 0 }
+    state.deck = darkMagicianDeck(2)
+
+    const fetchMock = stubDeckFetch(() => Promise.resolve(darkMagicianDeck(2)))
+
+    const component = await mountSuspended(DeckEditorPage)
+    const input = component.find('input[aria-label="Anzahl von Dark Magician im Main Deck"]')
+
+    await input.setValue('')
+    await input.trigger('change')
+    await flushPromises()
+
+    expect(deckCalls(fetchMock)).toEqual([])
+    await component.vm.$nextTick()
+    // The field is re-synced from the stored quantity.
+    const resynced = component.find<HTMLInputElement>('input[aria-label="Anzahl von Dark Magician im Main Deck"]')
+    expect(resynced.element.value).toBe('2')
+  })
+
+  it('shows owned totals for catalog-only cards from the owned-quantities endpoint', async () => {
+    state.deck = deckDetail({})
+    state.ownedQuantities = { 46986414: 4 }
+    state.source = {
+      items: [{
+        id: 46986414,
+        name: 'Dark Magician',
+        type: 'Normal Monster',
+        frameType: 'normal',
+        attribute: 'DARK',
+        race: 'Spellcaster',
+        level: 7,
+        imageSmall: null,
+      }],
+      total: 1,
+    }
+
+    const component = await mountSuspended(DeckEditorPage)
+    await component.find('[role="checkbox"]').trigger('click')
+    await flushPromises()
+    await component.vm.$nextTick()
+
+    expect(component.text()).toContain('Auch Katalogkarten anzeigen')
+    expect(component.text()).toContain('Besitz: 4')
   })
 })

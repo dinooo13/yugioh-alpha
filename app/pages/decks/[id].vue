@@ -137,6 +137,19 @@ const { data: sourceData, pending: sourcePending } = await useFetch<{
   default: () => ({ items: [], total: 0 }),
 })
 
+// In catalog mode the items carry no ownership data, so the owned totals for
+// exactly the listed cards are fetched separately — otherwise every catalog
+// row would claim "Besitz: 0" even for cards the user owns.
+const catalogCardIds = computed(() => (includeCatalog.value
+  ? (sourceData.value?.items ?? []).map(item => (item as CatalogSearchItem).id).filter(Boolean)
+  : []))
+
+const { data: ownedQuantities } = await useFetch<Record<string, number>>('/api/inventory/owned-quantities', {
+  query: computed(() => ({ ids: catalogCardIds.value.join(',') })),
+  headers: import.meta.server ? useRequestHeaders(['cookie']) : undefined,
+  default: () => ({}),
+})
+
 // The facet lists come from the inventory (the default source); in catalog
 // mode they stay a useful shortlist rather than the full catalog vocabulary.
 const { data: facets } = await useFetch<SearchFacets>('/api/inventory/search/facets', {
@@ -175,8 +188,9 @@ const attributeSelection = computed({
 const sourceCards = computed<SourceCard[]>(() => (sourceData.value?.items ?? []).map((item) => {
   const inventoryItem = item as Partial<InventorySearchItem>
   const catalogItem = item as Partial<CatalogSearchItem>
+  const catalogCardId = inventoryItem.catalogCardId ?? catalogItem.id ?? 0
   return {
-    catalogCardId: inventoryItem.catalogCardId ?? catalogItem.id ?? 0,
+    catalogCardId,
     name: item.name,
     type: item.type,
     frameType: catalogItem.frameType ?? null,
@@ -184,7 +198,7 @@ const sourceCards = computed<SourceCard[]>(() => (sourceData.value?.items ?? [])
     race: item.race ?? null,
     level: item.level ?? null,
     imageSmall: item.imageSmall ?? null,
-    owned: inventoryItem.totalQuantity ?? 0,
+    owned: inventoryItem.totalQuantity ?? ownedQuantities.value?.[String(catalogCardId)] ?? 0,
   }
 }))
 
@@ -240,20 +254,44 @@ function cardMetaLine(card: { type: string, level: number | null, attribute: str
 
 // --- Mutations -------------------------------------------------------------
 
+// Deck writes send an *absolute* quantity derived from the rendered deck, so
+// two overlapping writes would compute from the same stale state. Controls are
+// disabled while a write is in flight, and a sequence token drops the answer of
+// any request that was superseded before it came back.
+const inFlightMutations = ref(0)
+const isMutating = computed(() => inFlightMutations.value > 0)
+let mutationSequence = 0
+
+// Bumped after every write so uncontrolled quantity inputs re-render from the
+// server state (a rejected write must not leave a typed value behind).
+const inputEpoch = ref(0)
+
 async function applyDeck(request: Promise<DeckDetail>) {
+  const token = ++mutationSequence
+  inFlightMutations.value += 1
   errorMessage.value = ''
+
   try {
-    deck.value = await request
+    const detail = await request
+    if (token === mutationSequence) {
+      deck.value = detail
+    }
   }
   catch (requestError) {
-    errorMessage.value = requestError instanceof Error
-      ? requestError.message
-      : 'Die Änderung konnte nicht gespeichert werden.'
+    if (token === mutationSequence) {
+      errorMessage.value = requestError instanceof Error
+        ? requestError.message
+        : 'Die Änderung konnte nicht gespeichert werden.'
+    }
+  }
+  finally {
+    inFlightMutations.value -= 1
+    inputEpoch.value += 1
   }
 }
 
 async function setQuantity(catalogCardId: number, section: DeckSection, quantity: number) {
-  if (quantity < 0) {
+  if (quantity < 0 || isMutating.value) {
     return
   }
 
@@ -268,6 +306,10 @@ async function addCard(card: SourceCard, section: DeckSection) {
 }
 
 async function removeCard(row: DeckCardRow) {
+  if (isMutating.value) {
+    return
+  }
+
   await applyDeck($fetch<DeckDetail>(`/api/decks/${deckId.value}/cards`, {
     method: 'DELETE',
     query: { catalogCardId: row.catalogCardId, section: row.section },
@@ -275,6 +317,10 @@ async function removeCard(row: DeckCardRow) {
 }
 
 async function moveCard(row: DeckCardRow, to: DeckSection) {
+  if (isMutating.value) {
+    return
+  }
+
   await applyDeck($fetch<DeckDetail>(`/api/decks/${deckId.value}/cards/move`, {
     method: 'POST',
     body: { catalogCardId: row.catalogCardId, from: row.section, to },
@@ -282,10 +328,16 @@ async function moveCard(row: DeckCardRow, to: DeckSection) {
 }
 
 function onQuantityInput(row: DeckCardRow, value: string | number) {
-  const quantity = Number(value)
-  if (!Number.isInteger(quantity) || quantity < 0) {
+  const raw = String(value).trim()
+  const quantity = Number(raw)
+
+  // An emptied or malformed field is not "remove this card" — snap the input
+  // back to the stored quantity instead.
+  if (raw === '' || !Number.isInteger(quantity) || quantity < 0) {
+    inputEpoch.value += 1
     return
   }
+
   setQuantity(row.catalogCardId, row.section, quantity)
 }
 
@@ -314,7 +366,17 @@ async function deleteDeck() {
     return
   }
 
-  await $fetch(`/api/decks/${deckId.value}`, { method: 'DELETE' })
+  errorMessage.value = ''
+  try {
+    await $fetch(`/api/decks/${deckId.value}`, { method: 'DELETE' })
+  }
+  catch (requestError) {
+    errorMessage.value = requestError instanceof Error
+      ? requestError.message
+      : 'Das Deck konnte nicht gelöscht werden.'
+    return
+  }
+
   await navigateTo('/decks')
 }
 </script>
@@ -508,7 +570,7 @@ async function deleteDeck() {
                       size="xs"
                       :color="section === defaultSectionForCard(card) ? 'primary' : 'neutral'"
                       :variant="section === defaultSectionForCard(card) ? 'solid' : 'outline'"
-                      :disabled="!isSectionAllowedForCard(card, section)"
+                      :disabled="!isSectionAllowedForCard(card, section) || isMutating"
                       :title="isSectionAllowedForCard(card, section)
                         ? undefined
                         : `${card.name} kann nicht ins ${DECK_SECTION_LABELS[section]}`"
@@ -594,15 +656,18 @@ async function deleteDeck() {
                     color="neutral"
                     variant="outline"
                     size="xs"
+                    :disabled="isMutating"
                     :aria-label="`Eine Kopie von ${row.name} aus dem ${DECK_SECTION_LABELS[section]} entfernen`"
                     @click="setQuantity(row.catalogCardId, section, row.quantity - 1)"
                   />
                   <UInput
+                    :key="`${section}-${row.catalogCardId}-${inputEpoch}`"
                     :model-value="row.quantity"
                     type="number"
                     min="0"
                     size="xs"
                     class="w-16"
+                    :disabled="isMutating"
                     :aria-label="`Anzahl von ${row.name} im ${DECK_SECTION_LABELS[section]}`"
                     @change="(event: Event) => onQuantityInput(row, (event.target as HTMLInputElement).value)"
                   />
@@ -611,6 +676,7 @@ async function deleteDeck() {
                     color="neutral"
                     variant="outline"
                     size="xs"
+                    :disabled="isMutating"
                     :aria-label="`Eine Kopie von ${row.name} zum ${DECK_SECTION_LABELS[section]} hinzufügen`"
                     @click="setQuantity(row.catalogCardId, section, row.quantity + 1)"
                   />
@@ -620,6 +686,7 @@ async function deleteDeck() {
                       color="neutral"
                       variant="ghost"
                       size="xs"
+                      :disabled="isMutating"
                       :aria-label="`${row.name} verschieben`"
                     />
                   </UDropdownMenu>
@@ -628,6 +695,7 @@ async function deleteDeck() {
                     color="error"
                     variant="ghost"
                     size="xs"
+                    :disabled="isMutating"
                     :aria-label="`${row.name} aus dem ${DECK_SECTION_LABELS[section]} entfernen`"
                     @click="removeCard(row)"
                   />

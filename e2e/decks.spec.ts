@@ -74,16 +74,24 @@ test.describe('deckbuilder', () => {
 
     // --- Search by a contained card -----------------------------------------
     const deckSearch = page.getByLabel('Decks durchsuchen')
+
+    // Start from a term that matches nothing, so finding the deck by a card
+    // name afterwards is a real state change rather than an unfiltered list.
+    await deckSearch.fill('zzz')
+    await expect(page.getByText('Keine Decks gefunden')).toBeVisible()
+    await expect(page.getByRole('listitem').filter({ hasText: 'Test Deck' })).toHaveCount(0)
+
+    // "Stardust" is not part of the deck name — it only matches a card in it.
     await deckSearch.fill('Stardust')
     await expect(page.getByRole('listitem').filter({ hasText: 'Test Deck' })).toBeVisible()
-
-    await deckSearch.fill('Gibt es nicht')
-    await expect(page.getByText('Keine Decks gefunden')).toBeVisible()
-
-    await deckSearch.fill('')
-    await expect(page.getByRole('listitem').filter({ hasText: 'Test Deck' })).toBeVisible()
+    await expect(page.getByText('Keine Decks gefunden')).toHaveCount(0)
 
     // --- Delete the deck ----------------------------------------------------
+    // Reload instead of clearing the search box: a pending debounced refresh
+    // would re-render the list under the open dropdown.
+    await page.goto('/decks')
+    await expect(page.getByRole('listitem').filter({ hasText: 'Test Deck' })).toBeVisible()
+
     page.on('dialog', dialog => dialog.accept())
     await page.getByRole('button', { name: 'Optionen für Test Deck' }).click()
     await page.getByRole('menuitem', { name: 'Löschen' }).click()
