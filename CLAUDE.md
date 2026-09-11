@@ -1,1 +1,2 @@
-**IMPORTANT**: before you do anything else, run the `beans prime` command and heed its output.
+The product roadmap and phase plan live in `docs/Roadmap.md`.
+The dev workflow (branching, PRs, CI gates) lives in `docs/WORKFLOW.md`.
