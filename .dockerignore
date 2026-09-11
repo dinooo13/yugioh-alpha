@@ -15,6 +15,5 @@ playwright/.cache
 .env
 .env.*
 !.env.example
-.beans
 *.log
 .DS_Store
