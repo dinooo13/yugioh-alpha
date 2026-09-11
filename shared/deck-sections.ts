@@ -23,7 +23,7 @@ export const DECK_LIMITS = {
   mainMax: 60,
   extraMax: 15,
   sideMax: 15,
-  // Copies of one catalog card across main + side combined.
+  // Copies of one catalog card across the whole deck (main + extra + side).
   maxCopies: 3,
 } as const
 

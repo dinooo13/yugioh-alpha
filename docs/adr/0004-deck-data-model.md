@@ -91,12 +91,13 @@ decks.
 ### Structural limits are warnings, not errors
 
 `MAIN_MIN 40`, `MAIN_MAX 60`, `EXTRA_MAX 15`, `SIDE_MAX 15`, and
-`MAX_COPIES 3` (per catalog card across main + side) are returned as
+`MAX_COPIES 3` (per catalog card across the whole deck) are returned as
 `limits` plus a `warnings` array on the deck detail. They are **not**
 enforced as `400`s: Phase 4 introduces configurable rule formats where exactly
 these numbers become format-dependent, and a deckbuilder must let a user save
 a 12-card work in progress. Only structurally invalid writes are rejected: an
-unknown card, an unknown section, a negative quantity, or a card placed in a
+unknown card, an unknown section, a negative quantity, a quantity above the
+`MAX_DECK_CARD_QUANTITY` sanity cap of 99 per row, or a card placed in a
 section its type forbids.
 
 ### No format or legality data here

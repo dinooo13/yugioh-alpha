@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { and, desc, eq, isNull, like, ne, or, sql } from 'drizzle-orm'
+import { and, desc, eq, inArray, isNull, like, ne, or, sql } from 'drizzle-orm'
 import { createError } from 'h3'
 import type { useDb } from '../db'
 import {
@@ -360,6 +360,30 @@ export function listOwnedCards(db: Db, userId: string, options: InventoryListOpt
     .get()?.count ?? 0
 
   return { items: rows, total, page, pageSize }
+}
+
+/**
+ * Total owned copies per catalog card for one user, summed across every
+ * collection, printing, condition, language, and edition (see docs/adr/0002:
+ * deck availability is "a simple sum by catalog_card_id"). Cards the user
+ * does not own at all are absent from the map.
+ */
+export function ownedQuantitiesByCard(db: Db, userId: string, catalogCardIds: number[]): Map<number, number> {
+  if (catalogCardIds.length === 0) {
+    return new Map()
+  }
+
+  const rows = db
+    .select({
+      catalogCardId: ownedCard.catalogCardId,
+      owned: sql<number>`sum(${ownedCard.quantity})`,
+    })
+    .from(ownedCard)
+    .where(and(eq(ownedCard.userId, userId), inArray(ownedCard.catalogCardId, catalogCardIds)))
+    .groupBy(ownedCard.catalogCardId)
+    .all()
+
+  return new Map(rows.map(row => [row.catalogCardId, row.owned ?? 0]))
 }
 
 export function searchCatalogCards(db: Db, q = '') {

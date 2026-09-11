@@ -107,7 +107,8 @@ Availability is therefore derived on every read:
 Deck sizes (40–60 main, 15 extra, 15 side) and the 3-copies-per-card rule are
 returned as `warnings` rather than enforced — Phase 4 rule formats will make
 them configurable. Only structurally invalid writes (unknown card, unknown
-section, negative quantity, card in a forbidden section) are rejected.
+section, negative quantity, more than 99 copies in a single row, card in a
+forbidden section) are rejected.
 
 ## Quality Checks
 

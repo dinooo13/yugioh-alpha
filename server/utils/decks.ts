@@ -4,7 +4,8 @@ import type { SQL } from 'drizzle-orm'
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core'
 import { createError } from 'h3'
 import type { useDb } from '../db'
-import { catalogCard, catalogCardImage, deck, deckCard, ownedCard } from '../db/schema'
+import { catalogCard, catalogCardImage, deck, deckCard } from '../db/schema'
+import { ownedQuantitiesByCard } from './inventory'
 import {
   allowedSectionsForCard,
   DECK_LIMITS,
@@ -29,6 +30,11 @@ export type { DeckSection, DeckSectionCard }
 
 export const DECK_NAME_MAX_LENGTH = 80
 export const DECK_DESCRIPTION_MAX_LENGTH = 500
+
+// Sanity cap on a single deck_card row, not a format rule: nobody plays 100
+// copies of a card, and it keeps a typo/scripted call from bloating a deck.
+// The *format* copy limit (DECK_LIMITS.maxCopies) stays a warning.
+export const MAX_DECK_CARD_QUANTITY = 99
 
 const DEFAULT_PAGE_SIZE = 20
 const MAX_PAGE_SIZE = 60
@@ -174,7 +180,7 @@ export function validateDeckUpdateInput(body: unknown): Partial<DeckInput> {
 
 function normalizeCatalogCardId(value: unknown): number {
   const numberValue = typeof value === 'number' ? value : Number(value)
-  if (!Number.isInteger(numberValue) || numberValue < 1) {
+  if (!Number.isSafeInteger(numberValue) || numberValue < 1) {
     badRequest('catalog_card_id must be a positive integer')
   }
   return numberValue
@@ -189,10 +195,13 @@ function normalizeSection(value: unknown, field = 'section'): DeckSection {
 
 function normalizeQuantity(value: unknown, { allowZero }: { allowZero: boolean }): number {
   const numberValue = typeof value === 'number' ? value : Number(value)
-  if (!Number.isInteger(numberValue) || numberValue < (allowZero ? 0 : 1)) {
+  if (!Number.isSafeInteger(numberValue) || numberValue < (allowZero ? 0 : 1)) {
     badRequest(allowZero
       ? 'quantity must be a non-negative integer'
       : 'quantity must be a positive integer')
+  }
+  if (numberValue > MAX_DECK_CARD_QUANTITY) {
+    badRequest(`quantity must be at most ${MAX_DECK_CARD_QUANTITY}`)
   }
   return numberValue
 }
@@ -306,24 +315,6 @@ function cardCategoryRank(type: string): number {
   return 0
 }
 
-function ownedQuantitiesByCard(db: Db, userId: string, catalogCardIds: number[]): Map<number, number> {
-  if (catalogCardIds.length === 0) {
-    return new Map()
-  }
-
-  const rows = db
-    .select({
-      catalogCardId: ownedCard.catalogCardId,
-      owned: sql<number>`sum(${ownedCard.quantity})`,
-    })
-    .from(ownedCard)
-    .where(and(eq(ownedCard.userId, userId), inArray(ownedCard.catalogCardId, catalogCardIds)))
-    .groupBy(ownedCard.catalogCardId)
-    .all()
-
-  return new Map(rows.map(row => [row.catalogCardId, row.owned ?? 0]))
-}
-
 function buildWarnings(
   counts: { main: number, extra: number, side: number },
   rows: DeckCardRow[],
@@ -355,12 +346,10 @@ function buildWarnings(
     })
   }
 
-  // Copy limit counts main + side combined (the Extra Deck is separate).
+  // The standard copy limit counts every copy in the deck — main, extra, and
+  // side combined.
   const copiesByCard = new Map<number, { name: string, copies: number }>()
   for (const row of rows) {
-    if (row.section === 'extra') {
-      continue
-    }
     const entry = copiesByCard.get(row.catalogCardId) ?? { name: row.name, copies: 0 }
     entry.copies += row.quantity
     copiesByCard.set(row.catalogCardId, entry)
@@ -371,7 +360,7 @@ function buildWarnings(
       warnings.push({
         code: 'copies_above_max',
         cardId,
-        message: `${entry.name}: ${entry.copies} Kopien in Main + Side, höchstens ${DECK_LIMITS.maxCopies} sind üblich.`,
+        message: `${entry.name}: ${entry.copies} Kopien im Deck, höchstens ${DECK_LIMITS.maxCopies} sind üblich.`,
       })
     }
   }
@@ -479,6 +468,12 @@ export function createDeck(db: Db, userId: string, input: DeckInput): DeckDetail
 export function updateDeck(db: Db, userId: string, deckId: string, patch: Partial<DeckInput>): DeckDetail {
   const current = requireDeckRow(db, userId, deckId)
 
+  // An empty patch is a no-op, not a touch: `updatedAt` drives the default
+  // list sorting, so it must only move when something actually changed.
+  if (patch.name === undefined && patch.description === undefined) {
+    return buildDeckDetail(db, userId, current)
+  }
+
   const [updated] = db
     .update(deck)
     .set({
@@ -514,7 +509,7 @@ export function duplicateDeck(db: Db, userId: string, deckId: string): DeckDetai
     .values({
       id: randomUUID(),
       userId,
-      name: `${source.name} (Kopie)`.slice(0, DECK_NAME_MAX_LENGTH),
+      name: duplicateNameFor(source.name),
       description: source.description,
       createdAt: now,
       updatedAt: now,
@@ -536,6 +531,13 @@ export function duplicateDeck(db: Db, userId: string, deckId: string): DeckDetai
   }
 
   return buildDeckDetail(db, userId, copy!)
+}
+
+// Truncates the base name (not the suffix) so a duplicate always stays
+// recognizable as a copy within the 80 character name limit.
+export function duplicateNameFor(name: string): string {
+  const suffix = ' (Kopie)'
+  return `${name.slice(0, DECK_NAME_MAX_LENGTH - suffix.length).trimEnd()}${suffix}`
 }
 
 function touchDeck(db: Db, deckId: string, now: Date) {
@@ -776,6 +778,8 @@ export function listDecks(db: Db, userId: string, options: DeckListOptions = {})
       missingCount += Math.max(0, usedInDeck - (owned.get(catalogCardId) ?? 0))
     }
 
+    const cardCount = counts.main + counts.extra + counts.side
+
     return {
       id: row.id,
       name: row.name,
@@ -783,8 +787,9 @@ export function listDecks(db: Db, userId: string, options: DeckListOptions = {})
       mainCount: counts.main,
       extraCount: counts.extra,
       sideCount: counts.side,
-      cardCount: counts.main + counts.extra + counts.side,
-      complete: missingCount === 0,
+      cardCount,
+      // An empty deck has nothing missing, but it is not "complete" either.
+      complete: cardCount > 0 && missingCount === 0,
       missingCount,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,

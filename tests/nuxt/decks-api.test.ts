@@ -7,12 +7,14 @@ import * as schema from '../../server/db/schema'
 import {
   createDeck,
   DECK_LIMITS,
+  duplicateNameFor,
   defaultSectionForCard,
   deleteDeck,
   duplicateDeck,
   getDeckDetail,
   isExtraDeckCard,
   listDecks,
+  MAX_DECK_CARD_QUANTITY,
   moveDeckCard,
   parseDeckListQuery,
   removeDeckCard,
@@ -182,6 +184,26 @@ describe('deck validation', () => {
     expect(() => validateDeckCardInput({ catalogCardId: 1, section: 'main', quantity: -1 })).toThrow()
   })
 
+  it('caps a deck card quantity and rejects unsafe numbers', () => {
+    expect(validateDeckCardInput({ catalogCardId: 1, section: 'main', quantity: MAX_DECK_CARD_QUANTITY }).quantity)
+      .toBe(MAX_DECK_CARD_QUANTITY)
+
+    expect(() => validateDeckCardInput({ catalogCardId: 1, section: 'main', quantity: MAX_DECK_CARD_QUANTITY + 1 })).toThrow()
+    expect(() => validateDeckCardInput({ catalogCardId: 1, section: 'main', quantity: 1e20 })).toThrow()
+    expect(() => validateDeckCardInput({ catalogCardId: 1, section: 'main', quantity: 1.5 })).toThrow()
+    expect(() => validateDeckCardInput({ catalogCardId: 1e20, section: 'main' })).toThrow()
+    expect(() => validateDeckCardMoveInput({ catalogCardId: 1, from: 'main', to: 'side', quantity: 1e20 })).toThrow()
+  })
+
+  it('keeps the "(Kopie)" suffix inside the 80 character name limit', () => {
+    expect(duplicateNameFor('Kurz')).toBe('Kurz (Kopie)')
+
+    const longName = 'D'.repeat(80)
+    const copyName = duplicateNameFor(longName)
+    expect(copyName).toHaveLength(80)
+    expect(copyName.endsWith(' (Kopie)')).toBe(true)
+  })
+
   it('rejects a move between identical sections', () => {
     expect(validateDeckCardMoveInput({ catalogCardId: 1, from: 'main', to: 'side' }))
       .toEqual({ catalogCardId: 1, from: 'main', to: 'side', quantity: undefined })
@@ -328,6 +350,27 @@ describe('deck persistence', () => {
     expect(getDeckDetail(db, 'user-a', deck.id).counts.main).toBe(3)
   })
 
+  it('removes the deck cards when the deck is deleted', () => {
+    const deck = createDeck(db, 'user-a', { name: 'Deck', description: null })
+    upsertDeckCard(db, 'user-a', deck.id, { catalogCardId: CARD.darkMagician, section: 'main', quantity: 3 })
+    upsertDeckCard(db, 'user-a', deck.id, { catalogCardId: CARD.stardustDragon, section: 'extra', quantity: 1 })
+
+    expect(db.select().from(schema.deckCard).where(eq(schema.deckCard.deckId, deck.id)).all()).toHaveLength(2)
+
+    deleteDeck(db, 'user-a', deck.id)
+
+    expect(db.select().from(schema.deckCard).where(eq(schema.deckCard.deckId, deck.id)).all()).toHaveLength(0)
+  })
+
+  it('does not touch updatedAt for an empty patch', () => {
+    const deck = createDeck(db, 'user-a', { name: 'Deck', description: null })
+    const before = db.select().from(schema.deck).where(eq(schema.deck.id, deck.id)).get()!.updatedAt
+
+    const unchanged = updateDeck(db, 'user-a', deck.id, {})
+    expect(unchanged.updatedAt).toEqual(before)
+    expect(db.select().from(schema.deck).where(eq(schema.deck.id, deck.id)).get()!.updatedAt).toEqual(before)
+  })
+
   it('sorts the main deck monsters, spells, traps, then by name', () => {
     const deck = createDeck(db, 'user-a', { name: 'Deck', description: null })
     upsertDeckCard(db, 'user-a', deck.id, { catalogCardId: CARD.mirrorForce, section: 'main', quantity: 1 })
@@ -420,19 +463,38 @@ describe('deck warnings', () => {
     expect(codes).not.toContain('main_below_min')
   })
 
-  it('warns about more than three copies across main and side but not the extra deck', () => {
+  it('warns about more than three copies of a card across the whole deck', () => {
     const deck = createDeck(db, 'user-a', { name: 'Deck', description: null })
     upsertDeckCard(db, 'user-a', deck.id, { catalogCardId: CARD.darkMagician, section: 'main', quantity: 2 })
     upsertDeckCard(db, 'user-a', deck.id, { catalogCardId: CARD.darkMagician, section: 'side', quantity: 2 })
+    // Extra deck copies count towards the same limit.
     const detail = upsertDeckCard(db, 'user-a', deck.id, { catalogCardId: CARD.stardustDragon, section: 'extra', quantity: 5 })
 
     const copyWarnings = detail.warnings.filter(warning => warning.code === 'copies_above_max')
-    expect(copyWarnings).toHaveLength(1)
-    expect(copyWarnings[0]).toMatchObject({ cardId: CARD.darkMagician })
-    expect(copyWarnings[0]!.message).toContain('Dark Magician')
+    expect(copyWarnings.map(warning => warning.cardId).sort())
+      .toEqual([CARD.stardustDragon, CARD.darkMagician].sort())
+    expect(copyWarnings.find(warning => warning.cardId === CARD.darkMagician)!.message)
+      .toContain('Dark Magician: 4 Kopien')
 
     // Over-limit quantities are warnings, never hard errors: the write stuck.
     expect(detail.counts).toMatchObject({ main: 2, side: 2, extra: 5 })
+  })
+
+  it('accepts at most 99 copies in one row', () => {
+    const deck = createDeck(db, 'user-a', { name: 'Deck', description: null })
+
+    const detail = upsertDeckCard(db, 'user-a', deck.id, {
+      catalogCardId: CARD.potOfGreed,
+      section: 'main',
+      quantity: MAX_DECK_CARD_QUANTITY,
+    })
+    expect(detail.counts.main).toBe(MAX_DECK_CARD_QUANTITY)
+
+    expect(() => validateDeckCardInput({
+      catalogCardId: CARD.potOfGreed,
+      section: 'main',
+      quantity: MAX_DECK_CARD_QUANTITY + 1,
+    })).toThrow(expect.objectContaining({ statusCode: 400 }))
   })
 })
 
@@ -469,6 +531,27 @@ describe('deck list', () => {
     expect(listDecks(db, 'user-a').items[0]).toMatchObject({ complete: true, missingCount: 0 })
   })
 
+  it('does not call an empty deck complete', () => {
+    createDeck(db, 'user-a', { name: 'Leeres Deck', description: null })
+
+    expect(listDecks(db, 'user-a').items[0]).toMatchObject({
+      cardCount: 0,
+      complete: false,
+      missingCount: 0,
+    })
+  })
+
+  it('counts missing copies per card across sections, not per row', async () => {
+    await own(db, 'user-a', CARD.darkMagician, 3)
+
+    const deck = createDeck(db, 'user-a', { name: 'Deck', description: null })
+    upsertDeckCard(db, 'user-a', deck.id, { catalogCardId: CARD.darkMagician, section: 'main', quantity: 2 })
+    upsertDeckCard(db, 'user-a', deck.id, { catalogCardId: CARD.darkMagician, section: 'side', quantity: 2 })
+
+    // 4 copies used, 3 owned -> exactly 1 missing (not 1 per section).
+    expect(listDecks(db, 'user-a').items[0]).toMatchObject({ cardCount: 4, missingCount: 1, complete: false })
+  })
+
   it('scopes the list to the requesting user', () => {
     createDeck(db, 'user-a', { name: 'A-Deck', description: null })
     createDeck(db, 'user-b', { name: 'B-Deck', description: null })
@@ -489,6 +572,15 @@ describe('deck list', () => {
     expect(listDecks(db, 'user-a', { q: 'nichts' }).items).toEqual([])
     // LIKE wildcards in the term are matched literally.
     expect(listDecks(db, 'user-a', { q: '%' }).items).toEqual([])
+  })
+
+  it('never matches a card that is only in another user deck', () => {
+    const foreign = createDeck(db, 'user-b', { name: 'B-Deck', description: null })
+    upsertDeckCard(db, 'user-b', foreign.id, { catalogCardId: CARD.darkMagician, section: 'main', quantity: 1 })
+    createDeck(db, 'user-a', { name: 'A-Deck', description: null })
+
+    expect(listDecks(db, 'user-a', { q: 'Dark Magician' }).items).toEqual([])
+    expect(listDecks(db, 'user-a', { contains: CARD.darkMagician }).items).toEqual([])
   })
 
   it('filters by a contained catalog card', () => {
@@ -516,6 +608,11 @@ describe('deck list', () => {
     expect(firstPage.total).toBe(3)
     expect(listDecks(db, 'user-a', { sort: 'name', page: 2, pageSize: 2 }).items.map(item => item.name))
       .toEqual(['Charlie'])
+
+    // Past the last page: no items, but the unpaged total stays intact.
+    const beyond = listDecks(db, 'user-a', { sort: 'name', page: 9, pageSize: 2 })
+    expect(beyond.items).toEqual([])
+    expect(beyond).toMatchObject({ total: 3, page: 9, pageSize: 2 })
   })
 
   it('sorts by last update, most recent first', () => {
