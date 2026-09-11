@@ -192,11 +192,20 @@ function statusColor(deck: DeckListItem) {
         </p>
       </div>
 
-      <UButton
-        icon="i-lucide-plus"
-        label="Neues Deck"
-        @click="openCreate"
-      />
+      <div class="flex flex-wrap gap-2">
+        <UButton
+          icon="i-lucide-sparkles"
+          color="neutral"
+          variant="outline"
+          label="Mit KI erstellen"
+          to="/decks/assistent"
+        />
+        <UButton
+          icon="i-lucide-plus"
+          label="Neues Deck"
+          @click="openCreate"
+        />
+      </div>
     </div>
 
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
