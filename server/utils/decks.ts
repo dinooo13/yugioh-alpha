@@ -1,11 +1,15 @@
 import { randomUUID } from 'node:crypto'
-import { and, asc, desc, eq, inArray, or, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm'
 import type { SQL } from 'drizzle-orm'
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core'
 import { createError } from 'h3'
 import type { useDb } from '../db'
-import { catalogCard, catalogCardImage, deck, deckCard } from '../db/schema'
+import { catalogCard, catalogCardImage, deck, deckCard, ruleFormat } from '../db/schema'
 import { ownedQuantitiesByCard } from './inventory'
+import { evaluateDeck } from '../../shared/rule-formats'
+import type { DeckValidation, RuleSet } from '../../shared/rule-formats'
+import { loadCardDataForValidation } from './deck-validation'
+import { requireAssignableFormat, ruleFormatsById } from './rule-formats'
 import {
   allowedSectionsForCard,
   DECK_LIMITS,
@@ -48,6 +52,12 @@ export interface DeckInput {
   description: string | null
 }
 
+export interface DeckFormatRef {
+  id: string
+  name: string
+  isBuiltin: boolean
+}
+
 export interface DeckCardInput {
   catalogCardId: number
   section: DeckSection
@@ -68,6 +78,10 @@ export interface DeckListOptions {
   page?: number
   pageSize?: number
   contains?: number
+  /** A format id, or 'none' for decks without a format. */
+  formatId?: string
+  /** Only decks that are legal (true) / not legal (false) in their format. */
+  legal?: boolean
 }
 
 export interface DeckCardRow {
@@ -105,7 +119,12 @@ export interface DeckDetail {
   sections: Record<DeckSection, DeckCardRow[]>
   counts: { main: number, extra: number, side: number, total: number }
   limits: typeof DECK_LIMITS
+  /** Informational structural hints, independent of any rule format. */
   warnings: DeckWarning[]
+  /** The assigned rule format, or null when the deck has none. */
+  format: DeckFormatRef | null
+  /** Recomputed on every read/write; null while no format is assigned. */
+  validation: DeckValidation | null
 }
 
 function badRequest(message: string): never {
@@ -162,17 +181,35 @@ export function validateDeckInput(body: unknown): DeckInput {
   return { name, description }
 }
 
-export function validateDeckUpdateInput(body: unknown): Partial<DeckInput> {
+export interface DeckUpdateInput extends Partial<DeckInput> {
+  /** `null` removes the format assignment (validation off). */
+  formatId?: string | null
+}
+
+export function validateDeckUpdateInput(body: unknown): DeckUpdateInput {
   if (!isRecord(body)) {
     badRequest('Request body must be an object')
   }
 
-  const input: Partial<DeckInput> = {}
+  const input: DeckUpdateInput = {}
   if (body.name !== undefined) {
     input.name = validateDeckInput({ name: body.name }).name
   }
   if (body.description !== undefined) {
     input.description = validateDeckInput({ name: 'placeholder', description: body.description }).description
+  }
+
+  const rawFormatId = body.format_id !== undefined ? body.format_id : body.formatId
+  if (rawFormatId !== undefined) {
+    if (rawFormatId === null || rawFormatId === '') {
+      input.formatId = null
+    }
+    else if (typeof rawFormatId !== 'string') {
+      badRequest('format_id must be a string or null')
+    }
+    else {
+      input.formatId = rawFormatId
+    }
   }
 
   return input
@@ -257,12 +294,21 @@ export function parseDeckListQuery(rawQuery: Record<string, unknown>): DeckListO
   const page = Number(first(rawQuery.page))
   const pageSize = Number(first(rawQuery.pageSize))
 
+  const rawFormatId = first(rawQuery.formatId ?? rawQuery.format_id)
+  const rawLegal = first(rawQuery.legal)
+
   return {
     q: typeof rawQ === 'string' && rawQ.trim() !== '' ? rawQ.trim() : undefined,
     sort,
     contains: Number.isInteger(rawContains) && rawContains > 0 ? rawContains : undefined,
     page: Number.isInteger(page) && page > 0 ? page : undefined,
     pageSize: Number.isInteger(pageSize) && pageSize > 0 ? pageSize : undefined,
+    formatId: typeof rawFormatId === 'string' && rawFormatId.trim() !== '' ? rawFormatId.trim() : undefined,
+    legal: rawLegal === '1' || rawLegal === 'true' || rawLegal === true
+      ? true
+      : rawLegal === '0' || rawLegal === 'false' || rawLegal === false
+        ? false
+        : undefined,
   }
 }
 
@@ -411,8 +457,45 @@ function loadDeckCardRows(db: Db, userId: string, deckId: string): DeckCardRow[]
   })
 }
 
+/**
+ * Runs the rule engine for a deck. Returns `null` when the deck has no format
+ * assigned — "no format" means "no legality statement", not "legal".
+ */
+function buildValidation(
+  db: Db,
+  rules: RuleSet | undefined,
+  rows: Array<{ catalogCardId: number, section: DeckSection, quantity: number, name: string }>,
+): DeckValidation | null {
+  if (!rules) {
+    return null
+  }
+
+  const cardData = loadCardDataForValidation(db, rows.map(row => row.catalogCardId))
+  const cardNames = Object.fromEntries(rows.map(row => [row.catalogCardId, row.name]))
+
+  return evaluateDeck(
+    rules,
+    rows.map(row => ({ catalogCardId: row.catalogCardId, section: row.section, quantity: row.quantity })),
+    cardData,
+    { cardNames },
+  )
+}
+
 function buildDeckDetail(db: Db, userId: string, deckRow: typeof deck.$inferSelect): DeckDetail {
   const rows = loadDeckCardRows(db, userId, deckRow.id)
+
+  const formatRow = deckRow.formatId
+    ? db
+        .select({
+          id: ruleFormat.id,
+          name: ruleFormat.name,
+          isBuiltin: ruleFormat.isBuiltin,
+          rules: ruleFormat.rules,
+        })
+        .from(ruleFormat)
+        .where(eq(ruleFormat.id, deckRow.formatId))
+        .get()
+    : undefined
 
   const sections: Record<DeckSection, DeckCardRow[]> = { main: [], extra: [], side: [] }
   for (const row of rows) {
@@ -440,11 +523,38 @@ function buildDeckDetail(db: Db, userId: string, deckRow: typeof deck.$inferSele
     counts,
     limits: DECK_LIMITS,
     warnings: buildWarnings(counts, rows),
+    format: formatRow
+      ? { id: formatRow.id, name: formatRow.name, isBuiltin: formatRow.isBuiltin }
+      : null,
+    validation: buildValidation(db, formatRow?.rules, rows),
   }
 }
 
 export function getDeckDetail(db: Db, userId: string, deckId: string): DeckDetail {
   return buildDeckDetail(db, userId, requireDeckRow(db, userId, deckId))
+}
+
+/**
+ * Validates one of the caller's decks against an arbitrary rule set, without
+ * assigning it — the format editor's "Deck prüfen" preview and
+ * `GET /api/decks/:id/validate`.
+ */
+export function validateDeckWithRules(db: Db, userId: string, deckId: string, rules: RuleSet): DeckValidation {
+  const deckRow = requireDeckRow(db, userId, deckId)
+
+  const rows = db
+    .select({
+      catalogCardId: deckCard.catalogCardId,
+      section: deckCard.section,
+      quantity: deckCard.quantity,
+      name: catalogCard.name,
+    })
+    .from(deckCard)
+    .innerJoin(catalogCard, eq(deckCard.catalogCardId, catalogCard.id))
+    .where(eq(deckCard.deckId, deckRow.id))
+    .all()
+
+  return buildValidation(db, rules, rows.map(row => ({ ...row, section: row.section as DeckSection })))!
 }
 
 export function createDeck(db: Db, userId: string, input: DeckInput): DeckDetail {
@@ -465,13 +575,18 @@ export function createDeck(db: Db, userId: string, input: DeckInput): DeckDetail
   return buildDeckDetail(db, userId, created!)
 }
 
-export function updateDeck(db: Db, userId: string, deckId: string, patch: Partial<DeckInput>): DeckDetail {
+export function updateDeck(db: Db, userId: string, deckId: string, patch: DeckUpdateInput): DeckDetail {
   const current = requireDeckRow(db, userId, deckId)
 
   // An empty patch is a no-op, not a touch: `updatedAt` drives the default
   // list sorting, so it must only move when something actually changed.
-  if (patch.name === undefined && patch.description === undefined) {
+  if (patch.name === undefined && patch.description === undefined && patch.formatId === undefined) {
     return buildDeckDetail(db, userId, current)
+  }
+
+  // Only a built-in or one of the caller's own formats may be assigned.
+  if (typeof patch.formatId === 'string') {
+    requireAssignableFormat(db, userId, patch.formatId)
   }
 
   const [updated] = db
@@ -479,6 +594,7 @@ export function updateDeck(db: Db, userId: string, deckId: string, patch: Partia
     .set({
       name: patch.name ?? current.name,
       description: patch.description !== undefined ? patch.description : current.description,
+      formatId: patch.formatId !== undefined ? patch.formatId : current.formatId,
       updatedAt: new Date(),
     })
     .where(eq(deck.id, deckId))
@@ -511,6 +627,7 @@ export function duplicateDeck(db: Db, userId: string, deckId: string): DeckDetai
       userId,
       name: duplicateNameFor(source.name),
       description: source.description,
+      formatId: source.formatId,
       createdAt: now,
       updatedAt: now,
     })
@@ -684,9 +801,17 @@ export interface DeckListItem {
   /** True when every card in the deck is fully covered by owned copies. */
   complete: boolean
   missingCount: number
+  formatId: string | null
+  formatName: string | null
+  /** Legality in the assigned format; `null` when no format is assigned. */
+  legal: boolean | null
   createdAt: Date
   updatedAt: Date
 }
+
+// Upper bound on the decks scanned when filtering by legality: legality is
+// computed, not stored, so that filter cannot be pushed into SQL.
+const MAX_LEGALITY_SCAN = 500
 
 export function listDecks(db: Db, userId: string, options: DeckListOptions = {}) {
   const page = Math.max(1, options.page ?? 1)
@@ -716,6 +841,13 @@ export function listDecks(db: Db, userId: string, options: DeckListOptions = {})
     )`)
   }
 
+  if (options.formatId === 'none') {
+    clauses.push(isNull(deck.formatId))
+  }
+  else if (options.formatId) {
+    clauses.push(eq(deck.formatId, options.formatId))
+  }
+
   const where = and(...clauses) as SQL
 
   const orderBy = options.sort === 'name'
@@ -726,22 +858,15 @@ export function listDecks(db: Db, userId: string, options: DeckListOptions = {})
         ? [desc(deck.createdAt), asc(deck.name)]
         : [desc(deck.updatedAt), asc(deck.name)]
 
-  const deckRows = db
-    .select()
-    .from(deck)
-    .where(where)
-    .orderBy(...orderBy)
-    .limit(pageSize)
-    .offset((page - 1) * pageSize)
-    .all()
+  // Legality is derived, so `legal=` cannot be a SQL predicate: scan the
+  // matching decks (bounded), evaluate them, then paginate in memory.
+  const filtersByLegality = options.legal !== undefined
 
-  const total = db
-    .select({ count: sql<number>`count(*)` })
-    .from(deck)
-    .where(where)
-    .get()?.count ?? 0
+  const candidateRows = filtersByLegality
+    ? db.select().from(deck).where(where).orderBy(...orderBy).limit(MAX_LEGALITY_SCAN).all()
+    : db.select().from(deck).where(where).orderBy(...orderBy).limit(pageSize).offset((page - 1) * pageSize).all()
 
-  const deckIds = deckRows.map(row => row.id)
+  const deckIds = candidateRows.map(row => row.id)
   const cardRows = deckIds.length > 0
     ? db
         .select({
@@ -756,6 +881,40 @@ export function listDecks(db: Db, userId: string, options: DeckListOptions = {})
     : []
 
   const owned = ownedQuantitiesByCard(db, userId, [...new Set(cardRows.map(row => row.catalogCardId))])
+
+  const formats = ruleFormatsById(db, userId, candidateRows.flatMap(row => (row.formatId ? [row.formatId] : [])))
+  const cardData = formats.size > 0
+    ? loadCardDataForValidation(db, cardRows.map(row => row.catalogCardId))
+    : new Map()
+
+  const entriesByDeck = new Map<string, Array<{ catalogCardId: number, section: DeckSection, quantity: number }>>()
+  for (const row of cardRows) {
+    const entries = entriesByDeck.get(row.deckId) ?? []
+    entries.push({ catalogCardId: row.catalogCardId, section: row.section as DeckSection, quantity: row.quantity })
+    entriesByDeck.set(row.deckId, entries)
+  }
+
+  const legalityByDeck = new Map<string, boolean>()
+  for (const row of candidateRows) {
+    const format = row.formatId ? formats.get(row.formatId) : undefined
+    if (format) {
+      legalityByDeck.set(row.id, evaluateDeck(format.rules, entriesByDeck.get(row.id) ?? [], cardData).legal)
+    }
+  }
+
+  // A deck without a format is neither legal nor illegal — it drops out of
+  // both filters instead of counting as "not legal".
+  const matchingRows = filtersByLegality
+    ? candidateRows.filter(row => legalityByDeck.get(row.id) === options.legal)
+    : candidateRows
+
+  const total = filtersByLegality
+    ? matchingRows.length
+    : db.select({ count: sql<number>`count(*)` }).from(deck).where(where).get()?.count ?? 0
+
+  const deckRows = filtersByLegality
+    ? matchingRows.slice((page - 1) * pageSize, page * pageSize)
+    : matchingRows
 
   const usedByDeck = new Map<string, Map<number, number>>()
   const countsByDeck = new Map<string, { main: number, extra: number, side: number }>()
@@ -779,6 +938,7 @@ export function listDecks(db: Db, userId: string, options: DeckListOptions = {})
     }
 
     const cardCount = counts.main + counts.extra + counts.side
+    const format = row.formatId ? formats.get(row.formatId) : undefined
 
     return {
       id: row.id,
@@ -791,6 +951,9 @@ export function listDecks(db: Db, userId: string, options: DeckListOptions = {})
       // An empty deck has nothing missing, but it is not "complete" either.
       complete: cardCount > 0 && missingCount === 0,
       missingCount,
+      formatId: row.formatId,
+      formatName: format?.name ?? null,
+      legal: format ? legalityByDeck.get(row.id) ?? null : null,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     }
