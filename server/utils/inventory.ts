@@ -141,7 +141,7 @@ export function validateInventoryUpdateInput(body: unknown): Partial<InventoryIn
   return input
 }
 
-export async function ensureCatalogCardExists(db: Db, catalogCardId: number, printingId?: string | null) {
+export function ensureCatalogCardExists(db: Db, catalogCardId: number, printingId?: string | null) {
   const card = db.select({ id: catalogCard.id }).from(catalogCard).where(eq(catalogCard.id, catalogCardId)).get()
   if (!card) {
     badRequest('catalog_card_id does not exist')
@@ -177,12 +177,20 @@ function sameTupleWhere(userId: string, input: InventoryInput, exceptId?: string
   return and(...clauses)
 }
 
-export async function addOwnedCard(db: Db, userId: string, input: InventoryInput) {
-  await ensureCatalogCardExists(db, input.catalogCardId, input.printingId)
-  if (input.collectionId) {
-    assertCollectionOwnedByUser(db, userId, input.collectionId)
-  }
+export type OwnedCardRow = typeof ownedCard.$inferSelect
 
+/**
+ * Writes one owned-card row, merging into an existing row with the same
+ * ownership tuple instead of creating a duplicate. Assumes the input was
+ * already validated (catalog/printing existence, collection ownership) —
+ * `addOwnedCard` does that per request, the bulk endpoint does it for every
+ * item up front so the whole batch can run inside one transaction.
+ */
+function upsertOwnedCardRow(
+  db: Db,
+  userId: string,
+  input: InventoryInput,
+): { row: OwnedCardRow, merged: boolean } {
   const now = new Date()
   const existing = db.select().from(ownedCard).where(sameTupleWhere(userId, input)).get()
 
@@ -197,7 +205,7 @@ export async function addOwnedCard(db: Db, userId: string, input: InventoryInput
       .where(eq(ownedCard.id, existing.id))
       .returning()
       .all()
-    return updated!
+    return { row: updated!, merged: true }
   }
 
   const [created] = db
@@ -219,7 +227,123 @@ export async function addOwnedCard(db: Db, userId: string, input: InventoryInput
     .returning()
     .all()
 
-  return created!
+  return { row: created!, merged: false }
+}
+
+export async function addOwnedCard(db: Db, userId: string, input: InventoryInput) {
+  ensureCatalogCardExists(db, input.catalogCardId, input.printingId)
+  if (input.collectionId) {
+    assertCollectionOwnedByUser(db, userId, input.collectionId)
+  }
+
+  return upsertOwnedCardRow(db, userId, input).row
+}
+
+export const INVENTORY_BULK_MAX_ITEMS = 200
+
+export interface InventoryBulkItemError {
+  index: number
+  message: string
+}
+
+export interface InventoryBulkResult {
+  created: number
+  merged: number
+  items: OwnedCardRow[]
+}
+
+function errorMessageOf(error: unknown, fallback: string): string {
+  if (error && typeof error === 'object') {
+    const candidate = error as { statusMessage?: unknown, message?: unknown }
+    if (typeof candidate.statusMessage === 'string' && candidate.statusMessage !== '') {
+      return candidate.statusMessage
+    }
+    if (typeof candidate.message === 'string' && candidate.message !== '') {
+      return candidate.message
+    }
+  }
+  return fallback
+}
+
+/**
+ * Validates a whole bulk payload before anything is written: shape, per-item
+ * fields (same validators as the single-card endpoint), catalog/printing
+ * existence, and collection ownership. Fails with a single 400 carrying every
+ * offending item's index, so the review UI can mark the exact rows.
+ */
+export function validateInventoryBulkInput(db: Db, userId: string, body: unknown): InventoryInput[] {
+  if (!isRecord(body)) {
+    badRequest('Request body must be an object')
+  }
+
+  const rawItems = body.items
+  if (!Array.isArray(rawItems)) {
+    badRequest('items must be an array')
+  }
+  if (rawItems.length === 0) {
+    badRequest('items must contain at least one entry')
+  }
+  if (rawItems.length > INVENTORY_BULK_MAX_ITEMS) {
+    badRequest(`items must contain at most ${INVENTORY_BULK_MAX_ITEMS} entries`)
+  }
+
+  const inputs: InventoryInput[] = []
+  const errors: InventoryBulkItemError[] = []
+
+  rawItems.forEach((rawItem, index) => {
+    try {
+      const input = validateInventoryInput(rawItem)
+      ensureCatalogCardExists(db, input.catalogCardId, input.printingId)
+      if (input.collectionId) {
+        assertCollectionOwnedByUser(db, userId, input.collectionId)
+      }
+      inputs.push(input)
+    }
+    catch (error) {
+      errors.push({ index, message: errorMessageOf(error, 'Invalid item') })
+    }
+  })
+
+  if (errors.length > 0) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'Some items are invalid',
+      data: { errors },
+    })
+  }
+
+  return inputs
+}
+
+/**
+ * Writes every already-validated item in a single transaction (all or
+ * nothing), reusing the same dedup semantics as `addOwnedCard`.
+ */
+export async function addOwnedCardsBulk(
+  db: Db,
+  userId: string,
+  inputs: InventoryInput[],
+): Promise<InventoryBulkResult> {
+  return db.transaction((tx) => {
+    const items: OwnedCardRow[] = []
+    let created = 0
+    let merged = 0
+
+    for (const input of inputs) {
+      // better-sqlite3 transactions are synchronous; `tx` exposes the same
+      // query builder surface as the root client here.
+      const result = upsertOwnedCardRow(tx as unknown as Db, userId, input)
+      items.push(result.row)
+      if (result.merged) {
+        merged += 1
+      }
+      else {
+        created += 1
+      }
+    }
+
+    return { created, merged, items }
+  })
 }
 
 export async function updateOwnedCard(
@@ -253,7 +377,7 @@ export async function updateOwnedCard(
     note: patch.note !== undefined ? patch.note : current.note,
   }
 
-  await ensureCatalogCardExists(db, input.catalogCardId, input.printingId)
+  ensureCatalogCardExists(db, input.catalogCardId, input.printingId)
   if (input.collectionId) {
     assertCollectionOwnedByUser(db, userId, input.collectionId)
   }
