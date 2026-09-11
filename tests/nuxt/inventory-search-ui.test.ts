@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
-import InventarPage from '~/pages/inventar.vue'
+import InventarPage from '~/pages/inventar/index.vue'
 
 interface SearchCollectionBreakdown {
   collectionId: string | null

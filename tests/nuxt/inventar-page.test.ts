@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
 import AddToInventoryModal from '~/components/inventory/AddToInventoryModal.vue'
-import InventarPage from '~/pages/inventar.vue'
+import InventarPage from '~/pages/inventar/index.vue'
 
 const inventoryState = vi.hoisted(() => ({
   response: {
