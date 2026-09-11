@@ -18,6 +18,7 @@ interface CollectionsResponse {
 const navItems: NavigationMenuItem[] = [
   { label: 'Dashboard', icon: 'i-lucide-layout-dashboard', to: '/' },
   { label: 'Inventar', icon: 'i-lucide-archive', to: '/inventar' },
+  { label: 'Katalog', icon: 'i-lucide-book-open', to: '/katalog' },
   { label: 'Decks', icon: 'i-lucide-layers', to: '/decks' },
   { label: 'Formate', icon: 'i-lucide-scroll-text', to: '/formate' },
   { label: 'Turniere', icon: 'i-lucide-trophy', to: '/turniere' },
