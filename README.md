@@ -133,10 +133,69 @@ Availability is therefore derived on every read:
   appear in any number of saved decks, and each deck reports its own shortfall.
 
 Deck sizes (40–60 main, 15 extra, 15 side) and the 3-copies-per-card rule are
-returned as `warnings` rather than enforced — Phase 4 rule formats will make
-them configurable. Only structurally invalid writes (unknown card, unknown
-section, negative quantity, more than 99 copies in a single row, card in a
-forbidden section) are rejected.
+returned as `warnings` rather than enforced. They are only the fallback hints
+for a deck without a rule format — once a format is assigned, its rules govern
+the limits (see [Formate](#formate)). Only structurally invalid writes (unknown
+card, unknown section, negative quantity, more than 99 copies in a single row,
+card in a forbidden section) are rejected.
+
+## Formate
+
+Rule formats decide which cards and how many copies a deck may play. They live
+under `/formate` and are split into two groups:
+
+- **Offizielle Formate** — built-in, globally available, and read-only:
+  `TCG Advanced`, `OCG`, `GOAT Format`, and `Ohne Banliste`. They are upserted
+  on every server start (`seedBuiltinFormats`, see `server/plugins/migrate.ts`),
+  so improved rules ship with a deploy instead of a data migration. Anybody can
+  clone a built-in ("Klonen") to get an editable copy.
+- **Meine Formate** — the user's own formats, created in the editor at
+  `/formate/neu` and editable, duplicable, and deletable. Deleting a format
+  keeps every deck that used it and only resets that deck's format to "none".
+
+A format is a list of typed rules (max 50) stored as JSON and evaluated in code
+(`shared/rule-formats.ts`, see
+[`docs/adr/0005-rule-format-model.md`](./docs/adr/0005-rule-format-model.md)):
+
+| Rule | Meaning |
+|------|---------|
+| `deck_size` | min/max cards in the Main, Extra, or Side Deck |
+| `copies` | default copies per card (1–10, normally 3) |
+| `card_status` | specific cards are forbidden / limited / semi-limited |
+| `banlist` | the official TCG, OCG, or GOAT banlist (`catalog_card.banlist_info`) |
+| `filter` | restrict all cards matching (or *not* matching) a card filter to 0–3 copies |
+
+A card filter can combine types, frame types, attributes, races, archetypes,
+sets, card ids, level/ATK/DEF ranges, a name substring, an effect flag, and a
+release cut-off. All provided fields are ANDed, the values inside one field are
+ORed, and an empty filter matches every card.
+
+### Validation semantics
+
+- Copies are counted across **main + extra + side**. The effective limit per
+  card is the **lowest** of: the `copies` rule (default 3), an explicit
+  `card_status`, the selected banlist, and every applicable `filter` rule.
+- `hasEffect` is true for Spell, Trap, and Skill cards (they are nothing but
+  effect text) and for every monster whose card type does not contain
+  "Normal" — so "Normal Monster", "Normal Tuner Monster", and "Pendulum Normal
+  Monster" count as *without* effect.
+- `releasedBefore`/`releasedAfter` compare **strictly** (the boundary date
+  itself does not match) against the TCG date by default, or the OCG date with
+  `region: 'ocg'`. A card **without** a date for that region never matches, so
+  a GOAT-style "only cards up to June 2005" rule
+  (`not_matching releasedBefore 2005-07-01 → 0 copies`) also disallows cards
+  with an unknown release date — the conservative choice.
+- Legality is **never stored**. It is recomputed on every deck read and on
+  every write response, so a card change, a format edit, or a catalog refresh
+  takes effect immediately. A deck without a format is neither legal nor
+  illegal (`validation: null`).
+
+In the deck editor a format is picked in the header; the "Regelprüfung" panel
+then shows `Legal` / `Nicht legal – n Probleme` with the issue list, and every
+affected row is badged (`Verboten`, `Limitiert (1)`, `Semi-limitiert (2)`). The
+deck list shows the format name plus a legality badge and can filter by format
+and legality. The format editor can check any of the user's decks against the
+*unsaved* rules before saving them.
 
 ## Quality Checks
 

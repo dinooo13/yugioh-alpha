@@ -208,6 +208,10 @@ Product outcome:
 
 Users can build decks for specific rule environments and immediately see whether a deck is legal.
 
+Implemented: built-in formats (TCG Advanced, OCG, GOAT, Ohne Banliste) plus custom formats under
+`/formate`, with live validation in the deckbuilder. See
+[`docs/adr/0005-rule-format-model.md`](adr/0005-rule-format-model.md).
+
 ### Phase 5: AI Deck Assistance
 
 Goal: Help users create and improve decks using their inventory and selected rule formats.

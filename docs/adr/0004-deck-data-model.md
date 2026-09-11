@@ -92,7 +92,10 @@ decks.
 
 `MAIN_MIN 40`, `MAIN_MAX 60`, `EXTRA_MAX 15`, `SIDE_MAX 15`, and
 `MAX_COPIES 3` (per catalog card across the whole deck) are returned as
-`limits` plus a `warnings` array on the deck detail. They are **not**
+`limits` plus a `warnings` array on the deck detail. Since
+[ADR 0005](0005-rule-format-model.md) they are only the fallback hints for a
+deck *without* a rule format; once a format is assigned, its `deck_size` and
+`copies` rules are the authority. They are **not**
 enforced as `400`s: Phase 4 introduces configurable rule formats where exactly
 these numbers become format-dependent, and a deckbuilder must let a user save
 a 12-card work in progress. Only structurally invalid writes are rejected: an
@@ -105,7 +108,9 @@ section its type forbids.
 `deck` intentionally carries no format, banlist, or legality columns. Rule
 formats are Phase 4 and get their own model; a deck will then reference a
 format additively (a nullable `format_id`), leaving this ADR's decisions
-intact.
+intact. That is exactly what [ADR 0005](0005-rule-format-model.md) does:
+`deck.format_id` is a nullable `ON DELETE SET NULL` reference, and legality
+stays derived at read time — no legality column was added.
 
 ## Consequences
 
