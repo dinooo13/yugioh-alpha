@@ -91,7 +91,13 @@ test.describe('AI deck assistant', () => {
     // contains "Übernehmen" as a substring and would otherwise match first.
     const applyButton = slideover.getByRole('button', { name: 'Übernehmen', exact: true }).first()
     await applyButton.click()
-    await expect(applyButton).toBeDisabled()
+
+    // Applying a change relabels its own button to "Übernommen" and disables
+    // it (see app/pages/decks/[id].vue) — the "Übernehmen" locator above no
+    // longer matches that button afterwards, so assert on the new label.
+    const appliedButton = slideover.getByRole('button', { name: 'Übernommen', exact: true }).first()
+    await expect(appliedButton).toBeVisible()
+    await expect(appliedButton).toBeDisabled()
 
     // The fake model's only "add" candidates are already at their owned cap
     // for this seeded inventory, so its one change is removing a single main

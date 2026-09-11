@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
+import type { DOMWrapper } from '@vue/test-utils'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
 import AssistantPage from '~/pages/decks/assistent.vue'
 import type { DeckAssistantResult, DeckAssistantStatus } from '~~/shared/deck-assistant'
@@ -30,7 +31,7 @@ mockNuxtImport('useToast', () => {
 })
 
 function findButton(component: Awaited<ReturnType<typeof mountSuspended>>, label: string) {
-  return component.findAll('button').find(button => button.text().includes(label))
+  return component.findAll('button').find((button: DOMWrapper<Element>) => button.text().includes(label))
 }
 
 function buildResult(overrides: Partial<DeckAssistantResult> = {}): DeckAssistantResult {
@@ -54,7 +55,7 @@ function buildResult(overrides: Partial<DeckAssistantResult> = {}): DeckAssistan
     validation: {
       legal: false,
       issues: [
-        { severity: 'error', code: 'main_below_min', message: 'Das Main Deck hat 3 Karten, mindestens 40 sind üblich.' },
+        { severity: 'error', code: 'deck_size_min', section: 'main', message: 'Das Main Deck hat 3 Karten, mindestens 40 sind erforderlich.' },
       ],
       cards: {},
     },
