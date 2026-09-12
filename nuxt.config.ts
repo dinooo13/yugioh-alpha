@@ -17,6 +17,12 @@ export default defineNuxtConfig({
   colorMode: {
     preference: 'light',
   },
+  routeRules: {
+    // The SSR HTML for a shared profile/deck/collection page embeds the same
+    // payload as its `/api/**` counterpart (and, for token URLs, the token
+    // itself in the URL) — mark it non-cacheable by intermediaries too.
+    '/spieler/**': { headers: { 'cache-control': 'private, no-store' } },
+  },
   runtimeConfig: {
     dbFilePath: process.env.DB_FILE_PATH || process.env.DATABASE_URL || './data/app.db',
     betterAuthSecret: process.env.BETTER_AUTH_SECRET || 'dev-only-insecure-secret-change-me',

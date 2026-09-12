@@ -63,7 +63,8 @@ export interface SharedDeckSummary {
   cardCount: number
   formatName: string | null
   legal: boolean | null
-  visibility: Visibility
+  /** Null for non-owners: an owner-side setting the grant does not entitle them to see. */
+  visibility: Visibility | null
   updatedAt: string
 }
 
@@ -72,7 +73,8 @@ export interface SharedCollectionSummary {
   name: string
   description: string | null
   cardCount: number
-  visibility: Visibility
+  /** Null for non-owners: an owner-side setting the grant does not entitle them to see. */
+  visibility: Visibility | null
 }
 
 export interface PublicProfileResponse {

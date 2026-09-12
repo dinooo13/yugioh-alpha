@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { UserSearchItem } from '~~/shared/sharing'
+import { apiErrorMessage } from '~/utils/card-entry'
 
 const emit = defineEmits<{
   select: [userId: string]
@@ -10,6 +11,7 @@ const debouncedSearch = ref('')
 const results = ref<UserSearchItem[]>([])
 const isSearching = ref(false)
 const hasSearched = ref(false)
+const errorMessage = ref('')
 
 let debounceTimer: ReturnType<typeof setTimeout> | undefined
 watch(searchInput, (value) => {
@@ -30,11 +32,16 @@ watch(debouncedSearch, async (term) => {
   }
 
   isSearching.value = true
+  errorMessage.value = ''
   try {
     const response = await $fetch<{ items: UserSearchItem[] }>('/api/users/search', {
       query: { q: term },
     })
     results.value = response.items
+  }
+  catch (error) {
+    results.value = []
+    errorMessage.value = apiErrorMessage(error, 'Spieler konnten nicht geladen werden.')
   }
   finally {
     isSearching.value = false
@@ -90,6 +97,13 @@ function select(item: UserSearchItem) {
       class="text-sm text-gray-500"
     >
       Keine Spieler gefunden.
+    </p>
+
+    <p
+      v-if="errorMessage"
+      class="text-sm text-red-600"
+    >
+      {{ errorMessage }}
     </p>
   </div>
 </template>

@@ -349,7 +349,7 @@ export function listVisibleDecks(db: Db, ownerUserId: string, viewerUserId: stri
       cardCount: counts.main + counts.extra + counts.side,
       formatName: format?.name ?? null,
       legal,
-      visibility: row.visibility,
+      visibility: isOwner ? row.visibility : null,
       updatedAt: row.updatedAt.toISOString(),
     }
   })
@@ -384,6 +384,6 @@ export function listVisibleCollections(db: Db, ownerUserId: string, viewerUserId
     name: row.name,
     description: row.description,
     cardCount: row.cardCount,
-    visibility: row.visibility,
+    visibility: isOwner ? row.visibility : null,
   }))
 }

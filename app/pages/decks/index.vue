@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { OwnProfile, Visibility } from '~~/shared/sharing'
+import type { Visibility } from '~~/shared/sharing'
 
 interface DeckListItem {
   id: string
@@ -89,9 +89,7 @@ const sortItems = [
   { label: 'Name (Z-A)', value: '-name' },
 ]
 
-const { data: ownProfile } = await useFetch<OwnProfile>('/api/profile', {
-  headers: import.meta.server ? useRequestHeaders(['cookie']) : undefined,
-})
+const { data: ownProfile } = await useOwnProfile()
 
 const isFormOpen = ref(false)
 const editingDeck = ref<DeckListItem | null>(null)
@@ -182,6 +180,9 @@ function menuItemsFor(deck: DeckListItem) {
     {
       label: 'Teilen',
       icon: 'i-lucide-share-2',
+      // Without a loaded handle, sharePath would resolve to a broken
+      // `/spieler//decks/:id` link — keep the entry disabled until then.
+      disabled: !ownProfile.value?.handle,
       onSelect: () => openShare(deck),
     },
     {

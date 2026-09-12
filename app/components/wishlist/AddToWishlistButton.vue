@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { apiErrorMessage } from '~/utils/card-entry'
+
 const props = defineProps<{
   catalogCardId: number
   inWishlist: boolean
@@ -9,6 +11,7 @@ const emit = defineEmits<{
 }>()
 
 const isSaving = ref(false)
+const errorMessage = ref('')
 
 async function toggle() {
   if (isSaving.value) {
@@ -16,6 +19,7 @@ async function toggle() {
   }
 
   isSaving.value = true
+  errorMessage.value = ''
   try {
     if (props.inWishlist) {
       await $fetch(`/api/wishlist/card/${props.catalogCardId}`, { method: 'DELETE' })
@@ -26,6 +30,9 @@ async function toggle() {
       emit('changed', true)
     }
   }
+  catch (error) {
+    errorMessage.value = apiErrorMessage(error, 'Die Wunschliste konnte nicht aktualisiert werden.')
+  }
   finally {
     isSaving.value = false
   }
@@ -33,13 +40,21 @@ async function toggle() {
 </script>
 
 <template>
-  <UButton
-    :icon="inWishlist ? 'i-lucide-heart-off' : 'i-lucide-heart'"
-    :color="inWishlist ? 'neutral' : 'primary'"
-    :variant="inWishlist ? 'outline' : 'solid'"
-    size="xs"
-    :loading="isSaving"
-    :label="inWishlist ? 'Auf der Wunschliste' : 'Zur Wunschliste'"
-    @click="toggle"
-  />
+  <div class="inline-flex flex-col items-start gap-1">
+    <UButton
+      :icon="inWishlist ? 'i-lucide-heart-off' : 'i-lucide-heart'"
+      :color="inWishlist ? 'neutral' : 'primary'"
+      :variant="inWishlist ? 'outline' : 'solid'"
+      size="xs"
+      :loading="isSaving"
+      :label="inWishlist ? 'Auf der Wunschliste' : 'Zur Wunschliste'"
+      @click="toggle"
+    />
+    <p
+      v-if="errorMessage"
+      class="text-xs text-red-600"
+    >
+      {{ errorMessage }}
+    </p>
+  </div>
 </template>

@@ -2,7 +2,7 @@
 import type { NavigationMenuItem } from '@nuxt/ui'
 import { authClient } from '~/utils/auth-client'
 import { getAuthSession } from '~/utils/session'
-import type { OwnProfile, Visibility } from '~~/shared/sharing'
+import type { Visibility } from '~~/shared/sharing'
 
 interface CollectionItem {
   id: string
@@ -105,9 +105,7 @@ async function onDelete(collection: CollectionItem) {
 
 // Cheap, lazily creates the profile on first read — only needed to build the
 // "Teilen" share link (`/spieler/:handle/sammlungen/:id`).
-const { data: ownProfile } = await useFetch<OwnProfile>('/api/profile', {
-  headers: import.meta.server ? useRequestHeaders(['cookie']) : undefined,
-})
+const { data: ownProfile } = await useOwnProfile()
 
 const isShareOpen = ref(false)
 const sharingCollection = ref<CollectionItem | null>(null)
@@ -135,6 +133,9 @@ function menuItemsFor(collection: CollectionItem) {
     {
       label: 'Teilen',
       icon: 'i-lucide-share-2',
+      // Without a loaded handle, sharePath would resolve to a broken
+      // `/spieler//sammlungen/:id` link — keep the entry disabled until then.
+      disabled: !ownProfile.value?.handle,
       onSelect: () => openShare(collection),
     },
     {

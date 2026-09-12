@@ -92,7 +92,10 @@ async function setVisibility(visibility: Visibility) {
 }
 
 const shareUrl = computed(() => {
-  if (!state.value?.shareToken) {
+  // A `sharePath` built from an own profile that has not (yet) loaded its
+  // handle would produce a broken `/spieler//...` URL — defense in depth on
+  // top of the caller disabling "Teilen" until the handle is known.
+  if (!state.value?.shareToken || props.sharePath.includes('//')) {
     return ''
   }
   const origin = import.meta.client ? window.location.origin : ''
@@ -201,6 +204,7 @@ async function removeGrant(userId: string) {
                 color="neutral"
                 variant="outline"
                 :label="justCopied ? 'Link kopiert' : 'Link kopieren'"
+                :disabled="!shareUrl"
                 @click="copyLink"
               />
               <UButton

@@ -3,7 +3,8 @@ import { VISIBILITY_LABELS } from '~~/shared/sharing'
 import type { Visibility } from '~~/shared/sharing'
 
 const props = withDefaults(defineProps<{
-  visibility: Visibility
+  /** Null for a non-owner view (the API never discloses this owner-side setting to them). */
+  visibility: Visibility | null
   /** Hide the badge entirely for 'private' (the owner's default, everywhere else noise). */
   hidePrivate?: boolean
 }>(), {
@@ -16,9 +17,10 @@ const COLORS: Record<Visibility, 'neutral' | 'warning' | 'primary'> = {
   public: 'primary',
 }
 
-const color = computed(() => COLORS[props.visibility])
-const label = computed(() => VISIBILITY_LABELS[props.visibility])
-const visible = computed(() => !(props.hidePrivate && props.visibility === 'private'))
+const color = computed(() => (props.visibility ? COLORS[props.visibility] : 'neutral'))
+const label = computed(() => (props.visibility ? VISIBILITY_LABELS[props.visibility] : ''))
+const visible = computed(() =>
+  props.visibility != null && !(props.hidePrivate && props.visibility === 'private'))
 </script>
 
 <template>

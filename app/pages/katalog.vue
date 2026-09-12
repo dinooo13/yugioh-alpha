@@ -429,6 +429,7 @@ async function reloadCards() {
         class="group min-w-0 cursor-pointer overflow-hidden rounded-md border border-gray-200 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
         @click="openCard(card.id)"
         @keydown.enter="openCard(card.id)"
+        @keydown.space.prevent="openCard(card.id)"
       >
         <div class="aspect-[3/4.35] bg-gray-100">
           <img
@@ -474,6 +475,7 @@ async function reloadCards() {
             :catalog-card-id="card.id"
             :in-wishlist="isWishlisted(card.id)"
             @click.stop
+            @keydown.stop
             @changed="value => onWishlistChanged(card.id, value)"
           />
         </div>

@@ -105,9 +105,10 @@ export function validateShareUpdateInput(body: unknown): ShareUpdateInput {
  *   2. target.visibility === 'public'                           -> 'public'
  *   3. viewerUserId != null && a share_grant row exists         -> 'grant'
  *   4. token matches target.shareToken (token non-null)         -> 'token'
- * A token is honoured for 'link' AND 'public' resources, and is ignored
- * (never honoured) while visibility === 'private' — because setShareState
- * nulls the token on going private, rule 4 can then never fire.
+ * A token is only ever consulted while visibility === 'link' — 'public' is
+ * already allowed unconditionally by rule 2 (so rule 4's token check is
+ * unreachable for it), and 'private' nulls the token in setShareState, so
+ * rule 4 can never fire there either.
  * Evaluation order above is also the reported `via`.
  */
 export function resolveAccess(
@@ -369,6 +370,11 @@ export function addShareGrant(
   if (!grantedUserRow) {
     notFound('Player not found')
   }
+
+  // A user can exist without ever having visited a page that lazily creates
+  // their user_profile row; without this, ShareGrantItem.handle (which
+  // left-joins user_profile) would render as '@' for such a grantee.
+  ensureProfile(db, grantedUserId)
 
   const existing = db
     .select({ id: shareGrant.id })

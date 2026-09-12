@@ -3,7 +3,7 @@ import { useDb } from '../../../db'
 import { getProfileByHandle, toPublicProfile } from '../../../utils/profiles'
 import { getOptionalUser } from '../../../utils/session'
 import { parsePageQuery } from '../../../utils/shared-views'
-import { listPublicWishlist } from '../../../utils/wishlist'
+import { canViewWishlist, listPublicWishlist } from '../../../utils/wishlist'
 import type { SharedWishlistResponse } from '../../../../shared/sharing'
 
 export default defineEventHandler(async (event): Promise<SharedWishlistResponse> => {
@@ -22,9 +22,8 @@ export default defineEventHandler(async (event): Promise<SharedWishlistResponse>
   }
 
   const viewer = await getOptionalUser(event)
-  const isOwner = viewer?.id === profile.userId
 
-  if (!isOwner && profile.wishlistVisibility !== 'public') {
+  if (!canViewWishlist(profile.userId, profile.wishlistVisibility, viewer?.id ?? null)) {
     throw createError({ statusCode: 404, statusMessage: 'Wishlist not found' })
   }
 

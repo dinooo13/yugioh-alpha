@@ -6,7 +6,7 @@ import { createError } from 'h3'
 import type { useDb } from '../db'
 import { catalogCard, catalogCardImage, wishlistItem } from '../db/schema'
 import { ownedQuantitiesByCard } from './inventory'
-import type { WishlistItemView, WishlistResponse } from '../../shared/sharing'
+import type { WishlistItemView, WishlistResponse, WishlistVisibility } from '../../shared/sharing'
 
 type Db = ReturnType<typeof useDb>
 
@@ -341,6 +341,21 @@ export function listPublicWishlist(db: Db, ownerUserId: string, options: { page?
     page,
     pageSize,
   }
+}
+
+/**
+ * Whether `viewerUserId` may see `ownerUserId`'s wishlist: the owner always
+ * can, everyone else only while it is 'public'. Pure and dependency-free so
+ * both /api/profiles/:handle (the teaser count) and
+ * /api/profiles/:handle/wishlist (the item list, which 404s otherwise) can
+ * share and unit-test the same gate instead of duplicating the condition.
+ */
+export function canViewWishlist(
+  ownerUserId: string,
+  wishlistVisibility: WishlistVisibility,
+  viewerUserId: string | null,
+): boolean {
+  return viewerUserId === ownerUserId || wishlistVisibility === 'public'
 }
 
 /** Row count for one user's wishlist — the public-profile teaser count. */

@@ -4,7 +4,7 @@ import { requireProfileByHandle, toPublicProfile } from '../../../utils/profiles
 import { getOptionalUser } from '../../../utils/session'
 import { requireViewableInventory } from '../../../utils/sharing'
 import { inventoryCardCount, listVisibleCollections, listVisibleDecks } from '../../../utils/shared-views'
-import { wishlistItemCount } from '../../../utils/wishlist'
+import { canViewWishlist, wishlistItemCount } from '../../../utils/wishlist'
 import type { PublicProfileResponse } from '../../../../shared/sharing'
 
 export default defineEventHandler(async (event): Promise<PublicProfileResponse> => {
@@ -32,7 +32,7 @@ export default defineEventHandler(async (event): Promise<PublicProfileResponse> 
   }
 
   const isOwner = viewer?.id === profile.userId
-  const wishlistVisible = isOwner || profile.wishlistVisibility === 'public'
+  const wishlistVisible = canViewWishlist(profile.userId, profile.wishlistVisibility, viewer?.id ?? null)
 
   return {
     profile: toPublicProfile(profile),

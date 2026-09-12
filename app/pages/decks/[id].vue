@@ -9,7 +9,7 @@ import type { DeckSection } from '~~/shared/deck-sections'
 import { CARD_STATUS_LABELS } from '~~/shared/rule-formats'
 import type { DeckValidation } from '~~/shared/rule-formats'
 import type { AssistantChange, AssistantMissingCard, DeckAssistantResult, DeckAssistantStatus } from '~~/shared/deck-assistant'
-import type { OwnProfile, Visibility } from '~~/shared/sharing'
+import type { Visibility } from '~~/shared/sharing'
 import { apiErrorMessage } from '~/utils/card-entry'
 import type { AssistantRequestPayload } from '~/components/decks/AssistantRequestForm.vue'
 
@@ -202,9 +202,7 @@ const { data: assistantStatus } = await useFetch<DeckAssistantStatus>('/api/assi
 
 // Cheap, lazily creates the profile on first read — needed only to build the
 // share link (`/spieler/:handle/decks/:id`).
-const { data: ownProfile } = await useFetch<OwnProfile>('/api/profile', {
-  headers: import.meta.server ? useRequestHeaders(['cookie']) : undefined,
-})
+const { data: ownProfile } = await useOwnProfile()
 
 const isShareOpen = ref(false)
 const sharePath = computed(() => `/spieler/${ownProfile.value?.handle ?? ''}/decks/${deckId.value}`)
@@ -635,6 +633,7 @@ async function deleteDeck() {
             color="neutral"
             variant="outline"
             label="Teilen"
+            :disabled="!ownProfile?.handle"
             @click="() => { isShareOpen = true }"
           />
           <UButton
