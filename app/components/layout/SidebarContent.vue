@@ -16,6 +16,7 @@ const navItems = computed<NavigationMenuItem[]>(() => [
   { label: 'Inventar', icon: 'i-lucide-archive', to: '/inventar', active: route.path.startsWith('/inventar') },
   { label: 'Katalog', icon: 'i-lucide-book-open', to: '/katalog' },
   { label: 'Decks', icon: 'i-lucide-layers', to: '/decks', active: route.path.startsWith('/decks') },
+  { label: 'Assistent', icon: 'i-lucide-sparkles', to: '/assistent', active: route.path.startsWith('/assistent') },
   { label: 'Formate', icon: 'i-lucide-scroll-text', to: '/formate', active: route.path.startsWith('/formate') },
   { label: 'Wunschliste', icon: 'i-lucide-heart', to: '/wunschliste' },
   { label: 'Turniere', icon: 'i-lucide-trophy', to: '/turniere', active: route.path.startsWith('/turniere') },
