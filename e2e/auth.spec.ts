@@ -9,10 +9,15 @@ test.describe('auth happy path', () => {
     // Register a new user.
     await registerAndLogin(page, { name: 'E2E Test User', email, password })
 
-    // Better Auth signs the user in immediately after registration.
-    await expect(page.getByText('yugioh alpha', { exact: true })).toBeVisible()
+    // Better Auth signs the user in immediately after registration. The app
+    // name now appears twice (desktop sidebar + mobile topbar, #1) — scope
+    // to the desktop sidebar, which is what's actually visible at this
+    // (desktop) viewport. The sidebar shows the registered name, not the
+    // e-mail address (#17).
+    const sidebar = page.getByRole('complementary')
+    await expect(sidebar.getByText('yugioh alpha', { exact: true })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Abmelden' })).toBeVisible()
-    await expect(page.getByText(email)).toBeVisible()
+    await expect(sidebar.getByText('E2E Test User')).toBeVisible()
 
     // Log out.
     await logout(page)
