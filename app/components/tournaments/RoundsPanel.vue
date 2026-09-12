@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ROUND_STATUS_LABELS, TOURNAMENT_ERROR_MESSAGES } from '~~/shared/tournaments'
-import type { TournamentDetail, TournamentErrorCode, TournamentRoundDto } from '~~/shared/tournaments'
+import type { TournamentDetail, TournamentErrorCode, TournamentMatchDto, TournamentRoundDto } from '~~/shared/tournaments'
 import { apiErrorCode, apiErrorMessage } from '~/utils/card-entry'
 
 const props = defineProps<{
@@ -51,6 +51,67 @@ function isSlotSelected(matchId: string, slot: 'a' | 'b'): boolean {
   return swapSelection.value.some(entry => entry.matchId === matchId && entry.slot === slot)
 }
 
+function findCurrentMatch(matchId: string): TournamentMatchDto | undefined {
+  return props.tournament.currentRound?.matches.find(match => match.id === matchId)
+}
+
+function participantInSlot(match: TournamentMatchDto, slot: 'a' | 'b'): string | null {
+  return slot === 'a' ? match.participantAId : match.participantBId
+}
+
+function otherParticipant(match: TournamentMatchDto, slot: 'a' | 'b'): string | null {
+  return slot === 'a' ? match.participantBId : match.participantAId
+}
+
+function pairKey(a: string, b: string): string {
+  return [a, b].sort().join('::')
+}
+
+/**
+ * Whether swapping these two slots would recreate a pairing the two
+ * resulting opponents already played in an earlier round (#37) — checked
+ * against every completed round before the current one.
+ */
+function wouldRecreatePairing(
+  matchAId: string,
+  slotA: 'a' | 'b',
+  matchBId: string,
+  slotB: 'a' | 'b',
+): boolean {
+  const matchA = findCurrentMatch(matchAId)
+  const matchB = findCurrentMatch(matchBId)
+  if (!matchA || !matchB) {
+    return false
+  }
+
+  const stayingInMatchA = otherParticipant(matchA, slotA)
+  const stayingInMatchB = otherParticipant(matchB, slotB)
+  const movingFromMatchA = participantInSlot(matchA, slotA)
+  const movingFromMatchB = participantInSlot(matchB, slotB)
+
+  const resultingPairs: Array<[string, string]> = []
+  if (stayingInMatchA && movingFromMatchB) {
+    resultingPairs.push([stayingInMatchA, movingFromMatchB])
+  }
+  if (stayingInMatchB && movingFromMatchA) {
+    resultingPairs.push([stayingInMatchB, movingFromMatchA])
+  }
+
+  const priorPairs = new Set<string>()
+  for (const round of props.tournament.rounds) {
+    if (round.id === props.tournament.currentRound?.id) {
+      continue
+    }
+    for (const match of round.matches) {
+      if (match.participantBId) {
+        priorPairs.add(pairKey(match.participantAId, match.participantBId))
+      }
+    }
+  }
+
+  return resultingPairs.some(([a, b]) => priorPairs.has(pairKey(a, b)))
+}
+
 async function onSelectSlot(matchId: string, slot: 'a' | 'b') {
   if (isSlotSelected(matchId, slot)) {
     swapSelection.value = swapSelection.value.filter(entry => !(entry.matchId === matchId && entry.slot === slot))
@@ -65,8 +126,16 @@ async function onSelectSlot(matchId: string, slot: 'a' | 'b') {
 
   const [first, second] = swapSelection.value
   swapSelection.value = []
-  isSwapping.value = true
   swapError.value = ''
+
+  if (
+    wouldRecreatePairing(first!.matchId, first!.slot, second!.matchId, second!.slot)
+    && !window.confirm('Diese Paarung gab es bereits. Trotzdem tauschen?')
+  ) {
+    return
+  }
+
+  isSwapping.value = true
 
   try {
     const detail = await $fetch<TournamentDetail>(`/api/tournaments/${props.tournament.id}/matches/swap`, {
@@ -93,9 +162,9 @@ async function onSelectSlot(matchId: string, slot: 'a' | 'b') {
       <UButton
         v-if="tournament.canEditPairings"
         size="xs"
-        color="neutral"
+        :color="swapMode ? 'error' : 'neutral'"
         :variant="swapMode ? 'solid' : 'outline'"
-        label="Paarungen tauschen"
+        :label="swapMode ? 'Tauschen beenden' : 'Paarungen tauschen'"
         @click="toggleSwapMode"
       />
     </div>

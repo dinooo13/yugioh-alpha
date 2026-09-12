@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { PAIRING_SYSTEM_LABELS, TOURNAMENT_ERROR_MESSAGES, TOURNAMENT_STATUS_LABELS } from '~~/shared/tournaments'
+import { MIN_PARTICIPANTS_TO_START, PAIRING_SYSTEM_LABELS, TOURNAMENT_ERROR_MESSAGES, TOURNAMENT_STATUS_LABELS } from '~~/shared/tournaments'
 import type { TournamentDetail, TournamentErrorCode, TournamentStatus } from '~~/shared/tournaments'
 import { apiErrorCode, apiErrorMessage } from '~/utils/card-entry'
 
@@ -77,6 +77,16 @@ function finishTournament() {
   )
 }
 
+async function onFinishClick() {
+  const confirmed = window.confirm(
+    'Turnier abschließen? Ergebnisse und Paarungen können danach nicht mehr geändert werden.',
+  )
+  if (!confirmed) {
+    return
+  }
+  await finishTournament()
+}
+
 async function deleteTournament() {
   if (!tournament.value) {
     return
@@ -106,6 +116,64 @@ const STATUS_COLORS: Record<TournamentStatus, 'info' | 'warning' | 'neutral'> = 
   running: 'warning',
   finished: 'neutral',
 }
+
+// --- Header actions (#29) ---------------------------------------------------
+// Only the actions relevant to the current status are rendered at all, and
+// only the one obvious next action is styled as primary — the rest are
+// neutral outline buttons. Disabled buttons always carry a `title` so the
+// user understands why, instead of a mute grey button.
+
+type RunningAction = 'complete' | 'next' | 'finish'
+
+const primaryRunningAction = computed<RunningAction>(() => {
+  if (!tournament.value) {
+    return 'complete'
+  }
+  if (tournament.value.canCreateRound) {
+    return 'next'
+  }
+  if (tournament.value.canFinish) {
+    return 'finish'
+  }
+  return 'complete'
+})
+
+const startTitle = computed(() => {
+  if (!tournament.value || tournament.value.canStart) {
+    return undefined
+  }
+  return `Mindestens ${MIN_PARTICIPANTS_TO_START} Teilnehmer nötig`
+})
+
+const completeRoundTitle = computed(() => {
+  if (!tournament.value || tournament.value.canCompleteRound) {
+    return undefined
+  }
+  return 'Alle Ergebnisse müssen eingetragen sein'
+})
+
+const createRoundTitle = computed(() => {
+  if (!tournament.value || tournament.value.canCreateRound) {
+    return undefined
+  }
+  if (tournament.value.currentRound) {
+    return 'Schließe zuerst die laufende Runde ab'
+  }
+  return TOURNAMENT_ERROR_MESSAGES.planned_rounds_reached
+})
+
+const finishTitle = computed(() => {
+  if (!tournament.value || tournament.value.canFinish) {
+    return undefined
+  }
+  if (tournament.value.currentRound) {
+    return TOURNAMENT_ERROR_MESSAGES.round_not_complete
+  }
+  if (tournament.value.rounds.length === 0) {
+    return TOURNAMENT_ERROR_MESSAGES.no_rounds
+  }
+  return undefined
+})
 </script>
 
 <template>
@@ -173,7 +241,12 @@ const STATUS_COLORS: Record<TournamentStatus, 'info' | 'warning' | 'neutral'> = 
 
           <dl class="mt-2 space-y-0.5 text-sm text-gray-500">
             <div>Paarungssystem: {{ PAIRING_SYSTEM_LABELS[tournament.pairingSystem] }}</div>
-            <div>Runde {{ tournament.rounds.length }} von {{ tournament.plannedRounds ?? '–' }}</div>
+            <div v-if="tournament.rounds.length === 0">
+              Noch nicht gestartet
+            </div>
+            <div v-else>
+              Runde {{ tournament.rounds.length }} von {{ tournament.plannedRounds ?? '–' }}
+            </div>
             <div>Turnierleitung: {{ tournament.organizerName }}</div>
           </dl>
         </div>
@@ -182,32 +255,39 @@ const STATUS_COLORS: Record<TournamentStatus, 'info' | 'warning' | 'neutral'> = 
           v-if="tournament.role === 'organizer'"
           class="flex shrink-0 flex-wrap items-center gap-2"
         >
-          <template v-if="tournament.status !== 'finished'">
+          <template v-if="tournament.status === 'registration'">
             <UButton
               label="Turnier starten"
+              color="primary"
               :disabled="!tournament.canStart || busy"
+              :title="startTitle"
               @click="startTournament"
             />
+          </template>
+          <template v-else-if="tournament.status === 'running'">
             <UButton
-              color="neutral"
-              variant="outline"
-              label="Nächste Runde"
-              :disabled="!tournament.canCreateRound || busy"
-              @click="createNextRound"
-            />
-            <UButton
-              color="neutral"
-              variant="outline"
               label="Runde abschließen"
+              :color="primaryRunningAction === 'complete' ? 'primary' : 'neutral'"
+              :variant="primaryRunningAction === 'complete' ? 'solid' : 'outline'"
               :disabled="!tournament.canCompleteRound || busy"
+              :title="completeRoundTitle"
               @click="completeRound"
             />
             <UButton
-              color="neutral"
-              variant="outline"
+              label="Nächste Runde"
+              :color="primaryRunningAction === 'next' ? 'primary' : 'neutral'"
+              :variant="primaryRunningAction === 'next' ? 'solid' : 'outline'"
+              :disabled="!tournament.canCreateRound || busy"
+              :title="createRoundTitle"
+              @click="createNextRound"
+            />
+            <UButton
               label="Turnier abschließen"
+              :color="primaryRunningAction === 'finish' ? 'primary' : 'neutral'"
+              :variant="primaryRunningAction === 'finish' ? 'solid' : 'outline'"
               :disabled="!tournament.canFinish || busy"
-              @click="finishTournament"
+              :title="finishTitle"
+              @click="onFinishClick"
             />
           </template>
           <UButton
@@ -250,7 +330,10 @@ const STATUS_COLORS: Record<TournamentStatus, 'info' | 'warning' | 'neutral'> = 
         @updated="onUpdated"
       />
 
-      <TournamentsStandingsTable :standings="tournament.standings" />
+      <TournamentsStandingsTable
+        :standings="tournament.standings"
+        :status="tournament.status"
+      />
     </template>
   </div>
 </template>

@@ -9,18 +9,29 @@ const PAGE_SIZE = 20
 
 useHead({ title: 'Turniere – yugioh alpha' })
 
-type TabId = 'organizer' | 'participant' | 'finished'
+type RoleTab = 'organizer' | 'participant'
+type StatusFilter = 'active' | 'finished'
 
-const tab = ref<TabId>('organizer')
+// Two independent axes instead of three tabs that used to mix role and
+// status (#32 in the UX review): a role tab picks "Meine Turniere" vs.
+// "Teilnahmen", a separate toggle picks "Aktiv" vs. "Abgeschlossen". Neither
+// hardcodes `status: active` behind the role tabs anymore, so an organizer's
+// own finished tournament stays reachable under "Meine Turniere" +
+// "Abgeschlossen" instead of vanishing.
+const role = ref<RoleTab>('organizer')
+const statusFilter = ref<StatusFilter>('active')
 const page = ref(1)
 
-watch(tab, () => {
+watch([role, statusFilter], () => {
   page.value = 1
 })
 
-const listQuery = computed(() => (tab.value === 'finished'
-  ? { status: 'finished' as const, page: page.value, pageSize: PAGE_SIZE }
-  : { role: tab.value, status: 'active' as const, page: page.value, pageSize: PAGE_SIZE }))
+const listQuery = computed(() => ({
+  role: role.value,
+  status: statusFilter.value,
+  page: page.value,
+  pageSize: PAGE_SIZE,
+}))
 
 const { data, pending } = await useFetch<TournamentListResponse>('/api/tournaments', {
   query: listQuery,
@@ -29,8 +40,44 @@ const { data, pending } = await useFetch<TournamentListResponse>('/api/tournamen
   watch: [listQuery],
 })
 
+// Cheap, count-only fetch for the tab the user isn't currently looking at,
+// purely to label it ("Teilnahmen (1)") and to detect the "my tournaments is
+// empty but I do have participations" case for the hint below.
+const otherRole = computed<RoleTab>(() => (role.value === 'organizer' ? 'participant' : 'organizer'))
+const otherRoleQuery = computed(() => ({
+  role: otherRole.value,
+  status: statusFilter.value,
+  page: 1,
+  pageSize: 1,
+}))
+
+const { data: otherRoleData } = await useFetch<TournamentListResponse>('/api/tournaments', {
+  query: otherRoleQuery,
+  headers: import.meta.server ? useRequestHeaders(['cookie']) : undefined,
+  default: () => ({ items: [], total: 0, page: 1, pageSize: 1 }),
+  watch: [otherRoleQuery],
+})
+
 const tournaments = computed(() => data.value?.items ?? [])
 const total = computed(() => data.value?.total ?? 0)
+const otherRoleTotal = computed(() => otherRoleData.value?.total ?? 0)
+
+function countFor(tabRole: RoleTab): number {
+  return tabRole === role.value ? total.value : otherRoleTotal.value
+}
+
+function tabLabel(tabRole: RoleTab): string {
+  const base = tabRole === 'organizer' ? 'Meine Turniere' : 'Teilnahmen'
+  return `${base} (${countFor(tabRole)})`
+}
+
+function selectRole(next: RoleTab) {
+  role.value = next
+}
+
+function selectStatus(next: StatusFilter) {
+  statusFilter.value = next
+}
 
 const STATUS_COLORS: Record<TournamentStatus, 'info' | 'warning' | 'neutral'> = {
   registration: 'info',
@@ -46,15 +93,28 @@ function roundLabel(item: TournamentListItem) {
   return `Runde ${item.roundCount}/${item.plannedRounds ?? '–'}`
 }
 
+// The organizer tab is empty, but the user does have participations — the
+// most common reason someone lands here confused (#31): they were invited
+// and never noticed. Offer a direct switch instead of a dead end.
+const showParticipantHint = computed(() =>
+  role.value === 'organizer' && tournaments.value.length === 0 && otherRoleTotal.value > 0)
+
 const emptyState = computed(() => {
-  if (tab.value === 'organizer') {
+  if (role.value === 'organizer') {
+    if (statusFilter.value === 'active') {
+      return {
+        heading: 'Noch keine Turniere',
+        text: 'Lege dein erstes Turnier an und lade Spieler per E-Mail oder als Gast ein.',
+        showButton: true,
+      }
+    }
     return {
-      heading: 'Noch keine Turniere',
-      text: 'Lege dein erstes Turnier an und lade Spieler per E-Mail oder als Gast ein.',
-      showButton: true,
+      heading: 'Noch keine abgeschlossenen Turniere',
+      text: 'Turniere, die du leitest, erscheinen hier, sobald du sie abschließt.',
+      showButton: false,
     }
   }
-  if (tab.value === 'participant') {
+  if (statusFilter.value === 'active') {
     return {
       heading: 'Keine Teilnahmen',
       text: 'Du bist noch zu keinem Turnier eingeladen.',
@@ -62,8 +122,8 @@ const emptyState = computed(() => {
     }
   }
   return {
-    heading: 'Noch keine abgeschlossenen Turniere',
-    text: '',
+    heading: 'Keine abgeschlossenen Teilnahmen',
+    text: 'Turniere, an denen du teilgenommen hast, erscheinen hier, sobald sie abgeschlossen sind.',
     showButton: false,
   }
 })
@@ -88,28 +148,42 @@ const emptyState = computed(() => {
       />
     </div>
 
-    <div class="flex flex-wrap gap-2">
-      <UButton
-        color="neutral"
-        :variant="tab === 'organizer' ? 'solid' : 'outline'"
-        :aria-pressed="tab === 'organizer'"
-        label="Meine Turniere"
-        @click="() => { tab = 'organizer' }"
-      />
-      <UButton
-        color="neutral"
-        :variant="tab === 'participant' ? 'solid' : 'outline'"
-        :aria-pressed="tab === 'participant'"
-        label="Teilnahmen"
-        @click="() => { tab = 'participant' }"
-      />
-      <UButton
-        color="neutral"
-        :variant="tab === 'finished' ? 'solid' : 'outline'"
-        :aria-pressed="tab === 'finished'"
-        label="Abgeschlossen"
-        @click="() => { tab = 'finished' }"
-      />
+    <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div class="flex flex-wrap gap-2">
+        <UButton
+          color="neutral"
+          :variant="role === 'organizer' ? 'solid' : 'outline'"
+          :aria-pressed="role === 'organizer'"
+          :label="tabLabel('organizer')"
+          @click="selectRole('organizer')"
+        />
+        <UButton
+          color="neutral"
+          :variant="role === 'participant' ? 'solid' : 'outline'"
+          :aria-pressed="role === 'participant'"
+          :label="tabLabel('participant')"
+          @click="selectRole('participant')"
+        />
+      </div>
+
+      <div class="flex flex-wrap gap-2">
+        <UButton
+          size="sm"
+          color="neutral"
+          :variant="statusFilter === 'active' ? 'solid' : 'outline'"
+          :aria-pressed="statusFilter === 'active'"
+          label="Aktiv"
+          @click="selectStatus('active')"
+        />
+        <UButton
+          size="sm"
+          color="neutral"
+          :variant="statusFilter === 'finished' ? 'solid' : 'outline'"
+          :aria-pressed="statusFilter === 'finished'"
+          label="Abgeschlossen"
+          @click="selectStatus('finished')"
+        />
+      </div>
     </div>
 
     <div
@@ -142,6 +216,20 @@ const emptyState = computed(() => {
       >
         {{ emptyState.text }}
       </p>
+      <p
+        v-if="showParticipantHint"
+        class="mt-1 max-w-sm text-sm text-gray-500"
+      >
+        Du nimmst an {{ otherRoleTotal }} Turnier{{ otherRoleTotal === 1 ? '' : 'en' }} teil.
+      </p>
+      <UButton
+        v-if="showParticipantHint"
+        color="primary"
+        variant="outline"
+        label="Eingeladene Turniere ansehen"
+        class="mt-4"
+        @click="selectRole('participant')"
+      />
       <UButton
         v-if="emptyState.showButton"
         icon="i-lucide-plus"
@@ -191,7 +279,7 @@ const emptyState = computed(() => {
           <div>{{ item.participantCount }} Teilnehmer</div>
           <div>{{ roundLabel(item) }}</div>
           <div>{{ PAIRING_SYSTEM_LABELS[item.pairingSystem] }}</div>
-          <div v-if="tab === 'participant'">
+          <div v-if="role === 'participant'">
             Von {{ item.organizerName }}
           </div>
         </dl>

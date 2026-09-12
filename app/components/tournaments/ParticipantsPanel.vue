@@ -53,6 +53,22 @@ async function addParticipant() {
   }
 }
 
+/**
+ * "Zu dieser E-Mail-Adresse gibt es kein Konto." offers no way out — switch
+ * to the guest form and keep whatever name-ish text the organizer already
+ * typed (the e-mail's local part, if there was no name yet) so they don't
+ * have to retype it (#37).
+ */
+const showAddAsGuestHint = computed(() => addError.value === TOURNAMENT_ERROR_MESSAGES.user_not_found)
+
+function addAsGuestInstead() {
+  if (!nameInput.value && emailInput.value) {
+    nameInput.value = emailInput.value.split('@')[0] ?? ''
+  }
+  addMode.value = 'guest'
+  addError.value = ''
+}
+
 // --- Rename -----------------------------------------------------------------
 
 const renamingParticipant = ref<TournamentParticipantDto | null>(null)
@@ -123,6 +139,16 @@ async function setDropped(participant: TournamentParticipantDto, dropped: boolea
 }
 
 async function removeParticipant(participant: TournamentParticipantDto) {
+  // Destructive and irreversible — a registered deck is lost with the row —
+  // so it gets the same confirm as every other destructive action in the
+  // app (#28).
+  const confirmed = window.confirm(
+    `${participant.name} aus dem Turnier entfernen? Ein angemeldetes Deck geht dabei verloren.`,
+  )
+  if (!confirmed) {
+    return
+  }
+
   busyParticipantId.value = participant.id
   rowError.value = ''
 
@@ -193,6 +219,34 @@ function onDeckUpdated(detail: TournamentDetail) {
   emit('updated', detail)
 }
 
+// A linked participant who isn't the caller and isn't self-registerable by
+// the organizer either (i.e. any other linked participant while the
+// tournament is still open) manages their own deck — say so instead of just
+// omitting the button silently (#34).
+function managesOwnDeck(participant: TournamentParticipantDto): boolean {
+  return props.tournament.status === 'registration'
+    && participant.linked
+    && !participant.isSelf
+    && !canRegisterDeck(participant)
+}
+
+// The caller's own row, when they play in the tournament — used for the
+// "register before it starts" banner below (#31).
+const selfParticipant = computed(() =>
+  props.tournament.participants.find(participant => participant.id === props.tournament.selfParticipantId) ?? null)
+
+const showDeckReminder = computed(() =>
+  props.tournament.role === 'participant'
+  && props.tournament.status === 'registration'
+  && selfParticipant.value !== null
+  && !selfParticipant.value.deckName)
+
+function openOwnDeckModal() {
+  if (selfParticipant.value) {
+    openDeckModal(selfParticipant.value)
+  }
+}
+
 function deckBadge(participant: TournamentParticipantDto): { label: string, color: 'success' | 'error' | 'neutral' } | null {
   // deckName is snapshot-derived and survives the underlying deck being
   // deleted (deckId is ON DELETE SET NULL); gate on it, not on deckId, so a
@@ -215,12 +269,25 @@ function issueCountLabel(participant: TournamentParticipantDto): string | null {
   return participant.deckIssueCount === 1 ? '1 Regelverstoß' : `${participant.deckIssueCount} Regelverstöße`
 }
 
+function issueMessages(participant: TournamentParticipantDto): string[] {
+  return participant.deckSnapshot?.validation?.issues ?? []
+}
+
+// "Stand: 12.9.2026, 13:13:52" was overly precise and ambiguous about what
+// it meant; "Angemeldet am 12.09.2026, 13:13" (no seconds) reads clearly (#30).
 function capturedAtLabel(participant: TournamentParticipantDto): string | null {
   const capturedAt = participant.deckSnapshot?.capturedAt
   if (!capturedAt) {
     return null
   }
-  return `Stand: ${new Date(capturedAt).toLocaleString('de-DE')}`
+  const formatted = new Intl.DateTimeFormat('de-DE', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(capturedAt))
+  return `Angemeldet am ${formatted}`
 }
 </script>
 
@@ -229,6 +296,23 @@ function capturedAtLabel(participant: TournamentParticipantDto): string | null {
     <h2 class="text-base font-semibold text-gray-900">
       Teilnehmer ({{ tournament.participants.length }})
     </h2>
+
+    <UAlert
+      v-if="showDeckReminder"
+      class="mt-4"
+      color="warning"
+      variant="subtle"
+      icon="i-lucide-alert-triangle"
+      title="Melde dein Deck an, bevor das Turnier startet."
+    >
+      <template #actions>
+        <UButton
+          size="xs"
+          label="Deck anmelden"
+          @click="openOwnDeckModal"
+        />
+      </template>
+    </UAlert>
 
     <form
       v-if="canAddParticipant"
@@ -278,12 +362,22 @@ function capturedAtLabel(participant: TournamentParticipantDto): string | null {
         :loading="isAdding"
       />
     </form>
-    <p
+    <div
       v-if="addError"
-      class="mt-2 text-sm text-red-600"
+      class="mt-2 flex flex-wrap items-center gap-2"
     >
-      {{ addError }}
-    </p>
+      <p class="text-sm text-red-600">
+        {{ addError }}
+      </p>
+      <UButton
+        v-if="showAddAsGuestHint"
+        size="xs"
+        color="neutral"
+        variant="outline"
+        label="Stattdessen als Gast hinzufügen"
+        @click="addAsGuestInstead"
+      />
+    </div>
 
     <p
       v-if="rowError"
@@ -305,9 +399,6 @@ function capturedAtLabel(participant: TournamentParticipantDto): string | null {
             <th class="px-2 py-2">
               Deck
             </th>
-            <th class="px-2 py-2">
-              Status
-            </th>
             <th class="px-2 py-2 text-right">
               Aktionen
             </th>
@@ -322,7 +413,24 @@ function capturedAtLabel(participant: TournamentParticipantDto): string | null {
               {{ participant.seed }}
             </td>
             <td class="px-2 py-2 font-medium text-gray-900">
-              {{ participant.name }}
+              <div class="flex flex-wrap items-center gap-1.5">
+                <span>{{ participant.name }}</span>
+                <UBadge
+                  v-if="participant.linked"
+                  size="sm"
+                  color="neutral"
+                  variant="subtle"
+                  icon="i-lucide-user-check"
+                  label="Konto"
+                />
+                <UBadge
+                  v-if="participant.dropped"
+                  size="sm"
+                  color="neutral"
+                  variant="subtle"
+                  label="Ausgestiegen"
+                />
+              </div>
             </td>
             <td class="px-2 py-2">
               <template v-if="participant.deckName">
@@ -330,17 +438,44 @@ function capturedAtLabel(participant: TournamentParticipantDto): string | null {
                   {{ participant.deckName }}
                 </div>
                 <div class="mt-0.5 flex flex-wrap items-center gap-1">
+                  <UPopover v-if="deckBadge(participant) && participant.deckIssueCount">
+                    <button
+                      type="button"
+                      class="flex items-center gap-1 rounded hover:bg-gray-50"
+                      :aria-label="`Regelverstöße von ${participant.name} anzeigen`"
+                    >
+                      <UBadge
+                        size="sm"
+                        variant="subtle"
+                        :color="deckBadge(participant)!.color"
+                        :label="deckBadge(participant)!.label"
+                      />
+                      <span class="text-xs text-gray-500">{{ issueCountLabel(participant) }}</span>
+                    </button>
+
+                    <template #content>
+                      <div class="max-w-xs space-y-1 p-3">
+                        <p class="text-xs font-semibold text-gray-900">
+                          Regelverstöße
+                        </p>
+                        <ul class="list-inside list-disc space-y-0.5 text-xs text-gray-600">
+                          <li
+                            v-for="(issue, index) in issueMessages(participant)"
+                            :key="index"
+                          >
+                            {{ issue }}
+                          </li>
+                        </ul>
+                      </div>
+                    </template>
+                  </UPopover>
                   <UBadge
-                    v-if="deckBadge(participant)"
+                    v-else-if="deckBadge(participant)"
                     size="sm"
                     variant="subtle"
                     :color="deckBadge(participant)!.color"
                     :label="deckBadge(participant)!.label"
                   />
-                  <span
-                    v-if="issueCountLabel(participant)"
-                    class="text-xs text-gray-500"
-                  >{{ issueCountLabel(participant) }}</span>
                 </div>
                 <div
                   v-if="capturedAtLabel(participant)"
@@ -355,14 +490,6 @@ function capturedAtLabel(participant: TournamentParticipantDto): string | null {
               >Kein Deck</span>
             </td>
             <td class="px-2 py-2">
-              <UBadge
-                v-if="participant.dropped"
-                color="neutral"
-                variant="subtle"
-                label="Ausgestiegen"
-              />
-            </td>
-            <td class="px-2 py-2">
               <div class="flex items-center justify-end gap-2">
                 <UButton
                   v-if="canRegisterDeck(participant)"
@@ -372,6 +499,10 @@ function capturedAtLabel(participant: TournamentParticipantDto): string | null {
                   :label="participant.deckName ? 'Deck ändern' : 'Deck anmelden'"
                   @click="openDeckModal(participant)"
                 />
+                <span
+                  v-else-if="managesOwnDeck(participant)"
+                  class="text-xs text-gray-400"
+                >Meldet Deck selbst an</span>
                 <UDropdownMenu
                   v-if="menuItemsFor(participant).length > 0"
                   :items="menuItemsFor(participant)"
@@ -434,6 +565,7 @@ function capturedAtLabel(participant: TournamentParticipantDto): string | null {
       :tournament-id="tournament.id"
       :participant-id="deckModalParticipant?.id ?? null"
       :current-deck-id="deckModalParticipant?.deckId ?? null"
+      :format="tournament.format"
       @updated="onDeckUpdated"
     />
   </section>

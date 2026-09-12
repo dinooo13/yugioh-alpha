@@ -9,7 +9,7 @@
 // decks/collections/formats.
 
 import { randomUUID } from 'node:crypto'
-import { and, asc, eq, inArray, ne, or, sql } from 'drizzle-orm'
+import { and, asc, eq, inArray, or, sql } from 'drizzle-orm'
 import { createError } from 'h3'
 import type { useDb } from '../db'
 import {
@@ -767,10 +767,16 @@ export function listTournaments(db: Db, userId: string, options: TournamentListO
       and ${tournamentParticipant.userId} = ${userId}
   )`
 
+  // "participant" intentionally does NOT exclude the organizer: an organizer
+  // who also plays in their own tournament (`includeSelf`) has a genuine
+  // participant row and should see it under "Teilnahmen" too (#32 in the UX
+  // review — this used to require `organizerUserId <> userId`, which hid an
+  // organizer's own tournament from their "Teilnahmen" tab whenever they
+  // played themselves).
   const roleClause = options.role === 'organizer'
     ? eq(tournament.organizerUserId, userId)
     : options.role === 'participant'
-      ? and(ne(tournament.organizerUserId, userId), participatesClause)!
+      ? participatesClause
       : or(eq(tournament.organizerUserId, userId), participatesClause)!
 
   const statusClause = options.status === 'active'
