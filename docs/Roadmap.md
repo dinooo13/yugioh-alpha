@@ -229,6 +229,13 @@ Product outcome:
 
 Users can get meaningful deckbuilding help that understands their collection and constraints.
 
+Implemented: a dedicated builder at `/decks/assistent` for generating a new deck from the
+inventory, and a "KI-Vorschläge" panel in the deck editor for improving an existing deck, both
+respecting the selected rule format and separating owned-card suggestions from missing-card
+suggestions. Requires `NUXT_ASSISTANT_API_KEY` (or `ANTHROPIC_API_KEY`) to be configured; the
+feature is disabled with a UI notice otherwise. See
+[`docs/adr/0006-ai-deck-assistant.md`](adr/0006-ai-deck-assistant.md).
+
 ### Phase 6: Sharing and Social Features
 
 Goal: Let users selectively share collections and decks.

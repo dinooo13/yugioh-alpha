@@ -24,6 +24,17 @@ export default defineNuxtConfig({
     // E2E catalog fixture after migrations. Never enabled in normal runs —
     // see server/plugins/migrate.ts and server/db/fixtures/catalog-fixture.ts.
     e2eSeedCatalog: '',
+    // AI deck assistant (Phase 5), server-only. See server/utils/deck-assistant-model.ts
+    // for how these resolve to a provider. All overridable via NUXT_ASSISTANT_*.
+    assistant: {
+      // '' (auto: 'anthropic' when an API key is present, else disabled), 'anthropic', or 'fake'.
+      provider: '',
+      // Falls back to the SDK's own ANTHROPIC_API_KEY env var when empty.
+      apiKey: '',
+      model: 'claude-opus-5',
+      // 'low' | 'medium' | 'high' | 'xhigh' | 'max'.
+      effort: 'high',
+    },
     public: {
       betterAuthUrl: process.env.BETTER_AUTH_URL || 'http://localhost:3000',
     },

@@ -22,6 +22,7 @@ import {
   upsertDeckCard,
   validateDeckCardInput,
   validateDeckCardMoveInput,
+  validateDeckCreateCardsInput,
   validateDeckInput,
   validateDeckUpdateInput,
 } from '../../server/utils/decks'
@@ -216,6 +217,77 @@ describe('deck validation', () => {
       .toEqual({ q: 'Blue', sort: 'name', page: 2, pageSize: 5, contains: 46986414 })
     expect(parseDeckListQuery({ sort: 'bogus', page: '-1' }))
       .toEqual({ q: undefined, sort: undefined, page: undefined, pageSize: undefined, contains: undefined })
+  })
+
+  it('validates the optional cards array on deck creation', () => {
+    expect(validateDeckCreateCardsInput({ name: 'Deck' })).toBeUndefined()
+
+    expect(validateDeckCreateCardsInput({
+      cards: [
+        { catalog_card_id: CARD.darkMagician, section: 'main', quantity: 2 },
+        { catalogCardId: CARD.stardustDragon, section: 'extra', quantity: 1 },
+      ],
+    })).toEqual([
+      { catalogCardId: CARD.darkMagician, section: 'main', quantity: 2 },
+      { catalogCardId: CARD.stardustDragon, section: 'extra', quantity: 1 },
+    ])
+
+    expect(() => validateDeckCreateCardsInput({ cards: 'nope' })).toThrow(expect.objectContaining({ statusCode: 400 }))
+    // Unlike the upsert endpoint, quantity 0 is not a valid "remove" here.
+    expect(() => validateDeckCreateCardsInput({ cards: [{ catalogCardId: CARD.darkMagician, section: 'main', quantity: 0 }] }))
+      .toThrow(expect.objectContaining({ statusCode: 400 }))
+  })
+})
+
+describe('deck creation with cards', () => {
+  let db: TestDb
+
+  beforeEach(() => {
+    db = createTestDb()
+    seedUsersAndCatalog(db)
+  })
+
+  it('creates the deck and its cards in one call', () => {
+    const cards = validateDeckCreateCardsInput({
+      cards: [
+        { catalogCardId: CARD.darkMagician, section: 'main', quantity: 2 },
+        { catalogCardId: CARD.darkMagician, section: 'main', quantity: 1 },
+        { catalogCardId: CARD.stardustDragon, section: 'extra', quantity: 1 },
+      ],
+    })!
+
+    const created = createDeck(db, 'user-a', validateDeckInput({ name: 'KI-Vorschlag' }), cards)
+
+    // Duplicate (catalogCardId, section) entries are merged.
+    expect(created.sections.main).toEqual([expect.objectContaining({ catalogCardId: CARD.darkMagician, quantity: 3 })])
+    expect(created.sections.extra).toEqual([expect.objectContaining({ catalogCardId: CARD.stardustDragon, quantity: 1 })])
+    expect(getDeckDetail(db, 'user-a', created.id).counts).toMatchObject({ main: 3, extra: 1, total: 4 })
+  })
+
+  it('rejects an unknown catalog card and rolls back the whole deck', () => {
+    const cards = [{ catalogCardId: 999999999, section: 'main' as const, quantity: 1 }]
+
+    expect(() => createDeck(db, 'user-a', validateDeckInput({ name: 'Kaputt' }), cards))
+      .toThrow(expect.objectContaining({ statusCode: 400 }))
+    expect(listDecks(db, 'user-a').items).toEqual([])
+  })
+
+  it('rejects a card placed in a section its type forbids', () => {
+    const cards = [{ catalogCardId: CARD.stardustDragon, section: 'main' as const, quantity: 1 }]
+
+    expect(() => createDeck(db, 'user-a', validateDeckInput({ name: 'Kaputt' }), cards))
+      .toThrow(expect.objectContaining({ statusCode: 400 }))
+    expect(listDecks(db, 'user-a').items).toEqual([])
+  })
+
+  it('ignores a cards field on update, same as any other unknown key', () => {
+    const created = createDeck(db, 'user-a', validateDeckInput({ name: 'Deck' }))
+
+    const patch = validateDeckUpdateInput({ name: 'Umbenannt', cards: [{ catalogCardId: CARD.darkMagician, section: 'main', quantity: 1 }] })
+    expect(patch).toEqual({ name: 'Umbenannt' })
+
+    const updated = updateDeck(db, 'user-a', created.id, patch)
+    expect(updated.counts.total).toBe(0)
   })
 })
 

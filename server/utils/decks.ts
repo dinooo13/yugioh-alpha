@@ -259,6 +259,43 @@ export function validateDeckCardInput(body: unknown): DeckCardInput {
   }
 }
 
+// Upper bound on how many card rows a single `POST /api/decks` request may
+// seed the new deck with (an AI deck-assistant "build" suggestion, say).
+export const MAX_DECK_CREATE_CARDS = 100
+
+/**
+ * Validates the optional `cards` array on deck creation — one entry per
+ * (catalog_card_id, section), using the same per-item rules as the card
+ * upsert endpoint (unknown card, section rule, 1..99 quantity), except a
+ * create-time entry may not use quantity 0 (there is nothing to remove yet).
+ * Returns `undefined` when the request carries no `cards` field at all, so
+ * `PATCH` (which never reads this key) is unaffected.
+ */
+export function validateDeckCreateCardsInput(body: unknown): DeckCardInput[] | undefined {
+  if (!isRecord(body) || body.cards === undefined) {
+    return undefined
+  }
+
+  const rawCards = body.cards
+  if (!Array.isArray(rawCards)) {
+    badRequest('cards must be an array')
+  }
+  if (rawCards.length > MAX_DECK_CREATE_CARDS) {
+    badRequest(`cards must contain at most ${MAX_DECK_CREATE_CARDS} entries`)
+  }
+
+  return rawCards.map((rawCard) => {
+    if (!isRecord(rawCard)) {
+      badRequest('Each entry in cards must be an object')
+    }
+    return {
+      catalogCardId: normalizeCatalogCardId(rawCard.catalog_card_id ?? rawCard.catalogCardId),
+      section: normalizeSection(rawCard.section),
+      quantity: normalizeQuantity(rawCard.quantity, { allowZero: false }),
+    }
+  })
+}
+
 export function validateDeckCardMoveInput(body: unknown): DeckCardMoveInput {
   if (!isRecord(body)) {
     badRequest('Request body must be an object')
@@ -557,22 +594,63 @@ export function validateDeckWithRules(db: Db, userId: string, deckId: string, ru
   return buildValidation(db, rules, rows.map(row => ({ ...row, section: row.section as DeckSection })))!
 }
 
-export function createDeck(db: Db, userId: string, input: DeckInput): DeckDetail {
+/**
+ * Creates a deck, optionally seeded with a set of cards (e.g. an AI deck
+ * assistant "build" suggestion saved directly) — the deck row and every card
+ * row are written in one transaction, so a bad card never leaves behind an
+ * empty deck.
+ */
+export function createDeck(db: Db, userId: string, input: DeckInput, cards?: DeckCardInput[]): DeckDetail {
   const now = new Date()
-  const [created] = db
-    .insert(deck)
-    .values({
-      id: randomUUID(),
-      userId,
-      name: input.name,
-      description: input.description,
-      createdAt: now,
-      updatedAt: now,
-    })
-    .returning()
-    .all()
 
-  return buildDeckDetail(db, userId, created!)
+  const created = db.transaction((tx) => {
+    const txDb = tx as unknown as Db
+    const [createdDeck] = txDb
+      .insert(deck)
+      .values({
+        id: randomUUID(),
+        userId,
+        name: input.name,
+        description: input.description,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning()
+      .all()
+
+    if (cards && cards.length > 0) {
+      // Merge duplicate (catalogCardId, section) entries before validating
+      // section/existence, same as the card upsert would end up doing.
+      const merged = new Map<string, DeckCardInput>()
+      for (const cardInput of cards) {
+        const card = requireCatalogCard(txDb, cardInput.catalogCardId)
+        assertSectionAllowed(card, cardInput.section)
+
+        const key = `${cardInput.catalogCardId}:${cardInput.section}`
+        const existing = merged.get(key)
+        if (existing) {
+          existing.quantity = Math.min(MAX_DECK_CARD_QUANTITY, existing.quantity + cardInput.quantity)
+        }
+        else {
+          merged.set(key, { ...cardInput })
+        }
+      }
+
+      txDb.insert(deckCard).values([...merged.values()].map(cardInput => ({
+        id: randomUUID(),
+        deckId: createdDeck!.id,
+        catalogCardId: cardInput.catalogCardId,
+        section: cardInput.section,
+        quantity: cardInput.quantity,
+        createdAt: now,
+        updatedAt: now,
+      }))).run()
+    }
+
+    return createdDeck!
+  })
+
+  return buildDeckDetail(db, userId, created)
 }
 
 export function updateDeck(db: Db, userId: string, deckId: string, patch: DeckUpdateInput): DeckDetail {

@@ -33,6 +33,7 @@ export default defineConfig({
       NUXT_BETTER_AUTH_SECRET: 'e2e-test-secret-not-for-production-use-only',
       NUXT_PUBLIC_BETTER_AUTH_URL: baseURL,
       NUXT_E2E_SEED_CATALOG: '1',
+      NUXT_ASSISTANT_PROVIDER: 'fake',
     },
   },
 })
