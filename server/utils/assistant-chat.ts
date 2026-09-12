@@ -515,6 +515,12 @@ export type ChatTurnEvent =
  * persisted as a pending `assistantAction`), and persists/emits the final
  * assistant answer. Never throws: any failure is reported as an `error`
  * event, with nothing further persisted.
+ *
+ * `signal`, when given (the messages endpoint ties it to the SSE
+ * connection's close/abort — an explicit "Abbrechen"), stops the loop
+ * between rounds and mid-round once the model call itself reports
+ * `aborted`; either way, whatever text was produced so far is still
+ * persisted as the final assistant message, marked "… (abgebrochen)".
  */
 export async function runChatTurn(
   db: Db,
@@ -523,6 +529,7 @@ export async function runChatTurn(
   input: AssistantMessageInput,
   model: DeckAssistantModel,
   emit: (event: ChatTurnEvent) => void | Promise<void>,
+  signal?: AbortSignal,
 ): Promise<void> {
   requireOwnConversation(db, userId, conversationId)
 
@@ -564,8 +571,13 @@ export async function runChatTurn(
 
   try {
     let finalText: string | null = null
+    let aborted = false
 
     for (let round = 0; round < ASSISTANT_MAX_TOOL_ROUNDS; round++) {
+      if (signal?.aborted) {
+        aborted = true
+        break
+      }
       if (Date.now() - startedAt > TURN_TIMEOUT_MS) {
         finalText = 'Die Anfrage hat zu lange gedauert. Bitte versuche es erneut oder formuliere sie einfacher.'
         break
@@ -580,7 +592,13 @@ export async function runChatTurn(
 
       const result = await model.chat(modelInput, {
         onTextDelta: text => emit({ type: 'text_delta', text }),
-      })
+      }, signal)
+
+      if (result.aborted) {
+        finalText = result.text
+        aborted = true
+        break
+      }
 
       // A `length` finish means the model's output (answer or tool-call
       // arguments) was cut off by a context/output cap — never trustworthy
@@ -661,7 +679,17 @@ export async function runChatTurn(
         })
         messages.push({ role: 'tool', tool_call_id: call.id, content: toolContent })
 
-        await emit({ type: 'tool_result', id: call.id, ok, summary: summarizeToolOutcome(ok, resultForModel) })
+        // Summarized from `toolContent` — exactly what got persisted — not
+        // the pre-serialization `resultForModel`: a result too large to
+        // store is replaced by `serializeToolResult` with a small `{ error }`
+        // envelope, and the live chip must report the same outcome a reload
+        // will later derive from that same JSON (summarizeStoredToolResult
+        // in app/utils/assistant-tool-activity.ts treats any `{ error }`
+        // payload as a failed result, regardless of whether the tool call
+        // itself actually succeeded).
+        const storedResult: unknown = JSON.parse(toolContent)
+        const storedOk = ok && !(isRecord(storedResult) && typeof storedResult.error === 'string')
+        await emit({ type: 'tool_result', id: call.id, ok: storedOk, summary: summarizeToolOutcome(storedOk, storedResult) })
 
         if (proposedAction) {
           const now = new Date()
@@ -685,7 +713,14 @@ export async function runChatTurn(
       }
     }
 
-    if (finalText === null) {
+    if (aborted) {
+      // Persist whatever the model produced before the "Abbrechen" landed
+      // (possibly nothing) instead of losing it — clearly marked so it
+      // isn't mistaken for a complete answer.
+      const partial = (finalText ?? '').trim()
+      finalText = partial !== '' ? `${partial} … (abgebrochen)` : '… (abgebrochen)'
+    }
+    else if (finalText === null) {
       // Exhausted every round without a final answer — every one of the 8
       // rounds requested another tool call.
       finalText = 'Ich konnte die Anfrage nicht in wenigen Schritten abschließen. Bitte formuliere sie konkreter oder in kleineren Schritten.'

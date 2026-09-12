@@ -88,9 +88,17 @@ export default defineEventHandler(async (event) => {
   }
 
   const stream = createEventStream(event)
+
+  // Ties the turn's lifetime to the SSE connection: fired both when the
+  // client disconnects (an explicit "Abbrechen" aborts the underlying
+  // fetch) and when we close the stream ourselves once the turn is done —
+  // the latter is a no-op abort, nothing reads the signal after that point.
+  const abortController = new AbortController()
+  stream.onClosed(() => abortController.abort())
+
   runChatTurn(db, user.id, id, input, model, async (turnEvent) => {
     await stream.push({ event: sseEventName(turnEvent), data: JSON.stringify(sseEventData(turnEvent)) })
-  })
+  }, abortController.signal)
     .catch(() => {
       // runChatTurn reports its own failures as an `error` event and never
       // rejects — this only guards against a truly unexpected throw.
