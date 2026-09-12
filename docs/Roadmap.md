@@ -165,12 +165,17 @@ Product outcome:
 
 Users can add cards quickly without relying only on manual search and entry.
 
-Note: "photo-based card recognition" is currently covered by reading the card
-name / set code from a photo (client-side OCR, see
+Note: "photo-based card recognition" is now covered by the chat assistant's
+image input (a photo attached to a chat message, identified by the model and
+confirmed via its `search_catalog` tool — see
+[Phase 8](#phase-8-chat-assistent-mit-werkzeugen) and
+[ADR 0010](adr/0010-chat-assistant-with-tools.md), which superseded the
+original client-side-OCR approach of
 [ADR 0003](adr/0003-client-side-ocr-and-speech-entry.md)). Recognizing a card
-from its artwork alone (perceptual hashing or embeddings against catalog
-images) is still open and depends on the locally cached card images that
-[ADR 0001](adr/0001-card-catalog-data-model.md) lists as follow-up work.
+from its artwork alone via perceptual hashing or embeddings against catalog
+images, without a model in the loop, is still open and depends on the locally
+cached card images that [ADR 0001](adr/0001-card-catalog-data-model.md) lists
+as follow-up work.
 
 ### Phase 3: Deckbuilder
 
@@ -288,6 +293,44 @@ its legality in the selected rule format, round-by-round pairings with match res
 live standings with OMW%/GW%/OGW% tiebreakers, and a history of finished tournaments. See
 [`docs/adr/0008-tournament-model.md`](adr/0008-tournament-model.md).
 
+### Phase 8: Chat-Assistent mit Werkzeugen
+
+Goal: Replace the deck assistant's single-purpose entry points and the
+inventory's photo/voice modes with one conversational assistant that can act
+on the user's whole collection.
+
+Scope:
+
+- a persisted, multi-turn chat with the assistant
+- a tool layer over the catalog, inventory, decks, and formats (search,
+  read, and validate — no direct writes)
+- write requests (add cards to the inventory, create a deck, change a
+  deck's cards) proposed as pending actions the user must confirm
+- image input (a card photo) identified by the model and confirmed against
+  the catalog
+- voice dictation into the chat composer
+- conversation list with rename-by-first-message titles and deletion
+
+Product outcome:
+
+Users can ask the assistant about their collection in one place — "which
+Blue-Eyes cards do I own", "build me a GOAT deck from what I have", "what's
+on this photo" — and have it propose changes they explicitly confirm, instead
+of switching between a deck-only builder and a text/photo/voice entry form.
+
+Implemented: a new page at `/assistent` with a persisted conversation per
+thread, a tool layer (`search_catalog`, `get_card`, `search_inventory`,
+`list_collections`, `list_decks`, `get_deck`, `list_formats`,
+`validate_deck`, plus the write tools `add_to_inventory`, `create_deck`, and
+`update_deck_cards`) that only ever produces a pending action for a write,
+shown as an action card the user applies or rejects. Image attachments and
+Web Speech dictation both live in the chat composer, replacing the Foto and
+Sprache modes `/inventar/erfassen` used to have; the Liste mode there is
+unchanged. Works with any OpenAI-compatible Chat Completions endpoint that
+supports streaming and tool calls, with an optional
+`NUXT_ASSISTANT_VISION_MODEL` override for image-containing turns. See
+[`docs/adr/0010-chat-assistant-with-tools.md`](adr/0010-chat-assistant-with-tools.md).
+
 ## Recommended Build Order
 
 1. Card catalog and personal inventory
@@ -299,6 +342,7 @@ live standings with OMW%/GW%/OGW% tiebreakers, and a history of finished tournam
 7. AI deck assistance
 8. Sharing and social features
 9. Tournament mode
+10. Chat assistant with tools
 
 ## Key Product Principle
 

@@ -30,6 +30,7 @@ See [`.env.example`](./.env.example) for all available variables:
 - `NUXT_DB_FILE_PATH` - path to the SQLite database file (default: `./data/app.db`; the directory is created automatically)
 - `NUXT_ASSISTANT_API_KEY` - API key for the AI deck assistant (optional; falls back to `OPENAI_API_KEY`). Without a key or a custom base URL the feature is disabled and the UI shows a notice instead.
 - `NUXT_ASSISTANT_PROVIDER` / `NUXT_ASSISTANT_BASE_URL` / `NUXT_ASSISTANT_MODEL` / `NUXT_ASSISTANT_REASONING_EFFORT` - override the assistant's provider (`openai` / `fake`), the OpenAI-compatible endpoint's base URL, the model id, and an optional `reasoning_effort` some gateways (e.g. OpenCode Go) require; see [`.env.example`](./.env.example)
+- `NUXT_ASSISTANT_VISION_MODEL` - optional override model for chat turns that include an image (the chat assistant at `/assistent`, see below); leave empty to use `NUXT_ASSISTANT_MODEL` for those turns too
 
 ## Development
 
@@ -224,6 +225,36 @@ configured; without either, `/api/assistant/status` reports the feature as
 disabled and the UI shows a notice instead of the assistant panels. See
 [`docs/adr/0006-ai-deck-assistant.md`](./docs/adr/0006-ai-deck-assistant.md)
 and [`docs/adr/0009-openai-compatible-assistant-provider.md`](./docs/adr/0009-openai-compatible-assistant-provider.md).
+
+## Assistent
+
+`/assistent` is a persisted, multi-turn chat with tools over the user's own
+catalog, inventory, and decks — it replaced the Foto and Sprache modes of
+[Schnellerfassung](#schnellerfassung) and stands next to (not instead of) the
+one-shot [KI-Deck-Assistent](#ki-deck-assistent) above. Every conversation is
+saved and listed in a sidebar (titled from its first message), with a
+"Neue Unterhaltung" button and per-conversation deletion.
+
+The assistant can look things up (search the catalog, read a card's full
+text and printings, search the inventory, list collections/decks/formats,
+read and validate a deck) and, for anything that would change data — adding
+cards to the inventory, creating a deck, changing a deck's cards — it only
+ever proposes a **pending action**, shown as a card with `Übernehmen` /
+`Verwerfen` buttons; nothing is written until the user confirms it. A
+message can include up to 3 photos (resized client-side before upload) that
+the model identifies against the catalog, and the composer offers voice
+dictation via the browser's Web Speech API, reusing the same feature
+detection Schnellerfassung's old Sprache mode used.
+
+Like the deck assistant, this works with any OpenAI-compatible Chat
+Completions endpoint that supports streaming and tool calls. An optional
+`NUXT_ASSISTANT_VISION_MODEL` lets a deployment use a different model
+specifically for turns that include an image; see [`.env.example`](./.env.example).
+Providers that require OpenCode Go's session header get it automatically —
+every request (chat and the deck assistant alike) sends
+`x-opencode-session` and a `User-Agent` identifying this app, no
+configuration needed. See
+[`docs/adr/0010-chat-assistant-with-tools.md`](./docs/adr/0010-chat-assistant-with-tools.md).
 
 ## Teilen & Profile
 
