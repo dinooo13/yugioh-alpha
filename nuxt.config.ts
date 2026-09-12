@@ -32,14 +32,17 @@ export default defineNuxtConfig({
     e2eSeedCatalog: '',
     // AI deck assistant (Phase 5), server-only. See server/utils/deck-assistant-model.ts
     // for how these resolve to a provider. All overridable via NUXT_ASSISTANT_*.
+    // Works with any OpenAI-compatible Chat Completions endpoint — OpenAI,
+    // OpenRouter, Ollama, LM Studio, OpenCode Zen, etc.
     assistant: {
-      // '' (auto: 'anthropic' when an API key is present, else disabled), 'anthropic', or 'fake'.
+      // '' (auto: 'openai' when an API key is present or baseUrl was changed
+      // from the default, else disabled), 'openai', or 'fake'.
       provider: '',
-      // Falls back to the SDK's own ANTHROPIC_API_KEY env var when empty.
+      baseUrl: 'https://api.openai.com/v1',
+      // Falls back to the OPENAI_API_KEY env var when empty. Leave empty for
+      // keyless local servers (e.g. Ollama) alongside a custom baseUrl.
       apiKey: '',
-      model: 'claude-opus-5',
-      // 'low' | 'medium' | 'high' | 'xhigh' | 'max'.
-      effort: 'high',
+      model: 'gpt-4o-mini',
     },
     public: {
       betterAuthUrl: process.env.BETTER_AUTH_URL || 'http://localhost:3000',

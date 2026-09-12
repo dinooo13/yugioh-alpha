@@ -179,7 +179,7 @@ async function saveAsDeck() {
       color="warning"
       variant="subtle"
       icon="i-lucide-triangle-alert"
-      title="Der KI-Assistent ist nicht konfiguriert. Setze NUXT_ASSISTANT_API_KEY (oder ANTHROPIC_API_KEY) auf dem Server."
+      title="Der KI-Assistent ist nicht konfiguriert. Setze NUXT_ASSISTANT_API_KEY (oder OPENAI_API_KEY) bzw. NUXT_ASSISTANT_BASE_URL auf dem Server."
     />
 
     <template v-else>
