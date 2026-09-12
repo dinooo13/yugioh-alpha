@@ -62,7 +62,10 @@ export default defineEventHandler(async (event) => {
   return {
     types: uniqueSortedStrings(catalogRows.map(row => row.type)),
     attributes: uniqueSortedStrings(catalogRows.map(row => row.attribute)),
-    races: uniqueSortedStrings(catalogRows.map(row => row.race)),
+    // Skill Cards store the story character's (truncated) name in `race`, not
+    // a real monster race — excluded from the "Monsterart" facet (UX review
+    // #17), matching `getCatalogFacets` in server/utils/catalog-search.ts.
+    races: uniqueSortedStrings(catalogRows.filter(row => row.type !== 'Skill Card').map(row => row.race)),
     levels,
     sets,
     languages: uniqueSortedStrings(ownershipRows.map(row => row.language)),

@@ -522,7 +522,7 @@ describe('deck editor rule validation', () => {
       { id: 'tcg-advanced', name: 'TCG Advanced', isBuiltin: true },
       validation({
         legal: false,
-        issues: [{ severity: 'error', code: 'deck_size_min', section: 'main', message: 'Das Main Deck hat 1 Karten, mindestens 40 sind erforderlich.' }],
+        issues: [{ severity: 'error', code: 'deck_size_min', section: 'main', message: 'Das Main Deck hat 1 Karte, mindestens 40 sind erforderlich.' }],
         cards: {},
       }),
     )

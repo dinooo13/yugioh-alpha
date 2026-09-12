@@ -100,6 +100,7 @@ async function save() {
             placeholder="z. B. Blue-Eyes Control"
             maxlength="80"
             aria-label="Deckname"
+            autofocus
           />
         </UFormField>
 

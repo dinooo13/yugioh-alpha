@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Visibility } from '~~/shared/sharing'
+import { pluralize } from '~~/shared/plural'
 
 interface DeckListItem {
   id: string
@@ -144,9 +145,14 @@ async function duplicateDeck(deck: DeckListItem) {
   }
 }
 
+const { confirm } = useConfirm()
+
 async function deleteDeck(deck: DeckListItem) {
   errorMessage.value = ''
-  const confirmed = window.confirm(`"${deck.name}" wirklich löschen?`)
+  const confirmed = await confirm({
+    title: 'Deck löschen',
+    description: `"${deck.name}" wirklich löschen?`,
+  })
   if (!confirmed) {
     return
   }
@@ -195,14 +201,18 @@ function menuItemsFor(deck: DeckListItem) {
 }
 
 // An empty deck is neither complete nor missing anything — it is just empty.
+// "Vollständig"/"N fehlen" read as "the deck is tournament-ready", but this
+// badge is purely about ownership — `complete` really means "every deck
+// card is in the inventory" (server/utils/decks.ts) — so the wording spells
+// that out explicitly (UX review #12).
 function statusLabel(deck: DeckListItem) {
   if (deck.cardCount === 0) {
     return 'Leer'
   }
   if (deck.complete) {
-    return 'Vollständig'
+    return 'Alle Karten im Besitz'
   }
-  return deck.missingCount === 1 ? '1 fehlt' : `${deck.missingCount} fehlen`
+  return deck.missingCount === 1 ? '1 fehlt im Besitz' : `${deck.missingCount} fehlen im Besitz`
 }
 
 function statusColor(deck: DeckListItem) {
@@ -381,6 +391,7 @@ function statusColor(deck: DeckListItem) {
         </dl>
 
         <div class="mt-4 flex flex-wrap items-center gap-2">
+          <!-- Besitz-Status (links) -->
           <UBadge
             :color="statusColor(deck)"
             variant="subtle"
@@ -390,20 +401,24 @@ function statusColor(deck: DeckListItem) {
             :visibility="deck.visibility"
             hide-private
           />
-          <UBadge
-            v-if="deck.formatName"
-            color="neutral"
-            variant="subtle"
-            icon="i-lucide-scroll-text"
-            :label="deck.formatName"
-          />
-          <UBadge
-            v-if="deck.legal !== null"
-            :color="deck.legal ? 'success' : 'error'"
-            variant="subtle"
-            :label="deck.legal ? 'Legal' : 'Nicht legal'"
-          />
-          <span class="ml-auto text-xs text-gray-400">{{ deck.cardCount }} Karten</span>
+
+          <!-- Format + Legalität (rechts) -->
+          <div class="ml-auto flex flex-wrap items-center justify-end gap-2">
+            <UBadge
+              v-if="deck.formatName"
+              color="neutral"
+              variant="subtle"
+              icon="i-lucide-scroll-text"
+              :label="deck.formatName"
+            />
+            <UBadge
+              v-if="deck.legal !== null"
+              :color="deck.legal ? 'success' : 'error'"
+              variant="subtle"
+              :label="deck.legal ? 'Legal' : 'Nicht legal'"
+            />
+            <span class="text-xs text-gray-400">{{ pluralize(deck.cardCount, 'Karte', 'Karten') }}</span>
+          </div>
         </div>
       </li>
     </ul>

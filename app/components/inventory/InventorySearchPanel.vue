@@ -135,7 +135,7 @@ function resetFilters() {
           multiple
           value-key="value"
           :items="raceItems"
-          placeholder="Rasse"
+          placeholder="Monsterart"
           class="w-36"
         />
         <USelectMenu

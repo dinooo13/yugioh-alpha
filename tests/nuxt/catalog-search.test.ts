@@ -99,6 +99,20 @@ function seedCatalog(db: ReturnType<typeof createTestDb>) {
       tcgDate: '2020-01-01',
       syncedAt,
     },
+    {
+      id: 7,
+      name: 'Destiny Draw',
+      type: 'Skill Card',
+      frameType: 'skill',
+      desc: 'Skill cards store the story character in `race`, truncated by the sync job.',
+      // Real-world example from the UX review: "Abidos the Th" (13 chars).
+      race: 'Abidos the Th',
+      atk: null,
+      def: null,
+      level: null,
+      tcgDate: '2020-01-01',
+      syncedAt,
+    },
   ]).run()
 
   db.insert(schema.catalogSet).values([
@@ -178,9 +192,12 @@ describe('catalog search utilities', () => {
   it('returns distinct facets', async () => {
     const facets = await getCatalogFacets(db)
 
-    expect(facets.types).toEqual(['Effect Monster', 'Normal Monster', 'Spell Card'])
+    expect(facets.types).toEqual(['Effect Monster', 'Normal Monster', 'Skill Card', 'Spell Card'])
     expect(facets.attributes).toEqual(['DARK', 'LIGHT'])
+    // Skill Cards store the story character's (truncated) name in `race`,
+    // not a real monster race — excluded from the "Monsterart" facet (#17).
     expect(facets.races).toEqual(['Dragon', 'Normal', 'Spellcaster'])
+    expect(facets.races).not.toContain('Abidos the Th')
     expect(facets.levels).toEqual([4, 7, 8])
     expect(facets.sets).toEqual([
       { id: 'legend-of-blue-eyes', name: 'Legend of Blue Eyes' },

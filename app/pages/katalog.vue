@@ -65,7 +65,7 @@ interface CatalogCardDetail {
 
 const PAGE_SIZE = 24
 
-useHead({ title: 'Katalog - yugioh alpha' })
+useHead({ title: 'Katalog – yugioh alpha' })
 
 const route = useRoute()
 const router = useRouter()
@@ -108,6 +108,23 @@ const cardQuery = computed(() => ({
 
 const { data: facets } = await useFetch<CatalogFacets>('/api/catalog/facets', {
   default: () => ({ types: [], attributes: [], races: [], levels: [], sets: [] }),
+})
+
+// A plain `<select>` with 1000+ sets meant scrolling through an unsearchable
+// list to find one (UX review #5) — `USelectMenu` is searchable by default,
+// but reka-ui reserves the empty string for "clear selection", so "no set"
+// uses a non-empty sentinel mapped back to `''` (matching the
+// InventorySearchPanel convention).
+const noSetValue = '__all_sets__'
+const setItems = computed(() => [
+  { label: 'Alle Sets', value: noSetValue },
+  ...facets.value.sets.map(set => ({ label: set.name, value: set.id })),
+])
+const setSelection = computed({
+  get: () => setId.value || noSetValue,
+  set: (value: string) => {
+    setId.value = value === noSetValue ? '' : value
+  },
 })
 
 // Seeds the "Zur Wunschliste" toggle state per card (Phase 6). A Set keeps the
@@ -171,6 +188,12 @@ watch([debouncedSearch, type, attribute, race, level, setId, sort, page], async 
 }, { flush: 'post' })
 
 const totalPages = computed(() => Math.max(1, Math.ceil((cards.value?.total ?? 0) / PAGE_SIZE)))
+// `pluralize()` doesn't locale-format large counts — combined by hand here so
+// a one-hit search still reads "1 Karte" instead of "1 Karten" (UX review #10).
+const cardsTotalLabel = computed(() => {
+  const total = cards.value.total
+  return `${total.toLocaleString('de-DE')} ${total === 1 ? 'Karte' : 'Karten'}`
+})
 const primaryImage = computed(() => detail.value?.images[0]?.imageUrl ?? detail.value?.images[0]?.imageUrlSmall ?? null)
 
 watch(selectedCardId, async (cardId) => {
@@ -225,6 +248,22 @@ function nextPage() {
 
 async function reloadCards() {
   await refresh()
+}
+
+// "Zum Inventar" (UX review #6) reuses the same add-to-inventory modal as
+// `/inventar`, pre-filled with the card the user clicked — no more detour of
+// remembering the name and searching for it again on another page.
+const { data: collectionsData, refresh: refreshCollectionsAfterAdd } = await useCollections()
+const isAddToInventoryOpen = ref(false)
+const addingCard = ref<CatalogCardSummary | null>(null)
+
+function openAddToInventory(card: CatalogCardSummary) {
+  addingCard.value = card
+  isAddToInventoryOpen.value = true
+}
+
+async function onAddedToInventory() {
+  await refreshCollectionsAfterAdd()
 }
 </script>
 
@@ -320,22 +359,14 @@ async function reloadCards() {
             </option>
           </select>
 
-          <select
-            v-model="setId"
+          <USelectMenu
+            v-model="setSelection"
+            :items="setItems"
+            value-key="value"
             aria-label="Set"
-            class="h-10 min-w-0 w-full rounded-md border border-gray-200 bg-white px-3 text-sm text-gray-700 shadow-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
-          >
-            <option value="">
-              Set
-            </option>
-            <option
-              v-for="option in facets.sets"
-              :key="option.id"
-              :value="option.id"
-            >
-              {{ option.name }}
-            </option>
-          </select>
+            placeholder="Set"
+            class="min-w-0 w-full"
+          />
 
           <UButton
             icon="i-lucide-rotate-ccw"
@@ -351,7 +382,7 @@ async function reloadCards() {
 
     <div class="flex flex-wrap items-center justify-between gap-3">
       <p class="text-sm font-medium text-gray-700">
-        {{ cards.total.toLocaleString('de-DE') }} Karten
+        {{ cardsTotalLabel }}
       </p>
 
       <label class="flex items-center gap-2 text-sm text-gray-600">
@@ -378,7 +409,7 @@ async function reloadCards() {
       color="error"
       icon="i-lucide-circle-alert"
       title="Katalog konnte nicht geladen werden"
-      :description="String(error.message ?? error)"
+      description="Bitte versuche es erneut."
     >
       <template #actions>
         <UButton
@@ -471,13 +502,23 @@ async function reloadCards() {
               Lv {{ card.level }}
             </UBadge>
           </div>
-          <WishlistAddToWishlistButton
-            :catalog-card-id="card.id"
-            :in-wishlist="isWishlisted(card.id)"
-            @click.stop
-            @keydown.stop
-            @changed="value => onWishlistChanged(card.id, value)"
-          />
+          <div class="flex flex-wrap gap-1">
+            <UButton
+              icon="i-lucide-archive-restore"
+              color="primary"
+              size="xs"
+              label="Zum Inventar"
+              @click.stop="openAddToInventory(card)"
+              @keydown.stop
+            />
+            <WishlistAddToWishlistButton
+              :catalog-card-id="card.id"
+              :in-wishlist="isWishlisted(card.id)"
+              @click.stop
+              @keydown.stop
+              @changed="value => onWishlistChanged(card.id, value)"
+            />
+          </div>
         </div>
       </div>
     </section>
@@ -621,5 +662,12 @@ async function reloadCards() {
         </div>
       </template>
     </USlideover>
+
+    <InventoryAddToInventoryModal
+      v-model:open="isAddToInventoryOpen"
+      :card="addingCard"
+      :collections="collectionsData?.items ?? []"
+      @saved="onAddedToInventory"
+    />
   </div>
 </template>

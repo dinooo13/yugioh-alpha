@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { PublicProfileResponse, SharedWishlistResponse } from '~~/shared/sharing'
+import { pluralize } from '~~/shared/plural'
 
 definePageMeta({ layout: 'public' })
 
@@ -94,7 +95,7 @@ const isEmpty = computed(() => {
                 </h3>
               </NuxtLink>
               <p class="mt-1 text-xs text-gray-500">
-                {{ deck.cardCount }} Karten
+                {{ pluralize(deck.cardCount, 'Karte', 'Karten') }}
               </p>
               <SharingVisibilityBadge
                 v-if="data.viewer.isOwner"
@@ -127,7 +128,7 @@ const isEmpty = computed(() => {
                 </h3>
               </NuxtLink>
               <p class="mt-1 text-xs text-gray-500">
-                {{ collection.cardCount }} Karten
+                {{ pluralize(collection.cardCount, 'Karte', 'Karten') }}
               </p>
               <SharingVisibilityBadge
                 v-if="data.viewer.isOwner"
@@ -146,7 +147,7 @@ const isEmpty = computed(() => {
             Inventar
           </h2>
           <p class="mt-1 text-sm text-gray-500">
-            {{ data.inventory.cardCount }} Karten
+            {{ pluralize(data.inventory.cardCount, 'Karte', 'Karten') }}
           </p>
           <NuxtLink
             :to="`/spieler/${handle}/inventar`"
@@ -164,7 +165,7 @@ const isEmpty = computed(() => {
             Wunschliste
           </h2>
           <p class="mt-1 text-sm text-gray-500">
-            {{ data.wishlist.itemCount }} Karten
+            {{ pluralize(data.wishlist.itemCount, 'Karte', 'Karten') }}
           </p>
           <ul
             v-if="wishlistItems.length > 0"

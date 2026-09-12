@@ -1,6 +1,16 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { DOMWrapper } from '@vue/test-utils'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
 import KatalogPage from '~/pages/katalog.vue'
+
+// UModal teleports its content to <body> (same note as in collections-ui.test.ts).
+function body() {
+  return new DOMWrapper(document.body)
+}
+
+afterEach(() => {
+  document.body.innerHTML = ''
+})
 
 mockNuxtImport('useFetch', () => {
   return vi.fn((url: string | (() => string | null)) => {
@@ -59,5 +69,21 @@ describe('katalog page', () => {
     expect(component.find('input[aria-label="Karten suchen"]').exists()).toBe(true)
     expect(component.find('select[aria-label="Typ"]').exists()).toBe(true)
     expect(component.text()).toContain('Blue-Eyes White Dragon')
+
+    // The set filter used to be a native `<select>` with 1000+ unsearchable
+    // options (UX review #5) — now a searchable `USelectMenu`.
+    expect(component.find('select[aria-label="Set"]').exists()).toBe(false)
+    expect(component.find('[aria-label="Set"]').exists()).toBe(true)
+  })
+
+  it('opens the add-to-inventory modal pre-filled with the clicked card (#6)', async () => {
+    const component = await mountSuspended(KatalogPage)
+
+    const addButton = component.findAll('button').find(btn => btn.text() === 'Zum Inventar')
+    expect(addButton).toBeTruthy()
+    await addButton!.trigger('click')
+
+    expect(body().text()).toContain('Karte hinzufügen')
+    expect(body().text()).toContain('Blue-Eyes White Dragon')
   })
 })

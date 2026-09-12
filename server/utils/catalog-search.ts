@@ -1,4 +1,4 @@
-import { asc, count, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm'
+import { and, asc, count, desc, eq, inArray, isNotNull, ne, sql } from 'drizzle-orm'
 import type { useDb } from '../db'
 import { catalogCard, catalogCardImage, catalogPrinting, catalogSet } from '../db/schema'
 import { buildCardListWhere, type CardListQuery } from './catalog-query'
@@ -131,7 +131,11 @@ export async function getCatalogFacets(db: Db) {
     db
       .selectDistinct({ value: catalogCard.race })
       .from(catalogCard)
-      .where(isNotNull(catalogCard.race))
+      // Skill Cards store the story character's name in `race` (truncated to
+      // 13 chars by the ygoprodeck sync, e.g. "Abidos the Th") — not a real
+      // monster race, so it doesn't belong in the "Monsterart" facet (UX
+      // review #17).
+      .where(and(isNotNull(catalogCard.race), ne(catalogCard.type, 'Skill Card')))
       .orderBy(asc(catalogCard.race)),
     db
       .selectDistinct({ value: catalogCard.level })

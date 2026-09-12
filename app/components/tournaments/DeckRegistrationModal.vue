@@ -182,6 +182,7 @@ async function save() {
             :items="deckItems"
             aria-label="Deck"
             class="w-full"
+            autofocus
           />
         </UFormField>
 

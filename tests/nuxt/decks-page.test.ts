@@ -116,9 +116,9 @@ describe('decks page', () => {
     expect(text).toContain('Side')
     expect(text).toContain('70 Karten')
 
-    expect(text).toContain('Vollständig')
-    expect(text).toContain('1 fehlt')
-    expect(text).toContain('4 fehlen')
+    expect(text).toContain('Alle Karten im Besitz')
+    expect(text).toContain('1 fehlt im Besitz')
+    expect(text).toContain('4 fehlen im Besitz')
     // An empty deck is neither "complete" nor missing anything.
     expect(text).toContain('Leer')
 

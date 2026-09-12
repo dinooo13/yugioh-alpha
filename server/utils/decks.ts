@@ -8,6 +8,7 @@ import { catalogCard, catalogCardImage, deck, deckCard, ruleFormat } from '../db
 import { ownedQuantitiesByCard } from './inventory'
 import { evaluateDeck } from '../../shared/rule-formats'
 import type { DeckValidation, RuleSet } from '../../shared/rule-formats'
+import { pluralize } from '../../shared/plural'
 import { loadCardDataForValidation } from './deck-validation'
 import { requireAssignableFormat, ruleFormatsById } from './rule-formats'
 import { deleteGrantsForResource } from './sharing'
@@ -416,25 +417,25 @@ export function buildWarnings(
   if (counts.main < DECK_LIMITS.mainMin) {
     warnings.push({
       code: 'main_below_min',
-      message: `Das Main Deck hat ${counts.main} Karten, mindestens ${DECK_LIMITS.mainMin} sind üblich.`,
+      message: `Das Main Deck hat ${pluralize(counts.main, 'Karte', 'Karten')}, mindestens ${DECK_LIMITS.mainMin} sind üblich.`,
     })
   }
   if (counts.main > DECK_LIMITS.mainMax) {
     warnings.push({
       code: 'main_above_max',
-      message: `Das Main Deck hat ${counts.main} Karten, höchstens ${DECK_LIMITS.mainMax} sind üblich.`,
+      message: `Das Main Deck hat ${pluralize(counts.main, 'Karte', 'Karten')}, höchstens ${DECK_LIMITS.mainMax} sind üblich.`,
     })
   }
   if (counts.extra > DECK_LIMITS.extraMax) {
     warnings.push({
       code: 'extra_above_max',
-      message: `Das Extra Deck hat ${counts.extra} Karten, höchstens ${DECK_LIMITS.extraMax} sind üblich.`,
+      message: `Das Extra Deck hat ${pluralize(counts.extra, 'Karte', 'Karten')}, höchstens ${DECK_LIMITS.extraMax} sind üblich.`,
     })
   }
   if (counts.side > DECK_LIMITS.sideMax) {
     warnings.push({
       code: 'side_above_max',
-      message: `Das Side Deck hat ${counts.side} Karten, höchstens ${DECK_LIMITS.sideMax} sind üblich.`,
+      message: `Das Side Deck hat ${pluralize(counts.side, 'Karte', 'Karten')}, höchstens ${DECK_LIMITS.sideMax} sind üblich.`,
     })
   }
 

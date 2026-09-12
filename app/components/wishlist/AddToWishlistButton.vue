@@ -43,8 +43,8 @@ async function toggle() {
   <div class="inline-flex flex-col items-start gap-1">
     <UButton
       :icon="inWishlist ? 'i-lucide-heart-off' : 'i-lucide-heart'"
-      :color="inWishlist ? 'neutral' : 'primary'"
-      :variant="inWishlist ? 'outline' : 'solid'"
+      color="neutral"
+      variant="outline"
       size="xs"
       :loading="isSaving"
       :label="inWishlist ? 'Auf der Wunschliste' : 'Zur Wunschliste'"
