@@ -4,10 +4,10 @@ import { parseSuggestRequest, suggestForRequest } from '../../../utils/card-entr
 import { requireUser } from '../../../utils/session'
 
 /**
- * Ranks catalog candidates for freely typed, dictated, or OCR'd card lines.
- * One typed line is one result; one photo (`ocrText`) is at most one result,
- * since a single image shows a single card. Read-only: nothing is written
- * until the review flow posts to `/api/inventory/bulk`.
+ * Ranks catalog candidates for freely typed card lines (one typed line is
+ * one result). Read-only: nothing is written until the review flow posts to
+ * `/api/inventory/bulk`. Photo/voice card recognition moved to the chat
+ * assistant (`/assistent`, see docs/adr/0010-chat-assistant-with-tools.md).
  */
 export default defineEventHandler(async (event) => {
   await requireUser(event)

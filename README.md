@@ -86,21 +86,13 @@ name contains a known id from Omega's copied `db.sqlite`.
 
 ## Schnellerfassung
 
-`/inventar/erfassen` adds many cards at once. All three input modes feed the
-same review queue, and nothing is written before it has been confirmed:
+`/inventar/erfassen` adds many cards at once from a pasted or typed list, and
+nothing is written before it has been confirmed:
 
 - **Liste** – one card per line. Quantities (`3x Dark Magician`,
   `Dark Magician x3`, `3 Dark Magician`), set codes (`Dark Magician (SDY-006)`
   or a bare `SDY-006`), and 8-digit passcodes (`46986414`) are recognized
   automatically.
-- **Foto** – take or drop a photo of the card. OCR runs **in the browser** via
-  [`tesseract.js`](https://github.com/naptha/tesseract.js) (lazily imported,
-  English model): the image is never uploaded, only the recognized text is
-  sent for matching. The first run downloads the Tesseract WASM core and the
-  language data from the package CDN.
-- **Sprache** – dictate card names through the browser's Web Speech API
-  (German/English, continuous). Browsers without support (e.g. Firefox) show a
-  hint instead.
 
 The review table preselects certain matches (passcode, set code, exact name)
 and anything scoring at least 0.85, marks weaker hits as "Unsicher" with a
@@ -109,8 +101,10 @@ match. Language, condition, edition, and collection come from a
 "Standardwerte" panel and can be overridden per row. Saving posts the rows to
 `POST /api/inventory/bulk` in batches of 50, each batch in one transaction.
 
-See [`docs/adr/0003-client-side-ocr-and-speech-entry.md`](./docs/adr/0003-client-side-ocr-and-speech-entry.md)
-for why OCR and speech run client-side while matching stays on the server.
+Recognizing a card from a photo, or dictating card names by voice, now lives
+in the chat assistant (`/assistent`, see below) instead of its own modes here
+— see [`docs/adr/0010-chat-assistant-with-tools.md`](./docs/adr/0010-chat-assistant-with-tools.md)
+(supersedes [`docs/adr/0003`](./docs/adr/0003-client-side-ocr-and-speech-entry.md)).
 
 ## Decks
 
