@@ -29,11 +29,37 @@ const TITLES: Record<ShareResourceType, string> = {
 }
 const title = computed(() => TITLES[props.resourceType])
 
-const visibilityItems = VISIBILITIES.map(value => ({
-  value,
-  label: VISIBILITY_LABELS[value],
-  description: VISIBILITY_DESCRIPTIONS[value],
-}))
+// Used both for the "private, but N grants exist" description below and for
+// the "public makes grants moot" hint on the grants section — German
+// requires the correct grammatical gender/article per resource type ("dieses
+// Deck" / "diese Sammlung" / "dieses Inventar").
+const RESOURCE_ARTICLE_LABELS: Record<ShareResourceType, string> = {
+  deck: 'dieses Deck',
+  collection: 'diese Sammlung',
+  inventory: 'dieses Inventar',
+}
+const resourceArticleLabel = computed(() => RESOURCE_ARTICLE_LABELS[props.resourceType])
+
+// "Privat – Nur du kannst das sehen." stopped being true the moment a grant
+// exists (UX review #20: a granted user really could open a "private" deck)
+// — the description has to reflect that instead of a static string.
+const visibilityItems = computed(() => {
+  const grantCount = state.value?.grants.length ?? 0
+  return VISIBILITIES.map((value) => {
+    if (value === 'private' && grantCount > 0) {
+      return {
+        value,
+        label: VISIBILITY_LABELS[value],
+        description: `Nur du und ${grantCount} freigegebene${grantCount === 1 ? 'r' : ''} Spieler können das sehen.`,
+      }
+    }
+    return {
+      value,
+      label: VISIBILITY_LABELS[value],
+      description: VISIBILITY_DESCRIPTIONS[value],
+    }
+  })
+})
 
 const state = ref<ShareState | null>(null)
 const isLoading = ref(false)
@@ -189,7 +215,7 @@ async function removeGrant(userId: string) {
           />
 
           <div
-            v-if="state.visibility !== 'private'"
+            v-if="state.visibility === 'link'"
             class="space-y-2"
           >
             <UInput
@@ -218,10 +244,20 @@ async function removeGrant(userId: string) {
             </div>
           </div>
 
-          <div class="space-y-2">
+          <div
+            class="space-y-2"
+            :class="{ 'pointer-events-none opacity-50': state.visibility === 'public' }"
+          >
             <h3 class="text-sm font-semibold text-gray-900">
               Für einzelne Spieler freigegeben
             </h3>
+
+            <p
+              v-if="state.visibility === 'public'"
+              class="text-sm text-gray-500"
+            >
+              Nicht nötig – {{ resourceArticleLabel }} ist für alle sichtbar.
+            </p>
 
             <SharingUserPicker @select="addGrant" />
 

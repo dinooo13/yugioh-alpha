@@ -109,7 +109,7 @@ async function remove() {
           color="neutral"
           variant="outline"
           size="xs"
-          :disabled="isSaving"
+          :disabled="isSaving || item.quantity <= 1"
           :aria-label="`Ein Exemplar von ${item.name} entfernen`"
           @click="setQuantity(item.quantity - 1)"
         />

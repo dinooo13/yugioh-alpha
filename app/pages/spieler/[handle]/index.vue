@@ -46,17 +46,7 @@ const isEmpty = computed(() => {
 
 <template>
   <div class="space-y-6">
-    <div
-      v-if="error"
-      class="rounded-md border border-gray-200 bg-white px-6 py-12 text-center"
-    >
-      <h1 class="text-lg font-semibold text-gray-900">
-        Nicht gefunden oder nicht freigegeben.
-      </h1>
-      <p class="mt-2 text-sm text-gray-500">
-        Vielleicht ist der Link abgelaufen oder die Freigabe wurde zurückgenommen.
-      </p>
-    </div>
+    <SharingNotFoundNotice v-if="error" />
 
     <template v-else-if="data">
       <header class="rounded-md border border-gray-200 bg-white p-6">

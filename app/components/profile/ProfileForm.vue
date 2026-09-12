@@ -27,10 +27,20 @@ watch(() => props.profile, (profile) => {
 const isSubmitting = ref(false)
 const errorMessage = ref('')
 const successMessage = ref('')
+// Shown once, right after a save that actually changed the handle (UX
+// review #23) — every `/spieler/<altes-handle>/...` link already handed out
+// breaks the moment this happens, and that consequence was previously
+// undisclosed.
+const handleChangedNotice = ref(false)
+
+// Live preview of the public profile URL as the visitor would see it — the
+// rule text below used to only appear after a failed submit.
+const handlePreview = computed(() => `/spieler/${form.handle.trim().toLowerCase() || '…'}`)
 
 async function save() {
   errorMessage.value = ''
   successMessage.value = ''
+  handleChangedNotice.value = false
 
   const handle = form.handle.trim().toLowerCase()
   if (handle.length < 3 || handle.length > 30 || !HANDLE_PATTERN.test(handle)) {
@@ -43,6 +53,8 @@ async function save() {
     return
   }
 
+  const previousHandle = props.profile.handle
+
   isSubmitting.value = true
   try {
     const updated = await $fetch<OwnProfile>('/api/profile', {
@@ -54,6 +66,7 @@ async function save() {
       },
     })
     successMessage.value = 'Gespeichert'
+    handleChangedNotice.value = updated.handle !== previousHandle
     emit('saved', updated)
   }
   catch (error) {
@@ -89,6 +102,10 @@ async function save() {
         maxlength="30"
         aria-label="Nutzername"
       />
+      <template #help>
+        Nur Kleinbuchstaben, Ziffern und Bindestriche, 3–30 Zeichen. Profil-URL:
+        <span class="font-medium text-gray-700">{{ handlePreview }}</span>
+      </template>
     </UFormField>
 
     <UFormField label="Über mich">
@@ -112,6 +129,12 @@ async function save() {
       class="text-sm text-emerald-600"
     >
       {{ successMessage }}
+    </p>
+    <p
+      v-if="handleChangedNotice"
+      class="text-sm text-amber-600"
+    >
+      Bereits geteilte Links mit dem alten Nutzernamen funktionieren nicht mehr.
     </p>
 
     <div class="flex justify-end">

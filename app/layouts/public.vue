@@ -14,6 +14,11 @@ onMounted(async () => {
     session.value = await getAuthSession()
   }
 })
+
+const route = useRoute()
+// Preserved across the login round-trip so a signed-out visitor lands back
+// on the shared link they came from (§4.2 #19) instead of the dashboard.
+const loginTarget = computed(() => ({ path: '/login', query: { redirect: route.fullPath } }))
 </script>
 
 <template>
@@ -51,7 +56,7 @@ onMounted(async () => {
             v-else
             label="Anmelden"
             icon="i-lucide-log-in"
-            to="/login"
+            :to="loginTarget"
           />
         </div>
       </div>
