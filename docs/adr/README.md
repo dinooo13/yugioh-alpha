@@ -14,3 +14,4 @@ mark the old as superseded.
 | [0004](0004-deck-data-model.md) | Deck data model | Accepted |
 | [0005](0005-rule-format-model.md) | Rule format model | Accepted |
 | [0006](0006-ai-deck-assistant.md) | AI deck assistant | Accepted |
+| [0007](0007-sharing-and-profile-model.md) | Sharing and profile model | Accepted |
