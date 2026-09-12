@@ -29,15 +29,39 @@ if (status.value?.chat && (conversations.value?.items.length ?? 0) > 0) {
 const isCreating = ref(false)
 const errorMessage = ref('')
 
+async function createConversation(): Promise<{ id: string }> {
+  errorMessage.value = ''
+  return $fetch<{ id: string }>('/api/assistant/chat', { method: 'POST' })
+}
+
 async function startWithPrompt(prompt: string) {
   if (isCreating.value) {
     return
   }
   isCreating.value = true
-  errorMessage.value = ''
   try {
-    const conversation = await $fetch<{ id: string }>('/api/assistant/chat', { method: 'POST' })
+    const conversation = await createConversation()
     await navigateTo({ path: `/assistent/${conversation.id}`, query: { prompt } })
+  }
+  catch (error) {
+    errorMessage.value = apiErrorMessage(error, 'Die Unterhaltung konnte nicht erstellt werden.')
+  }
+  finally {
+    isCreating.value = false
+  }
+}
+
+// The primary action in the empty state: an empty conversation, no message
+// sent — unlike the example prompts below, which pass `?prompt=` so the
+// conversation page sends it once on load (see app/pages/assistent/[id].vue).
+async function startEmpty() {
+  if (isCreating.value) {
+    return
+  }
+  isCreating.value = true
+  try {
+    const conversation = await createConversation()
+    await navigateTo(`/assistent/${conversation.id}`)
   }
   catch (error) {
     errorMessage.value = apiErrorMessage(error, 'Die Unterhaltung konnte nicht erstellt werden.')
@@ -75,6 +99,14 @@ async function startWithPrompt(prompt: string) {
       >
         {{ errorMessage }}
       </p>
+
+      <UButton
+        icon="i-lucide-plus"
+        label="Neue Unterhaltung"
+        size="lg"
+        :loading="isCreating"
+        @click="startEmpty"
+      />
 
       <div class="grid gap-3 sm:grid-cols-3">
         <button

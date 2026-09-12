@@ -3,6 +3,7 @@ import { flushPromises } from '@vue/test-utils'
 import type { DOMWrapper } from '@vue/test-utils'
 import { mockNuxtImport, mountSuspended } from '@nuxt/test-utils/runtime'
 import AssistantConversationPage from '~/pages/assistent/[id].vue'
+import AssistantIndexPage from '~/pages/assistent/index.vue'
 import type {
   AssistantActionView,
   AssistantConversationListItem,
@@ -15,6 +16,10 @@ const state = vi.hoisted(() => ({
   status: { enabled: true, provider: 'fake', model: 'fake', chat: true, vision: true, visionModel: null } as DeckAssistantStatus,
   conversations: { items: [] as AssistantConversationListItem[] },
 }))
+
+const navigateToMock = vi.hoisted(() => vi.fn())
+
+mockNuxtImport('navigateTo', () => navigateToMock)
 
 mockNuxtImport('useFetch', () => {
   return (url: string | (() => string)) => {
@@ -86,6 +91,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
   state.status = { enabled: true, provider: 'fake', model: 'fake', chat: true, vision: true, visionModel: null }
   state.conversations = { items: [] }
+  navigateToMock.mockClear()
 })
 
 describe('assistant chat page', () => {
@@ -131,5 +137,48 @@ describe('assistant chat page', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/assistant/chat/actions/action-1/apply', expect.objectContaining({ method: 'POST' }))
     expect(component.text()).toContain('Übernommen')
     expect(component.text()).not.toContain('Wartet auf Bestätigung')
+  })
+})
+
+describe('assistant empty-state page', () => {
+  it('shows a primary "Neue Unterhaltung" button alongside the example prompts when there are no conversations yet', async () => {
+    vi.stubGlobal('$fetch', vi.fn(() => Promise.resolve(null)))
+
+    const component = await mountSuspended(AssistantIndexPage)
+    await flushPromises()
+
+    expect(findButton(component, 'Neue Unterhaltung')).toBeTruthy()
+    expect(component.text()).toContain('Welche Karten habe ich von Blue-Eyes?')
+  })
+
+  it('starts an empty conversation and navigates to it, without sending any message', async () => {
+    const fetchMock = vi.fn((url: string, options?: { method?: string }) => {
+      if (url === '/api/assistant/chat' && options?.method === 'POST') {
+        return Promise.resolve({ id: 'new-conv' })
+      }
+      return Promise.resolve(null)
+    })
+    vi.stubGlobal('$fetch', fetchMock)
+
+    const component = await mountSuspended(AssistantIndexPage)
+    await flushPromises()
+
+    const createButton = findButton(component, 'Neue Unterhaltung')
+    expect(createButton).toBeTruthy()
+    await createButton!.trigger('click')
+    await flushPromises()
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/assistant/chat', expect.objectContaining({ method: 'POST' }))
+    expect(navigateToMock).toHaveBeenCalledWith('/assistent/new-conv')
+  })
+
+  it('redirects straight to the newest conversation instead of showing the empty state when one already exists', async () => {
+    state.conversations = { items: [{ id: 'existing-conv', title: 'Bestehend', updatedAt: '2025-01-01T00:00:00.000Z' }] }
+    vi.stubGlobal('$fetch', vi.fn(() => Promise.resolve(null)))
+
+    await mountSuspended(AssistantIndexPage)
+    await flushPromises()
+
+    expect(navigateToMock).toHaveBeenCalledWith('/assistent/existing-conv')
   })
 })

@@ -14,12 +14,6 @@ const DARK_MAGICIAN = 46986414
 const ONE_PIXEL_PNG_BASE64
   = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
 
-// Inert for the fake model's scripted intents (no "such/finde/hinzufügen/
-// füge" substring — see fakeChat in server/utils/deck-assistant-model.ts) —
-// used only to bootstrap the very first conversation from the empty state's
-// example prompts, which auto-send on arrival.
-const BOOTSTRAP_PROMPT = 'Baue mir ein Deck aus meinen Karten für GOAT'
-
 test.describe('Chat assistant', () => {
   test('searches the catalog, proposes and applies an inventory change, understands a photo, and manages conversations', async ({ page }) => {
     await registerAndLogin(page)
@@ -35,18 +29,15 @@ test.describe('Chat assistant', () => {
     await expect(page).toHaveURL('/assistent')
 
     // Fresh account: no conversations exist yet, so /assistent shows the
-    // empty state with example prompts instead of a thread (no
-    // "Neue Unterhaltung" button is reachable until a first conversation
-    // exists) — clicking one bootstraps a first conversation. Its
-    // auto-sent reply is an inert "Testantwort: ..." that doesn't interact
-    // with anything tested below.
-    await page.getByRole('button', { name: BOOTSTRAP_PROMPT, exact: true }).click()
+    // empty state — its primary "Neue Unterhaltung" button (not one of the
+    // example prompts below it) creates an empty conversation and navigates
+    // straight into it, with nothing auto-sent.
+    await page.getByRole('button', { name: 'Neue Unterhaltung', exact: true }).click()
     await expect(page).toHaveURL(/\/assistent\/[0-9a-f-]+$/)
 
     const nachricht = page.getByLabel('Nachricht', { exact: true })
     const senden = page.getByRole('button', { name: 'Senden', exact: true })
 
-    // Wait out the bootstrap turn — the composer is disabled while a turn streams.
     await expect(nachricht).toBeEnabled()
 
     // --- search_catalog ---------------------------------------------------
@@ -108,8 +99,10 @@ test.describe('Chat assistant', () => {
     await expect(nachricht).toBeEnabled()
 
     // --- conversation list: title derived from the first message, delete ---
-    const firstConversationItem = conversationAside.locator('li').filter({ hasText: BOOTSTRAP_PROMPT })
-    await expect(firstConversationItem.getByRole('link', { name: BOOTSTRAP_PROMPT, exact: true })).toBeVisible()
+    // The first conversation's title comes from its first user message —
+    // "suche Dark Magician", sent right after the empty conversation was created.
+    const firstConversationItem = conversationAside.locator('li').filter({ hasText: 'suche Dark Magician' })
+    await expect(firstConversationItem.getByRole('link', { name: 'suche Dark Magician', exact: true })).toBeVisible()
 
     await firstConversationItem.getByRole('button').click()
     await acceptConfirm(page)
