@@ -3,7 +3,5 @@ allowBuilds:
   '@prisma/client': false
   better-sqlite3: true
   esbuild: true
-  # tesseract.js' only install script is the opencollective donation notice.
-  tesseract.js: false
   unrs-resolver: true
   vue-demi: true
