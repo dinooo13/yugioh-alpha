@@ -17,7 +17,12 @@ import {
   getDeckAssistantStatus,
   useDeckAssistantModel,
 } from '../../server/utils/deck-assistant-model'
-import type { AssistantModelInput, DeckAssistantModel } from '../../server/utils/deck-assistant-model'
+import type {
+  AssistantModelInput,
+  ChatMessage,
+  ChatModelInput,
+  DeckAssistantModel,
+} from '../../server/utils/deck-assistant-model'
 import type { DeckAssistantRequest } from '../../shared/deck-assistant'
 
 const CARD = {
@@ -117,8 +122,12 @@ async function statusOf(run: () => Promise<unknown>): Promise<number | undefined
   return undefined
 }
 
+const notImplementedChat: DeckAssistantModel['chat'] = async () => {
+  throw new Error('chat() not implemented on this test double')
+}
+
 function modelReturning(output: unknown): DeckAssistantModel {
-  return { id: 'test-model', async generate() { return output } }
+  return { id: 'test-model', async generate() { return output }, chat: notImplementedChat }
 }
 
 function capturingModel(output: unknown) {
@@ -129,6 +138,7 @@ function capturingModel(output: unknown) {
       calls.push(input)
       return output
     },
+    chat: notImplementedChat,
   }
   return { model, calls }
 }
@@ -465,12 +475,26 @@ describe('pool truncation', () => {
 
 describe('assistant status/config resolution', () => {
   it('resolves to fake, openai-by-key, openai-by-custom-base-url, or disabled', () => {
-    const config = useRuntimeConfig().assistant as { provider: string, baseUrl: string, apiKey: string, model: string }
+    const config = useRuntimeConfig().assistant as {
+      provider: string
+      baseUrl: string
+      apiKey: string
+      model: string
+      visionModel: string
+    }
     const original = { ...config }
 
     try {
       config.provider = 'fake'
-      expect(getDeckAssistantStatus()).toEqual({ enabled: true, provider: 'fake', model: 'fake', baseUrl: null })
+      expect(getDeckAssistantStatus()).toEqual({
+        enabled: true,
+        provider: 'fake',
+        model: 'fake',
+        baseUrl: null,
+        chat: true,
+        vision: true,
+        visionModel: null,
+      })
       expect(useDeckAssistantModel()?.id).toBe('fake')
 
       config.provider = ''
@@ -482,8 +506,16 @@ describe('assistant status/config resolution', () => {
         provider: 'openai',
         model: 'gpt-4o-mini',
         baseUrl: 'api.openai.com',
+        chat: true,
+        vision: true,
+        visionModel: null,
       })
       expect(useDeckAssistantModel()?.id).toBe('gpt-4o-mini')
+
+      // A configured vision model is reported separately.
+      config.visionModel = 'gpt-4o'
+      expect(getDeckAssistantStatus().visionModel).toBe('gpt-4o')
+      config.visionModel = ''
 
       // No key, but a base URL explicitly pointed away from the default
       // (e.g. a keyless local Ollama server) still resolves to 'openai'.
@@ -494,10 +526,21 @@ describe('assistant status/config resolution', () => {
         provider: 'openai',
         model: 'gpt-4o-mini',
         baseUrl: 'localhost:11434',
+        chat: true,
+        vision: true,
+        visionModel: null,
       })
 
       config.baseUrl = ''
-      expect(getDeckAssistantStatus()).toEqual({ enabled: false, provider: null, model: null, baseUrl: null })
+      expect(getDeckAssistantStatus()).toEqual({
+        enabled: false,
+        provider: null,
+        model: null,
+        baseUrl: null,
+        chat: false,
+        vision: false,
+        visionModel: null,
+      })
       expect(useDeckAssistantModel()).toBeNull()
     }
     finally {
@@ -743,5 +786,353 @@ describe('OpenAI-compatible model', () => {
     await model.generate(baseInput)
 
     expect(calls[0]!.url).toBe('https://openrouter.ai/api/v1/chat/completions')
+  })
+
+  it('sends x-opencode-session and a User-Agent header, with a fresh session id per call', async () => {
+    const { fetch: fetchImpl, calls } = fetchReturning({ status: 200, body: successBody }, { status: 200, body: successBody })
+    const model = createOpenAiCompatibleModel({ baseUrl: 'https://opencode.ai/zen/go/v1', apiKey: 'go-key', model: 'glm-5.3-flash', fetch: fetchImpl })
+
+    await model.generate(baseInput)
+    await model.generate(baseInput)
+
+    const firstSession = calls[0]!.init.headers['x-opencode-session']
+    const secondSession = calls[1]!.init.headers['x-opencode-session']
+    expect(firstSession).toEqual(expect.any(String))
+    expect(firstSession).not.toBe('')
+    expect(secondSession).not.toBe(firstSession)
+    expect(calls[0]!.init.headers['user-agent']).toMatch(/^yugioh-alpha\//)
+  })
+})
+
+describe('chat()', () => {
+  interface RecordedInit { headers: Record<string, string>, body: string }
+  interface RecordedCall { url: string, init: RecordedInit }
+
+  function sseLine(payload: unknown): string {
+    return `data: ${JSON.stringify(payload)}\n\n`
+  }
+
+  function sseFetchReturning(chunks: string[], status = 200): { fetch: typeof fetch, calls: RecordedCall[] } {
+    const calls: RecordedCall[] = []
+    const fetchImpl = (async (url: string, init: RecordedInit) => {
+      calls.push({ url, init })
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          for (const chunk of chunks) {
+            controller.enqueue(new TextEncoder().encode(chunk))
+          }
+          controller.close()
+        },
+      })
+      return { status, body: stream } as unknown as Response
+    }) as unknown as typeof fetch
+    return { fetch: fetchImpl, calls }
+  }
+
+  function errorFetchReturning(status: number): { fetch: typeof fetch } {
+    const fetchImpl = (async () => ({ status, body: null }) as unknown as Response) as unknown as typeof fetch
+    return { fetch: fetchImpl }
+  }
+
+  function collectHandlers() {
+    const textDeltas: string[] = []
+    let toolCallDeltas = 0
+    return {
+      handlers: {
+        onTextDelta: (text: string) => textDeltas.push(text),
+        onToolCallDelta: () => { toolCallDeltas += 1 },
+      },
+      textDeltas,
+      get toolCallDeltas() { return toolCallDeltas },
+    }
+  }
+
+  const chatBaseInput: ChatModelInput = {
+    sessionId: 'conversation-42',
+    system: 'system prompt',
+    messages: [{ role: 'user', content: [{ type: 'text', text: 'Hallo' }] }],
+    tools: [],
+  }
+
+  it('accumulates streamed text deltas and reports finishReason "stop"', async () => {
+    const { fetch: fetchImpl } = sseFetchReturning([
+      sseLine({ choices: [{ delta: { content: 'Hallo' } }] }),
+      sseLine({ choices: [{ delta: { content: ' Welt' } }] }),
+      sseLine({ choices: [{ delta: {}, finish_reason: 'stop' }] }),
+      'data: [DONE]\n\n',
+    ])
+    const model = createOpenAiCompatibleModel({ baseUrl: 'https://api.openai.com/v1', apiKey: 'sk-test', model: 'gpt-4o-mini', fetch: fetchImpl })
+    const { handlers, textDeltas } = collectHandlers()
+
+    const result = await model.chat(chatBaseInput, handlers)
+
+    expect(result).toEqual({ text: 'Hallo Welt', toolCalls: [], finishReason: 'stop' })
+    expect(textDeltas).toEqual(['Hallo', ' Welt'])
+  })
+
+  it('tolerates a "data:" line split across chunk boundaries', async () => {
+    const wholeLine = sseLine({ choices: [{ delta: { content: 'Hallo' } }] })
+    const splitAt = Math.floor(wholeLine.length / 2)
+    const { fetch: fetchImpl } = sseFetchReturning([
+      wholeLine.slice(0, splitAt),
+      wholeLine.slice(splitAt),
+      'data: [DONE]\n\n',
+    ])
+    const model = createOpenAiCompatibleModel({ baseUrl: 'https://api.openai.com/v1', apiKey: 'sk-test', model: 'gpt-4o-mini', fetch: fetchImpl })
+    const { handlers } = collectHandlers()
+
+    const result = await model.chat(chatBaseInput, handlers)
+
+    expect(result.text).toBe('Hallo')
+  })
+
+  it('accumulates tool-call argument deltas split across events, keyed by index', async () => {
+    const { fetch: fetchImpl } = sseFetchReturning([
+      sseLine({ choices: [{ delta: { tool_calls: [{ index: 0, id: 'call_1', function: { name: 'search_catalog', arguments: '' } }] } }] }),
+      sseLine({ choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: '{"query":' } }] } }] }),
+      sseLine({ choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: '"Dark Magician"}' } }] } }] }),
+      sseLine({ choices: [{ delta: {}, finish_reason: 'tool_calls' }] }),
+      'data: [DONE]\n\n',
+    ])
+    const model = createOpenAiCompatibleModel({ baseUrl: 'https://api.openai.com/v1', apiKey: 'sk-test', model: 'gpt-4o-mini', fetch: fetchImpl })
+    const bundle = collectHandlers()
+
+    const result = await model.chat(chatBaseInput, bundle.handlers)
+
+    expect(result.finishReason).toBe('tool_calls')
+    expect(result.toolCalls).toEqual([{ id: 'call_1', name: 'search_catalog', arguments: '{"query":"Dark Magician"}' }])
+    expect(bundle.toolCallDeltas).toBeGreaterThan(0)
+  })
+
+  it('ignores a malformed "data:" line and keeps reading the stream', async () => {
+    const { fetch: fetchImpl } = sseFetchReturning([
+      'data: not json at all\n\n',
+      sseLine({ choices: [{ delta: { content: 'Hallo' } }] }),
+      'data: [DONE]\n\n',
+    ])
+    const model = createOpenAiCompatibleModel({ baseUrl: 'https://api.openai.com/v1', apiKey: 'sk-test', model: 'gpt-4o-mini', fetch: fetchImpl })
+    const { handlers } = collectHandlers()
+
+    const result = await model.chat(chatBaseInput, handlers)
+
+    expect(result.text).toBe('Hallo')
+  })
+
+  it('sends x-opencode-session (the conversation id), a User-Agent header, and accept: text/event-stream', async () => {
+    const { fetch: fetchImpl, calls } = sseFetchReturning([sseLine({ choices: [{ delta: {}, finish_reason: 'stop' }] }), 'data: [DONE]\n\n'])
+    const model = createOpenAiCompatibleModel({ baseUrl: 'https://opencode.ai/zen/go/v1', apiKey: 'go-key', model: 'glm-5.3-flash', fetch: fetchImpl })
+
+    await model.chat(chatBaseInput, collectHandlers().handlers)
+
+    expect(calls[0]!.init.headers['x-opencode-session']).toBe('conversation-42')
+    expect(calls[0]!.init.headers['user-agent']).toMatch(/^yugioh-alpha\//)
+    expect(calls[0]!.init.headers.accept).toBe('text/event-stream')
+    expect(calls[0]!.init.headers.authorization).toBe('Bearer go-key')
+  })
+
+  it('sends stream: true, the system + conversation messages, and reasoning_effort when configured', async () => {
+    const { fetch: fetchImpl, calls } = sseFetchReturning([sseLine({ choices: [{ delta: {}, finish_reason: 'stop' }] }), 'data: [DONE]\n\n'])
+    const model = createOpenAiCompatibleModel({ baseUrl: 'https://api.openai.com/v1', apiKey: 'sk-test', model: 'gpt-4o-mini', reasoningEffort: 'low', fetch: fetchImpl })
+
+    await model.chat(chatBaseInput, collectHandlers().handlers)
+
+    const body = JSON.parse(calls[0]!.init.body)
+    expect(body.stream).toBe(true)
+    expect(body.reasoning_effort).toBe('low')
+    expect(body.messages).toEqual([
+      { role: 'system', content: 'system prompt' },
+      { role: 'user', content: [{ type: 'text', text: 'Hallo' }] },
+    ])
+  })
+
+  it('includes tools and tool_choice "auto" only when tools are given', async () => {
+    const toolDef = { type: 'function' as const, function: { name: 'search_catalog', description: 'x', parameters: { type: 'object' } } }
+    const { fetch: fetchImpl, calls } = sseFetchReturning(
+      [sseLine({ choices: [{ delta: {}, finish_reason: 'stop' }] }), 'data: [DONE]\n\n'],
+      200,
+    )
+    const model = createOpenAiCompatibleModel({ baseUrl: 'https://api.openai.com/v1', apiKey: 'sk-test', model: 'gpt-4o-mini', fetch: fetchImpl })
+
+    await model.chat({ ...chatBaseInput, tools: [toolDef] }, collectHandlers().handlers)
+    await model.chat(chatBaseInput, collectHandlers().handlers)
+
+    const withTools = JSON.parse(calls[0]!.init.body)
+    expect(withTools.tools).toEqual([toolDef])
+    expect(withTools.tool_choice).toBe('auto')
+
+    const withoutTools = JSON.parse(calls[1]!.init.body)
+    expect(withoutTools.tools).toBeUndefined()
+    expect(withoutTools.tool_choice).toBeUndefined()
+  })
+
+  it('uses the configured model for a turn without images', async () => {
+    const { fetch: fetchImpl, calls } = sseFetchReturning([sseLine({ choices: [{ delta: {}, finish_reason: 'stop' }] }), 'data: [DONE]\n\n'])
+    const model = createOpenAiCompatibleModel({ baseUrl: 'https://api.openai.com/v1', apiKey: 'sk-test', model: 'gpt-4o-mini', visionModel: 'gpt-4o', fetch: fetchImpl })
+
+    await model.chat(chatBaseInput, collectHandlers().handlers)
+
+    expect(JSON.parse(calls[0]!.init.body).model).toBe('gpt-4o-mini')
+  })
+
+  it('uses the configured visionModel for a turn that includes an image', async () => {
+    const { fetch: fetchImpl, calls } = sseFetchReturning([sseLine({ choices: [{ delta: {}, finish_reason: 'stop' }] }), 'data: [DONE]\n\n'])
+    const model = createOpenAiCompatibleModel({ baseUrl: 'https://api.openai.com/v1', apiKey: 'sk-test', model: 'gpt-4o-mini', visionModel: 'gpt-4o', fetch: fetchImpl })
+
+    const imageInput: ChatModelInput = {
+      ...chatBaseInput,
+      messages: [{ role: 'user', content: [{ type: 'text', text: 'Was ist das?' }, { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,abc' } }] }],
+    }
+    await model.chat(imageInput, collectHandlers().handlers)
+
+    expect(JSON.parse(calls[0]!.init.body).model).toBe('gpt-4o')
+  })
+
+  it('falls back to the configured model for an image turn when no visionModel is set', async () => {
+    const { fetch: fetchImpl, calls } = sseFetchReturning([sseLine({ choices: [{ delta: {}, finish_reason: 'stop' }] }), 'data: [DONE]\n\n'])
+    const model = createOpenAiCompatibleModel({ baseUrl: 'https://api.openai.com/v1', apiKey: 'sk-test', model: 'gpt-4o-mini', fetch: fetchImpl })
+
+    const imageInput: ChatModelInput = {
+      ...chatBaseInput,
+      messages: [{ role: 'user', content: [{ type: 'image_url', image_url: { url: 'data:image/jpeg;base64,abc' } }] }],
+    }
+    await model.chat(imageInput, collectHandlers().handlers)
+
+    expect(JSON.parse(calls[0]!.init.body).model).toBe('gpt-4o-mini')
+  })
+
+  it('an explicit input.model override wins over the configured vision model', async () => {
+    const { fetch: fetchImpl, calls } = sseFetchReturning([sseLine({ choices: [{ delta: {}, finish_reason: 'stop' }] }), 'data: [DONE]\n\n'])
+    const model = createOpenAiCompatibleModel({ baseUrl: 'https://api.openai.com/v1', apiKey: 'sk-test', model: 'gpt-4o-mini', visionModel: 'gpt-4o', fetch: fetchImpl })
+
+    await model.chat({ ...chatBaseInput, model: 'custom-model' }, collectHandlers().handlers)
+
+    expect(JSON.parse(calls[0]!.init.body).model).toBe('custom-model')
+  })
+
+  it('maps 401/403 to a 503 configuration error', async () => {
+    const { fetch: fetchImpl } = errorFetchReturning(401)
+    const model = createOpenAiCompatibleModel({ baseUrl: 'https://api.openai.com/v1', apiKey: 'sk-bad', model: 'gpt-4o-mini', fetch: fetchImpl })
+
+    await expect(model.chat(chatBaseInput, collectHandlers().handlers)).rejects.toMatchObject({
+      statusCode: 503,
+      statusMessage: 'KI-Assistent ist nicht korrekt konfiguriert.',
+    })
+  })
+
+  it('maps 429 to a 503 "ausgelastet" error', async () => {
+    const { fetch: fetchImpl } = errorFetchReturning(429)
+    const model = createOpenAiCompatibleModel({ baseUrl: 'https://api.openai.com/v1', apiKey: 'sk-test', model: 'gpt-4o-mini', fetch: fetchImpl })
+
+    await expect(model.chat(chatBaseInput, collectHandlers().handlers)).rejects.toMatchObject({
+      statusCode: 503,
+      statusMessage: 'Der KI-Assistent ist ausgelastet, bitte später erneut versuchen.',
+    })
+  })
+
+  it('maps a generic 500 and a network error to a 502 "nicht erreichbar" error', async () => {
+    const { fetch: fetchImpl } = errorFetchReturning(500)
+    const model = createOpenAiCompatibleModel({ baseUrl: 'https://api.openai.com/v1', apiKey: 'sk-test', model: 'gpt-4o-mini', fetch: fetchImpl })
+
+    await expect(model.chat(chatBaseInput, collectHandlers().handlers)).rejects.toMatchObject({ statusCode: 502 })
+
+    const networkFailingFetch = (async () => {
+      throw new TypeError('fetch failed')
+    }) as unknown as typeof fetch
+    const networkModel = createOpenAiCompatibleModel({ baseUrl: 'https://api.openai.com/v1', apiKey: 'sk-test', model: 'gpt-4o-mini', fetch: networkFailingFetch })
+
+    await expect(networkModel.chat(chatBaseInput, collectHandlers().handlers)).rejects.toMatchObject({ statusCode: 502 })
+  })
+})
+
+describe('fake model chat()', () => {
+  function userText(text: string): ChatMessage {
+    return { role: 'user', content: [{ type: 'text', text }] }
+  }
+  function userTextWithImage(text: string): ChatMessage {
+    return {
+      role: 'user',
+      content: [{ type: 'text', text }, { type: 'image_url', image_url: { url: 'data:image/png;base64,xyz' } }],
+    }
+  }
+  function assistantToolCallMessage(): ChatMessage {
+    return { role: 'assistant', content: '', tool_calls: [{ id: 'call-1', type: 'function', function: { name: 'search_catalog', arguments: '{}' } }] }
+  }
+  function toolResultMessage(content: unknown): ChatMessage {
+    return { role: 'tool', tool_call_id: 'call-1', content: JSON.stringify(content) }
+  }
+  function noopHandlers() {
+    return { onTextDelta: () => {}, onToolCallDelta: () => {} }
+  }
+
+  it('emits a search_catalog tool call for a "suche" message', async () => {
+    const model = createFakeModel()
+    const result = await model.chat({ sessionId: 's', system: 'sys', messages: [userText('suche Dark Magician')], tools: [] }, noopHandlers())
+
+    expect(result.finishReason).toBe('tool_calls')
+    expect(result.toolCalls).toHaveLength(1)
+    expect(result.toolCalls[0]!.name).toBe('search_catalog')
+    expect(JSON.parse(result.toolCalls[0]!.arguments)).toEqual({ query: 'Dark Magician' })
+  })
+
+  it('answers with the found-card count after a search_catalog tool result', async () => {
+    const model = createFakeModel()
+    const messages: ChatMessage[] = [
+      userText('suche Dark Magician'),
+      assistantToolCallMessage(),
+      toolResultMessage([{ id: 46986414, name: 'Dark Magician' }]),
+    ]
+
+    const result = await model.chat({ sessionId: 's', system: 'sys', messages, tools: [] }, noopHandlers())
+
+    expect(result.finishReason).toBe('stop')
+    expect(result.toolCalls).toEqual([])
+    expect(result.text).toContain('1')
+    expect(result.text).toContain('Dark Magician')
+  })
+
+  it('emits an add_to_inventory tool call using the first card from an earlier search result', async () => {
+    const model = createFakeModel()
+    const messages: ChatMessage[] = [
+      userText('suche Dark Magician'),
+      assistantToolCallMessage(),
+      toolResultMessage([{ id: 46986414, name: 'Dark Magician' }]),
+      userText('füge 2 hinzu'),
+    ]
+
+    const result = await model.chat({ sessionId: 's', system: 'sys', messages, tools: [] }, noopHandlers())
+
+    expect(result.finishReason).toBe('tool_calls')
+    expect(result.toolCalls[0]!.name).toBe('add_to_inventory')
+    expect(JSON.parse(result.toolCalls[0]!.arguments)).toEqual({ items: [{ catalogCardId: 46986414, quantity: 2 }] })
+  })
+
+  it('answers with a confirmation after the add_to_inventory tool result', async () => {
+    const model = createFakeModel()
+    const messages: ChatMessage[] = [
+      userText('füge 2 hinzu'),
+      assistantToolCallMessage(),
+      toolResultMessage({ status: 'pending_confirmation' }),
+    ]
+
+    const result = await model.chat({ sessionId: 's', system: 'sys', messages, tools: [] }, noopHandlers())
+
+    expect(result).toEqual({ text: 'Ich habe einen Vorschlag angelegt.', toolCalls: [], finishReason: 'stop' })
+  })
+
+  it('identifies a card from an image and follows up with a search_catalog call', async () => {
+    const model = createFakeModel()
+    const result = await model.chat({ sessionId: 's', system: 'sys', messages: [userTextWithImage('Was ist das?')], tools: [] }, noopHandlers())
+
+    expect(result.text).toBe('Auf dem Bild sehe ich: Dark Magician.')
+    expect(result.finishReason).toBe('tool_calls')
+    expect(result.toolCalls[0]!.name).toBe('search_catalog')
+    expect(JSON.parse(result.toolCalls[0]!.arguments)).toEqual({ query: 'Dark Magician' })
+  })
+
+  it('echoes the message text otherwise', async () => {
+    const model = createFakeModel()
+    const result = await model.chat({ sessionId: 's', system: 'sys', messages: [userText('Hallo!')], tools: [] }, noopHandlers())
+
+    expect(result).toEqual({ text: 'Testantwort: Hallo!', toolCalls: [], finishReason: 'stop' })
   })
 })

@@ -46,6 +46,9 @@ export default defineNuxtConfig({
       // Optional `reasoning_effort` (low | medium | high); some gateways such
       // as OpenCode Go require it for certain models. Empty = not sent.
       reasoningEffort: '',
+      // Phase 8 chat assistant: model used for any turn that includes an
+      // image, when set. Empty = use `model` for those turns too.
+      visionModel: '',
     },
     public: {
       betterAuthUrl: process.env.BETTER_AUTH_URL || 'http://localhost:3000',

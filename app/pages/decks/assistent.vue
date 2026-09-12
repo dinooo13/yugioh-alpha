@@ -12,7 +12,7 @@ const toast = useToast()
 
 const { data: status } = await useFetch<DeckAssistantStatus>('/api/assistant/status', {
   headers: import.meta.server ? useRequestHeaders(['cookie']) : undefined,
-  default: () => ({ enabled: false, provider: null, model: null }),
+  default: () => ({ enabled: false, provider: null, model: null, chat: false, vision: false, visionModel: null }),
 })
 
 const result = ref<DeckAssistantResult | null>(null)
