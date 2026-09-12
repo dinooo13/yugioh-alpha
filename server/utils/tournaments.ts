@@ -135,7 +135,10 @@ function assertStatus(
   code: TournamentErrorCode = 'invalid_status',
 ): void {
   if (!allowed.includes(row.status)) {
-    conflict(code, `Tournament must be ${allowed.join(' or ')}`)
+    // A finished tournament always gets its own status-specific code, even
+    // when the caller passed a fallback (e.g. 'registration_closed') meant
+    // for the more common "still in the wrong phase" case.
+    conflict(row.status === 'finished' ? 'tournament_finished' : code, `Tournament must be ${allowed.join(' or ')}`)
   }
 }
 
@@ -555,7 +558,10 @@ function toParticipantDto(
     isSelf,
     dropped: participant.dropped,
     seed: participant.seed,
-    deckId: participant.deckId,
+    // Don't hand out a deck id for a snapshot the caller cannot open (#3):
+    // deckName/deckLegal/deckIssueCount stay populated (snapshot-derived),
+    // only the identifier of a resource the caller can't read is withheld.
+    deckId: canSeeSnapshot ? participant.deckId : null,
     deckName: participant.deckSnapshot?.name ?? null,
     deckLegal: participant.deckLegal,
     deckIssueCount: participant.deckIssueCount,
@@ -961,69 +967,76 @@ export function addParticipant(db: Db, userId: string, id: string, input: Partic
   const { row } = requireOrganizerTournament(db, userId, id)
   assertStatus(row, ['registration'], 'registration_closed')
 
-  const participantCount = db
-    .select({ count: sql<number>`count(*)` })
-    .from(tournamentParticipant)
-    .where(eq(tournamentParticipant.tournamentId, id))
-    .get()?.count ?? 0
-  if (participantCount >= MAX_PARTICIPANTS) {
-    conflict('too_many_participants', 'Tournament is full')
-  }
+  const now = new Date()
 
-  let name: string
-  let linkedUserId: string | null = null
+  db.transaction((tx) => {
+    const txDb = tx as unknown as Db
 
-  if (input.email !== null) {
-    const found = db
-      .select({ id: user.id, name: user.name })
-      .from(user)
-      .where(sql`lower(${user.email}) = ${input.email}`)
-      .get()
-    if (!found) {
-      badRequest('user_not_found', 'No account with this email address')
-    }
-
-    const existing = db
-      .select({ id: tournamentParticipant.id })
-      .from(tournamentParticipant)
-      .where(and(eq(tournamentParticipant.tournamentId, id), eq(tournamentParticipant.userId, found.id)))
-      .get()
-    if (existing) {
-      conflict('participant_exists', 'This participant is already registered')
-    }
-
-    name = found.name
-    linkedUserId = found.id
-  }
-  else {
-    const guestName = input.name!
-    const existingNames = db
-      .select({ name: tournamentParticipant.name })
+    const participantCount = txDb
+      .select({ count: sql<number>`count(*)` })
       .from(tournamentParticipant)
       .where(eq(tournamentParticipant.tournamentId, id))
-      .all()
-    if (existingNames.some(row2 => row2.name.toLowerCase() === guestName.toLowerCase())) {
-      conflict('participant_exists', 'This participant is already registered')
+      .get()?.count ?? 0
+    if (participantCount >= MAX_PARTICIPANTS) {
+      conflict('too_many_participants', 'Tournament is full')
     }
-    name = guestName
-  }
 
-  const maxSeed = db
-    .select({ maxSeed: sql<number | null>`max(${tournamentParticipant.seed})` })
-    .from(tournamentParticipant)
-    .where(eq(tournamentParticipant.tournamentId, id))
-    .get()?.maxSeed ?? 0
+    let name: string
+    let linkedUserId: string | null = null
 
-  const now = new Date()
-  db.insert(tournamentParticipant).values({
-    id: randomUUID(),
-    tournamentId: id,
-    userId: linkedUserId,
-    name,
-    seed: maxSeed + 1,
-    createdAt: now,
-    updatedAt: now,
-  }).run()
+    if (input.email !== null) {
+      const found = txDb
+        .select({ id: user.id, name: user.name })
+        .from(user)
+        .where(sql`lower(${user.email}) = ${input.email}`)
+        .get()
+      if (!found) {
+        badRequest('user_not_found', 'No account with this email address')
+      }
+
+      const existing = txDb
+        .select({ id: tournamentParticipant.id })
+        .from(tournamentParticipant)
+        .where(and(eq(tournamentParticipant.tournamentId, id), eq(tournamentParticipant.userId, found.id)))
+        .get()
+      if (existing) {
+        conflict('participant_exists', 'This participant is already registered')
+      }
+
+      name = found.name
+      linkedUserId = found.id
+    }
+    else {
+      const guestName = input.name!
+      const existingNames = txDb
+        .select({ name: tournamentParticipant.name })
+        .from(tournamentParticipant)
+        .where(eq(tournamentParticipant.tournamentId, id))
+        .all()
+      if (existingNames.some(row2 => row2.name.toLowerCase() === guestName.toLowerCase())) {
+        conflict('participant_exists', 'This participant is already registered')
+      }
+      name = guestName
+    }
+
+    const maxSeed = txDb
+      .select({ maxSeed: sql<number | null>`max(${tournamentParticipant.seed})` })
+      .from(tournamentParticipant)
+      .where(eq(tournamentParticipant.tournamentId, id))
+      .get()?.maxSeed ?? 0
+
+    txDb.insert(tournamentParticipant).values({
+      id: randomUUID(),
+      tournamentId: id,
+      userId: linkedUserId,
+      name,
+      seed: maxSeed + 1,
+      createdAt: now,
+      updatedAt: now,
+    }).run()
+
+    txDb.update(tournament).set({ updatedAt: now }).where(eq(tournament.id, id)).run()
+  })
 
   return getTournamentDetail(db, userId, id)
 }
@@ -1041,24 +1054,32 @@ export function updateParticipant(
     conflict('tournament_finished', 'Tournament is finished')
   }
 
-  const participant = db
-    .select()
-    .from(tournamentParticipant)
-    .where(and(eq(tournamentParticipant.id, participantId), eq(tournamentParticipant.tournamentId, id)))
-    .get()
-  if (!participant) {
-    notFound()
-  }
+  const now = new Date()
 
-  if (patch.dropped !== undefined && row.status !== 'running') {
-    conflict('invalid_status', 'A participant can only drop while the tournament is running')
-  }
+  db.transaction((tx) => {
+    const txDb = tx as unknown as Db
 
-  db.update(tournamentParticipant).set({
-    name: patch.name ?? participant.name,
-    dropped: patch.dropped ?? participant.dropped,
-    updatedAt: new Date(),
-  }).where(eq(tournamentParticipant.id, participantId)).run()
+    const participant = txDb
+      .select()
+      .from(tournamentParticipant)
+      .where(and(eq(tournamentParticipant.id, participantId), eq(tournamentParticipant.tournamentId, id)))
+      .get()
+    if (!participant) {
+      notFound()
+    }
+
+    if (patch.dropped !== undefined && row.status !== 'running') {
+      conflict('invalid_status', 'A participant can only drop while the tournament is running')
+    }
+
+    txDb.update(tournamentParticipant).set({
+      name: patch.name ?? participant.name,
+      dropped: patch.dropped ?? participant.dropped,
+      updatedAt: now,
+    }).where(eq(tournamentParticipant.id, participantId)).run()
+
+    txDb.update(tournament).set({ updatedAt: now }).where(eq(tournament.id, id)).run()
+  })
 
   return getTournamentDetail(db, userId, id)
 }
@@ -1067,14 +1088,40 @@ export function removeParticipant(db: Db, userId: string, id: string, participan
   const { row } = requireOrganizerTournament(db, userId, id)
   assertStatus(row, ['registration'], 'registration_closed')
 
-  const deleted = db
-    .delete(tournamentParticipant)
-    .where(and(eq(tournamentParticipant.id, participantId), eq(tournamentParticipant.tournamentId, id)))
-    .returning({ id: tournamentParticipant.id })
-    .all()
-  if (deleted.length === 0) {
-    notFound()
-  }
+  const now = new Date()
+
+  db.transaction((tx) => {
+    const txDb = tx as unknown as Db
+
+    const deleted = txDb
+      .delete(tournamentParticipant)
+      .where(and(eq(tournamentParticipant.id, participantId), eq(tournamentParticipant.tournamentId, id)))
+      .returning({ id: tournamentParticipant.id })
+      .all()
+    if (deleted.length === 0) {
+      notFound()
+    }
+
+    // Renumber seeds contiguously (1..n) so registration never shows gaps;
+    // startTournament re-freezes seeds anyway, so this is purely cosmetic
+    // during the registration phase.
+    const remaining = txDb
+      .select()
+      .from(tournamentParticipant)
+      .where(eq(tournamentParticipant.tournamentId, id))
+      .orderBy(asc(tournamentParticipant.seed))
+      .all()
+    remaining.forEach((participant, index) => {
+      if (participant.seed !== index + 1) {
+        txDb.update(tournamentParticipant)
+          .set({ seed: index + 1, updatedAt: now })
+          .where(eq(tournamentParticipant.id, participant.id))
+          .run()
+      }
+    })
+
+    txDb.update(tournament).set({ updatedAt: now }).where(eq(tournament.id, id)).run()
+  })
 
   return getTournamentDetail(db, userId, id)
 }
@@ -1114,26 +1161,26 @@ export function registerParticipantDeck(
 
   const now = new Date()
 
-  if (deckId === null) {
-    db.update(tournamentParticipant).set({
-      deckId: null,
-      deckSnapshot: null,
-      deckLegal: null,
-      deckIssueCount: null,
-      updatedAt: now,
-    }).where(eq(tournamentParticipant.id, participantId)).run()
-  }
-  else {
-    const format = loadTournamentFormat(db, row)
-    const { snapshot, legal, issueCount } = buildDeckSnapshot(db, deckOwnerUserId, deckId, format)
-    db.update(tournamentParticipant).set({
-      deckId,
-      deckSnapshot: snapshot,
-      deckLegal: legal,
-      deckIssueCount: issueCount,
-      updatedAt: now,
-    }).where(eq(tournamentParticipant.id, participantId)).run()
-  }
+  // buildDeckSnapshot reads through getDeckDetail/loadCardDataForValidation
+  // against `db` (not a transaction handle) and may throw a validation error
+  // (unknown_deck/empty_deck); resolve it before opening the transaction that
+  // guards the actual writes.
+  const write = deckId === null
+    ? { deckId: null, deckSnapshot: null, deckLegal: null, deckIssueCount: null }
+    : (() => {
+        const format = loadTournamentFormat(db, row)
+        const { snapshot, legal, issueCount } = buildDeckSnapshot(db, deckOwnerUserId, deckId, format)
+        return { deckId, deckSnapshot: snapshot, deckLegal: legal, deckIssueCount: issueCount }
+      })()
+
+  db.transaction((tx) => {
+    const txDb = tx as unknown as Db
+
+    txDb.update(tournamentParticipant).set({ ...write, updatedAt: now })
+      .where(eq(tournamentParticipant.id, participantId)).run()
+
+    txDb.update(tournament).set({ updatedAt: now }).where(eq(tournament.id, id)).run()
+  })
 
   return getTournamentDetail(db, userId, id)
 }
@@ -1313,15 +1360,19 @@ export function reportMatchResult(
   const isDraw = gamesA === gamesB
 
   const now = new Date()
-  db.update(tournamentMatch).set({
-    gamesA,
-    gamesB,
-    winnerParticipantId,
-    isDraw,
-    reportedAt: now,
-  }).where(eq(tournamentMatch.id, matchId)).run()
+  db.transaction((tx) => {
+    const txDb = tx as unknown as Db
 
-  db.update(tournament).set({ updatedAt: now }).where(eq(tournament.id, id)).run()
+    txDb.update(tournamentMatch).set({
+      gamesA,
+      gamesB,
+      winnerParticipantId,
+      isDraw,
+      reportedAt: now,
+    }).where(eq(tournamentMatch.id, matchId)).run()
+
+    txDb.update(tournament).set({ updatedAt: now }).where(eq(tournament.id, id)).run()
+  })
 
   return getTournamentDetail(db, userId, id)
 }
@@ -1340,16 +1391,18 @@ export function swapPairing(db: Db, userId: string, id: string, input: PairingSw
     conflict('round_completed', 'This round is already completed')
   }
 
-  const matchA = db
+  // Load every match of the round once: matchA/matchB are derived from it, and
+  // the "no result reported yet" gate below must look at *all* of them, not
+  // just the two being swapped, or a third already-reported table would let
+  // pairings drift after results exist (see swapPairing review finding #1).
+  const roundMatches = db
     .select()
     .from(tournamentMatch)
-    .where(and(eq(tournamentMatch.id, input.matchAId), eq(tournamentMatch.roundId, currentRound.id)))
-    .get()
-  const matchB = db
-    .select()
-    .from(tournamentMatch)
-    .where(and(eq(tournamentMatch.id, input.matchBId), eq(tournamentMatch.roundId, currentRound.id)))
-    .get()
+    .where(eq(tournamentMatch.roundId, currentRound.id))
+    .all()
+
+  const matchA = roundMatches.find(match => match.id === input.matchAId)
+  const matchB = roundMatches.find(match => match.id === input.matchBId)
   if (!matchA || !matchB) {
     badRequest('invalid_swap', 'Both matches must belong to the current round')
   }
@@ -1359,7 +1412,7 @@ export function swapPairing(db: Db, userId: string, id: string, input: PairingSw
   }
 
   const isReportedNonBye = (match: typeof matchA) => match.participantBId !== null && match.reportedAt !== null
-  if (isReportedNonBye(matchA) || isReportedNonBye(matchB)) {
+  if (roundMatches.some(isReportedNonBye)) {
     conflict('results_reported', 'Results have already been reported for this round')
   }
 
@@ -1446,8 +1499,12 @@ export function completeRound(db: Db, userId: string, id: string, roundId: strin
   }
 
   const now = new Date()
-  db.update(tournamentRound).set({ status: 'completed', completedAt: now }).where(eq(tournamentRound.id, roundId)).run()
-  db.update(tournament).set({ updatedAt: now }).where(eq(tournament.id, id)).run()
+  db.transaction((tx) => {
+    const txDb = tx as unknown as Db
+
+    txDb.update(tournamentRound).set({ status: 'completed', completedAt: now }).where(eq(tournamentRound.id, roundId)).run()
+    txDb.update(tournament).set({ updatedAt: now }).where(eq(tournament.id, id)).run()
+  })
 
   return getTournamentDetail(db, userId, id)
 }

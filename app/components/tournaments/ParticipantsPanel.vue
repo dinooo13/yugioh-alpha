@@ -194,7 +194,10 @@ function onDeckUpdated(detail: TournamentDetail) {
 }
 
 function deckBadge(participant: TournamentParticipantDto): { label: string, color: 'success' | 'error' | 'neutral' } | null {
-  if (!participant.deckId) {
+  // deckName is snapshot-derived and survives the underlying deck being
+  // deleted (deckId is ON DELETE SET NULL); gate on it, not on deckId, so a
+  // deleted deck keeps showing the registered snapshot's legality badge.
+  if (!participant.deckName) {
     return null
   }
   if (participant.deckLegal === null) {
@@ -322,7 +325,7 @@ function capturedAtLabel(participant: TournamentParticipantDto): string | null {
               {{ participant.name }}
             </td>
             <td class="px-2 py-2">
-              <template v-if="participant.deckId">
+              <template v-if="participant.deckName">
                 <div class="text-gray-900">
                   {{ participant.deckName }}
                 </div>
@@ -366,7 +369,7 @@ function capturedAtLabel(participant: TournamentParticipantDto): string | null {
                   size="xs"
                   color="neutral"
                   variant="outline"
-                  :label="participant.deckId ? 'Deck ändern' : 'Deck anmelden'"
+                  :label="participant.deckName ? 'Deck ändern' : 'Deck anmelden'"
                   @click="openDeckModal(participant)"
                 />
                 <UDropdownMenu
