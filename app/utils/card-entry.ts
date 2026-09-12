@@ -312,7 +312,7 @@ export interface ApiItemError {
 interface ApiErrorBody {
   statusCode?: number
   statusMessage?: string
-  data?: { errors?: ApiItemError[] }
+  data?: { errors?: ApiItemError[], code?: string }
 }
 
 function apiErrorBody(error: unknown): ApiErrorBody | undefined {
@@ -333,4 +333,10 @@ export function apiErrorMessage(error: unknown, fallback: string): string {
 /** Per-item validation failures carried by `/api/inventory/bulk`. */
 export function apiItemErrors(error: unknown): ApiItemError[] {
   return apiErrorBody(error)?.data?.errors ?? []
+}
+
+/** Machine-readable error code (`data.code`), used by the tournament pages. */
+export function apiErrorCode(error: unknown): string | undefined {
+  const code = apiErrorBody(error)?.data?.code
+  return typeof code === 'string' ? code : undefined
 }
