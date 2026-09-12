@@ -5,7 +5,7 @@ import Database from 'better-sqlite3'
 import { beforeEach, describe, expect, it } from 'vitest'
 import * as schema from '../../server/db/schema'
 import { createDeck, deleteDeck, upsertDeckCard } from '../../server/utils/decks'
-import { createCollection } from '../../server/utils/collections'
+import { createCollection, deleteCollection } from '../../server/utils/collections'
 import { addOwnedCard, validateInventoryInput } from '../../server/utils/inventory'
 import { ensureProfile, toPublicProfile } from '../../server/utils/profiles'
 import {
@@ -21,7 +21,7 @@ import {
   tokensMatch,
 } from '../../server/utils/sharing'
 import type { ShareAccessVia, ShareTarget } from '../../server/utils/sharing'
-import { buildSharedDeckView, listSharedCollection, listVisibleDecks } from '../../server/utils/shared-views'
+import { buildSharedDeckView, listSharedCollection, listSharedInventory, listVisibleDecks } from '../../server/utils/shared-views'
 import type { ShareResourceType, Visibility } from '../../shared/sharing'
 
 const CARD = {
@@ -344,6 +344,20 @@ describe('deleteDeck cleans up grants', () => {
   })
 })
 
+describe('deleteCollection cleans up grants', () => {
+  it('removes the collection grants (deleteGrantsForResource wiring)', async () => {
+    const db = createTestDb()
+    seedUsersAndCatalog(db)
+    const box = await createCollection(db, 'user-a', { name: 'Box', description: null })
+    addShareGrant(db, 'user-a', 'collection', box.id, 'user-b')
+
+    await deleteCollection(db, 'user-a', box.id)
+
+    const rows = db.select().from(schema.shareGrant).where(eq(schema.shareGrant.resourceId, box.id)).all()
+    expect(rows).toEqual([])
+  })
+})
+
 describe('listVisibleDecks', () => {
   let db: TestDb
 
@@ -374,6 +388,14 @@ describe('listVisibleDecks', () => {
 
     expect(listVisibleDecks(db, 'user-a', 'user-b').map(item => item.id)).toEqual([deckId])
     expect(listVisibleDecks(db, 'user-a', 'user-c').map(item => item.id)).toEqual([])
+  })
+
+  it('nulls out visibility for a non-owner (the grant does not entitle them to the owner-side setting)', () => {
+    const deckId = createDeck(db, 'user-a', { name: 'Granted', description: null }).id
+    addShareGrant(db, 'user-a', 'deck', deckId, 'user-b')
+
+    expect(listVisibleDecks(db, 'user-a', 'user-b')[0]?.visibility).toBeNull()
+    expect(listVisibleDecks(db, 'user-a', 'user-a')[0]?.visibility).toBe('private')
   })
 })
 
@@ -424,5 +446,49 @@ describe('listSharedCollection', () => {
     const page = listSharedCollection(db, 'user-a', boxA.id, {})
     const item = page.items.find(entry => entry.catalogCardId === CARD.darkMagician)
     expect(item?.quantity).toBe(2)
+  })
+})
+
+describe('listSharedInventory', () => {
+  it('aggregates a user\'s copies across all of their collections, scoped to that owner only', async () => {
+    const db = createTestDb()
+    seedUsersAndCatalog(db)
+    const boxA = await createCollection(db, 'user-a', { name: 'Box A', description: null })
+    const boxB = await createCollection(db, 'user-a', { name: 'Box B', description: null })
+
+    await addOwnedCard(db, 'user-a', validateInventoryInput({
+      catalog_card_id: CARD.darkMagician,
+      collection_id: boxA.id,
+      quantity: 2,
+    }))
+    await addOwnedCard(db, 'user-a', validateInventoryInput({
+      catalog_card_id: CARD.darkMagician,
+      collection_id: boxB.id,
+      quantity: 3,
+    }))
+    // A second user's inventory must never leak into user-a's shared view.
+    await addOwnedCard(db, 'user-b', validateInventoryInput({
+      catalog_card_id: CARD.potOfGreed,
+      quantity: 9,
+    }))
+
+    const page = listSharedInventory(db, 'user-a', {})
+
+    expect(page.total).toBe(1)
+    expect(page.items).toHaveLength(1)
+    expect(page.items[0]).toMatchObject({ catalogCardId: CARD.darkMagician, quantity: 5 })
+  })
+
+  it('filters by name and clamps the page size', async () => {
+    const db = createTestDb()
+    seedUsersAndCatalog(db)
+    await addOwnedCard(db, 'user-a', validateInventoryInput({ catalog_card_id: CARD.darkMagician, quantity: 1 }))
+    await addOwnedCard(db, 'user-a', validateInventoryInput({ catalog_card_id: CARD.potOfGreed, quantity: 1 }))
+
+    const filtered = listSharedInventory(db, 'user-a', { q: 'Dark' })
+    expect(filtered.items.map(item => item.catalogCardId)).toEqual([CARD.darkMagician])
+
+    const clamped = listSharedInventory(db, 'user-a', { pageSize: 1000 })
+    expect(clamped.pageSize).toBe(100)
   })
 })

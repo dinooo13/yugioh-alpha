@@ -6,6 +6,7 @@ import * as schema from '../../server/db/schema'
 import { addOwnedCard, validateInventoryInput } from '../../server/utils/inventory'
 import {
   addWishlistItem,
+  canViewWishlist,
   listPublicWishlist,
   listWishlist,
   MAX_WISHLIST_QUANTITY,
@@ -158,5 +159,26 @@ describe('wishlistCardIds', () => {
 
     expect(wishlistCardIds(db, 'user-a')).toEqual([CARD.darkMagician])
     expect(wishlistCardIds(db, 'user-b')).toEqual([CARD.potOfGreed])
+  })
+})
+
+// This is the exact gate GET /api/profiles/:handle/wishlist (and the profile
+// page's teaser count) run before returning anything to a non-owner — pinned
+// here at the util level since it is what stands between a private wishlist
+// and a 404 for a stranger.
+describe('canViewWishlist', () => {
+  it('lets the owner see their own wishlist regardless of visibility', () => {
+    expect(canViewWishlist('user-a', 'private', 'user-a')).toBe(true)
+    expect(canViewWishlist('user-a', 'public', 'user-a')).toBe(true)
+  })
+
+  it('404s (returns false) for anyone else while private, including anonymous', () => {
+    expect(canViewWishlist('user-a', 'private', 'user-b')).toBe(false)
+    expect(canViewWishlist('user-a', 'private', null)).toBe(false)
+  })
+
+  it('lets anyone see a public wishlist, including anonymous', () => {
+    expect(canViewWishlist('user-a', 'public', 'user-b')).toBe(true)
+    expect(canViewWishlist('user-a', 'public', null)).toBe(true)
   })
 })
