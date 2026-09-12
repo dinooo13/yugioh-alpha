@@ -1,21 +1,44 @@
 <script setup lang="ts">
 import { formatRate } from '~~/shared/tournaments'
-import type { TournamentStandingRow } from '~~/shared/tournaments'
+import type { TournamentStandingRow, TournamentStatus } from '~~/shared/tournaments'
 
-defineProps<{
+const props = defineProps<{
   standings: TournamentStandingRow[]
+  status: TournamentStatus
 }>()
 
 function recordLabel(row: TournamentStandingRow): string {
   return `${row.wins}-${row.losses}-${row.draws}`
 }
+
+// The first-ranked row of a finished tournament, i.e. the winner (#36). Rank
+// 1 while still running is just the current leader, not a final result, so
+// the trophy/"Sieger" treatment is finished-only.
+const winner = computed(() => {
+  if (props.status !== 'finished') {
+    return null
+  }
+  return props.standings.find(row => row.rank === 1) ?? null
+})
 </script>
 
 <template>
   <section class="rounded-md border border-gray-200 bg-white p-4">
-    <h2 class="text-base font-semibold text-gray-900">
-      Tabelle
-    </h2>
+    <div class="flex flex-wrap items-center justify-between gap-2">
+      <h2 class="text-base font-semibold text-gray-900">
+        Tabelle
+      </h2>
+      <p
+        v-if="winner"
+        class="flex items-center gap-1.5 text-sm font-semibold text-amber-600"
+      >
+        <UIcon
+          name="i-lucide-trophy"
+          class="size-4"
+        />
+        Sieger: {{ winner.name }}
+      </p>
+    </div>
 
     <p
       v-if="standings.length === 0"
@@ -58,11 +81,22 @@ function recordLabel(row: TournamentStandingRow): string {
           <tr
             v-for="row in standings"
             :key="row.participantId"
+            :class="row.rank === 1 ? 'bg-amber-50' : undefined"
           >
             <td class="py-2 pr-2 tabular-nums text-gray-500">
-              {{ row.rank }}
+              <span class="inline-flex items-center gap-1">
+                <UIcon
+                  v-if="row.rank === 1"
+                  name="i-lucide-trophy"
+                  class="size-3.5 text-amber-500"
+                />
+                {{ row.rank }}
+              </span>
             </td>
-            <td class="px-2 py-2 font-medium text-gray-900">
+            <td
+              class="px-2 py-2 font-medium"
+              :class="row.rank === 1 ? 'text-amber-900' : 'text-gray-900'"
+            >
               {{ row.name }}
               <UBadge
                 v-if="row.dropped"

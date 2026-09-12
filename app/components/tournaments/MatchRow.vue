@@ -66,6 +66,19 @@ function saveForm() {
   submitResult(a, b)
 }
 
+/**
+ * A fresh, never-touched form starts at 0:0 — "Ergebnis speichern" being
+ * active right away lets a stray click record a false draw and hand both
+ * players a point (#33). Disable it until at least one field has moved away
+ * from that starting value; the quick buttons (2:0 / 0:2 / Unentschieden)
+ * remain the normal way to report a result and are never gated by this.
+ */
+const isUntouchedZeroZero = computed(() => {
+  const a = typeof gamesA.value === 'number' ? gamesA.value : 0
+  const b = typeof gamesB.value === 'number' ? gamesB.value : 0
+  return a === 0 && b === 0
+})
+
 const winnerName = computed(() => {
   if (props.match.winnerParticipantId === props.match.participantAId) {
     return props.match.participantAName
@@ -89,17 +102,23 @@ function onChipClick(slot: 'a' | 'b') {
     <div class="flex flex-wrap items-center gap-2">
       <span class="text-xs font-semibold text-gray-500">Tisch {{ match.tableNumber }}</span>
 
+      <!-- Names are only interactive in swap mode (#35): outside of it a
+           `<button>` announced no affordance and did nothing on click. -->
       <button
+        v-if="swapMode"
         type="button"
-        class="rounded px-1 text-sm font-medium"
-        :class="[
-          swapMode ? 'cursor-pointer hover:bg-primary/10' : 'cursor-default',
-          selectedA ? 'bg-primary/20 text-primary' : 'text-gray-900',
-        ]"
+        class="cursor-pointer rounded px-1 text-sm font-medium hover:bg-primary/10"
+        :class="selectedA ? 'bg-primary/20 text-primary' : 'text-gray-900'"
         @click="onChipClick('a')"
       >
         {{ match.participantAName }}
       </button>
+      <span
+        v-else
+        class="rounded px-1 text-sm font-medium text-gray-900"
+      >
+        {{ match.participantAName }}
+      </span>
 
       <template v-if="match.isBye">
         <UBadge
@@ -112,16 +131,20 @@ function onChipClick(slot: 'a' | 'b') {
       <template v-else>
         <span class="text-xs text-gray-400">vs.</span>
         <button
+          v-if="swapMode"
           type="button"
-          class="rounded px-1 text-sm font-medium"
-          :class="[
-            swapMode ? 'cursor-pointer hover:bg-primary/10' : 'cursor-default',
-            selectedB ? 'bg-primary/20 text-primary' : 'text-gray-900',
-          ]"
+          class="cursor-pointer rounded px-1 text-sm font-medium hover:bg-primary/10"
+          :class="selectedB ? 'bg-primary/20 text-primary' : 'text-gray-900'"
           @click="onChipClick('b')"
         >
           {{ match.participantBName }}
         </button>
+        <span
+          v-else
+          class="rounded px-1 text-sm font-medium text-gray-900"
+        >
+          {{ match.participantBName }}
+        </span>
       </template>
     </div>
 
@@ -146,7 +169,29 @@ function onChipClick(slot: 'a' | 'b') {
         />
       </template>
 
+      <!-- Quick buttons first and primary: they are the normal path for
+           reporting a result (#33). The manual score fields + save button
+           come after, for the rarer best-of-3-with-games case. -->
       <template v-else-if="canEdit">
+        <UButton
+          size="xs"
+          label="2:0"
+          :loading="isSubmitting"
+          @click="submitResult(2, 0)"
+        />
+        <UButton
+          size="xs"
+          label="0:2"
+          :loading="isSubmitting"
+          @click="submitResult(0, 2)"
+        />
+        <UButton
+          size="xs"
+          label="Unentschieden"
+          :loading="isSubmitting"
+          @click="submitResult(1, 1)"
+        />
+
         <UInput
           v-model.number="gamesA"
           type="number"
@@ -168,33 +213,13 @@ function onChipClick(slot: 'a' | 'b') {
         />
         <UButton
           size="xs"
+          color="neutral"
+          variant="outline"
           label="Ergebnis speichern"
+          :disabled="isUntouchedZeroZero"
+          :title="isUntouchedZeroZero ? 'Trage zuerst ein Ergebnis ein' : undefined"
           :loading="isSubmitting"
           @click="saveForm"
-        />
-        <UButton
-          size="xs"
-          color="neutral"
-          variant="outline"
-          label="2:0"
-          :loading="isSubmitting"
-          @click="submitResult(2, 0)"
-        />
-        <UButton
-          size="xs"
-          color="neutral"
-          variant="outline"
-          label="0:2"
-          :loading="isSubmitting"
-          @click="submitResult(0, 2)"
-        />
-        <UButton
-          size="xs"
-          color="neutral"
-          variant="outline"
-          label="Unentschieden"
-          :loading="isSubmitting"
-          @click="submitResult(1, 1)"
         />
       </template>
     </div>
