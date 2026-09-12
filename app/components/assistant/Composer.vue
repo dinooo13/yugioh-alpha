@@ -40,9 +40,11 @@ type SpeechRecognitionCtor = new () => SpeechRecognitionLike
 const props = withDefaults(defineProps<{
   disabled?: boolean
   streaming?: boolean
+  cancelling?: boolean
 }>(), {
   disabled: false,
   streaming: false,
+  cancelling: false,
 })
 
 const emit = defineEmits<{
@@ -54,20 +56,71 @@ const text = ref('')
 const images = ref<string[]>([])
 const errorMessage = ref('')
 const isProcessingImage = ref(false)
-const fileInput = ref<HTMLInputElement | null>(null)
+const cameraInput = ref<HTMLInputElement | null>(null)
+const galleryInput = ref<HTMLInputElement | null>(null)
+
+// A touch device (phone/tablet) gets a dedicated camera button *and* a
+// gallery one — `capture` on the camera input opens the camera directly,
+// which would otherwise make an already-taken photo unreachable (#11). A
+// mouse/trackpad device has no camera to jump to in the first place, so
+// both inputs would just open the same file picker — show only one there.
+const isTouchDevice = ref(import.meta.client && navigator.maxTouchPoints > 0)
 
 const totalImageBytes = computed(() => images.value.reduce((sum, image) => sum + image.length, 0))
-const canSend = computed(() => !props.disabled && !props.streaming && (text.value.trim() !== '' || images.value.length > 0))
+const canSend = computed(() =>
+  !props.disabled && !props.streaming && !isProcessingImage.value && (text.value.trim() !== '' || images.value.length > 0))
 
 // --- Images: max 3, resized client-side to ≤1280px JPEG q0.85 -------------
 
+interface ImageSource {
+  width: number
+  height: number
+  draw: (context: CanvasRenderingContext2D, width: number, height: number) => void
+  dispose: () => void
+}
+
+/** Decodes `file` via `createImageBitmap` (honoring EXIF orientation so a
+ * phone photo isn't resized sideways), falling back to a plain `<img>` +
+ * `URL.createObjectURL` when `createImageBitmap` isn't available at all. */
+async function loadImageSource(file: File): Promise<ImageSource> {
+  if (typeof createImageBitmap === 'function') {
+    const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' })
+    return {
+      width: bitmap.width,
+      height: bitmap.height,
+      draw: (context, width, height) => context.drawImage(bitmap, 0, 0, width, height),
+      dispose: () => bitmap.close(),
+    }
+  }
+
+  const objectUrl = URL.createObjectURL(file)
+  try {
+    const image = new Image()
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve()
+      image.onerror = () => reject(new Error('image decode failed'))
+      image.src = objectUrl
+    })
+    return {
+      width: image.naturalWidth,
+      height: image.naturalHeight,
+      draw: (context, width, height) => context.drawImage(image, 0, 0, width, height),
+      dispose: () => URL.revokeObjectURL(objectUrl),
+    }
+  }
+  catch (error) {
+    URL.revokeObjectURL(objectUrl)
+    throw error
+  }
+}
+
 async function resizeImageToDataUrl(file: File): Promise<string> {
-  const bitmap = await createImageBitmap(file)
+  const source = await loadImageSource(file)
   try {
     const maxEdge = 1280
-    const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height))
-    const width = Math.max(1, Math.round(bitmap.width * scale))
-    const height = Math.max(1, Math.round(bitmap.height * scale))
+    const scale = Math.min(1, maxEdge / Math.max(source.width, source.height))
+    const width = Math.max(1, Math.round(source.width * scale))
+    const height = Math.max(1, Math.round(source.height * scale))
 
     const canvas = document.createElement('canvas')
     canvas.width = width
@@ -76,12 +129,12 @@ async function resizeImageToDataUrl(file: File): Promise<string> {
     if (!context) {
       throw new Error('canvas 2d context unavailable')
     }
-    context.drawImage(bitmap, 0, 0, width, height)
+    source.draw(context, width, height)
 
     return canvas.toDataURL('image/jpeg', 0.85)
   }
   finally {
-    bitmap.close()
+    source.dispose()
   }
 }
 
@@ -287,23 +340,44 @@ onBeforeUnmount(() => {
       />
 
       <input
-        ref="fileInput"
+        v-if="isTouchDevice"
+        ref="cameraInput"
         type="file"
         accept="image/*"
         capture="environment"
         multiple
         class="hidden"
-        aria-label="Foto hinzufügen"
+        aria-label="Foto aufnehmen"
         @change="onFilesSelected"
       >
       <UButton
-        icon="i-lucide-image"
+        v-if="isTouchDevice"
+        icon="i-lucide-camera"
         color="neutral"
         variant="outline"
-        aria-label="Foto hinzufügen"
+        aria-label="Foto aufnehmen"
         :loading="isProcessingImage"
         :disabled="disabled || streaming || images.length >= ASSISTANT_MESSAGE_IMAGES_MAX"
-        @click="fileInput?.click()"
+        @click="cameraInput?.click()"
+      />
+
+      <input
+        ref="galleryInput"
+        type="file"
+        accept="image/*"
+        multiple
+        class="hidden"
+        :aria-label="isTouchDevice ? 'Aus Galerie hinzufügen' : 'Foto hinzufügen'"
+        @change="onFilesSelected"
+      >
+      <UButton
+        :icon="isTouchDevice ? 'i-lucide-images' : 'i-lucide-image'"
+        color="neutral"
+        variant="outline"
+        :aria-label="isTouchDevice ? 'Aus Galerie hinzufügen' : 'Foto hinzufügen'"
+        :loading="isProcessingImage"
+        :disabled="disabled || streaming || images.length >= ASSISTANT_MESSAGE_IMAGES_MAX"
+        @click="galleryInput?.click()"
       />
 
       <UButton
@@ -328,7 +402,8 @@ onBeforeUnmount(() => {
         icon="i-lucide-square"
         color="neutral"
         variant="outline"
-        label="Abbrechen"
+        :label="cancelling ? 'Wird abgebrochen…' : 'Abbrechen'"
+        :disabled="cancelling"
         @click="emit('cancel')"
       />
     </div>

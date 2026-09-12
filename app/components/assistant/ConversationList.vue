@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { AssistantConversationListItem } from '~~/shared/assistant-chat'
+import { apiErrorMessage } from '~/utils/card-entry'
 
 const props = defineProps<{
   items: AssistantConversationListItem[]
@@ -15,15 +16,20 @@ const { confirm } = useConfirm()
 
 const isCreating = ref(false)
 const deletingId = ref<string | null>(null)
+const errorMessage = ref('')
 
 async function onCreate() {
   if (isCreating.value) {
     return
   }
   isCreating.value = true
+  errorMessage.value = ''
   try {
     const conversation = await $fetch<{ id: string }>('/api/assistant/chat', { method: 'POST' })
     emit('created', conversation.id)
+  }
+  catch (error) {
+    errorMessage.value = apiErrorMessage(error, 'Die Unterhaltung konnte nicht erstellt werden.')
   }
   finally {
     isCreating.value = false
@@ -40,9 +46,13 @@ async function onDelete(item: AssistantConversationListItem) {
   }
 
   deletingId.value = item.id
+  errorMessage.value = ''
   try {
     await $fetch(`/api/assistant/chat/${item.id}`, { method: 'DELETE' })
     emit('deleted', item.id)
+  }
+  catch (error) {
+    errorMessage.value = apiErrorMessage(error, 'Die Unterhaltung konnte nicht gelöscht werden.')
   }
   finally {
     deletingId.value = null
@@ -60,6 +70,12 @@ async function onDelete(item: AssistantConversationListItem) {
         :loading="isCreating"
         @click="onCreate"
       />
+      <p
+        v-if="errorMessage"
+        class="mt-2 text-xs text-red-600"
+      >
+        {{ errorMessage }}
+      </p>
     </div>
 
     <ul class="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-3 pb-3">
