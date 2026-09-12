@@ -440,7 +440,7 @@ export async function runChatTurn(
   const startedAt = Date.now()
 
   try {
-    let finalText = ''
+    let finalText: string | null = null
 
     for (let round = 0; round < ASSISTANT_MAX_TOOL_ROUNDS; round++) {
       if (Date.now() - startedAt > TURN_TIMEOUT_MS) {
@@ -537,6 +537,11 @@ export async function runChatTurn(
       }
     }
 
+    if (finalText === null) {
+      // Exhausted every round without a final answer — every one of the 8
+      // rounds requested another tool call.
+      finalText = 'Ich konnte die Anfrage nicht in wenigen Schritten abschließen. Bitte formuliere sie konkreter oder in kleineren Schritten.'
+    }
     const finalMessage = insertMessage(db, conversationId, { role: 'assistant', content: finalText })
 
     const now = new Date()
