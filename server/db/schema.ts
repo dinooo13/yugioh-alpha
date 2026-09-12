@@ -2,6 +2,7 @@ import { relations } from 'drizzle-orm'
 import { sqliteTable, text, integer, index, uniqueIndex } from 'drizzle-orm/sqlite-core'
 import type { RuleSet } from '../../shared/rule-formats'
 import type { ShareResourceType, Visibility, WishlistVisibility } from '../../shared/sharing'
+import type { PairingSystem, TournamentDeckSnapshot, TournamentStatus } from '../../shared/tournaments'
 
 // Better Auth core tables (email/password only).
 // Generated to match Better Auth's expected schema for the Drizzle adapter (provider: "sqlite").
@@ -467,4 +468,164 @@ export const wishlistItem = sqliteTable(
 export const wishlistItemRelations = relations(wishlistItem, ({ one }) => ({
   user: one(user, { fields: [wishlistItem.userId], references: [user.id] }),
   catalogCard: one(catalogCard, { fields: [wishlistItem.catalogCardId], references: [catalogCard.id] }),
+}))
+// Tournaments (see docs/adr/0008-tournament-model.md).
+//
+// A tournament belongs to one organizer. Participants are either linked app
+// users (`user_id`) or free-text guests (`user_id IS NULL`). Registering a
+// deck copies the decklist into `deck_snapshot` — unlike deck legality
+// (ADR 0005), a tournament record is history and must not change when a deck,
+// a format, or the catalog is edited afterwards.
+
+export const tournament = sqliteTable(
+  'tournament',
+  {
+    id: text('id').primaryKey(),
+    organizerUserId: text('organizer_user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    description: text('description'),
+    // The format every registered deck is checked against, or NULL for
+    // "no format" (decks are registered without a legality statement).
+    // Deleting a format un-assigns it, like `deck.format_id` (ADR 0005).
+    formatId: text('format_id')
+      .references(() => ruleFormat.id, { onDelete: 'set null' }),
+    // 'swiss' | 'round_robin' (shared/tournaments.ts).
+    pairingSystem: text('pairing_system').notNull().$type<PairingSystem>().default('swiss'),
+    // 'registration' | 'running' | 'finished'.
+    status: text('status').notNull().$type<TournamentStatus>().default('registration'),
+    // NULL until the tournament starts: resolved from the participant count
+    // (Swiss: ceil(log2(n)); round robin: the circle length).
+    plannedRounds: integer('planned_rounds'),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+    startedAt: integer('started_at', { mode: 'timestamp' }),
+    finishedAt: integer('finished_at', { mode: 'timestamp' }),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+  },
+  table => [
+    index('idx_tournament_organizer').on(table.organizerUserId),
+    index('idx_tournament_format').on(table.formatId),
+    index('idx_tournament_status').on(table.status),
+  ],
+)
+
+export const tournamentParticipant = sqliteTable(
+  'tournament_participant',
+  {
+    id: text('id').primaryKey(),
+    tournamentId: text('tournament_id')
+      .notNull()
+      .references(() => tournament.id, { onDelete: 'cascade' }),
+    // NULL = guest participant (name only, no account).
+    // A deleted user leaves their results intact as a named guest row.
+    userId: text('user_id')
+      .references(() => user.id, { onDelete: 'set null' }),
+    // Display name inside this tournament. Seeded from `user.name` for
+    // linked participants; never an email.
+    name: text('name').notNull(),
+    // The registered deck, or NULL. `deck_snapshot` is the authority — this
+    // is only a back-reference so "open the deck" can work while it exists.
+    deckId: text('deck_id')
+      .references(() => deck.id, { onDelete: 'set null' }),
+    deckSnapshot: text('deck_snapshot', { mode: 'json' }).$type<TournamentDeckSnapshot>(),
+    // Legality against the tournament's format at registration time.
+    // NULL = no deck registered, or the tournament has no format.
+    deckLegal: integer('deck_legal', { mode: 'boolean' }),
+    deckIssueCount: integer('deck_issue_count'),
+    dropped: integer('dropped', { mode: 'boolean' }).notNull().default(false),
+    // Registration order, renumbered to 1..n when the tournament starts.
+    // Drives the round-robin circle and is the final standings tiebreak.
+    seed: integer('seed').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+  },
+  table => [
+    index('idx_tournament_participant_tournament').on(table.tournamentId),
+    index('idx_tournament_participant_user').on(table.userId),
+    // SQLite treats NULLs as distinct in a unique index, so any number of
+    // guest rows coexist while one app user can join a tournament only once.
+    uniqueIndex('idx_tournament_participant_unique_user').on(table.tournamentId, table.userId),
+  ],
+)
+
+export const tournamentRound = sqliteTable(
+  'tournament_round',
+  {
+    id: text('id').primaryKey(),
+    tournamentId: text('tournament_id')
+      .notNull()
+      .references(() => tournament.id, { onDelete: 'cascade' }),
+    number: integer('number').notNull(),
+    // 'pending' | 'completed'.
+    status: text('status').notNull().$type<'pending' | 'completed'>().default('pending'),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+    completedAt: integer('completed_at', { mode: 'timestamp' }),
+  },
+  table => [
+    index('idx_tournament_round_tournament').on(table.tournamentId),
+    uniqueIndex('idx_tournament_round_number').on(table.tournamentId, table.number),
+  ],
+)
+
+export const tournamentMatch = sqliteTable(
+  'tournament_match',
+  {
+    id: text('id').primaryKey(),
+    roundId: text('round_id')
+      .notNull()
+      .references(() => tournamentRound.id, { onDelete: 'cascade' }),
+    // Denormalized so standings can be loaded with one query per tournament
+    // instead of a join through every round.
+    tournamentId: text('tournament_id')
+      .notNull()
+      .references(() => tournament.id, { onDelete: 'cascade' }),
+    tableNumber: integer('table_number').notNull(),
+    participantAId: text('participant_a_id')
+      .notNull()
+      .references(() => tournamentParticipant.id, { onDelete: 'cascade' }),
+    // NULL = bye. A bye is stored as a reported 2–0 win for A.
+    participantBId: text('participant_b_id')
+      .references(() => tournamentParticipant.id, { onDelete: 'cascade' }),
+    winnerParticipantId: text('winner_participant_id')
+      .references(() => tournamentParticipant.id, { onDelete: 'set null' }),
+    gamesA: integer('games_a').notNull().default(0),
+    gamesB: integer('games_b').notNull().default(0),
+    isDraw: integer('is_draw', { mode: 'boolean' }).notNull().default(false),
+    // NULL = no result entered yet. Byes are reported at creation time.
+    reportedAt: integer('reported_at', { mode: 'timestamp' }),
+  },
+  table => [
+    index('idx_tournament_match_round').on(table.roundId),
+    index('idx_tournament_match_tournament').on(table.tournamentId),
+    index('idx_tournament_match_participant_a').on(table.participantAId),
+    index('idx_tournament_match_participant_b').on(table.participantBId),
+    uniqueIndex('idx_tournament_match_table').on(table.roundId, table.tableNumber),
+  ],
+)
+
+export const tournamentRelations = relations(tournament, ({ one, many }) => ({
+  organizer: one(user, { fields: [tournament.organizerUserId], references: [user.id] }),
+  format: one(ruleFormat, { fields: [tournament.formatId], references: [ruleFormat.id] }),
+  participants: many(tournamentParticipant),
+  rounds: many(tournamentRound),
+  matches: many(tournamentMatch),
+}))
+
+export const tournamentParticipantRelations = relations(tournamentParticipant, ({ one }) => ({
+  tournament: one(tournament, { fields: [tournamentParticipant.tournamentId], references: [tournament.id] }),
+  user: one(user, { fields: [tournamentParticipant.userId], references: [user.id] }),
+  deck: one(deck, { fields: [tournamentParticipant.deckId], references: [deck.id] }),
+}))
+
+export const tournamentRoundRelations = relations(tournamentRound, ({ one, many }) => ({
+  tournament: one(tournament, { fields: [tournamentRound.tournamentId], references: [tournament.id] }),
+  matches: many(tournamentMatch),
+}))
+
+export const tournamentMatchRelations = relations(tournamentMatch, ({ one }) => ({
+  round: one(tournamentRound, { fields: [tournamentMatch.roundId], references: [tournamentRound.id] }),
+  tournament: one(tournament, { fields: [tournamentMatch.tournamentId], references: [tournament.id] }),
+  participantA: one(tournamentParticipant, { fields: [tournamentMatch.participantAId], references: [tournamentParticipant.id], relationName: 'participantA' }),
+  participantB: one(tournamentParticipant, { fields: [tournamentMatch.participantBId], references: [tournamentParticipant.id], relationName: 'participantB' }),
 }))
