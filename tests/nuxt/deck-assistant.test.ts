@@ -1,8 +1,7 @@
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
 import { drizzle } from 'drizzle-orm/better-sqlite3'
 import Database from 'better-sqlite3'
-import Anthropic from '@anthropic-ai/sdk'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import * as schema from '../../server/db/schema'
 import { createDeck, updateDeck, upsertDeckCard } from '../../server/utils/decks'
 import { createRuleFormat, validateRuleFormatInput } from '../../server/utils/rule-formats'
@@ -13,8 +12,8 @@ import {
   validateDeckAssistantRequest,
 } from '../../server/utils/deck-assistant'
 import {
-  createAnthropicModel,
   createFakeModel,
+  createOpenAiCompatibleModel,
   getDeckAssistantStatus,
   useDeckAssistantModel,
 } from '../../server/utils/deck-assistant-model'
@@ -465,22 +464,40 @@ describe('pool truncation', () => {
 })
 
 describe('assistant status/config resolution', () => {
-  it('resolves to fake, anthropic-by-key, or disabled', () => {
-    const config = useRuntimeConfig().assistant as { provider: string, apiKey: string, model: string, effort: string }
+  it('resolves to fake, openai-by-key, openai-by-custom-base-url, or disabled', () => {
+    const config = useRuntimeConfig().assistant as { provider: string, baseUrl: string, apiKey: string, model: string }
     const original = { ...config }
 
     try {
       config.provider = 'fake'
-      expect(getDeckAssistantStatus()).toEqual({ enabled: true, provider: 'fake', model: 'fake' })
+      expect(getDeckAssistantStatus()).toEqual({ enabled: true, provider: 'fake', model: 'fake', baseUrl: null })
       expect(useDeckAssistantModel()?.id).toBe('fake')
 
       config.provider = ''
+      config.baseUrl = ''
       config.apiKey = 'sk-test-key'
       config.model = ''
-      expect(getDeckAssistantStatus()).toEqual({ enabled: true, provider: 'anthropic', model: 'claude-opus-5' })
+      expect(getDeckAssistantStatus()).toEqual({
+        enabled: true,
+        provider: 'openai',
+        model: 'gpt-4o-mini',
+        baseUrl: 'api.openai.com',
+      })
+      expect(useDeckAssistantModel()?.id).toBe('gpt-4o-mini')
 
+      // No key, but a base URL explicitly pointed away from the default
+      // (e.g. a keyless local Ollama server) still resolves to 'openai'.
       config.apiKey = ''
-      expect(getDeckAssistantStatus()).toEqual({ enabled: false, provider: null, model: null })
+      config.baseUrl = 'http://localhost:11434/v1'
+      expect(getDeckAssistantStatus()).toEqual({
+        enabled: true,
+        provider: 'openai',
+        model: 'gpt-4o-mini',
+        baseUrl: 'localhost:11434',
+      })
+
+      config.baseUrl = ''
+      expect(getDeckAssistantStatus()).toEqual({ enabled: false, provider: null, model: null, baseUrl: null })
       expect(useDeckAssistantModel()).toBeNull()
     }
     finally {
@@ -489,14 +506,7 @@ describe('assistant status/config resolution', () => {
   })
 })
 
-describe('Anthropic model', () => {
-  // `generate` uses `client.beta.messages.stream(...)`, a synchronous call
-  // that returns a stream object; the typed errors and the final parsed
-  // message surface from awaiting `finalMessage()`.
-  function mockClient(finalMessage: () => Promise<unknown>) {
-    return { beta: { messages: { stream: () => ({ finalMessage }) } } } as unknown as Anthropic
-  }
-
+describe('OpenAI-compatible model', () => {
   const baseInput: AssistantModelInput = {
     mode: 'build',
     system: 'system prompt',
@@ -508,39 +518,185 @@ describe('Anthropic model', () => {
     includeMissing: true,
   }
 
-  it('parses the JSON text block on success', async () => {
-    const client = mockClient(async () => ({
-      stop_reason: 'end_turn',
-      content: [{ type: 'text', text: JSON.stringify({ summary: 'ok', cards: [], missing: [] }) }],
-    }))
-    const model = createAnthropicModel({ model: 'claude-opus-5', effort: 'high', client })
+  interface RecordedInit { headers: Record<string, string>, body: string }
+  interface RecordedCall { url: string, init: RecordedInit }
+
+  function jsonResponse(status: number, body: unknown) {
+    return { status, json: async () => body } as Response
+  }
+
+  function fetchReturning(...responses: Array<{ status: number, body: unknown }>): { fetch: typeof fetch, calls: RecordedCall[] } {
+    const calls: RecordedCall[] = []
+    let i = 0
+    const fetchImpl = (async (url: string, init: RecordedInit) => {
+      calls.push({ url, init })
+      const response = responses[Math.min(i, responses.length - 1)]!
+      i++
+      return jsonResponse(response.status, response.body)
+    }) as unknown as typeof fetch
+    return { fetch: fetchImpl, calls }
+  }
+
+  const successBody = {
+    choices: [{ finish_reason: 'stop', message: { content: JSON.stringify({ summary: 'ok', cards: [], missing: [] }) } }],
+  }
+
+  it('parses the JSON content on success and requests json_schema structured output', async () => {
+    const { fetch: fetchImpl, calls } = fetchReturning({ status: 200, body: successBody })
+    const model = createOpenAiCompatibleModel({ baseUrl: 'https://api.openai.com/v1', apiKey: 'sk-test', model: 'gpt-4o-mini', fetch: fetchImpl })
 
     await expect(model.generate(baseInput)).resolves.toEqual({ summary: 'ok', cards: [], missing: [] })
+    expect(calls).toHaveLength(1)
+    expect(calls[0]!.url).toBe('https://api.openai.com/v1/chat/completions')
+    expect(calls[0]!.init.headers.authorization).toBe('Bearer sk-test')
+    const body = JSON.parse(calls[0]!.init.body)
+    expect(body.model).toBe('gpt-4o-mini')
+    expect(body.response_format).toEqual({
+      type: 'json_schema',
+      json_schema: { name: 'deck_assistant', schema: baseInput.schema },
+    })
+    expect(body.messages).toEqual([
+      { role: 'system', content: 'system prompt' },
+      { role: 'user', content: 'stable context\n\nuser prompt' },
+    ])
   })
 
-  it('uses the LAST text block, not the first, when a fallback hop precedes the real answer', async () => {
-    const fallbackBlock: Anthropic.Beta.BetaFallbackBlock = {
-      type: 'fallback',
-      from: { model: 'claude-opus-5' },
-      to: { model: 'claude-sonnet-5' },
-      trigger: { type: 'refusal', category: null },
+  it('joins an array-of-parts message content', async () => {
+    const body = {
+      choices: [{
+        finish_reason: 'stop',
+        message: { content: [{ type: 'text', text: '{"summary":"ok",' }, { type: 'text', text: '"cards":[],"missing":[]}' }] },
+      }],
     }
-    const client = mockClient(async () => ({
-      stop_reason: 'end_turn',
-      content: [
-        { type: 'text', text: 'partial garbage before the refusal' },
-        fallbackBlock,
-        { type: 'text', text: JSON.stringify({ summary: 'ok', cards: [], missing: [] }) },
-      ],
-    }))
-    const model = createAnthropicModel({ model: 'claude-opus-5', effort: 'high', client })
+    const { fetch: fetchImpl } = fetchReturning({ status: 200, body })
+    const model = createOpenAiCompatibleModel({ baseUrl: 'https://api.openai.com/v1', apiKey: 'sk-test', model: 'gpt-4o-mini', fetch: fetchImpl })
 
     await expect(model.generate(baseInput)).resolves.toEqual({ summary: 'ok', cards: [], missing: [] })
   })
 
-  it('throws a German error on a refusal stop_reason', async () => {
-    const client = mockClient(async () => ({ stop_reason: 'refusal', content: [] }))
-    const model = createAnthropicModel({ model: 'claude-opus-5', effort: 'high', client })
+  it('strips ``` fences around the JSON content', async () => {
+    const body = {
+      choices: [{ finish_reason: 'stop', message: { content: '```json\n{"summary":"ok","cards":[],"missing":[]}\n```' } }],
+    }
+    const { fetch: fetchImpl } = fetchReturning({ status: 200, body })
+    const model = createOpenAiCompatibleModel({ baseUrl: 'https://api.openai.com/v1', apiKey: 'sk-test', model: 'gpt-4o-mini', fetch: fetchImpl })
+
+    await expect(model.generate(baseInput)).resolves.toEqual({ summary: 'ok', cards: [], missing: [] })
+  })
+
+  it('falls back from json_schema to json_object to no response_format on repeated 400s', async () => {
+    const { fetch: fetchImpl, calls } = fetchReturning(
+      { status: 400, body: { error: 'unsupported response_format' } },
+      { status: 400, body: { error: 'still unsupported' } },
+      { status: 200, body: successBody },
+    )
+    const model = createOpenAiCompatibleModel({ baseUrl: 'https://api.openai.com/v1', apiKey: 'sk-test', model: 'gpt-4o-mini', fetch: fetchImpl })
+
+    await expect(model.generate(baseInput)).resolves.toEqual({ summary: 'ok', cards: [], missing: [] })
+    expect(calls).toHaveLength(3)
+
+    const firstBody = JSON.parse(calls[0]!.init.body)
+    expect(firstBody.response_format).toEqual({ type: 'json_schema', json_schema: { name: 'deck_assistant', schema: baseInput.schema } })
+
+    const secondBody = JSON.parse(calls[1]!.init.body)
+    expect(secondBody.response_format).toEqual({ type: 'json_object' })
+    expect(secondBody.messages[0].content).toContain('Antworte ausschließlich mit einem JSON-Objekt nach diesem Schema:')
+
+    const thirdBody = JSON.parse(calls[2]!.init.body)
+    expect(thirdBody.response_format).toBeUndefined()
+    expect(thirdBody.messages[0].content).toBe('system prompt')
+  })
+
+  it('also falls back on a 422 response', async () => {
+    const { fetch: fetchImpl, calls } = fetchReturning(
+      { status: 422, body: { error: 'unprocessable' } },
+      { status: 200, body: successBody },
+    )
+    const model = createOpenAiCompatibleModel({ baseUrl: 'https://api.openai.com/v1', apiKey: 'sk-test', model: 'gpt-4o-mini', fetch: fetchImpl })
+
+    await expect(model.generate(baseInput)).resolves.toEqual({ summary: 'ok', cards: [], missing: [] })
+    expect(calls).toHaveLength(2)
+  })
+
+  it('maps 401/403 to a 503 configuration error', async () => {
+    const { fetch: fetchImpl } = fetchReturning({ status: 401, body: { error: 'invalid api key' } })
+    const model = createOpenAiCompatibleModel({ baseUrl: 'https://api.openai.com/v1', apiKey: 'sk-bad', model: 'gpt-4o-mini', fetch: fetchImpl })
+
+    await expect(model.generate(baseInput)).rejects.toMatchObject({
+      statusCode: 503,
+      statusMessage: 'KI-Assistent ist nicht korrekt konfiguriert.',
+    })
+  })
+
+  it('maps 429 to a 503 "ausgelastet" error', async () => {
+    const { fetch: fetchImpl } = fetchReturning({ status: 429, body: { error: 'rate limited' } })
+    const model = createOpenAiCompatibleModel({ baseUrl: 'https://api.openai.com/v1', apiKey: 'sk-test', model: 'gpt-4o-mini', fetch: fetchImpl })
+
+    await expect(model.generate(baseInput)).rejects.toMatchObject({
+      statusCode: 503,
+      statusMessage: 'Der KI-Assistent ist ausgelastet, bitte später erneut versuchen.',
+    })
+  })
+
+  it('maps a generic 500 to a 502 "nicht erreichbar" error', async () => {
+    const { fetch: fetchImpl } = fetchReturning({ status: 500, body: { error: 'server error' } })
+    const model = createOpenAiCompatibleModel({ baseUrl: 'https://api.openai.com/v1', apiKey: 'sk-test', model: 'gpt-4o-mini', fetch: fetchImpl })
+
+    await expect(model.generate(baseInput)).rejects.toMatchObject({
+      statusCode: 502,
+      statusMessage: 'Der KI-Assistent ist derzeit nicht erreichbar.',
+    })
+  })
+
+  it('maps a network error to a 502', async () => {
+    const fetchImpl = (async () => {
+      throw new TypeError('fetch failed')
+    }) as unknown as typeof fetch
+    const model = createOpenAiCompatibleModel({ baseUrl: 'https://api.openai.com/v1', apiKey: 'sk-test', model: 'gpt-4o-mini', fetch: fetchImpl })
+
+    await expect(model.generate(baseInput)).rejects.toMatchObject({ statusCode: 502 })
+  })
+
+  it('maps a timeout (AbortError) to a 502', async () => {
+    vi.useFakeTimers()
+    try {
+      const fetchImpl = ((_url: string, init: RequestInit) => new Promise<Response>((_resolve, reject) => {
+        init.signal?.addEventListener('abort', () => {
+          const error = new Error('The operation was aborted')
+          error.name = 'AbortError'
+          reject(error)
+        })
+      })) as unknown as typeof fetch
+
+      const model = createOpenAiCompatibleModel({ baseUrl: 'https://api.openai.com/v1', apiKey: 'sk-test', model: 'gpt-4o-mini', fetch: fetchImpl })
+
+      const pending = expect(model.generate(baseInput)).rejects.toMatchObject({
+        statusCode: 502,
+        statusMessage: 'Der KI-Assistent ist derzeit nicht erreichbar.',
+      })
+      await vi.advanceTimersByTimeAsync(120_000)
+      await pending
+    }
+    finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('maps finish_reason "length" to a 502 "zu lang" error', async () => {
+    const body = { choices: [{ finish_reason: 'length', message: { content: '' } }] }
+    const { fetch: fetchImpl } = fetchReturning({ status: 200, body })
+    const model = createOpenAiCompatibleModel({ baseUrl: 'https://api.openai.com/v1', apiKey: 'sk-test', model: 'gpt-4o-mini', fetch: fetchImpl })
+
+    await expect(model.generate(baseInput)).rejects.toMatchObject({
+      statusCode: 502,
+      statusMessage: 'Die Antwort des Assistenten war zu lang oder unvollständig.',
+    })
+  })
+
+  it('maps finish_reason "content_filter" to a 502 "abgelehnt" error', async () => {
+    const body = { choices: [{ finish_reason: 'content_filter', message: { content: '' } }] }
+    const { fetch: fetchImpl } = fetchReturning({ status: 200, body })
+    const model = createOpenAiCompatibleModel({ baseUrl: 'https://api.openai.com/v1', apiKey: 'sk-test', model: 'gpt-4o-mini', fetch: fetchImpl })
 
     await expect(model.generate(baseInput)).rejects.toMatchObject({
       statusCode: 502,
@@ -548,40 +704,32 @@ describe('Anthropic model', () => {
     })
   })
 
-  it('throws a German error on a max_tokens stop_reason', async () => {
-    const client = mockClient(async () => ({ stop_reason: 'max_tokens', content: [] }))
-    const model = createAnthropicModel({ model: 'claude-opus-5', effort: 'high', client })
+  it('throws a 502 when the content is not valid JSON', async () => {
+    const body = { choices: [{ finish_reason: 'stop', message: { content: 'not json at all' } }] }
+    const { fetch: fetchImpl } = fetchReturning({ status: 200, body })
+    const model = createOpenAiCompatibleModel({ baseUrl: 'https://api.openai.com/v1', apiKey: 'sk-test', model: 'gpt-4o-mini', fetch: fetchImpl })
 
-    await expect(model.generate(baseInput)).rejects.toMatchObject({ statusCode: 502 })
+    await expect(model.generate(baseInput)).rejects.toMatchObject({
+      statusCode: 502,
+      statusMessage: 'Ungültige Antwort des Assistenten.',
+    })
   })
 
-  it('throws a 502 when the text block is not valid JSON', async () => {
-    const client = mockClient(async () => ({
-      stop_reason: 'end_turn',
-      content: [{ type: 'text', text: 'not json at all' }],
-    }))
-    const model = createAnthropicModel({ model: 'claude-opus-5', effort: 'high', client })
+  it('omits the Authorization header when the api key is empty (keyless local servers)', async () => {
+    const { fetch: fetchImpl, calls } = fetchReturning({ status: 200, body: successBody })
+    const model = createOpenAiCompatibleModel({ baseUrl: 'http://localhost:11434/v1', apiKey: '', model: 'llama3', fetch: fetchImpl })
 
-    await expect(model.generate(baseInput)).rejects.toMatchObject({ statusCode: 502 })
+    await model.generate(baseInput)
+
+    expect(calls[0]!.init.headers.authorization).toBeUndefined()
   })
 
-  it('maps AuthenticationError, RateLimitError, and a generic APIError', async () => {
-    const authClient = mockClient(async () => {
-      throw new Anthropic.AuthenticationError(401, {}, 'invalid api key', new Headers())
-    })
-    await expect(createAnthropicModel({ model: 'claude-opus-5', effort: 'high', client: authClient }).generate(baseInput))
-      .rejects.toMatchObject({ statusCode: 503 })
+  it('strips a trailing slash from the base URL', async () => {
+    const { fetch: fetchImpl, calls } = fetchReturning({ status: 200, body: successBody })
+    const model = createOpenAiCompatibleModel({ baseUrl: 'https://openrouter.ai/api/v1/', apiKey: 'sk-test', model: 'openai/gpt-4o-mini', fetch: fetchImpl })
 
-    const rateLimitClient = mockClient(async () => {
-      throw new Anthropic.RateLimitError(429, {}, 'slow down', new Headers())
-    })
-    await expect(createAnthropicModel({ model: 'claude-opus-5', effort: 'high', client: rateLimitClient }).generate(baseInput))
-      .rejects.toMatchObject({ statusCode: 503 })
+    await model.generate(baseInput)
 
-    const apiErrorClient = mockClient(async () => {
-      throw Anthropic.APIError.generate(500, {}, 'server error', new Headers())
-    })
-    await expect(createAnthropicModel({ model: 'claude-opus-5', effort: 'high', client: apiErrorClient }).generate(baseInput))
-      .rejects.toMatchObject({ statusCode: 502 })
+    expect(calls[0]!.url).toBe('https://openrouter.ai/api/v1/chat/completions')
   })
 })
