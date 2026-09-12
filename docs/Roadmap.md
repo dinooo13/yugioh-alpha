@@ -279,6 +279,12 @@ Product outcome:
 
 Groups can run and track Yu-Gi-Oh tournaments using decks and formats already modeled in the app.
 
+Implemented: tournaments under `/turniere` with Swiss or round-robin pairings, participants
+added as app users (by e-mail) or as guests, deck registration that snapshots the decklist and
+its legality in the selected rule format, round-by-round pairings with match result entry,
+live standings with OMW%/GW%/OGW% tiebreakers, and a history of finished tournaments. See
+[`docs/adr/0008-tournament-model.md`](adr/0008-tournament-model.md).
+
 ## Recommended Build Order
 
 1. Card catalog and personal inventory
