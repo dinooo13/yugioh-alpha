@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Accepted — the model-provider section is superseded by [ADR 0009](0009-openai-compatible-assistant-provider.md)
 
 ## Context
 

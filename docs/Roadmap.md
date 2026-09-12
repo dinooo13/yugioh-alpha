@@ -232,9 +232,12 @@ Users can get meaningful deckbuilding help that understands their collection and
 Implemented: a dedicated builder at `/decks/assistent` for generating a new deck from the
 inventory, and a "KI-Vorschläge" panel in the deck editor for improving an existing deck, both
 respecting the selected rule format and separating owned-card suggestions from missing-card
-suggestions. Requires `NUXT_ASSISTANT_API_KEY` (or `ANTHROPIC_API_KEY`) to be configured; the
+suggestions. Talks to any OpenAI-compatible Chat Completions endpoint (OpenAI, OpenRouter,
+Ollama, LM Studio, OpenCode Zen, ...). Requires `NUXT_ASSISTANT_API_KEY` (or `OPENAI_API_KEY`),
+or a custom `NUXT_ASSISTANT_BASE_URL` for a keyless local server, to be configured; the
 feature is disabled with a UI notice otherwise. See
-[`docs/adr/0006-ai-deck-assistant.md`](adr/0006-ai-deck-assistant.md).
+[`docs/adr/0006-ai-deck-assistant.md`](adr/0006-ai-deck-assistant.md) and
+[`docs/adr/0009-openai-compatible-assistant-provider.md`](adr/0009-openai-compatible-assistant-provider.md).
 
 ### Phase 6: Sharing and Social Features
 

@@ -28,8 +28,8 @@ See [`.env.example`](./.env.example) for all available variables:
 - `NUXT_BETTER_AUTH_SECRET` - secret for Better Auth (required in production, for example `openssl rand -base64 32`)
 - `NUXT_PUBLIC_BETTER_AUTH_URL` - publicly reachable base URL of the app
 - `NUXT_DB_FILE_PATH` - path to the SQLite database file (default: `./data/app.db`; the directory is created automatically)
-- `NUXT_ASSISTANT_API_KEY` - Anthropic API key for the AI deck assistant (optional; falls back to `ANTHROPIC_API_KEY`). Without a key the feature is disabled and the UI shows a notice instead.
-- `NUXT_ASSISTANT_PROVIDER` / `NUXT_ASSISTANT_MODEL` / `NUXT_ASSISTANT_EFFORT` - override the assistant's provider (`anthropic` / `fake`), model id, and output effort; see [`.env.example`](./.env.example)
+- `NUXT_ASSISTANT_API_KEY` - API key for the AI deck assistant (optional; falls back to `OPENAI_API_KEY`). Without a key or a custom base URL the feature is disabled and the UI shows a notice instead.
+- `NUXT_ASSISTANT_PROVIDER` / `NUXT_ASSISTANT_BASE_URL` / `NUXT_ASSISTANT_MODEL` - override the assistant's provider (`openai` / `fake`), the OpenAI-compatible endpoint's base URL, and the model id; see [`.env.example`](./.env.example)
 
 ## Development
 
@@ -207,6 +207,10 @@ existing deck). Both respect the currently selected rule format and split
 their output into owned suggestions and a separate list of missing cards, so
 a suggestion never silently assumes cards the user doesn't have.
 
+It works with any OpenAI-compatible endpoint, e.g. OpenAI, OpenRouter,
+Ollama, LM Studio, or OpenCode Zen — see
+[`.env.example`](./.env.example) for `NUXT_ASSISTANT_BASE_URL`.
+
 The server never trusts the model with a free-form deck list: it first
 builds a candidate pool of owned cards the selected format actually allows
 (capped at 400 cards, with a warning if a collection is larger), the model
@@ -220,11 +224,12 @@ a suggestion is persisted; a build result is saved through `POST /api/decks`
 through the same `PUT /api/decks/:id/cards` endpoint a manual edit would
 use.
 
-The feature requires `NUXT_ASSISTANT_API_KEY` (or the SDK's own
-`ANTHROPIC_API_KEY`) to be configured; without it, `/api/assistant/status`
-reports the feature as disabled and the UI shows a notice instead of the
-assistant panels. See
-[`docs/adr/0006-ai-deck-assistant.md`](./docs/adr/0006-ai-deck-assistant.md).
+The feature requires `NUXT_ASSISTANT_API_KEY` (or `OPENAI_API_KEY`), or a
+custom `NUXT_ASSISTANT_BASE_URL` pointed at a keyless local server, to be
+configured; without either, `/api/assistant/status` reports the feature as
+disabled and the UI shows a notice instead of the assistant panels. See
+[`docs/adr/0006-ai-deck-assistant.md`](./docs/adr/0006-ai-deck-assistant.md)
+and [`docs/adr/0009-openai-compatible-assistant-provider.md`](./docs/adr/0009-openai-compatible-assistant-provider.md).
 
 ## Teilen & Profile
 
