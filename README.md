@@ -253,6 +253,26 @@ profile page for other players to see. Trading against a wishlist is explicitly 
 this phase; see
 [`docs/adr/0007-sharing-and-profile-model.md`](./docs/adr/0007-sharing-and-profile-model.md).
 
+## Turniere
+
+Tournaments live under `/turniere`. A tournament has one organizer, who creates
+it, picks a rule format (or none) and a pairing system (`Schweizer System` or
+`Jeder gegen jeden`), and adds participants either as linked app users (by
+exact e-mail match) or as free-text guests. Registering a deck for a
+participant copies its decklist and legality verdict into a snapshot
+(`deck_snapshot`) — later edits to the deck, the format, or the catalog never
+change what a tournament recorded, unlike deck legality elsewhere in the app
+(see [Formate](#formate)), which is always recomputed live.
+
+Starting a tournament freezes the seed order and creates the first round's
+pairings; each round is played, results are entered as game counts (or via the
+`2:0` / `0:2` / `Unentschieden` shortcuts), and the round is completed once
+every match has a result. Standings (`Punkte`, `S-N-U`, `OMW%`, `GW%`, `OGW%`)
+are computed from the match history on every read, never stored. Finishing the
+tournament makes it read-only and moves it into the "Abgeschlossen" history
+list. See
+[`docs/adr/0008-tournament-model.md`](./docs/adr/0008-tournament-model.md).
+
 ## Quality Checks
 
 ```bash
