@@ -24,17 +24,7 @@ useHead({
 
 <template>
   <div class="space-y-6">
-    <div
-      v-if="error"
-      class="rounded-md border border-gray-200 bg-white px-6 py-12 text-center"
-    >
-      <h1 class="text-lg font-semibold text-gray-900">
-        Nicht gefunden oder nicht freigegeben.
-      </h1>
-      <p class="mt-2 text-sm text-gray-500">
-        Vielleicht ist der Link abgelaufen oder die Freigabe wurde zurückgenommen.
-      </p>
-    </div>
+    <SharingNotFoundNotice v-if="error" />
 
     <template v-else-if="data">
       <div>
@@ -77,16 +67,63 @@ useHead({
         />
       </div>
 
-      <UAlert
+      <section
         v-if="data.format"
-        color="neutral"
-        variant="subtle"
-        :title="data.format.name"
-        :description="data.validation ? (data.validation.legal ? 'Legal' : 'Nicht legal') : undefined"
-      />
+        class="rounded-md border border-gray-200 bg-white p-4"
+      >
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <h2 class="text-base font-semibold text-gray-900">
+            {{ data.format.name }}
+          </h2>
+          <UBadge
+            v-if="data.validation"
+            :color="data.validation.legal ? 'success' : 'error'"
+            variant="subtle"
+            :label="data.validation.legal ? 'Legal' : 'Nicht legal'"
+            aria-label="Legalität"
+          />
+        </div>
 
+        <!--
+          The issues behind "Nicht legal" ARE delivered to every viewer (see
+          `SharedDeckView.validation` / server/utils/shared-views.ts) — a
+          guest previously saw only the bare badge with no way to learn why
+          (UX review #21). Collapsed by default so it doesn't compete with
+          the badge for attention.
+        -->
+        <UCollapsible
+          v-if="data.validation && !data.validation.legal && data.validation.issues.length > 0"
+          class="mt-2"
+        >
+          <template #default="{ open }">
+            <UButton
+              color="neutral"
+              variant="link"
+              size="xs"
+              class="px-0"
+              :label="open ? 'Details ausblenden' : 'Details anzeigen'"
+              :trailing-icon="open ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'"
+            />
+          </template>
+          <template #content>
+            <ul class="mt-2 list-inside list-disc space-y-0.5 text-sm text-red-700">
+              <li
+                v-for="(issue, index) in data.validation.issues"
+                :key="`${issue.code}-${issue.cardId ?? issue.section ?? index}`"
+              >
+                {{ issue.message }}
+              </li>
+            </ul>
+          </template>
+        </UCollapsible>
+      </section>
+
+      <!--
+        Owner-only: this is deck-building coaching ("your main deck is a bit
+        short"), not information a guest can act on (UX review #21).
+      -->
       <UAlert
-        v-if="data.warnings.length > 0"
+        v-if="data.isOwner && data.warnings.length > 0"
         color="warning"
         variant="subtle"
         icon="i-lucide-triangle-alert"

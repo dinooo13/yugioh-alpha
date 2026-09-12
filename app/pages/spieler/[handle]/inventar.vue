@@ -26,8 +26,11 @@ const { data, pending, error } = await useFetch<SharedCardListResponse>(
   },
 )
 
+const pageTitle = computed(() =>
+  data.value ? `Inventar von ${data.value.owner.displayName}` : 'Inventar')
+
 useHead({
-  title: computed(() => `${data.value?.source.name ?? 'Inventar'} – yugioh alpha`),
+  title: computed(() => `${pageTitle.value} – yugioh alpha`),
   meta: [
     { name: 'referrer', content: 'no-referrer' },
     { name: 'robots', content: 'noindex, nofollow' },
@@ -49,17 +52,7 @@ function onPage(value: number) {
 
 <template>
   <div class="space-y-6">
-    <div
-      v-if="error"
-      class="rounded-md border border-gray-200 bg-white px-6 py-12 text-center"
-    >
-      <h1 class="text-lg font-semibold text-gray-900">
-        Nicht gefunden oder nicht freigegeben.
-      </h1>
-      <p class="mt-2 text-sm text-gray-500">
-        Vielleicht ist der Link abgelaufen oder die Freigabe wurde zurückgenommen.
-      </p>
-    </div>
+    <SharingNotFoundNotice v-if="error" />
 
     <template v-else-if="data">
       <div>
@@ -77,10 +70,10 @@ function onPage(value: number) {
 
       <div>
         <h1 class="text-2xl font-semibold text-gray-900">
-          {{ data.source.name }}
+          {{ pageTitle }}
         </h1>
         <p class="mt-1 text-sm text-gray-500">
-          Geteilt von {{ data.owner.displayName }} · {{ data.total }} Karten
+          {{ data.total }} Karte<span v-if="data.total !== 1">n</span>
         </p>
       </div>
 

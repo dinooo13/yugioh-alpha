@@ -20,6 +20,8 @@ function onShareUpdated(visibility: Visibility) {
 }
 
 const isSavingWishlistVisibility = ref(false)
+const wishlistVisibilitySaved = ref(false)
+let wishlistVisibilitySavedTimer: ReturnType<typeof setTimeout> | undefined
 
 async function setWishlistVisibility(makePublic: boolean) {
   if (isSavingWishlistVisibility.value || !profile.value) {
@@ -37,6 +39,14 @@ async function setWishlistVisibility(makePublic: boolean) {
       method: 'PUT',
       body: { visibility },
     })
+    // Same "Gespeichert" feedback as the form above (UX review #22) — before
+    // this the switch gave no confirmation at all; only a reload proved it
+    // had worked.
+    wishlistVisibilitySaved.value = true
+    clearTimeout(wishlistVisibilitySavedTimer)
+    wishlistVisibilitySavedTimer = setTimeout(() => {
+      wishlistVisibilitySaved.value = false
+    }, 2000)
   }
   finally {
     isSavingWishlistVisibility.value = false
@@ -76,15 +86,15 @@ const wishlistPublic = computed({
           :profile="profile"
           @saved="onSaved"
         />
-      </section>
 
-      <section class="rounded-md border border-gray-200 bg-white p-4">
-        <NuxtLink
-          :to="`/spieler/${profile.handle}`"
-          class="text-sm font-medium text-primary hover:underline"
-        >
-          Öffentliches Profil ansehen
-        </NuxtLink>
+        <div class="mt-4 border-t border-gray-100 pt-4">
+          <NuxtLink
+            :to="`/spieler/${profile.handle}`"
+            class="text-sm font-medium text-primary hover:underline"
+          >
+            Öffentliches Profil ansehen
+          </NuxtLink>
+        </div>
       </section>
 
       <section class="flex items-center justify-between gap-4 rounded-md border border-gray-200 bg-white p-4">
@@ -111,13 +121,22 @@ const wishlistPublic = computed({
         </div>
       </section>
 
-      <section class="flex items-center justify-between gap-4 rounded-md border border-gray-200 bg-white p-4">
+      <section
+        id="wunschliste"
+        class="flex items-center justify-between gap-4 rounded-md border border-gray-200 bg-white p-4"
+      >
         <div>
           <h2 class="text-base font-semibold text-gray-900">
             Wunschliste öffentlich zeigen
           </h2>
           <p class="mt-1 text-sm text-gray-500">
             Andere Spieler können deine Wunschliste auf deinem Profil sehen.
+          </p>
+          <p
+            v-if="wishlistVisibilitySaved"
+            class="mt-1 text-sm text-emerald-600"
+          >
+            Gespeichert
           </p>
         </div>
         <USwitch

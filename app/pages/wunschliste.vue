@@ -31,6 +31,8 @@ const { data, pending, refresh } = await useFetch<WishlistResponse>('/api/wishli
   watch: [query],
 })
 
+const { data: ownProfile } = await useOwnProfile()
+
 const items = computed(() => data.value?.items ?? [])
 const total = computed(() => data.value?.total ?? 0)
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)))
@@ -74,13 +76,25 @@ function nextPage() {
 
 <template>
   <div class="space-y-6">
-    <div>
-      <h1 class="text-2xl font-semibold text-gray-900">
-        Wunschliste
-      </h1>
-      <p class="mt-1 text-sm text-gray-500">
-        {{ total }} Karte<span v-if="total !== 1">n</span>
-      </p>
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h1 class="text-2xl font-semibold text-gray-900">
+          Wunschliste
+        </h1>
+        <p class="mt-1 text-sm text-gray-500">
+          {{ total }} Karte<span v-if="total !== 1">n</span>
+        </p>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <SharingVisibilityBadge :visibility="ownProfile?.wishlistVisibility ?? null" />
+        <NuxtLink
+          to="/profil#wunschliste"
+          class="text-sm font-medium text-primary hover:underline"
+        >
+          Sichtbarkeit ändern
+        </NuxtLink>
+      </div>
     </div>
 
     <UInput
