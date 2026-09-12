@@ -50,6 +50,13 @@
       "when": 1789174443373,
       "tag": "0006_tidy_speed",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1789212141475,
+      "tag": "0007_flashy_inertia",
+      "breakpoints": true
     }
   ]
 }
