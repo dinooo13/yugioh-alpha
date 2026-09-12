@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { InventorySearchFilters } from '~/components/inventory/InventorySearchPanel.vue'
+import { apiErrorMessage } from '~/utils/card-entry'
 
 interface InventoryItem {
   id: string
@@ -164,16 +165,12 @@ const items = computed(() => data.value.items)
 const total = computed(() => data.value.total)
 const pageCount = computed(() => Math.max(1, Math.ceil(total.value / pageSize)))
 
-const collectionOptions = ref<CollectionOption[]>([])
-const allCardsCount = ref(0)
-
-async function loadCollections() {
-  const response = await $fetch<{ items: CollectionOption[], allCount: number }>('/api/collections').catch(() => ({ items: [], allCount: 0 }))
-  collectionOptions.value = response.items
-  allCardsCount.value = response.allCount
-}
-
-await loadCollections()
+// Shared with the layout sidebar (same `useCollections` key) so a collection
+// created/renamed/deleted in the sidebar — or a card assigned to one from
+// this page — shows up in both places immediately (UX review #4).
+const { data: collectionsResponse, refresh: refreshCollections } = await useCollections()
+const collectionOptions = computed<CollectionOption[]>(() => collectionsResponse.value.items)
+const allCardsCount = computed(() => collectionsResponse.value.allCount)
 
 const activeCollection = computed(() => collectionOptions.value.find(c => c.id === collectionId.value) ?? null)
 const headerTitle = computed(() => activeCollection.value?.name ?? 'Alle Karten')
@@ -192,10 +189,10 @@ async function assignToCollection(item: InventoryItem, value: string) {
       method: 'PATCH',
       body: { collectionId: value === noAssignmentValue ? null : value },
     })
-    await Promise.all([refresh(), loadCollections(), refreshSearch()])
+    await Promise.all([refresh(), refreshCollections(), refreshSearch()])
   }
   catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : 'Die Sammlung konnte nicht geändert werden.'
+    errorMessage.value = apiErrorMessage(error, 'Die Sammlung konnte nicht geändert werden.')
   }
 }
 
@@ -335,24 +332,29 @@ function openEdit(item: InventoryItem) {
   isEntryOpen.value = true
 }
 
+const { confirm } = useConfirm()
+
 async function removeItem(item: InventoryItem) {
   errorMessage.value = ''
-  const confirmed = window.confirm(`${item.cardName} aus dem Inventar entfernen?`)
+  const confirmed = await confirm({
+    title: 'Karte entfernen',
+    description: `${item.cardName} aus dem Inventar entfernen?`,
+  })
   if (!confirmed) {
     return
   }
 
   try {
     await $fetch(`/api/inventory/${item.id}`, { method: 'DELETE' })
-    await Promise.all([refresh(), loadCollections(), refreshSearch(), refreshFacets()])
+    await Promise.all([refresh(), refreshCollections(), refreshSearch(), refreshFacets()])
   }
   catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : 'Die Karte konnte nicht entfernt werden.'
+    errorMessage.value = apiErrorMessage(error, 'Die Karte konnte nicht entfernt werden.')
   }
 }
 
 async function onSaved() {
-  await Promise.all([refresh(), loadCollections(), refreshSearch(), refreshFacets()])
+  await Promise.all([refresh(), refreshCollections(), refreshSearch(), refreshFacets()])
 }
 </script>
 
@@ -422,19 +424,27 @@ async function onSaved() {
       {{ errorMessage }}
     </p>
 
+    <!-- Filterleiste ist modusunabhängig sichtbar (UX review #16) — vorher
+         verschwand sie kommentarlos beim Wechsel auf "Liste". -->
+    <InventorySearchPanel
+      v-model:filters="filters"
+      :facets="facets"
+      :collections="collectionOptions"
+      :edition-labels="editionLabels"
+      :condition-labels="conditionLabels"
+    />
+    <p
+      v-if="mode === 'liste' && hasActiveSearchFilters"
+      class="text-xs text-gray-500"
+    >
+      Diese Filter wirken sich auf die Trefferzahl in "Übersicht" aus. "Liste" zeigt weiterhin alle Karten, gefiltert nach Suchtext und Sammlung.
+    </p>
+
     <!-- Übersicht: aggregated, faceted inventory-wide search -->
     <div
       v-if="mode === 'uebersicht'"
       class="space-y-4"
     >
-      <InventorySearchPanel
-        v-model:filters="filters"
-        :facets="facets"
-        :collections="collectionOptions"
-        :edition-labels="editionLabels"
-        :condition-labels="conditionLabels"
-      />
-
       <p class="text-sm text-gray-500">
         {{ searchTotal }} Karte<span v-if="searchTotal !== 1">n</span>
       </p>
@@ -456,9 +466,19 @@ async function onSaved() {
           color="error"
           variant="subtle"
           title="Die Suche konnte nicht geladen werden"
-          :description="searchError.message"
+          description="Bitte versuche es erneut."
           class="m-4"
-        />
+        >
+          <template #actions>
+            <UButton
+              icon="i-lucide-refresh-cw"
+              label="Erneut versuchen"
+              color="error"
+              variant="outline"
+              @click="() => refreshSearch()"
+            />
+          </template>
+        </UAlert>
 
         <div
           v-else-if="searchItems.length === 0 && !hasAnyFilter"
@@ -564,107 +584,111 @@ async function onSaved() {
           />
         </div>
 
-        <table
+        <div
           v-else
-          class="w-full table-fixed divide-y divide-gray-200"
+          class="overflow-x-auto"
         >
-          <thead class="bg-gray-50">
-            <tr class="text-left text-xs font-semibold uppercase text-gray-500">
-              <th class="w-16 px-4 py-3">
-                Bild
-              </th>
-              <th class="px-4 py-3">
-                Karte
-              </th>
-              <th class="w-20 px-4 py-3">
-                Sprache
-              </th>
-              <th class="w-28 px-4 py-3">
-                Edition
-              </th>
-              <th class="w-24 px-4 py-3">
-                Zustand
-              </th>
-              <th class="w-20 px-4 py-3 text-right">
-                Anzahl
-              </th>
-              <th class="w-40 px-4 py-3">
-                Sammlung
-              </th>
-              <th class="w-24 px-4 py-3 text-right">
-                Aktionen
-              </th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-100">
-            <tr
-              v-for="item in items"
-              :key="item.id"
-              class="text-sm"
-            >
-              <td class="px-4 py-3">
-                <img
-                  v-if="item.imageUrlSmall"
-                  :src="item.imageUrlSmall"
-                  :alt="item.cardName"
-                  class="h-14 w-10 rounded object-cover"
-                >
-                <div
-                  v-else
-                  class="flex h-14 w-10 items-center justify-center rounded bg-gray-100 text-xs text-gray-400"
-                >
-                  —
-                </div>
-              </td>
-              <td class="min-w-0 px-4 py-3">
-                <div class="truncate font-medium text-gray-900">
-                  {{ item.cardName }}
-                </div>
-                <div class="truncate text-xs text-gray-500">
-                  {{ item.cardType }}<span v-if="item.setName"> · {{ item.setName }}</span>
-                </div>
-              </td>
-              <td class="px-4 py-3 uppercase text-gray-700">
-                {{ item.language }}
-              </td>
-              <td class="px-4 py-3 text-gray-700">
-                {{ editionLabels[item.edition] ?? item.edition }}
-              </td>
-              <td class="px-4 py-3 text-gray-700">
-                {{ conditionLabels[item.condition] ?? item.condition }}
-              </td>
-              <td class="px-4 py-3 text-right font-semibold tabular-nums text-gray-900">
-                ×{{ item.quantity }}
-              </td>
-              <td class="px-4 py-3">
-                <USelect
-                  :model-value="item.collectionId ?? noAssignmentValue"
-                  :items="assignItems"
-                  :aria-label="`Sammlung für ${item.cardName}`"
-                  @update:model-value="(value: string) => assignToCollection(item, value)"
-                />
-              </td>
-              <td class="px-4 py-3">
-                <div class="flex justify-end gap-1">
-                  <UButton
-                    icon="i-lucide-pencil"
-                    color="neutral"
-                    variant="ghost"
-                    aria-label="Karte bearbeiten"
-                    @click="openEdit(item)"
+          <table
+            class="w-full table-fixed divide-y divide-gray-200"
+          >
+            <thead class="bg-gray-50">
+              <tr class="text-left text-xs font-semibold uppercase text-gray-500">
+                <th class="w-16 px-4 py-3">
+                  Bild
+                </th>
+                <th class="px-4 py-3">
+                  Karte
+                </th>
+                <th class="w-20 px-4 py-3">
+                  Sprache
+                </th>
+                <th class="w-28 px-4 py-3">
+                  Auflage
+                </th>
+                <th class="w-24 px-4 py-3">
+                  Zustand
+                </th>
+                <th class="w-20 px-4 py-3 text-right">
+                  Anzahl
+                </th>
+                <th class="w-40 px-4 py-3">
+                  Sammlung
+                </th>
+                <th class="w-24 px-4 py-3 text-right">
+                  Aktionen
+                </th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+              <tr
+                v-for="item in items"
+                :key="item.id"
+                class="text-sm"
+              >
+                <td class="px-4 py-3">
+                  <img
+                    v-if="item.imageUrlSmall"
+                    :src="item.imageUrlSmall"
+                    :alt="item.cardName"
+                    class="h-14 w-10 rounded object-cover"
+                  >
+                  <div
+                    v-else
+                    class="flex h-14 w-10 items-center justify-center rounded bg-gray-100 text-xs text-gray-400"
+                  >
+                    —
+                  </div>
+                </td>
+                <td class="min-w-0 px-4 py-3">
+                  <div class="truncate font-medium text-gray-900">
+                    {{ item.cardName }}
+                  </div>
+                  <div class="truncate text-xs text-gray-500">
+                    {{ item.cardType }}<span v-if="item.setName"> · {{ item.setName }}</span>
+                  </div>
+                </td>
+                <td class="px-4 py-3 uppercase text-gray-700">
+                  {{ item.language }}
+                </td>
+                <td class="px-4 py-3 text-gray-700">
+                  {{ editionLabels[item.edition] ?? item.edition }}
+                </td>
+                <td class="px-4 py-3 text-gray-700">
+                  {{ conditionLabels[item.condition] ?? item.condition }}
+                </td>
+                <td class="px-4 py-3 text-right font-semibold tabular-nums text-gray-900">
+                  ×{{ item.quantity }}
+                </td>
+                <td class="px-4 py-3">
+                  <USelect
+                    :model-value="item.collectionId ?? noAssignmentValue"
+                    :items="assignItems"
+                    :aria-label="`Sammlung für ${item.cardName}`"
+                    @update:model-value="(value: string) => assignToCollection(item, value)"
                   />
-                  <UButton
-                    icon="i-lucide-trash-2"
-                    color="error"
-                    variant="ghost"
-                    aria-label="Karte entfernen"
-                    @click="removeItem(item)"
-                  />
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+                </td>
+                <td class="px-4 py-3">
+                  <div class="flex justify-end gap-1">
+                    <UButton
+                      icon="i-lucide-pencil"
+                      color="neutral"
+                      variant="ghost"
+                      aria-label="Karte bearbeiten"
+                      @click="openEdit(item)"
+                    />
+                    <UButton
+                      icon="i-lucide-trash-2"
+                      color="error"
+                      variant="ghost"
+                      aria-label="Karte entfernen"
+                      @click="removeItem(item)"
+                    />
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <div

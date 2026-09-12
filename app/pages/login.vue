@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { authClient } from '~/utils/auth-client'
 import { waitForAuthSession } from '~/utils/session'
+import { authErrorMessage } from '~/utils/auth-errors'
 
 definePageMeta({ layout: 'auth' })
 useHead({ title: 'Anmelden – yugioh alpha' })
@@ -14,6 +15,12 @@ const loading = ref(false)
 
 async function onSubmit() {
   error.value = ''
+
+  if (!email.value.trim() || !password.value) {
+    error.value = 'Bitte fülle alle Felder aus.'
+    return
+  }
+
   loading.value = true
   const { error: signInError } = await authClient.signIn.email({
     email: email.value,
@@ -22,7 +29,7 @@ async function onSubmit() {
   loading.value = false
 
   if (signInError) {
-    error.value = signInError.message || 'Anmeldung fehlgeschlagen. Bitte überprüfe deine Angaben.'
+    error.value = authErrorMessage(signInError, 'Anmeldung fehlgeschlagen. Bitte überprüfe deine Angaben.')
     return
   }
 
@@ -47,6 +54,7 @@ async function onSubmit() {
 
     <form
       class="mt-6 space-y-4"
+      novalidate
       @submit.prevent="onSubmit"
     >
       <UFormField label="E-Mail">

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { authClient } from '~/utils/auth-client'
 import { waitForAuthSession } from '~/utils/session'
+import { authErrorMessage } from '~/utils/auth-errors'
 
 definePageMeta({ layout: 'auth' })
 useHead({ title: 'Registrieren – yugioh alpha' })
@@ -13,6 +14,15 @@ const loading = ref(false)
 
 async function onSubmit() {
   error.value = ''
+
+  // Native `required` still blocks submission, but browsers only ever
+  // surface that as a focus + a non-localized tooltip — no visible German
+  // message on the page (UX review #3).
+  if (!name.value.trim() || !email.value.trim() || !password.value) {
+    error.value = 'Bitte fülle alle Felder aus.'
+    return
+  }
+
   loading.value = true
   const { error: signUpError } = await authClient.signUp.email({
     name: name.value || email.value,
@@ -22,7 +32,7 @@ async function onSubmit() {
   loading.value = false
 
   if (signUpError) {
-    error.value = signUpError.message || 'Registrierung fehlgeschlagen. Bitte versuche es erneut.'
+    error.value = authErrorMessage(signUpError, 'Registrierung fehlgeschlagen. Bitte versuche es erneut.')
     return
   }
 
@@ -45,6 +55,7 @@ async function onSubmit() {
 
     <form
       class="mt-6 space-y-4"
+      novalidate
       @submit.prevent="onSubmit"
     >
       <UFormField label="Name">
@@ -70,7 +81,10 @@ async function onSubmit() {
         />
       </UFormField>
 
-      <UFormField label="Passwort">
+      <UFormField
+        label="Passwort"
+        help="Mindestens 8 Zeichen"
+      >
         <UInput
           v-model="password"
           type="password"
