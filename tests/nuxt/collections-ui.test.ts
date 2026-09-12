@@ -7,7 +7,7 @@ import DefaultLayout from '~/layouts/default.vue'
 // once a session is present — stub the module directly rather than relying
 // on a real `/api/auth/get-session` round trip in the test environment.
 vi.mock('~/utils/session', () => ({
-  getAuthSession: vi.fn(() => Promise.resolve({ session: {}, user: { email: 'fabian@example.com' } })),
+  getAuthSession: vi.fn(() => Promise.resolve({ session: {}, user: { email: 'fabian@example.com', name: 'Fabian Meyer' } })),
 }))
 
 const fetchState = vi.hoisted(() => ({

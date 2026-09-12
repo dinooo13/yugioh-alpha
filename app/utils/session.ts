@@ -2,6 +2,7 @@ export interface AuthSession {
   session: unknown
   user: {
     email: string
+    name: string
   }
 }
 
