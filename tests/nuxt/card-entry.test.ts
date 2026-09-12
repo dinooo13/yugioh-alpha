@@ -6,7 +6,6 @@ import { CATALOG_FIXTURE_IDS, seedCatalogFixture } from '../../server/db/fixture
 import * as schema from '../../server/db/schema'
 import {
   MAX_ENTRY_LINES,
-  extractCardCandidatesFromOcrText,
   parseEntryLine,
   parseEntryText,
   parseSuggestLimit,
@@ -14,8 +13,6 @@ import {
   resolveEntryLine,
   similarity,
   suggestCatalogMatches,
-  suggestForRequest,
-  suggestFromOcrText,
 } from '../../server/utils/card-entry'
 
 function createTestDb() {
@@ -128,33 +125,6 @@ describe('parseEntryText', () => {
     expect(parsed).toHaveLength(3)
     expect(parsed.map(line => line.query)).toEqual(['Dark Magician', 'Pot of Greed', 'SDY-006'])
     expect(parsed[0]!.quantity).toBe(2)
-  })
-})
-
-describe('extractCardCandidatesFromOcrText', () => {
-  it('prioritizes set codes and passcodes, keeps plausible name lines, drops noise', () => {
-    const candidates = extractCardCandidatesFromOcrText([
-      '-- ~',
-      'Dark Magician',
-      '[SPELLCASTER / NORMAL]',
-      'ATK/2500 DEF/2100',
-      'SDY-006',
-      '46986414',
-      'Dark Magician',
-      '1996 KAZUKI TAKAHASHI',
-    ].join('\n'))
-
-    expect(candidates[0]).toBe('SDY-006')
-    expect(candidates[1]).toBe('46986414')
-    expect(candidates).toContain('Dark Magician')
-    // Deduplicated (case-insensitively), and pure stat/symbol lines dropped.
-    expect(candidates.filter(candidate => candidate === 'Dark Magician')).toHaveLength(1)
-    expect(candidates).not.toContain('ATK/2500 DEF/2100')
-    expect(candidates).not.toContain('-- ~')
-  })
-
-  it('returns an empty list for unusable output', () => {
-    expect(extractCardCandidatesFromOcrText('\n***\n12\n')).toEqual([])
   })
 })
 
@@ -333,71 +303,16 @@ describe('resolveEntryLine', () => {
   })
 })
 
-describe('suggestFromOcrText', () => {
-  let db: TestDb
-
-  beforeAll(() => {
-    db = createTestDb()
-    seedCatalogFixture(db)
-  })
-
-  const cardDump = [
-    'a i',
-    'DARK MAGICIAN',
-    '[Spellcaster / Normal]',
-    '\'\'The ultimate wizard in terms of attack and defense.\'\'',
-    'ATK/2500 DEF/2100',
-    'SDY-006',
-    '46986414',
-    '© 1996 KAZUKI TAKAHASHI',
-  ].join('\n')
-
-  it('turns one photo into exactly one result', () => {
-    const result = suggestFromOcrText(db, cardDump)
-
-    expect(result).not.toBeNull()
-    expect(result!.input).toMatchObject({ quantity: 1, setCode: 'SDY-006' })
-    expect(result!.candidates[0]).toMatchObject({
-      cardId: CATALOG_FIXTURE_IDS.darkMagician,
-      name: 'Dark Magician',
-    })
-    // Every lookup of the same card collapses into a single candidate.
-    expect(result!.candidates.filter(candidate => candidate.cardId === CATALOG_FIXTURE_IDS.darkMagician))
-      .toHaveLength(1)
-  })
-
-  it('produces one row for the whole request', () => {
-    const results = suggestForRequest(db, parseSuggestRequest({ ocrText: cardDump }))
-
-    expect(results).toHaveLength(1)
-    expect(results[0]!.candidates[0]!.cardId).toBe(CATALOG_FIXTURE_IDS.darkMagician)
-  })
-
-  it('falls back to the best name line when there is no identifier', () => {
-    const result = suggestFromOcrText(db, 'Pot of Greed\nSpell Card\nDraw 2 cards.')
-
-    expect(result!.input).toMatchObject({ quantity: 1, query: 'Pot of Greed' })
-    expect(result!.candidates[0]).toMatchObject({ name: 'Pot of Greed', matchedBy: 'exact' })
-  })
-
-  it('returns null for unusable output', () => {
-    expect(suggestFromOcrText(db, '***\n12\n')).toBeNull()
-    expect(suggestForRequest(db, parseSuggestRequest({ ocrText: '***\n12\n' }))).toEqual([])
-  })
-})
-
 describe('parseSuggestRequest', () => {
-  it('merges text and item list into parsed lines and keeps OCR text separate', () => {
+  it('merges the text and item list into parsed lines', () => {
     const request = parseSuggestRequest({
       text: '2x Dark Magician\n\nPot of Greed',
       items: ['SDY-006'],
-      ocrText: 'Kuriboh\nATK/300 DEF/200',
       limit: 3,
     })
 
     expect(request.lines.map(line => line.query)).toEqual(['Dark Magician', 'Pot of Greed', 'SDY-006'])
     expect(request.lines[0]!.quantity).toBe(2)
-    expect(request.ocrText).toContain('Kuriboh')
     expect(request.limit).toBe(3)
   })
 
@@ -407,7 +322,6 @@ describe('parseSuggestRequest', () => {
     expect(() => parseSuggestRequest({ text: tooManyLines })).toThrow()
     expect(() => parseSuggestRequest({ items: Array.from({ length: MAX_ENTRY_LINES + 1 }, () => 'Kuriboh') })).toThrow()
     expect(() => parseSuggestRequest({ text: 'a'.repeat(20_001) })).toThrow()
-    expect(() => parseSuggestRequest({ ocrText: 'a'.repeat(20_001) })).toThrow()
     expect(parseSuggestRequest({ text: Array.from({ length: MAX_ENTRY_LINES }, (_, i) => `Card ${i}`).join('\n') })
       .lines).toHaveLength(MAX_ENTRY_LINES)
   })
@@ -418,7 +332,6 @@ describe('parseSuggestRequest', () => {
     expect(() => parseSuggestRequest('nope')).toThrow()
     expect(() => parseSuggestRequest({ items: [42] })).toThrow()
     expect(() => parseSuggestRequest({ text: 42 })).toThrow()
-    expect(() => parseSuggestRequest({ ocrText: 42 })).toThrow()
   })
 
   it('clamps the requested limit', () => {
