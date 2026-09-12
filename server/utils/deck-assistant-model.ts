@@ -310,8 +310,13 @@ function mapFinishReason(raw: unknown): ChatModelResult['finishReason'] {
 
 /**
  * Reads a `text/event-stream` body, tolerating `data:` lines split across
- * chunk boundaries and a final `data: [DONE]`. Calls `onData` with the parsed
- * JSON of every well-formed `data:` line (malformed lines are skipped).
+ * chunk boundaries and a final `data: [DONE]`. Per the SSE spec, one event
+ * may carry several `data:` lines that must be joined with `\n` before
+ * parsing (a provider that pretty-prints or chunks its JSON that way would
+ * otherwise silently lose every delta) — lines are buffered per event and
+ * only parsed once the blank-line separator (or end of stream) is reached.
+ * Calls `onData` with the parsed JSON of every well-formed event (a
+ * malformed one is skipped).
  */
 async function readSseEvents(
   body: ReadableStream<Uint8Array> | null,
@@ -324,13 +329,14 @@ async function readSseEvents(
   const reader = body.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
+  let pendingDataLines: string[] = []
 
-  const consumeLine = (line: string) => {
-    const trimmed = line.trim()
-    if (!trimmed.startsWith('data:')) {
+  const flush = () => {
+    if (pendingDataLines.length === 0) {
       return
     }
-    const data = trimmed.slice(5).trim()
+    const data = pendingDataLines.join('\n')
+    pendingDataLines = []
     if (data === '' || data === '[DONE]') {
       return
     }
@@ -338,8 +344,22 @@ async function readSseEvents(
       onData(JSON.parse(data))
     }
     catch {
-      // Malformed line — ignore and keep reading the stream.
+      // Malformed event — ignore and keep reading the stream.
     }
+  }
+
+  const consumeLine = (line: string) => {
+    const trimmed = line.replace(/\r$/, '')
+    if (trimmed === '') {
+      // Blank line: the SSE event boundary — flush whatever `data:` lines
+      // accumulated since the last one.
+      flush()
+      return
+    }
+    if (!trimmed.startsWith('data:')) {
+      return
+    }
+    pendingDataLines.push(trimmed.slice(5).replace(/^ /, ''))
   }
 
   while (true) {
@@ -358,6 +378,9 @@ async function readSseEvents(
   if (buffer !== '') {
     consumeLine(buffer)
   }
+  // The stream may end right after the last event's `data:` line(s), with no
+  // trailing blank line to trigger the flush above.
+  flush()
 }
 
 export function createOpenAiCompatibleModel(options: CreateOpenAiCompatibleModelOptions): DeckAssistantModel {
@@ -517,6 +540,14 @@ export function createOpenAiCompatibleModel(options: CreateOpenAiCompatibleModel
           }
         })
       }
+      catch {
+        // The 120s timeout covers the whole stream read, not just the
+        // initial `fetch()` — a mid-stream abort or a dropped connection
+        // rejects `reader.read()` with a raw AbortError/TypeError that must
+        // be mapped to the same German 502 as every other reachability
+        // failure, not left to escape as "unexpected error".
+        assistantError(502, 'Der KI-Assistent ist derzeit nicht erreichbar.')
+      }
       finally {
         clearTimeout(timeoutId)
       }
@@ -650,11 +681,35 @@ function findLastIndexByRole(messages: ChatMessage[], role: ChatMessage['role'])
   return -1
 }
 
-/** Extracts the search term from "suche/such/finde [nach] <term>" — falls back to the whole text. */
+/**
+ * The result array of a tool outcome, whether it's the bare array a few
+ * tools still return, or the `{ items, truncated, total? }` envelope the
+ * capped read tools use (assistant-tools.ts `capResult`) — `null` if
+ * `parsed` is neither.
+ */
+function fakeResultItems(parsed: unknown): unknown[] | null {
+  if (Array.isArray(parsed)) {
+    return parsed
+  }
+  if (isRecord(parsed) && Array.isArray(parsed.items)) {
+    return parsed.items
+  }
+  return null
+}
+
+// Matches "such"/"suche"/"suchen"/"finde" as whole words only — `lower.includes('such')`
+// used to also fire on "versuche", "untersuche" or "Suchtkarte".
+const FAKE_SEARCH_INTENT_PATTERN = /\bsuch(?:e|en)?\b|\bfinde\b/i
+
+/** Extracts the search term after "suche/such/finde [nach] <term>" — falls back to the last word(s) rather than the whole sentence when the keyword itself can't be isolated. */
 function fakeExtractSearchQuery(text: string): string {
-  const match = text.match(/(?:suche|such|finde)\s*(?:nach\s+)?(.+)$/i)
+  const match = text.match(/\b(?:such(?:e|en)?|finde)\b\s*(?:nach\s+)?(.+)$/i)
   const query = match?.[1]?.trim()
-  return query && query !== '' ? query : text.trim()
+  if (query && query !== '') {
+    return query
+  }
+  const words = text.trim().split(/\s+/).filter(Boolean)
+  return words.slice(-3).join(' ')
 }
 
 function fakeExtractQuantity(text: string): number {
@@ -670,14 +725,15 @@ function fakeFindLastSearchResultCard(messages: ChatMessage[]): { id: number, na
       continue
     }
     try {
-      const parsed: unknown = JSON.parse(message.content)
-      if (Array.isArray(parsed) && parsed.length > 0 && isRecord(parsed[0]) && typeof parsed[0].id === 'number') {
-        const name = typeof parsed[0].name === 'string' ? parsed[0].name : `#${parsed[0].id}`
-        return { id: parsed[0].id, name }
+      const items = fakeResultItems(JSON.parse(message.content))
+      const first = items?.[0]
+      if (items && items.length > 0 && isRecord(first) && typeof first.id === 'number') {
+        const name = typeof first.name === 'string' ? first.name : `#${first.id}`
+        return { id: first.id, name }
       }
     }
     catch {
-      // Not a JSON array of cards — keep scanning further back.
+      // Not JSON at all — keep scanning further back.
     }
   }
   return null
@@ -704,7 +760,7 @@ async function fakeChat(input: ChatModelInput, handlers: ChatStreamHandlers): Pr
 
   const text = lastUser ? fakeUserText(lastUser) : ''
   const lower = text.toLowerCase()
-  const isSearchIntent = lower.includes('suche') || lower.includes('such') || lower.includes('finde')
+  const isSearchIntent = FAKE_SEARCH_INTENT_PATTERN.test(lower)
   const isAddIntent = lower.includes('hinzufügen') || lower.includes('füge')
   const hasImage = lastUser ? fakeHasImage(lastUser) : false
 
@@ -720,14 +776,14 @@ async function fakeChat(input: ChatModelInput, handlers: ChatStreamHandlers): Pr
       let names: string[] = []
       if (lastToolMessage?.role === 'tool') {
         try {
-          const parsed: unknown = JSON.parse(lastToolMessage.content)
-          if (Array.isArray(parsed)) {
-            count = parsed.length
-            names = parsed.flatMap(item => (isRecord(item) && typeof item.name === 'string') ? [item.name] : [])
+          const items = fakeResultItems(JSON.parse(lastToolMessage.content))
+          if (items) {
+            count = items.length
+            names = items.flatMap(item => (isRecord(item) && typeof item.name === 'string') ? [item.name] : [])
           }
         }
         catch {
-          // Not a JSON array — report zero results.
+          // Not JSON at all — report zero results.
         }
       }
       result = fakeTextResult(`Ich habe ${count} ${count === 1 ? 'Karte' : 'Karten'} gefunden: ${names.join(', ')}`)

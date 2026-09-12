@@ -96,6 +96,20 @@ export interface AssistantMessageInput {
   images: string[]
 }
 
+// Only the three MIME types the client actually produces (see ADR 0010's
+// "Images (client)" decision — canvas-resized JPEG, or a passthrough
+// PNG/WebP) are accepted; anything else (e.g. `data:text/html`,
+// `data:application/pdf`) is rejected rather than forwarded to the model.
+const IMAGE_DATA_URL_PATTERN = /^data:image\/(?:jpe?g|png|webp)[;,]/i
+
+/** The decoded byte size of a `data:` URL's base64 payload (3/4 of its encoded character length, ignoring padding). */
+function decodedByteSizeOfDataUrl(dataUrl: string): number {
+  const commaIndex = dataUrl.indexOf(',')
+  const base64Length = commaIndex >= 0 ? dataUrl.length - commaIndex - 1 : dataUrl.length
+  const paddingLength = dataUrl.endsWith('==') ? 2 : dataUrl.endsWith('=') ? 1 : 0
+  return Math.max(0, Math.floor((base64Length * 3) / 4) - paddingLength)
+}
+
 export function validateAssistantMessageInput(body: unknown): AssistantMessageInput {
   if (!isRecord(body)) {
     badRequest('Request body must be an object')
@@ -120,12 +134,15 @@ export function validateAssistantMessageInput(body: unknown): AssistantMessageIn
       badRequest(`images must contain at most ${ASSISTANT_MESSAGE_IMAGES_MAX} entries`)
     }
     for (const image of rawImages) {
-      if (typeof image !== 'string' || !image.startsWith('data:')) {
-        badRequest('images must be data URLs')
+      if (typeof image !== 'string' || !IMAGE_DATA_URL_PATTERN.test(image)) {
+        badRequest('images must be data URLs with an image/jpeg, image/png or image/webp MIME type')
       }
       images.push(image)
     }
-    const totalBytes = images.reduce((sum, image) => sum + image.length, 0)
+    // The data URL's base64 payload decodes to 3/4 of its character length —
+    // measuring the raw string length instead would let ~1/3 more decoded
+    // bytes through than the cap intends.
+    const totalBytes = images.reduce((sum, image) => sum + decodedByteSizeOfDataUrl(image), 0)
     if (totalBytes > ASSISTANT_MESSAGE_TOTAL_BYTES_MAX) {
       badRequest('images are too large in total')
     }
@@ -247,6 +264,65 @@ export function deleteConversation(db: Db, userId: string, conversationId: strin
 
 // --- History -----------------------------------------------------------------
 
+/**
+ * Fixes up a trimmed history window so it never starts or ends mid
+ * tool-call sequence — a plain count/char trim can cut the window right
+ * between an assistant `tool_calls` message and its `tool` result rows (or
+ * leave a `tool_calls` message whose results were never persisted, e.g. the
+ * turn died between the assistant insert and a tool insert). Sent as-is to
+ * an OpenAI-compatible endpoint, either shape is rejected with 400
+ * ("'messages' with role 'tool' must be a response to a preceding message
+ * with 'tool_calls'"), permanently breaking every further turn in that
+ * conversation.
+ *
+ * Rules (order matters — user rows are never dropped, so the loop below
+ * always leaves the window starting on a `user` row once one exists):
+ * 1. Drop leading rows until the first row is a `user` message.
+ * 2. Drop an assistant `tool_calls` message unless every one of its
+ *    `toolCalls[].id` has a matching `tool` row in the window.
+ * 3. Drop a `tool` row whose `toolCallId` has no preceding (kept) assistant
+ *    `tool_calls` message in the window.
+ */
+function sanitizeHistoryWindow(rows: MessageRow[]): MessageRow[] {
+  let start = 0
+  while (start < rows.length && rows[start]!.role !== 'user') {
+    start += 1
+  }
+  const windowed = rows.slice(start)
+
+  const toolCallIdsWithResult = new Set(
+    windowed.filter(row => row.role === 'tool' && row.toolCallId).map(row => row.toolCallId!),
+  )
+
+  const sanitized: MessageRow[] = []
+  const answeredCallIds = new Set<string>()
+
+  for (const row of windowed) {
+    if (row.role === 'assistant' && row.toolCalls && row.toolCalls.length > 0) {
+      const allAnswered = row.toolCalls.every(call => toolCallIdsWithResult.has(call.id))
+      if (!allAnswered) {
+        continue
+      }
+      for (const call of row.toolCalls) {
+        answeredCallIds.add(call.id)
+      }
+      sanitized.push(row)
+    }
+    else if (row.role === 'tool') {
+      if (row.toolCallId && answeredCallIds.has(row.toolCallId)) {
+        sanitized.push(row)
+      }
+      // else: orphan tool row (its assistant tool_calls message isn't in
+      // the window) — dropped.
+    }
+    else {
+      sanitized.push(row)
+    }
+  }
+
+  return sanitized
+}
+
 function loadHistory(db: Db, conversationId: string): MessageRow[] {
   const rows = db
     .select()
@@ -264,7 +340,7 @@ function loadHistory(db: Db, conversationId: string): MessageRow[] {
     const removed = trimmed.shift()!
     totalChars -= removed.content.length
   }
-  return trimmed
+  return sanitizeHistoryWindow(trimmed)
 }
 
 function toHistoryChatMessage(row: MessageRow): ChatMessage {
@@ -329,17 +405,45 @@ function summarizeToolOutcome(ok: boolean, resultOrError: unknown): string {
   if (Array.isArray(resultOrError)) {
     return `${resultOrError.length} Ergebnis(se)`
   }
+  // The capped read tools (assistant-tools.ts capResult) wrap their array in
+  // `{ items, truncated, total? }` instead of returning it bare, precisely so
+  // a cap isn't mistaken for the true count — mirror that here too.
+  if (isRecord(resultOrError) && Array.isArray(resultOrError.items)) {
+    const count = resultOrError.items.length
+    return resultOrError.truncated === true ? `mindestens ${count} Ergebnis(se)` : `${count} Ergebnis(se)`
+  }
   if (isRecord(resultOrError) && typeof resultOrError.summary === 'string') {
     return resultOrError.summary
   }
   return 'OK'
 }
 
+// A result over budget is replaced with a small, valid JSON envelope instead
+// of being cut off mid-string — a truncated JSON document is not just
+// unreadable for a human, it's not parseable at all, so a model asked to
+// reason about "the tool result" gets a syntax-broken blob instead of data.
 function serializeToolResult(value: unknown): string {
   const json = JSON.stringify(value ?? null)
-  return json.length > TOOL_RESULT_MAX_CHARS ? `${json.slice(0, TOOL_RESULT_MAX_CHARS)}… (gekürzt)` : json
+  if (json.length <= TOOL_RESULT_MAX_CHARS) {
+    return json
+  }
+  return JSON.stringify({ error: 'Ergebnis zu groß', hint: 'Bitte enger suchen.' })
 }
 
+/** Parses a tool call's accumulated `arguments` JSON, or reports that it failed to parse at all (see the caller: invalid JSON is a tool error, not silently `{}`). */
+function tryParseToolArguments(argumentsJson: string): { ok: true, value: unknown } | { ok: false } {
+  if (argumentsJson.trim() === '') {
+    return { ok: true, value: {} }
+  }
+  try {
+    return { ok: true, value: JSON.parse(argumentsJson) }
+  }
+  catch {
+    return { ok: false }
+  }
+}
+
+/** Used only to persist an assistant message's `toolCalls` field, which always wants an object — falls back to `{}` for storage/display even when `tryParseToolArguments` above would treat the same string as a tool error. */
 function safeParseToolArguments(argumentsJson: string): Record<string, unknown> {
   try {
     const parsed: unknown = argumentsJson.trim() === '' ? {} : JSON.parse(argumentsJson)
@@ -361,11 +465,18 @@ interface InsertMessageFields {
   attachments?: MessageRow['attachments']
 }
 
+/**
+ * Persists one message and bumps the conversation's `updatedAt` in the same
+ * call — every message that lands in the conversation (user, assistant
+ * tool-call round, tool result, final answer) should move it in the
+ * conversation list, not just a turn that happens to finish successfully.
+ */
 function insertMessage(
   db: Db,
   conversationId: string,
   fields: InsertMessageFields,
 ): MessageRow {
+  const now = new Date()
   const [row] = db
     .insert(assistantMessage)
     .values({
@@ -375,11 +486,12 @@ function insertMessage(
       toolCallId: null,
       toolName: null,
       attachments: null,
-      createdAt: new Date(),
+      createdAt: now,
       ...fields,
     })
     .returning()
     .all()
+  db.update(assistantConversation).set({ updatedAt: now }).where(eq(assistantConversation.id, conversationId)).run()
   return row!
 }
 
@@ -423,6 +535,17 @@ export async function runChatTurn(
     content: input.text,
     attachments: attachments.length > 0 ? attachments : null,
   })
+  // The title is derived from the first user message the moment it's
+  // persisted — not after a successful turn completes. A turn that fails
+  // right after this (provider down, 502) must not leave the conversation
+  // titled "Neue Unterhaltung" forever, and a *later* turn can no longer
+  // derive it at all (`isFirstMessage` is only true once).
+  if (isFirstMessage && input.text !== '') {
+    db.update(assistantConversation)
+      .set({ title: truncate(input.text, CONVERSATION_TITLE_MAX_LENGTH) })
+      .where(eq(assistantConversation.id, conversationId))
+      .run()
+  }
   await emit({ type: 'message_start', userMessageId: userMessage.id })
 
   const messages: ChatMessage[] = [
@@ -459,8 +582,21 @@ export async function runChatTurn(
         onTextDelta: text => emit({ type: 'text_delta', text }),
       })
 
+      // A `length` finish means the model's output (answer or tool-call
+      // arguments) was cut off by a context/output cap — never trustworthy
+      // enough to feed into another round, so the turn ends here regardless
+      // of whether this round also carries (now possibly truncated) tool
+      // calls.
+      if (result.finishReason === 'length') {
+        const base = result.text !== '' ? result.text : 'Die Antwort wurde abgeschnitten.'
+        finalText = `${base} … (Antwort wurde gekürzt)`
+        break
+      }
+
       if (result.toolCalls.length === 0) {
-        finalText = result.text
+        finalText = result.finishReason === 'content_filter' || result.text === ''
+          ? 'Ich konnte dazu keine Antwort erzeugen. Bitte formuliere die Frage anders.'
+          : result.text
         break
       }
 
@@ -492,16 +628,28 @@ export async function runChatTurn(
         let resultForModel: unknown
         let proposedAction: AssistantProposedAction | undefined
 
-        try {
-          const outcome = await runTool(call.name, { db, userId }, safeParseToolArguments(call.arguments))
-          resultForModel = outcome.result
-          if ('action' in outcome) {
-            proposedAction = outcome.action
-          }
-        }
-        catch (error) {
+        const parsedArguments = tryParseToolArguments(call.arguments)
+        if (!parsedArguments.ok) {
+          // A `length` finish (or any other truncation) can leave the
+          // accumulated `arguments` string as cut-off JSON. Running the tool
+          // with `{}` would silently fail on missing required fields in a way
+          // the model can't tell apart from a genuine argument mistake — an
+          // explicit error lets it retry with a shorter/different call.
           ok = false
-          resultForModel = { error: germanErrorMessage(error) }
+          resultForModel = { error: 'Ungültige Argumente' }
+        }
+        else {
+          try {
+            const outcome = await runTool(call.name, { db, userId }, parsedArguments.value)
+            resultForModel = outcome.result
+            if ('action' in outcome) {
+              proposedAction = outcome.action
+            }
+          }
+          catch (error) {
+            ok = false
+            resultForModel = { error: germanErrorMessage(error) }
+          }
         }
 
         const toolContent = serializeToolResult(resultForModel)
@@ -542,17 +690,9 @@ export async function runChatTurn(
       // rounds requested another tool call.
       finalText = 'Ich konnte die Anfrage nicht in wenigen Schritten abschließen. Bitte formuliere sie konkreter oder in kleineren Schritten.'
     }
+    // `insertMessage` bumps `updatedAt`; the title was already derived (if
+    // applicable) right after the user message was persisted, above.
     const finalMessage = insertMessage(db, conversationId, { role: 'assistant', content: finalText })
-
-    const now = new Date()
-    const conversationUpdate: { updatedAt: Date, title?: string } = { updatedAt: now }
-    if (isFirstMessage && input.text !== '') {
-      conversationUpdate.title = truncate(input.text, CONVERSATION_TITLE_MAX_LENGTH)
-    }
-    db.update(assistantConversation)
-      .set(conversationUpdate)
-      .where(eq(assistantConversation.id, conversationId))
-      .run()
 
     await emit({ type: 'message_end', message: toMessageView(finalMessage) })
   }

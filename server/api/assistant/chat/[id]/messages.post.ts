@@ -1,16 +1,19 @@
 import { and, eq } from 'drizzle-orm'
-import { createError, createEventStream, getRouterParam, readBody } from 'h3'
+import { createError, createEventStream, getRequestHeader, getRouterParam, readBody } from 'h3'
 import { useDb } from '../../../../db'
 import { assistantConversation } from '../../../../db/schema'
 import { useDeckAssistantModel } from '../../../../utils/deck-assistant-model'
 import { runChatTurn, validateAssistantMessageInput } from '../../../../utils/assistant-chat'
-import type { ChatTurnEvent } from '../../../../utils/assistant-chat'
+import type { AssistantMessageInput, ChatTurnEvent } from '../../../../utils/assistant-chat'
 import { requireUser } from '../../../../utils/session'
+import { claimTurnLock, isTurnInFlight, releaseTurnLock } from '../../../../utils/assistant-turn-lock'
+import { ASSISTANT_MESSAGE_TOTAL_BYTES_MAX } from '../../../../../shared/assistant-chat'
 
-// One running turn per user at a time — a double-click or duplicate submit
-// must not start two model calls/DB write passes concurrently. Module-level,
-// in-memory, process-local: the same guard shape as POST /api/assistant/suggest.
-const usersInFlight = new Set<string>()
+// A little over the encoded-image cap plus the rest of the JSON body (text
+// field, array brackets, field names) — generous enough for any legitimate
+// request, tight enough to reject an oversized body via `content-length`
+// *before* `readBody` buffers it into memory.
+const MAX_REQUEST_BODY_BYTES = ASSISTANT_MESSAGE_TOTAL_BYTES_MAX + 8192
 
 function sseEventName(turnEvent: ChatTurnEvent): string {
   return turnEvent.type
@@ -58,14 +61,33 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 503, statusMessage: 'KI-Assistent ist nicht konfiguriert.' })
   }
 
-  if (usersInFlight.has(user.id)) {
+  // Claimed right after the check, before `readBody` — otherwise two
+  // near-simultaneous submits could both pass the check while the first is
+  // still awaiting the body, and both would start a turn. Every exit path
+  // below (including a validation/size error) releases it again; once
+  // `runChatTurn` is handed the lock, its own `finally` releases it.
+  if (isTurnInFlight(user.id)) {
     throw createError({ statusCode: 409, statusMessage: 'Es läuft bereits eine Anfrage.' })
   }
+  claimTurnLock(user.id)
 
-  const input = validateAssistantMessageInput(await readBody(event))
+  let input: AssistantMessageInput
+  try {
+    // `content-length` is checked before the body is ever read into memory —
+    // the precise 4 MB/3-image validation below still runs afterwards, this
+    // only rejects a body that's already unreasonable up front.
+    const contentLength = Number(getRequestHeader(event, 'content-length'))
+    if (Number.isFinite(contentLength) && contentLength > MAX_REQUEST_BODY_BYTES) {
+      throw createError({ statusCode: 413, statusMessage: 'Die Anfrage ist zu groß.' })
+    }
+    input = validateAssistantMessageInput(await readBody(event))
+  }
+  catch (error) {
+    releaseTurnLock(user.id)
+    throw error
+  }
+
   const stream = createEventStream(event)
-
-  usersInFlight.add(user.id)
   runChatTurn(db, user.id, id, input, model, async (turnEvent) => {
     await stream.push({ event: sseEventName(turnEvent), data: JSON.stringify(sseEventData(turnEvent)) })
   })
@@ -74,7 +96,7 @@ export default defineEventHandler(async (event) => {
       // rejects — this only guards against a truly unexpected throw.
     })
     .finally(() => {
-      usersInFlight.delete(user.id)
+      releaseTurnLock(user.id)
       return stream.close()
     })
 
