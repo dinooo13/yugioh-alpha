@@ -57,6 +57,52 @@ describe('sharing share modal', () => {
     expect(text).toContain('Öffentlich')
   })
 
+  it('describes "Privat" as visible to granted players once a grant exists, singular and plural', async () => {
+    const fetchMock = vi.fn(() => Promise.resolve(shareState({
+      grants: [{ userId: 'user-b', handle: 'bella', displayName: 'Bella', createdAt: '2025-01-01T00:00:00.000Z' }],
+    })))
+    await mountModal(fetchMock)
+
+    expect(body().text()).toContain('Nur du und 1 freigegebener Spieler können das sehen.')
+
+    const fetchMockTwo = vi.fn(() => Promise.resolve(shareState({
+      grants: [
+        { userId: 'user-b', handle: 'bella', displayName: 'Bella', createdAt: '2025-01-01T00:00:00.000Z' },
+        { userId: 'user-c', handle: 'carla', displayName: 'Carla', createdAt: '2025-01-01T00:00:00.000Z' },
+      ],
+    })))
+    document.body.innerHTML = ''
+    await mountModal(fetchMockTwo)
+
+    expect(body().text()).toContain('Nur du und 2 freigegebene Spieler können das sehen.')
+  })
+
+  it('keeps the plain "Privat" description when there are no grants', async () => {
+    const fetchMock = vi.fn(() => Promise.resolve(shareState()))
+    await mountModal(fetchMock)
+
+    expect(body().text()).toContain('Nur du kannst das sehen.')
+  })
+
+  it('hides the token link and dims the grants section once the resource is public', async () => {
+    const fetchMock = vi.fn(() => Promise.resolve(shareState({
+      visibility: 'public',
+      shareToken: 'abc',
+      grants: [{ userId: 'user-b', handle: 'bella', displayName: 'Bella', createdAt: '2025-01-01T00:00:00.000Z' }],
+    })))
+    await mountModal(fetchMock)
+
+    expect(body().find('input[aria-label="Freigabe-Link"]').exists()).toBe(false)
+    expect(body().text()).toContain('Nicht nötig – dieses Deck ist für alle sichtbar.')
+  })
+
+  it('still shows the token link for "Nur über Link"', async () => {
+    const fetchMock = vi.fn(() => Promise.resolve(shareState({ visibility: 'link', shareToken: 'abc' })))
+    await mountModal(fetchMock)
+
+    expect(body().find('input[aria-label="Freigabe-Link"]').exists()).toBe(true)
+  })
+
   it('PUTs the new visibility when "Nur über Link" is selected', async () => {
     const fetchMock = vi.fn((url: string, options?: Record<string, unknown>) => {
       if (options?.method === 'PUT') {

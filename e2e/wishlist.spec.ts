@@ -22,6 +22,15 @@ test.describe('wishlist', () => {
     await expect(page).toHaveURL('/wunschliste')
     await expect(page.getByText('Kuriboh')).toBeVisible()
 
+    // The wishlist's own visibility is now shown on the page itself, not
+    // just on /profil (UX review #22); it starts private.
+    await expect(page.getByText('Privat', { exact: true })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Sichtbarkeit ändern' })).toBeVisible()
+
+    // Quantity starts at 1 — the minus button must not pretend it can go
+    // any lower (UX review #25).
+    await expect(page.getByRole('button', { name: 'Ein Exemplar von Kuriboh entfernen' })).toBeDisabled()
+
     // Quantity starts at 1 from the catalog toggle; bump it to 3.
     const addOne = page.getByRole('button', { name: 'Ein Exemplar von Kuriboh hinzufügen' })
     await addOne.click()
@@ -40,6 +49,12 @@ test.describe('wishlist', () => {
     // Publish the wishlist and check it from an anonymous context.
     await page.goto('/profil')
     await page.getByLabel('Wunschliste öffentlich zeigen').click()
+    // Same "Gespeichert" feedback as the profile form above it — previously
+    // this switch gave no confirmation at all (UX review #22).
+    await expect(page.getByText('Gespeichert').last()).toBeVisible()
+
+    await page.goto('/wunschliste')
+    await expect(page.getByText('Öffentlich', { exact: true })).toBeVisible()
 
     const anonContext = await browser.newContext()
     const anonPage = await anonContext.newPage()
