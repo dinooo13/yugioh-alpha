@@ -119,14 +119,23 @@ export interface ChatModelResult {
   text: string
   toolCalls: ChatModelToolCall[]
   finishReason: 'stop' | 'tool_calls' | 'length' | 'content_filter' | 'other'
+  /** Set when `signal` aborted the call mid-stream (a user "Abbrechen") —
+   * `text`/`toolCalls` carry whatever was accumulated before the abort, so
+   * the caller can still persist a partial answer instead of losing it. */
+  aborted?: boolean
 }
 
 export interface DeckAssistantModel {
   readonly id: string
   /** Returns the parsed JSON object the model produced — untrusted, unvalidated. */
   generate(input: AssistantModelInput): Promise<unknown>
-  /** Multi-turn chat with tool calling, streamed. */
-  chat(input: ChatModelInput, handlers: ChatStreamHandlers): Promise<ChatModelResult>
+  /**
+   * Multi-turn chat with tool calling, streamed. `signal`, when given, aborts
+   * the underlying request/stream read early (combined with the model's own
+   * request timeout) — see `runChatTurn` (assistant-chat.ts) for how the
+   * turn loop reacts to `result.aborted`.
+   */
+  chat(input: ChatModelInput, handlers: ChatStreamHandlers, signal?: AbortSignal): Promise<ChatModelResult>
 }
 
 function assistantError(statusCode: number, message: string): never {
@@ -451,7 +460,7 @@ export function createOpenAiCompatibleModel(options: CreateOpenAiCompatibleModel
       assistantError(502, 'Der KI-Assistent ist derzeit nicht erreichbar.')
     },
 
-    async chat(input: ChatModelInput, handlers: ChatStreamHandlers): Promise<ChatModelResult> {
+    async chat(input: ChatModelInput, handlers: ChatStreamHandlers, signal?: AbortSignal): Promise<ChatModelResult> {
       const hasImage = input.messages.some(message =>
         message.role === 'user' && message.content.some(part => part.type === 'image_url'))
       const modelToUse = input.model?.trim() || (hasImage && visionModel ? visionModel : model)
@@ -466,6 +475,11 @@ export function createOpenAiCompatibleModel(options: CreateOpenAiCompatibleModel
 
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+      // Combine our own request timeout with the caller's cancellation
+      // signal (the turn's "Abbrechen") — either one aborts the same
+      // in-flight fetch/stream read; `signal?.aborted` below is what tells
+      // the two apart afterwards.
+      const combinedSignal = signal ? AbortSignal.any([controller.signal, signal]) : controller.signal
 
       let response: Response
       try {
@@ -473,11 +487,14 @@ export function createOpenAiCompatibleModel(options: CreateOpenAiCompatibleModel
           method: 'POST',
           headers: { ...buildRequestHeaders(apiKey, input.sessionId), accept: 'text/event-stream' },
           body: JSON.stringify(body),
-          signal: controller.signal,
+          signal: combinedSignal,
         })
       }
       catch (error) {
         clearTimeout(timeoutId)
+        if (signal?.aborted) {
+          return { text: '', toolCalls: [], finishReason: 'other', aborted: true }
+        }
         if (error instanceof Error && error.name === 'AbortError') {
           assistantError(502, 'Der KI-Assistent ist derzeit nicht erreichbar.')
         }
@@ -541,11 +558,17 @@ export function createOpenAiCompatibleModel(options: CreateOpenAiCompatibleModel
         })
       }
       catch {
-        // The 120s timeout covers the whole stream read, not just the
-        // initial `fetch()` — a mid-stream abort or a dropped connection
-        // rejects `reader.read()` with a raw AbortError/TypeError that must
-        // be mapped to the same German 502 as every other reachability
-        // failure, not left to escape as "unexpected error".
+        clearTimeout(timeoutId)
+        // A mid-stream abort/dropped connection rejects `reader.read()` with
+        // a raw AbortError/TypeError. When the caller's own signal is what
+        // aborted it (an explicit "Abbrechen", not our request timeout),
+        // report it as such with whatever text/tool-calls were accumulated
+        // so far — the turn loop persists that as a partial answer — rather
+        // than mapping it to the same "unreachable" 502 as a real failure.
+        if (signal?.aborted) {
+          const toolCalls = [...toolCallsByIndex.entries()].sort(([a], [b]) => a - b).map(([, call]) => call)
+          return { text, toolCalls, finishReason: 'other', aborted: true }
+        }
         assistantError(502, 'Der KI-Assistent ist derzeit nicht erreichbar.')
       }
       finally {
