@@ -29,7 +29,7 @@ See [`.env.example`](./.env.example) for all available variables:
 - `NUXT_PUBLIC_BETTER_AUTH_URL` - publicly reachable base URL of the app
 - `NUXT_DB_FILE_PATH` - path to the SQLite database file (default: `./data/app.db`; the directory is created automatically)
 - `NUXT_ASSISTANT_API_KEY` - API key for the AI deck assistant (optional; falls back to `OPENAI_API_KEY`). Without a key or a custom base URL the feature is disabled and the UI shows a notice instead.
-- `NUXT_ASSISTANT_PROVIDER` / `NUXT_ASSISTANT_BASE_URL` / `NUXT_ASSISTANT_MODEL` - override the assistant's provider (`openai` / `fake`), the OpenAI-compatible endpoint's base URL, and the model id; see [`.env.example`](./.env.example)
+- `NUXT_ASSISTANT_PROVIDER` / `NUXT_ASSISTANT_BASE_URL` / `NUXT_ASSISTANT_MODEL` / `NUXT_ASSISTANT_REASONING_EFFORT` - override the assistant's provider (`openai` / `fake`), the OpenAI-compatible endpoint's base URL, the model id, and an optional `reasoning_effort` some gateways (e.g. OpenCode Go) require; see [`.env.example`](./.env.example)
 
 ## Development
 

@@ -541,6 +541,18 @@ describe('OpenAI-compatible model', () => {
     choices: [{ finish_reason: 'stop', message: { content: JSON.stringify({ summary: 'ok', cards: [], missing: [] }) } }],
   }
 
+  it('sends reasoning_effort only when configured', async () => {
+    const withEffort = fetchReturning({ status: 200, body: successBody })
+    const withEffortModel = createOpenAiCompatibleModel({ baseUrl: 'https://opencode.ai/zen/go/v1', apiKey: 'go-key', model: 'glm-5.3', reasoningEffort: 'low', fetch: withEffort.fetch })
+    await withEffortModel.generate(baseInput)
+    expect(JSON.parse(withEffort.calls[0]!.init.body).reasoning_effort).toBe('low')
+
+    const without = fetchReturning({ status: 200, body: successBody })
+    const withoutModel = createOpenAiCompatibleModel({ baseUrl: 'https://api.openai.com/v1', apiKey: 'sk-test', model: 'gpt-4o-mini', fetch: without.fetch })
+    await withoutModel.generate(baseInput)
+    expect(JSON.parse(without.calls[0]!.init.body)).not.toHaveProperty('reasoning_effort')
+  })
+
   it('parses the JSON content on success and requests json_schema structured output', async () => {
     const { fetch: fetchImpl, calls } = fetchReturning({ status: 200, body: successBody })
     const model = createOpenAiCompatibleModel({ baseUrl: 'https://api.openai.com/v1', apiKey: 'sk-test', model: 'gpt-4o-mini', fetch: fetchImpl })

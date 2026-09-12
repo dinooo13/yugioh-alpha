@@ -92,6 +92,11 @@ export interface CreateOpenAiCompatibleModelOptions {
   baseUrl: string
   apiKey?: string
   model: string
+  /**
+   * Sent as `reasoning_effort` when set. Some OpenAI-compatible gateways
+   * (e.g. OpenCode Go) require it for certain models; most ignore it.
+   */
+  reasoningEffort?: string
   /** Injectable for tests. */
   fetch?: typeof fetch
 }
@@ -197,6 +202,7 @@ export function createOpenAiCompatibleModel(options: CreateOpenAiCompatibleModel
   const baseUrl = options.baseUrl.replace(/\/+$/, '')
   const apiKey = options.apiKey ?? ''
   const model = options.model
+  const reasoningEffort = (options.reasoningEffort ?? '').trim()
   const fetchImpl = options.fetch ?? fetch
 
   return {
@@ -232,6 +238,7 @@ export function createOpenAiCompatibleModel(options: CreateOpenAiCompatibleModel
             { role: 'user', content: userContent },
           ],
           temperature: 0.2,
+          ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
           ...(attempt.responseFormat ? { response_format: attempt.responseFormat } : {}),
         }
 
@@ -370,6 +377,7 @@ export interface DeckAssistantRuntimeConfig {
   baseUrl: string
   apiKey: string
   model: string
+  reasoningEffort: string
 }
 
 type Provider = 'openai' | 'fake' | null
@@ -398,6 +406,11 @@ function resolveApiKey(config: DeckAssistantRuntimeConfig): string {
     return trimmed
   }
   return (process.env.OPENAI_API_KEY ?? '').trim()
+}
+
+function resolveReasoningEffort(config: DeckAssistantRuntimeConfig): string | undefined {
+  const trimmed = (config.reasoningEffort ?? '').trim()
+  return trimmed !== '' ? trimmed : undefined
 }
 
 function resolveModelId(config: DeckAssistantRuntimeConfig): string {
@@ -437,6 +450,7 @@ export function useDeckAssistantModel(): DeckAssistantModel | null {
       baseUrl: resolveBaseUrl(config),
       apiKey: resolveApiKey(config),
       model: resolveModelId(config),
+      reasoningEffort: resolveReasoningEffort(config),
     })
   }
   return null

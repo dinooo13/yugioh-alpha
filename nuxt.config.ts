@@ -43,6 +43,9 @@ export default defineNuxtConfig({
       // keyless local servers (e.g. Ollama) alongside a custom baseUrl.
       apiKey: '',
       model: 'gpt-4o-mini',
+      // Optional `reasoning_effort` (low | medium | high); some gateways such
+      // as OpenCode Go require it for certain models. Empty = not sent.
+      reasoningEffort: '',
     },
     public: {
       betterAuthUrl: process.env.BETTER_AUTH_URL || 'http://localhost:3000',
