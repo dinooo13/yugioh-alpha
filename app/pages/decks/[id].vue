@@ -9,6 +9,7 @@ import type { DeckSection } from '~~/shared/deck-sections'
 import { CARD_STATUS_LABELS } from '~~/shared/rule-formats'
 import type { DeckValidation } from '~~/shared/rule-formats'
 import type { AssistantChange, AssistantMissingCard, DeckAssistantResult, DeckAssistantStatus } from '~~/shared/deck-assistant'
+import type { OwnProfile, Visibility } from '~~/shared/sharing'
 import { apiErrorMessage } from '~/utils/card-entry'
 import type { AssistantRequestPayload } from '~/components/decks/AssistantRequestForm.vue'
 
@@ -42,6 +43,7 @@ interface DeckDetail {
   warnings: Array<{ code: string, message: string, cardId?: number }>
   format: { id: string, name: string, isBuiltin: boolean } | null
   validation: DeckValidation | null
+  visibility: Visibility
 }
 
 interface RuleFormatListItem {
@@ -195,6 +197,23 @@ const { data: assistantStatus } = await useFetch<DeckAssistantStatus>('/api/assi
   headers: import.meta.server ? useRequestHeaders(['cookie']) : undefined,
   default: () => ({ enabled: false, provider: null, model: null }),
 })
+
+// --- Sharing (Phase 6) -------------------------------------------------------
+
+// Cheap, lazily creates the profile on first read — needed only to build the
+// share link (`/spieler/:handle/decks/:id`).
+const { data: ownProfile } = await useFetch<OwnProfile>('/api/profile', {
+  headers: import.meta.server ? useRequestHeaders(['cookie']) : undefined,
+})
+
+const isShareOpen = ref(false)
+const sharePath = computed(() => `/spieler/${ownProfile.value?.handle ?? ''}/decks/${deckId.value}`)
+
+function onShareUpdated(visibility: Visibility) {
+  if (deck.value) {
+    deck.value = { ...deck.value, visibility }
+  }
+}
 
 const isAssistantOpen = ref(false)
 const assistantResult = ref<DeckAssistantResult | null>(null)
@@ -603,12 +622,20 @@ async function deleteDeck() {
         </div>
 
         <div class="flex shrink-0 flex-wrap items-center gap-2">
+          <SharingVisibilityBadge :visibility="deck.visibility" />
           <USelect
             v-model="formatSelection"
             :items="formatItems"
             :disabled="isMutating"
             class="w-56"
             aria-label="Format"
+          />
+          <UButton
+            icon="i-lucide-share-2"
+            color="neutral"
+            variant="outline"
+            label="Teilen"
+            @click="() => { isShareOpen = true }"
           />
           <UButton
             v-if="assistantStatus?.enabled"
@@ -956,6 +983,15 @@ async function deleteDeck() {
         v-model:open="isFormOpen"
         :initial-values="{ id: deck.id, name: deck.name, description: deck.description }"
         @saved="onDeckSaved"
+      />
+
+      <SharingShareModal
+        v-model:open="isShareOpen"
+        resource-type="deck"
+        :resource-id="deckId"
+        :resource-name="deck.name"
+        :share-path="sharePath"
+        @updated="onShareUpdated"
       />
 
       <USlideover

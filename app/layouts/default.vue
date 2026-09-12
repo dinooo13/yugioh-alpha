@@ -2,12 +2,14 @@
 import type { NavigationMenuItem } from '@nuxt/ui'
 import { authClient } from '~/utils/auth-client'
 import { getAuthSession } from '~/utils/session'
+import type { OwnProfile, Visibility } from '~~/shared/sharing'
 
 interface CollectionItem {
   id: string
   name: string
   description: string | null
   cardCount: number
+  visibility: Visibility
 }
 
 interface CollectionsResponse {
@@ -27,6 +29,7 @@ const navItems = computed<NavigationMenuItem[]>(() => [
   { label: 'Katalog', icon: 'i-lucide-book-open', to: '/katalog' },
   { label: 'Decks', icon: 'i-lucide-layers', to: '/decks', active: route.path.startsWith('/decks') },
   { label: 'Formate', icon: 'i-lucide-scroll-text', to: '/formate', active: route.path.startsWith('/formate') },
+  { label: 'Wunschliste', icon: 'i-lucide-heart', to: '/wunschliste' },
   { label: 'Turniere', icon: 'i-lucide-trophy', to: '/turniere' },
 ])
 
@@ -100,12 +103,39 @@ async function onDelete(collection: CollectionItem) {
   await refreshCollections()
 }
 
+// Cheap, lazily creates the profile on first read — only needed to build the
+// "Teilen" share link (`/spieler/:handle/sammlungen/:id`).
+const { data: ownProfile } = await useFetch<OwnProfile>('/api/profile', {
+  headers: import.meta.server ? useRequestHeaders(['cookie']) : undefined,
+})
+
+const isShareOpen = ref(false)
+const sharingCollection = ref<CollectionItem | null>(null)
+const sharePath = computed(() => `/spieler/${ownProfile.value?.handle ?? ''}/sammlungen/${sharingCollection.value?.id ?? ''}`)
+
+function openShare(collection: CollectionItem) {
+  sharingCollection.value = collection
+  isShareOpen.value = true
+}
+
+function onShareUpdated(visibility: Visibility) {
+  if (sharingCollection.value) {
+    sharingCollection.value = { ...sharingCollection.value, visibility }
+  }
+  refreshCollections()
+}
+
 function menuItemsFor(collection: CollectionItem) {
   return [[
     {
       label: 'Umbenennen',
       icon: 'i-lucide-pencil',
       onSelect: () => openRename(collection),
+    },
+    {
+      label: 'Teilen',
+      icon: 'i-lucide-share-2',
+      onSelect: () => openShare(collection),
     },
     {
       label: 'Löschen',
@@ -175,6 +205,10 @@ async function onLogout() {
                 :class="dotColorFor(collection.id)"
               />
               <span class="truncate">{{ collection.name }}</span>
+              <SharingVisibilityBadge
+                :visibility="collection.visibility"
+                hide-private
+              />
               <span class="ml-auto text-xs tabular-nums text-gray-400">{{ collection.cardCount }}</span>
             </NuxtLink>
             <UDropdownMenu :items="menuItemsFor(collection)">
@@ -222,6 +256,15 @@ async function onLogout() {
           <span class="truncate text-sm text-gray-700">{{ session.user.email }}</span>
         </div>
         <UButton
+          icon="i-lucide-user"
+          label="Profil"
+          to="/profil"
+          variant="ghost"
+          color="neutral"
+          block
+          class="mt-1 justify-start"
+        />
+        <UButton
           icon="i-lucide-log-out"
           label="Abmelden"
           variant="ghost"
@@ -241,6 +284,16 @@ async function onLogout() {
       v-model:open="isFormOpen"
       :initial-values="editingCollection"
       @saved="onCollectionSaved"
+    />
+
+    <SharingShareModal
+      v-if="sharingCollection"
+      v-model:open="isShareOpen"
+      resource-type="collection"
+      :resource-id="sharingCollection.id"
+      :resource-name="sharingCollection.name"
+      :share-path="sharePath"
+      @updated="onShareUpdated"
     />
   </div>
 </template>

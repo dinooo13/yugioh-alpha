@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { OwnProfile, Visibility } from '~~/shared/sharing'
+
 interface DeckListItem {
   id: string
   name: string
@@ -12,6 +14,7 @@ interface DeckListItem {
   formatId: string | null
   formatName: string | null
   legal: boolean | null
+  visibility: Visibility
   createdAt: string
   updatedAt: string
 }
@@ -86,8 +89,32 @@ const sortItems = [
   { label: 'Name (Z-A)', value: '-name' },
 ]
 
+const { data: ownProfile } = await useFetch<OwnProfile>('/api/profile', {
+  headers: import.meta.server ? useRequestHeaders(['cookie']) : undefined,
+})
+
 const isFormOpen = ref(false)
 const editingDeck = ref<DeckListItem | null>(null)
+
+const isShareOpen = ref(false)
+const sharingDeck = ref<DeckListItem | null>(null)
+const sharePath = computed(() => `/spieler/${ownProfile.value?.handle ?? ''}/decks/${sharingDeck.value?.id ?? ''}`)
+
+function openShare(deck: DeckListItem) {
+  sharingDeck.value = deck
+  isShareOpen.value = true
+}
+
+function onShareUpdated(visibility: Visibility) {
+  if (!sharingDeck.value || !data.value) {
+    return
+  }
+  const sharedId = sharingDeck.value.id
+  data.value = {
+    ...data.value,
+    items: data.value.items.map(item => (item.id === sharedId ? { ...item, visibility } : item)),
+  }
+}
 
 function openCreate() {
   editingDeck.value = null
@@ -151,6 +178,11 @@ function menuItemsFor(deck: DeckListItem) {
       label: 'Duplizieren',
       icon: 'i-lucide-copy',
       onSelect: () => duplicateDeck(deck),
+    },
+    {
+      label: 'Teilen',
+      icon: 'i-lucide-share-2',
+      onSelect: () => openShare(deck),
     },
     {
       label: 'Löschen',
@@ -353,6 +385,10 @@ function statusColor(deck: DeckListItem) {
             variant="subtle"
             :label="statusLabel(deck)"
           />
+          <SharingVisibilityBadge
+            :visibility="deck.visibility"
+            hide-private
+          />
           <UBadge
             v-if="deck.formatName"
             color="neutral"
@@ -386,6 +422,16 @@ function statusColor(deck: DeckListItem) {
       v-model:open="isFormOpen"
       :initial-values="editingDeck"
       @saved="onSaved"
+    />
+
+    <SharingShareModal
+      v-if="sharingDeck"
+      v-model:open="isShareOpen"
+      resource-type="deck"
+      :resource-id="sharingDeck.id"
+      :resource-name="sharingDeck.name"
+      :share-path="sharePath"
+      @updated="onShareUpdated"
     />
   </div>
 </template>
