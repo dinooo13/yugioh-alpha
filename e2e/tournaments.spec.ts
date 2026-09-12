@@ -1,5 +1,31 @@
 import { expect, test } from '@playwright/test'
+import type { Locator } from '@playwright/test'
 import { registerAndLogin, uniqueEmail } from './helpers/auth'
+
+/**
+ * `fill` followed by a value check, with one retry.
+ *
+ * Right after a fresh navigation (`page.goto`) into a page guarded by the
+ * global auth middleware, the client re-runs that middleware once during
+ * hydration — a `getAuthSession` round trip that can still be settling the
+ * form when Playwright's `fill` lands, silently discarding it. The window is
+ * a few tens of milliseconds and never repeats once past it, so a single
+ * retry is enough to make this deterministic instead of racy: if the value
+ * didn't stick, the disruptive re-render has already happened, and refilling
+ * lands cleanly. Without this, an unlucky fill can submit an empty field and
+ * fail validation instead of creating the record (e.g. "Bitte einen Namen
+ * angeben.").
+ */
+async function fillReliably(locator: Locator, value: string) {
+  await locator.fill(value)
+  try {
+    await expect(locator).toHaveValue(value, { timeout: 1000 })
+  }
+  catch {
+    await locator.fill(value)
+    await expect(locator).toHaveValue(value)
+  }
+}
 
 // Passcodes from the seeded E2E catalog fixture
 // (server/db/fixtures/catalog-fixture.ts).
@@ -59,7 +85,7 @@ test.describe('tournaments', () => {
     await page.getByRole('link', { name: 'Neues Turnier' }).first().click()
     await expect(page).toHaveURL('/turniere/neu')
 
-    await page.getByLabel('Turniername').fill('Freitagsturnier')
+    await fillReliably(page.getByLabel('Turniername'), 'Freitagsturnier')
     await page.getByLabel('Format').click()
     await page.getByRole('option', { name: 'Ohne Banliste' }).click()
     await page.getByLabel('Paarungssystem').click()
@@ -75,8 +101,14 @@ test.describe('tournaments', () => {
 
     // --- Add three guests ----------------------------------------------------
     await page.getByRole('button', { name: 'Als Gast' }).click()
+    const guestNameField = page.getByLabel('Name')
     for (const name of ['Alice', 'Bob', 'Carla']) {
-      await page.getByLabel('Name').fill(name)
+      // The field is only guaranteed empty (cleared by the previous
+      // successful submit) once its own row is visible — wait for that
+      // first, otherwise a fast `fill` can land before the clear and be
+      // immediately overwritten, submitting an empty name.
+      await expect(guestNameField).toHaveValue('')
+      await fillReliably(guestNameField, name)
       await page.getByRole('button', { name: 'Teilnehmer hinzufügen' }).click()
       await expect(participantRow(page, name)).toBeVisible()
     }
@@ -196,7 +228,7 @@ test.describe('tournaments', () => {
     // Organizer creates the tournament and adds B by e-mail.
     const organizer = await registerAndLogin(page)
     await page.goto('/turniere/neu')
-    await page.getByLabel('Turniername').fill('Einladungsturnier')
+    await fillReliably(page.getByLabel('Turniername'), 'Einladungsturnier')
     await page.getByRole('button', { name: 'Turnier anlegen' }).click()
     await expect(page).toHaveURL(/\/turniere\/[0-9a-f-]{36}$/)
     const tournamentUrl = page.url()
