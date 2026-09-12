@@ -33,11 +33,14 @@ async function cloneFormat(format: RuleFormatListItem) {
   }
 }
 
+const { confirm } = useConfirm()
+
 async function deleteFormat(format: RuleFormatListItem) {
   errorMessage.value = ''
-  const confirmed = window.confirm(
-    `"${format.name}" wirklich löschen? Decks mit diesem Format behalten ihre Karten und stehen danach ohne Format da.`,
-  )
+  const confirmed = await confirm({
+    title: 'Format löschen',
+    description: `"${format.name}" wirklich löschen? Decks mit diesem Format behalten ihre Karten und stehen danach ohne Format da.`,
+  })
   if (!confirmed) {
     return
   }

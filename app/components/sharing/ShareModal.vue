@@ -141,8 +141,13 @@ async function copyLink() {
   }, 2000)
 }
 
+const { confirm } = useConfirm()
+
 async function regenerateToken() {
-  const confirmed = window.confirm('Alte Links werden dadurch ungültig. Fortfahren?')
+  const confirmed = await confirm({
+    title: 'Neuen Link erzeugen',
+    description: 'Alte Links werden dadurch ungültig. Fortfahren?',
+  })
   if (!confirmed) {
     return
   }

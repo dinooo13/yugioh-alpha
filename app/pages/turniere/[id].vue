@@ -18,6 +18,7 @@ useHead({ title: computed(() => `${tournament.value?.name ?? 'Turnier'} – yugi
 
 const errorMessage = ref('')
 const busy = ref(false)
+const { confirm } = useConfirm()
 
 function errorText(requestError: unknown, fallback: string) {
   const code = apiErrorCode(requestError) as TournamentErrorCode | undefined
@@ -78,9 +79,10 @@ function finishTournament() {
 }
 
 async function onFinishClick() {
-  const confirmed = window.confirm(
-    'Turnier abschließen? Ergebnisse und Paarungen können danach nicht mehr geändert werden.',
-  )
+  const confirmed = await confirm({
+    title: 'Turnier abschließen',
+    description: 'Turnier abschließen? Ergebnisse und Paarungen können danach nicht mehr geändert werden.',
+  })
   if (!confirmed) {
     return
   }
@@ -91,9 +93,10 @@ async function deleteTournament() {
   if (!tournament.value) {
     return
   }
-  const confirmed = window.confirm(
-    `"${tournament.value.name}" wirklich löschen? Alle Runden und Ergebnisse gehen verloren.`,
-  )
+  const confirmed = await confirm({
+    title: 'Turnier löschen',
+    description: `"${tournament.value.name}" wirklich löschen? Alle Runden und Ergebnisse gehen verloren.`,
+  })
   if (!confirmed) {
     return
   }

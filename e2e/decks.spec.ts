@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { registerAndLogin } from './helpers/auth'
+import { acceptConfirm } from './helpers/confirm'
 
 // Passcodes from the seeded E2E catalog fixture
 // (server/db/fixtures/catalog-fixture.ts).
@@ -70,7 +71,7 @@ test.describe('deckbuilder', () => {
     await expect(deckCard).toContainText('Main')
     await expect(deckCard).toContainText('Extra')
     await expect(deckCard).toContainText('4 Karten')
-    await expect(deckCard.getByText('1 fehlt')).toBeVisible()
+    await expect(deckCard.getByText('1 fehlt im Besitz')).toBeVisible()
 
     // --- Search by a contained card -----------------------------------------
     const deckSearch = page.getByLabel('Decks durchsuchen')
@@ -92,9 +93,9 @@ test.describe('deckbuilder', () => {
     await page.goto('/decks')
     await expect(page.getByRole('listitem').filter({ hasText: 'Test Deck' })).toBeVisible()
 
-    page.on('dialog', dialog => dialog.accept())
     await page.getByRole('button', { name: 'Optionen für Test Deck' }).click()
     await page.getByRole('menuitem', { name: 'Löschen' }).click()
+    await acceptConfirm(page)
 
     await expect(page.getByText('Noch keine Decks')).toBeVisible()
   })

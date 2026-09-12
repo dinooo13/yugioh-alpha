@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { registerAndLogin } from './helpers/auth'
+import { acceptConfirm } from './helpers/confirm'
 
 // Passcodes from the seeded E2E catalog fixture
 // (server/db/fixtures/catalog-fixture.ts).
@@ -104,7 +105,8 @@ test.describe('rule formats', () => {
     await page.getByRole('option', { name: 'TCG Advanced', exact: true }).click()
 
     await expect(status).toContainText('Nicht legal')
-    await expect(page.getByText('Das Main Deck hat 1 Karten, mindestens 40 sind erforderlich.')).toBeVisible()
+    // Correct German plural (UX review #10): "1 Karte", not "1 Karten".
+    await expect(page.getByText('Das Main Deck hat 1 Karte, mindestens 40 sind erforderlich.')).toBeVisible()
 
     // --- The deck list shows format and legality ---------------------------
     await page.goto('/decks')
@@ -118,8 +120,8 @@ test.describe('rule formats', () => {
     await expect(page.getByRole('heading', { name: 'Meine Formate' })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'TCG Advanced' })).toBeVisible()
 
-    page.on('dialog', dialog => dialog.accept())
     await page.getByRole('button', { name: 'Nur alte Karten löschen' }).click()
+    await acceptConfirm(page)
     await expect(page.getByText('Noch keine eigenen Formate')).toBeVisible()
 
     // The deck survives; it just lost its format assignment.

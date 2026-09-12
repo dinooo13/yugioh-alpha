@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 import type { Locator } from '@playwright/test'
 import { registerAndLogin, uniqueEmail } from './helpers/auth'
+import { acceptConfirm, cancelConfirm } from './helpers/confirm'
 
 /**
  * `fill` followed by a value check, with one retry.
@@ -59,10 +60,6 @@ function participantRow(page: import('@playwright/test').Page, name: string) {
 test.describe('tournaments', () => {
   test('runs a Swiss tournament from creation to finish', async ({ page }) => {
     const organizer = await registerAndLogin(page)
-
-    // "Turnier abschließen" and "Turnier löschen" both confirm before acting
-    // (#27, #28) — accept every native confirm for the rest of this test.
-    page.on('dialog', dialog => dialog.accept())
 
     // Seed a deck through the API with the page's session cookie (same
     // trick as e2e/decks.spec.ts). It is deliberately too small (13 cards)
@@ -164,6 +161,7 @@ test.describe('tournaments', () => {
 
     // --- Finish the tournament -------------------------------------------------
     await page.getByRole('button', { name: 'Turnier abschließen' }).click()
+    await acceptConfirm(page)
     await expect(page.getByText('Dieses Turnier ist abgeschlossen und kann nicht mehr geändert werden.')).toBeVisible()
     await expect(page.getByRole('button', { name: 'Nächste Runde' })).toHaveCount(0)
 
@@ -214,6 +212,7 @@ test.describe('tournaments', () => {
     await expect(page).toHaveURL(/\/turniere\/[0-9a-f-]{36}$/)
 
     await page.getByRole('button', { name: 'Turnier löschen' }).click()
+    await acceptConfirm(page)
 
     await expect(page).toHaveURL('/turniere')
     await expect(page.getByText('Noch keine Turniere')).toBeVisible()
@@ -301,15 +300,15 @@ test.describe('tournaments', () => {
     await expect(participantRow(page, 'Wegwerf Gast')).toBeVisible()
 
     // Cancelling "Entfernen" keeps the participant (#28).
-    page.once('dialog', dialog => dialog.dismiss())
     await page.getByRole('button', { name: 'Optionen für Wegwerf Gast' }).click()
     await page.getByRole('menuitem', { name: 'Entfernen' }).click()
+    await cancelConfirm(page)
     await expect(participantRow(page, 'Wegwerf Gast')).toBeVisible()
 
     // Accepting it removes them.
-    page.once('dialog', dialog => dialog.accept())
     await page.getByRole('button', { name: 'Optionen für Wegwerf Gast' }).click()
     await page.getByRole('menuitem', { name: 'Entfernen' }).click()
+    await acceptConfirm(page)
     await expect(participantRow(page, 'Wegwerf Gast')).toHaveCount(0)
 
     // Two participants and a completed round are needed to reach "Turnier
@@ -326,13 +325,13 @@ test.describe('tournaments', () => {
     await page.getByRole('button', { name: 'Runde abschließen' }).click()
 
     // Cancelling "Turnier abschließen" leaves it running (#27).
-    page.once('dialog', dialog => dialog.dismiss())
     await page.getByRole('button', { name: 'Turnier abschließen' }).click()
+    await cancelConfirm(page)
     await expect(page.getByText('Läuft')).toBeVisible()
 
     // Accepting it finishes the tournament.
-    page.once('dialog', dialog => dialog.accept())
     await page.getByRole('button', { name: 'Turnier abschließen' }).click()
+    await acceptConfirm(page)
     await expect(page.getByText('Dieses Turnier ist abgeschlossen und kann nicht mehr geändert werden.')).toBeVisible()
 
     // The winner is called out next to the standings (#36).
