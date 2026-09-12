@@ -40,6 +40,7 @@ const swapMode = ref(false)
 const swapSelection = ref<Array<{ matchId: string, slot: 'a' | 'b' }>>([])
 const swapError = ref('')
 const isSwapping = ref(false)
+const { confirm } = useConfirm()
 
 function toggleSwapMode() {
   swapMode.value = !swapMode.value
@@ -128,11 +129,14 @@ async function onSelectSlot(matchId: string, slot: 'a' | 'b') {
   swapSelection.value = []
   swapError.value = ''
 
-  if (
-    wouldRecreatePairing(first!.matchId, first!.slot, second!.matchId, second!.slot)
-    && !window.confirm('Diese Paarung gab es bereits. Trotzdem tauschen?')
-  ) {
-    return
+  if (wouldRecreatePairing(first!.matchId, first!.slot, second!.matchId, second!.slot)) {
+    const confirmed = await confirm({
+      title: 'Paarung wiederholen?',
+      description: 'Diese Paarung gab es bereits. Trotzdem tauschen?',
+    })
+    if (!confirmed) {
+      return
+    }
   }
 
   isSwapping.value = true

@@ -1,6 +1,25 @@
+import { defineComponent } from 'vue'
 import { describe, expect, it, vi } from 'vitest'
+import { DOMWrapper } from '@vue/test-utils'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
 import FormatePage from '~/pages/formate/index.vue'
+import ConfirmDialog from '~/components/layout/ConfirmDialog.vue'
+
+// `useConfirm()` is backed by a single shared `useState`, resolved by
+// `ConfirmDialog` (normally mounted once in `default.vue`) — mounting both
+// in the same Nuxt app instance is what makes the promise returned by
+// `confirm()` actually settle in a test.
+const PageWithConfirmDialog = defineComponent({
+  components: { FormatePage, ConfirmDialog },
+  template: '<div><FormatePage /><ConfirmDialog /></div>',
+})
+
+// UModal teleports its content to <body>, so the confirm dialog's own
+// "Bestätigen"/"Abbrechen" buttons are read from there (same pattern as
+// share-modal.test.ts).
+function body() {
+  return new DOMWrapper(document.body)
+}
 
 interface RuleFormatListItem {
   id: string
@@ -112,17 +131,17 @@ describe('formats page', () => {
 
     const fetchMock = vi.fn((_url: string, _options?: Record<string, unknown>) => Promise.resolve(null))
     vi.stubGlobal('$fetch', fetchMock)
-    vi.stubGlobal('confirm', vi.fn(() => false))
 
     // Nuxt's session helper uses `$fetch` too — only format calls matter here.
     const formatCalls = () => fetchMock.mock.calls.filter(([url]) => String(url).startsWith('/api/formats'))
 
-    const component = await mountSuspended(FormatePage)
+    const component = await mountSuspended(PageWithConfirmDialog)
     await component.find('[aria-label="Eigenes löschen"]').trigger('click')
+    await body().findAll('button').find(btn => btn.text() === 'Abbrechen')!.trigger('click')
     expect(formatCalls()).toEqual([])
 
-    vi.stubGlobal('confirm', vi.fn(() => true))
     await component.find('[aria-label="Eigenes löschen"]').trigger('click')
+    await body().findAll('button').find(btn => btn.text() === 'Bestätigen')!.trigger('click')
     expect(fetchMock).toHaveBeenCalledWith('/api/formats/own-1', { method: 'DELETE' })
 
     vi.unstubAllGlobals()

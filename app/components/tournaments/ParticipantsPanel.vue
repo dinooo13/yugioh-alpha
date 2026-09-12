@@ -138,13 +138,17 @@ async function setDropped(participant: TournamentParticipantDto, dropped: boolea
   }
 }
 
+const { confirm } = useConfirm()
+
 async function removeParticipant(participant: TournamentParticipantDto) {
   // Destructive and irreversible — a registered deck is lost with the row —
   // so it gets the same confirm as every other destructive action in the
-  // app (#28).
-  const confirmed = window.confirm(
-    `${participant.name} aus dem Turnier entfernen? Ein angemeldetes Deck geht dabei verloren.`,
-  )
+  // app (#28), now via the themed useConfirm() dialog instead of a native
+  // `window.confirm` (#14).
+  const confirmed = await confirm({
+    title: 'Teilnehmer entfernen',
+    description: `${participant.name} aus dem Turnier entfernen? Ein angemeldetes Deck geht dabei verloren.`,
+  })
   if (!confirmed) {
     return
   }
