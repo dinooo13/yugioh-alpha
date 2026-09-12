@@ -60,6 +60,10 @@ test.describe('tournaments', () => {
   test('runs a Swiss tournament from creation to finish', async ({ page }) => {
     const organizer = await registerAndLogin(page)
 
+    // "Turnier abschließen" and "Turnier löschen" both confirm before acting
+    // (#27, #28) — accept every native confirm for the rest of this test.
+    page.on('dialog', dialog => dialog.accept())
+
     // Seed a deck through the API with the page's session cookie (same
     // trick as e2e/decks.spec.ts). It is deliberately too small (13 cards)
     // to be legal against a standard 40-card-minimum format.
@@ -168,7 +172,10 @@ test.describe('tournaments', () => {
     await expect(page.getByRole('columnheader', { name: 'Punkte' })).toBeVisible()
     await expect(page.getByRole('columnheader', { name: 'OMW%' })).toBeVisible()
 
-    const standingsSection = page.getByRole('heading', { name: 'Tabelle' }).locator('..')
+    // The "Tabelle" heading now shares its row with the "Sieger: …" line
+    // (#36), so it's no longer the table's direct parent — scope by the
+    // enclosing <section> instead of a fixed number of `..` hops.
+    const standingsSection = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Tabelle' }) })
     const standingsRows = standingsSection.locator('tbody tr')
     await expect(standingsRows).toHaveCount(4)
 
@@ -186,20 +193,26 @@ test.describe('tournaments', () => {
     expect(await nameAndPoints(2)).toEqual({ name: 'Carla', points: '3' })
     expect(await nameAndPoints(3)).toEqual({ name: 'Alice', points: '0' })
 
-    // --- History filter --------------------------------------------------------
+    // --- History filter (#32: role and status are independent axes) ----------
     await page.goto('/turniere')
+    // Default view is "Meine Turniere" + "Aktiv" — the now-finished tournament
+    // is not an active one, so it's not here.
+    await expect(page.getByRole('heading', { name: 'Freitagsturnier' })).toHaveCount(0)
+
     await page.getByRole('button', { name: 'Abgeschlossen' }).click()
     await expect(page.getByRole('heading', { name: 'Freitagsturnier' })).toBeVisible()
 
-    await page.getByRole('button', { name: 'Meine Turniere' }).click()
-    await expect(page.getByRole('heading', { name: 'Freitagsturnier' })).toHaveCount(0)
+    // The organizer also played in their own tournament ("Ich spiele selbst
+    // mit"), so it stays visible under "Teilnahmen" too, still filtered to
+    // "Abgeschlossen" — this used to require excluding the organizer's own
+    // participant row.
+    await page.getByRole('button', { name: 'Teilnahmen' }).click()
+    await expect(page.getByRole('heading', { name: 'Freitagsturnier' })).toBeVisible()
 
     // --- Delete -----------------------------------------------------------------
-    await page.getByRole('button', { name: 'Abgeschlossen' }).click()
     await page.getByRole('link', { name: 'Freitagsturnier' }).click()
     await expect(page).toHaveURL(/\/turniere\/[0-9a-f-]{36}$/)
 
-    page.on('dialog', dialog => dialog.accept())
     await page.getByRole('button', { name: 'Turnier löschen' }).click()
 
     await expect(page).toHaveURL('/turniere')
@@ -253,6 +266,10 @@ test.describe('tournaments', () => {
     await expect(bPage.getByRole('button', { name: 'Turnier löschen' })).toHaveCount(0)
     await expect(bPage.getByRole('button', { name: 'Teilnehmer hinzufügen' })).toHaveCount(0)
 
+    // A linked participant without a registered deck sees a prominent
+    // reminder before the tournament starts (#31).
+    await expect(bPage.getByText('Melde dein Deck an, bevor das Turnier startet.')).toBeVisible()
+
     // B registers their own deck during registration.
     const bRow = participantRow(bPage, participant.name)
     await bRow.getByRole('button', { name: 'Deck anmelden' }).click()
@@ -260,11 +277,65 @@ test.describe('tournaments', () => {
     await bPage.getByRole('option', { name: 'B-Deck' }).click()
     await bPage.getByRole('button', { name: 'Anmelden' }).click()
     await expect(bRow.getByText('B-Deck')).toBeVisible()
+    await expect(bPage.getByText('Melde dein Deck an, bevor das Turnier startet.')).toHaveCount(0)
 
     // B cannot register a deck for the organizer's row: no button on it.
     const organizerRowForB = participantRow(bPage, organizer.name)
     await expect(organizerRowForB.getByRole('button', { name: /Deck an/ })).toHaveCount(0)
 
     await bContext.close()
+  })
+
+  test('confirms before removing a participant and before finishing a tournament, and lets a cancelled confirm keep the previous state', async ({ page }) => {
+    await registerAndLogin(page)
+
+    await page.goto('/turniere/neu')
+    await fillReliably(page.getByLabel('Turniername'), 'Bestätigungsturnier')
+    await page.getByRole('button', { name: 'Turnier anlegen' }).click()
+    await expect(page).toHaveURL(/\/turniere\/[0-9a-f-]{36}$/)
+
+    await page.getByRole('button', { name: 'Als Gast' }).click()
+    const guestNameField = page.getByLabel('Name')
+    await fillReliably(guestNameField, 'Wegwerf Gast')
+    await page.getByRole('button', { name: 'Teilnehmer hinzufügen' }).click()
+    await expect(participantRow(page, 'Wegwerf Gast')).toBeVisible()
+
+    // Cancelling "Entfernen" keeps the participant (#28).
+    page.once('dialog', dialog => dialog.dismiss())
+    await page.getByRole('button', { name: 'Optionen für Wegwerf Gast' }).click()
+    await page.getByRole('menuitem', { name: 'Entfernen' }).click()
+    await expect(participantRow(page, 'Wegwerf Gast')).toBeVisible()
+
+    // Accepting it removes them.
+    page.once('dialog', dialog => dialog.accept())
+    await page.getByRole('button', { name: 'Optionen für Wegwerf Gast' }).click()
+    await page.getByRole('menuitem', { name: 'Entfernen' }).click()
+    await expect(participantRow(page, 'Wegwerf Gast')).toHaveCount(0)
+
+    // Two participants and a completed round are needed to reach "Turnier
+    // abschließen" — add one back and play it out.
+    await expect(guestNameField).toHaveValue('')
+    await fillReliably(guestNameField, 'Mitspieler')
+    await page.getByRole('button', { name: 'Teilnehmer hinzufügen' }).click()
+    await expect(participantRow(page, 'Mitspieler')).toBeVisible()
+
+    await page.getByRole('button', { name: 'Turnier starten' }).click()
+    await expect(page.getByText('Läuft')).toBeVisible()
+
+    await matchRow(page, 1).getByRole('button', { name: '2:0' }).click()
+    await page.getByRole('button', { name: 'Runde abschließen' }).click()
+
+    // Cancelling "Turnier abschließen" leaves it running (#27).
+    page.once('dialog', dialog => dialog.dismiss())
+    await page.getByRole('button', { name: 'Turnier abschließen' }).click()
+    await expect(page.getByText('Läuft')).toBeVisible()
+
+    // Accepting it finishes the tournament.
+    page.once('dialog', dialog => dialog.accept())
+    await page.getByRole('button', { name: 'Turnier abschließen' }).click()
+    await expect(page.getByText('Dieses Turnier ist abgeschlossen und kann nicht mehr geändert werden.')).toBeVisible()
+
+    // The winner is called out next to the standings (#36).
+    await expect(page.getByText(/Sieger: /)).toBeVisible()
   })
 })
