@@ -174,6 +174,34 @@ describe('turnier detail page — organizer, registration', () => {
     expect(text).toContain('Nicht legal')
     expect(text).toContain('2 Regelverstöße')
   })
+
+  it('keeps showing the registered deck name and legality badge once the underlying deck is deleted', async () => {
+    // deck.deck_id is ON DELETE SET NULL: deckId goes null but the
+    // snapshot-derived deckName/deckLegal/deckIssueCount survive. The panel
+    // must key off deckName, not deckId, or a deleted deck silently drops
+    // out of a running/finished tournament's participant list.
+    state.tournament = tournamentDetail({
+      participants: [
+        participant({
+          deckId: null,
+          deckName: 'Turnierdeck',
+          deckLegal: false,
+          deckIssueCount: 2,
+        }),
+      ],
+    })
+
+    const component = await mountSuspended(TurnierDetailPage)
+    const text = component.text()
+
+    expect(text).toContain('Turnierdeck')
+    expect(text).toContain('Nicht legal')
+    expect(text).toContain('2 Regelverstöße')
+    expect(text).not.toContain('Kein Deck')
+    // deckId is null, so there is nothing left to preselect — the button
+    // still reads "Deck ändern" because the participant is registered.
+    expect(text).toContain('Deck ändern')
+  })
 })
 
 describe('turnier detail page — organizer, running', () => {
