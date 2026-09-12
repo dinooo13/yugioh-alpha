@@ -85,6 +85,10 @@ test.describe('sharing', () => {
     await page.getByRole('button', { name: 'Hinzufügen' }).click()
     await expect(page.getByText(`@${profileB.handle}`)).toBeVisible()
 
+    // "Privat" no longer claims only the owner can see it once a grant
+    // exists (UX review #20).
+    await expect(page.getByText('Nur du und 1 freigegebener Spieler können das sehen.')).toBeVisible()
+
     // B finds the deck on A's profile and opens it read-only. The deck's
     // name is also a heading on this very profile page, so the navigation
     // itself — not just the heading text — has to be awaited before reading
@@ -130,6 +134,11 @@ test.describe('sharing', () => {
     await expect(anonPage.getByRole('heading', { name: 'Inventar' })).toBeVisible()
     await anonPage.getByRole('link', { name: 'Inventar ansehen' }).click()
 
+    // The shared inventory names its owner in both the H1 and the <title>
+    // (UX review #24) — "Alle Karten" told a visitor nothing.
+    await expect(anonPage.getByRole('heading', { name: 'Inventar von E2E Test User' })).toBeVisible()
+    await expect(anonPage).toHaveTitle('Inventar von E2E Test User – yugioh alpha')
+
     await expect(anonPage.getByText('Dark Magician')).toBeVisible()
     await expect(anonPage.getByText('2×')).toBeVisible()
 
@@ -146,5 +155,64 @@ test.describe('sharing', () => {
     await expect(anonPage.getByText('Nicht gefunden oder nicht freigegeben.')).toBeVisible()
 
     await anonContext.close()
+  })
+
+  test('a granted user who is signed out is offered a login link that returns them to the shared deck', async ({ page, browser }) => {
+    await registerAndLogin(page)
+    const profileA = await (await page.request.get('/api/profile')).json()
+
+    const inventoryResponse = await page.request.post('/api/inventory', {
+      data: { catalog_card_id: DARK_MAGICIAN, quantity: 3 },
+    })
+    expect(inventoryResponse.ok()).toBe(true)
+
+    const deckResponse = await page.request.post('/api/decks', {
+      data: {
+        name: 'Deck für B ohne Session',
+        cards: [{ catalog_card_id: DARK_MAGICIAN, section: 'main', quantity: 3 }],
+      },
+    })
+    expect(deckResponse.ok()).toBe(true)
+    const deck = await deckResponse.json()
+
+    // User B is registered (so a grant can target them), then signed out —
+    // the whole point of this test is what an anonymous grantee sees.
+    const contextB = await browser.newContext()
+    const pageB = await contextB.newPage()
+    const userB = await registerAndLogin(pageB, { email: uniqueEmail() })
+    const profileB = await (await pageB.request.get('/api/profile')).json()
+    await logout(pageB)
+
+    await page.goto(`/decks/${deck.id}`)
+    await page.getByRole('button', { name: 'Teilen' }).click()
+    await page.getByLabel('Spieler suchen').fill(profileB.handle)
+    await page.getByRole('button', { name: 'Hinzufügen' }).click()
+    await expect(page.getByText(`@${profileB.handle}`)).toBeVisible()
+
+    const deckPath = `/spieler/${profileA.handle}/decks/${deck.id}`
+
+    // Signed out, B's grant is invisible to the server (grants are
+    // user-bound) — the not-found box is correct, but it must not read like
+    // a dead end (UX review #19).
+    await pageB.goto(deckPath)
+    await expect(pageB.getByText('Nicht gefunden oder nicht freigegeben.')).toBeVisible()
+
+    const loginLink = pageB.getByRole('link', { name: 'melde dich an' })
+    await expect(loginLink).toBeVisible()
+
+    await loginLink.click()
+    await expect(pageB).toHaveURL(/\/login\?redirect=/)
+    expect(new URL(pageB.url()).searchParams.get('redirect')).toBe(deckPath)
+
+    await pageB.getByLabel('E-Mail').fill(userB.email)
+    await pageB.getByLabel('Passwort').fill(userB.password)
+    await pageB.getByRole('button', { name: 'Anmelden' }).click()
+
+    // Signed in, the same grant now resolves — landing back on the deck the
+    // login link was clicked from, not the dashboard.
+    await expect(pageB).toHaveURL(deckPath)
+    await expect(pageB.getByRole('heading', { name: 'Deck für B ohne Session' })).toBeVisible()
+
+    await contextB.close()
   })
 })
