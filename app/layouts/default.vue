@@ -30,7 +30,7 @@ const navItems = computed<NavigationMenuItem[]>(() => [
   { label: 'Decks', icon: 'i-lucide-layers', to: '/decks', active: route.path.startsWith('/decks') },
   { label: 'Formate', icon: 'i-lucide-scroll-text', to: '/formate', active: route.path.startsWith('/formate') },
   { label: 'Wunschliste', icon: 'i-lucide-heart', to: '/wunschliste' },
-  { label: 'Turniere', icon: 'i-lucide-trophy', to: '/turniere' },
+  { label: 'Turniere', icon: 'i-lucide-trophy', to: '/turniere', active: route.path.startsWith('/turniere') },
 ])
 
 // Deterministic cosmetic color per collection, since collections have no
