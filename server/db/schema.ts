@@ -629,3 +629,98 @@ export const tournamentMatchRelations = relations(tournamentMatch, ({ one }) => 
   participantA: one(tournamentParticipant, { fields: [tournamentMatch.participantAId], references: [tournamentParticipant.id], relationName: 'participantA' }),
   participantB: one(tournamentParticipant, { fields: [tournamentMatch.participantBId], references: [tournamentParticipant.id], relationName: 'participantB' }),
 }))
+
+// Chat assistant with tools (Phase 8, see docs/adr/0010-chat-assistant-with-tools.md).
+//
+// A conversation is a persisted thread of messages between the user and the
+// model, including 'tool' role messages (the tool call results the model
+// saw). Write tools never mutate directly: a tool call that would change the
+// user's data creates an `assistantAction` row instead ("pending"), which the
+// UI must explicitly apply or reject — see server/utils/assistant-tools.ts.
+
+export const assistantConversation = sqliteTable(
+  'assistant_conversation',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    // Seeded from the first user message (truncated), shown in the conversation list.
+    title: text('title').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+  },
+  table => [
+    index('idx_assistant_conversation_user_updated').on(table.userId, table.updatedAt),
+  ],
+)
+
+export const assistantMessage = sqliteTable(
+  'assistant_message',
+  {
+    id: text('id').primaryKey(),
+    conversationId: text('conversation_id')
+      .notNull()
+      .references(() => assistantConversation.id, { onDelete: 'cascade' }),
+    role: text('role').notNull().$type<'user' | 'assistant' | 'tool'>(),
+    // Plain text; '' is allowed for a pure tool-call assistant message.
+    content: text('content').notNull(),
+    // [{ id, name, arguments }] — only set on an assistant message that requested tool calls.
+    toolCalls: text('tool_calls', { mode: 'json' }).$type<Array<{ id: string, name: string, arguments: Record<string, unknown> }>>(),
+    // Only set on a 'tool' role message: which call this is the result of.
+    toolCallId: text('tool_call_id'),
+    toolName: text('tool_name'),
+    // Image attachments are never persisted as bytes — only a label survives
+    // (see ADR 0010): [{ kind: 'image', label }].
+    attachments: text('attachments', { mode: 'json' }).$type<Array<{ kind: 'image', label: string }>>(),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  },
+  table => [
+    index('idx_assistant_message_conversation_created').on(table.conversationId, table.createdAt),
+  ],
+)
+
+export const assistantAction = sqliteTable(
+  'assistant_action',
+  {
+    id: text('id').primaryKey(),
+    conversationId: text('conversation_id')
+      .notNull()
+      .references(() => assistantConversation.id, { onDelete: 'cascade' }),
+    messageId: text('message_id')
+      .notNull()
+      .references(() => assistantMessage.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    kind: text('kind').notNull().$type<'add_to_inventory' | 'create_deck' | 'update_deck_cards'>(),
+    // Validated tool arguments — exactly what `applyAction` executes.
+    payload: text('payload', { mode: 'json' }).notNull().$type<Record<string, unknown>>(),
+    // German one-liner shown on the action card.
+    summary: text('summary').notNull(),
+    status: text('status').notNull().$type<'pending' | 'applied' | 'rejected' | 'failed'>().default('pending'),
+    result: text('result', { mode: 'json' }).$type<unknown>(),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+    resolvedAt: integer('resolved_at', { mode: 'timestamp' }),
+  },
+  table => [
+    index('idx_assistant_action_user_status').on(table.userId, table.status),
+  ],
+)
+
+export const assistantConversationRelations = relations(assistantConversation, ({ one, many }) => ({
+  user: one(user, { fields: [assistantConversation.userId], references: [user.id] }),
+  messages: many(assistantMessage),
+  actions: many(assistantAction),
+}))
+
+export const assistantMessageRelations = relations(assistantMessage, ({ one, many }) => ({
+  conversation: one(assistantConversation, { fields: [assistantMessage.conversationId], references: [assistantConversation.id] }),
+  actions: many(assistantAction),
+}))
+
+export const assistantActionRelations = relations(assistantAction, ({ one }) => ({
+  conversation: one(assistantConversation, { fields: [assistantAction.conversationId], references: [assistantConversation.id] }),
+  message: one(assistantMessage, { fields: [assistantAction.messageId], references: [assistantMessage.id] }),
+  user: one(user, { fields: [assistantAction.userId], references: [user.id] }),
+}))
