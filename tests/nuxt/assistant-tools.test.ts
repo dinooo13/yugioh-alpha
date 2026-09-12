@@ -6,8 +6,8 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import * as schema from '../../server/db/schema'
 import { addOwnedCard, ownedQuantitiesByCard, validateInventoryInput } from '../../server/utils/inventory'
 import { createCollection } from '../../server/utils/collections'
-import { createDeck, updateDeck, upsertDeckCard } from '../../server/utils/decks'
-import { createRuleFormat, seedBuiltinFormats, validateRuleFormatInput } from '../../server/utils/rule-formats'
+import { createDeck, getDeckDetail, listDecks, updateDeck, upsertDeckCard } from '../../server/utils/decks'
+import { createRuleFormat, deleteRuleFormat, seedBuiltinFormats, validateRuleFormatInput } from '../../server/utils/rule-formats'
 import {
   applyAction,
   ASSISTANT_TOOL_RESULT_MAX_ITEMS,
@@ -17,6 +17,7 @@ import {
   toolDefinitions,
 } from '../../server/utils/assistant-tools'
 import type { ToolOutcome } from '../../server/utils/assistant-tools'
+import type { AssistantActionKind } from '../../shared/assistant-chat'
 
 const CARD = {
   darkMagician: 46986414,
@@ -148,9 +149,12 @@ describe('runTool', () => {
 describe('search_catalog', () => {
   it('finds cards by a name substring and includes stats', async () => {
     const outcome = await tool('search_catalog').run({ db, userId: 'user-a' }, { query: 'Dark Mag' })
-    expect(outcome.result).toEqual([
-      expect.objectContaining({ id: CARD.darkMagician, name: 'Dark Magician', type: 'Normal Monster', atk: 2500, def: 2100 }),
-    ])
+    expect(outcome.result).toMatchObject({
+      items: [
+        expect.objectContaining({ id: CARD.darkMagician, name: 'Dark Magician', type: 'Normal Monster', atk: 2500, def: 2100 }),
+      ],
+      truncated: false,
+    })
   })
 
   it('rejects non-object arguments', async () => {
@@ -169,10 +173,14 @@ describe('search_catalog', () => {
     db.insert(schema.catalogCard).values(extraCards).run()
 
     const full = await tool('search_catalog').run({ db, userId: 'user-a' }, { query: 'Filler Card' })
-    expect((full.result as unknown[])).toHaveLength(ASSISTANT_TOOL_RESULT_MAX_ITEMS)
+    const fullResult = full.result as { items: unknown[], truncated: boolean }
+    expect(fullResult.items).toHaveLength(ASSISTANT_TOOL_RESULT_MAX_ITEMS)
+    expect(fullResult.truncated).toBe(true)
 
     const limited = await tool('search_catalog').run({ db, userId: 'user-a' }, { query: 'Filler Card', limit: 3 })
-    expect((limited.result as unknown[])).toHaveLength(3)
+    const limitedResult = limited.result as { items: unknown[], truncated: boolean }
+    expect(limitedResult.items).toHaveLength(3)
+    expect(limitedResult.truncated).toBe(true)
   })
 })
 
@@ -200,7 +208,8 @@ describe('search_inventory', () => {
     await own(db, 'user-a', CARD.potOfGreed, 3)
 
     const outcome = await tool('search_inventory').run({ db, userId: 'user-a' }, {})
-    const byCard = new Map((outcome.result as Array<{ catalogCardId: number, quantity: number, collections: unknown[] }>).map(row => [row.catalogCardId, row]))
+    const { items } = outcome.result as { items: Array<{ catalogCardId: number, quantity: number, collections: unknown[] }> }
+    const byCard = new Map(items.map(row => [row.catalogCardId, row]))
 
     expect(byCard.get(CARD.darkMagician)).toMatchObject({ name: 'Dark Magician', quantity: 3 })
     expect(byCard.get(CARD.darkMagician)!.collections).toEqual([{ id: collectionA.id, name: 'Box 1', quantity: 2 }])
@@ -212,10 +221,10 @@ describe('search_inventory', () => {
     await own(db, 'user-b', CARD.potOfGreed, 5)
 
     const byQuery = await tool('search_inventory').run({ db, userId: 'user-a' }, { query: 'Dark' })
-    expect(byQuery.result).toEqual([expect.objectContaining({ catalogCardId: CARD.darkMagician })])
+    expect(byQuery.result).toMatchObject({ items: [expect.objectContaining({ catalogCardId: CARD.darkMagician })] })
 
     const byQueryMiss = await tool('search_inventory').run({ db, userId: 'user-a' }, { query: 'Pot of Greed' })
-    expect(byQueryMiss.result).toEqual([])
+    expect(byQueryMiss.result).toMatchObject({ items: [] })
   })
 
   it('404s for a collectionId the caller does not own', async () => {
@@ -231,7 +240,7 @@ describe('list_collections', () => {
     await createCollection(db, 'user-b', { name: 'Not mine', description: null })
 
     const outcome = await tool('list_collections').run({ db, userId: 'user-a' }, {})
-    expect(outcome.result).toEqual([{ id: collection.id, name: 'Box 1', cardCount: 4 }])
+    expect(outcome.result).toMatchObject({ items: [{ id: collection.id, name: 'Box 1', cardCount: 4 }], truncated: false })
   })
 })
 
@@ -242,9 +251,13 @@ describe('list_decks', () => {
     createDeck(db, 'user-b', { name: 'Not mine', description: null })
 
     const outcome = await tool('list_decks').run({ db, userId: 'user-a' }, {})
-    expect(outcome.result).toEqual([
-      expect.objectContaining({ id: deck.id, name: 'My Deck', formatName: null, legal: null, counts: { main: 1, extra: 0, side: 0, total: 1 } }),
-    ])
+    expect(outcome.result).toMatchObject({
+      items: [
+        expect.objectContaining({ id: deck.id, name: 'My Deck', formatName: null, legal: null, counts: { main: 1, extra: 0, side: 0, total: 1 } }),
+      ],
+      truncated: false,
+      total: 1,
+    })
   })
 
   it('filters by query', async () => {
@@ -252,7 +265,8 @@ describe('list_decks', () => {
     createDeck(db, 'user-a', { name: 'Burn Deck', description: null })
 
     const outcome = await tool('list_decks').run({ db, userId: 'user-a' }, { query: 'Blue-Eyes' })
-    expect((outcome.result as Array<{ name: string }>).map(item => item.name)).toEqual(['Blue-Eyes Deck'])
+    const { items } = outcome.result as { items: Array<{ name: string }> }
+    expect(items.map(item => item.name)).toEqual(['Blue-Eyes Deck'])
   })
 })
 
@@ -292,7 +306,7 @@ describe('list_formats', () => {
     seedBuiltinFormats(db)
     createRuleFormat(db, 'user-a', validateRuleFormatInput({ name: 'Mein Format', rules: { rules: [] } }))
     const outcome = await tool('list_formats').run({ db, userId: 'user-a' }, {})
-    const names = (outcome.result as Array<{ name: string, isBuiltin: boolean }>)
+    const { items: names } = outcome.result as { items: Array<{ name: string, isBuiltin: boolean }> }
     expect(names.some(item => item.isBuiltin)).toBe(true)
     expect(names.some(item => item.name === 'Mein Format' && !item.isBuiltin)).toBe(true)
   })
@@ -402,29 +416,37 @@ describe('update_deck_cards (write tool)', () => {
 })
 
 describe('applyAction', () => {
+  let pendingActionCounter = 0
+
+  /** Inserts a pending `assistant_action` row directly — the conversation/message it references are incidental to these tests. */
+  function insertPendingAction(userId: string, kind: AssistantActionKind, payload: Record<string, unknown>, summary = 'Test') {
+    pendingActionCounter += 1
+    const n = pendingActionCounter
+    const conversation = db.insert(schema.assistantConversation).values({
+      id: `conv-${n}`, userId, title: 'Test', createdAt: new Date(), updatedAt: new Date(),
+    }).returning().all()[0]!
+    const message = db.insert(schema.assistantMessage).values({
+      id: `msg-${n}`, conversationId: conversation.id, role: 'assistant', content: '', createdAt: new Date(),
+    }).returning().all()[0]!
+    return db.insert(schema.assistantAction).values({
+      id: `action-${n}`,
+      conversationId: conversation.id,
+      messageId: message.id,
+      userId,
+      kind,
+      payload,
+      summary,
+      status: 'pending',
+      createdAt: new Date(),
+    }).returning().all()[0]!
+  }
+
   async function proposeAddToInventory(userId: string, quantity = 2) {
     const outcome = await tool('add_to_inventory').run({ db, userId }, {
       items: [{ catalogCardId: CARD.darkMagician, quantity }],
     })
     const action = (outcome as Extract<ToolOutcome, { action: unknown }>).action
-    const conversation = db.insert(schema.assistantConversation).values({
-      id: 'conv-1', userId, title: 'Test', createdAt: new Date(), updatedAt: new Date(),
-    }).returning().all()[0]!
-    const message = db.insert(schema.assistantMessage).values({
-      id: 'msg-1', conversationId: conversation.id, role: 'assistant', content: '', createdAt: new Date(),
-    }).returning().all()[0]!
-    const row = db.insert(schema.assistantAction).values({
-      id: 'action-1',
-      conversationId: conversation.id,
-      messageId: message.id,
-      userId,
-      kind: action.kind,
-      payload: action.payload,
-      summary: action.summary,
-      status: 'pending',
-      createdAt: new Date(),
-    }).returning().all()[0]!
-    return row
+    return insertPendingAction(userId, action.kind, action.payload, action.summary)
   }
 
   it('applies an add_to_inventory action and marks it applied', async () => {
@@ -455,6 +477,97 @@ describe('applyAction', () => {
     const updated = await applyAction(db, 'user-a', action.id)
     expect(updated.status).toBe('failed')
     expect(updated.result).toMatchObject({ error: expect.any(String) })
+  })
+
+  it('a concurrent double apply: exactly one call succeeds, the other 409s, and the write happens once', async () => {
+    const action = await proposeAddToInventory('user-a', 2)
+
+    const results = await Promise.allSettled([
+      applyAction(db, 'user-a', action.id),
+      applyAction(db, 'user-a', action.id),
+    ])
+
+    expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1)
+    const rejected = results.filter((result): result is PromiseRejectedResult => result.status === 'rejected')
+    expect(rejected).toHaveLength(1)
+    expect((rejected[0]!.reason as { statusCode?: number }).statusCode).toBe(409)
+
+    // Applied exactly once — not twice.
+    expect(ownedQuantitiesByCard(db, 'user-a', [CARD.darkMagician]).get(CARD.darkMagician)).toBe(2)
+  })
+
+  it('rolls back the whole payload (no orphan deck) when create_deck succeeds but the format assignment fails', async () => {
+    const format = createRuleFormat(db, 'user-a', validateRuleFormatInput({ name: 'Format', rules: { rules: [] } }))
+    const outcome = await tool('create_deck').run({ db, userId: 'user-a' }, {
+      name: 'Rollback Deck',
+      formatId: format.id,
+      cards: [{ catalogCardId: CARD.darkMagician, section: 'main', quantity: 1 }],
+    })
+    const action = (outcome as Extract<ToolOutcome, { action: unknown }>).action
+    const row = insertPendingAction('user-a', action.kind, action.payload, action.summary)
+
+    // The format is removed after the action was proposed but before it's applied —
+    // `createDeck` would still succeed on its own; the format assignment that
+    // follows fails, and the whole transaction (including the deck row) must
+    // roll back rather than leaving an orphan, unassigned deck behind.
+    deleteRuleFormat(db, 'user-a', format.id)
+
+    const updated = await applyAction(db, 'user-a', row.id)
+    expect(updated.status).toBe('failed')
+
+    const decks = listDecks(db, 'user-a', {}).items
+    expect(decks.some(deckItem => deckItem.name === 'Rollback Deck')).toBe(false)
+  })
+
+  it('re-validates a create_deck payload at apply time and creates nothing for an out-of-bounds quantity', async () => {
+    // Simulates a payload row tampered with (or corrupted) after proposal —
+    // the tool layer would never itself produce a quantity this large.
+    const row = insertPendingAction('user-a', 'create_deck', {
+      name: 'Sneaky Deck',
+      description: null,
+      formatId: null,
+      cards: [{ catalogCardId: CARD.darkMagician, section: 'main', quantity: 5000 }],
+    })
+
+    const updated = await applyAction(db, 'user-a', row.id)
+    expect(updated.status).toBe('failed')
+
+    const decks = listDecks(db, 'user-a', {}).items
+    expect(decks.some(deckItem => deckItem.name === 'Sneaky Deck')).toBe(false)
+  })
+
+  it('re-validates an update_deck_cards payload at apply time and changes nothing for an out-of-bounds quantity', async () => {
+    const deck = createDeck(db, 'user-a', { name: 'Mein Deck', description: null })
+    const row = insertPendingAction('user-a', 'update_deck_cards', {
+      deckId: deck.id,
+      changes: [{ catalogCardId: CARD.darkMagician, section: 'main', quantity: 5000 }],
+    })
+
+    const updated = await applyAction(db, 'user-a', row.id)
+    expect(updated.status).toBe('failed')
+    expect(getDeckDetail(db, 'user-a', deck.id).sections.main).toEqual([])
+  })
+
+  it('does not partially apply a batch of deck-card changes when one entry is invalid', async () => {
+    const deck = createDeck(db, 'user-a', { name: 'Mein Deck', description: null })
+    const outcome = await tool('update_deck_cards').run({ db, userId: 'user-a' }, {
+      deckId: deck.id,
+      changes: [
+        { catalogCardId: CARD.darkMagician, section: 'main', quantity: 2 },
+        { catalogCardId: CARD.potOfGreed, section: 'main', quantity: 1 },
+      ],
+    })
+    const action = (outcome as Extract<ToolOutcome, { action: unknown }>).action
+    const row = insertPendingAction('user-a', action.kind, action.payload, action.summary)
+
+    // The catalog changes between proposal and apply — Pot of Greed disappears.
+    db.delete(schema.catalogCard).where(eq(schema.catalogCard.id, CARD.potOfGreed)).run()
+
+    const updated = await applyAction(db, 'user-a', row.id)
+    expect(updated.status).toBe('failed')
+    // Dark Magician would have succeeded on its own, but the batch fails
+    // together — no partial deck changes.
+    expect(getDeckDetail(db, 'user-a', deck.id).sections.main).toEqual([])
   })
 })
 

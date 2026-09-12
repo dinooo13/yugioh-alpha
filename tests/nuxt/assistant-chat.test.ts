@@ -1,5 +1,6 @@
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
 import { drizzle } from 'drizzle-orm/better-sqlite3'
+import { eq } from 'drizzle-orm'
 import Database from 'better-sqlite3'
 import { beforeEach, describe, expect, it } from 'vitest'
 import * as schema from '../../server/db/schema'
@@ -121,8 +122,30 @@ describe('validateAssistantMessageInput', () => {
     expect(() => validateAssistantMessageInput({ text: 'hi', images: ['https://example.com/x.png'] })).toThrowError()
   })
 
+  it('rejects a data URL with a disallowed MIME type', () => {
+    expect(() => validateAssistantMessageInput({ text: 'hi', images: ['data:application/pdf;base64,abc'] })).toThrowError()
+    expect(() => validateAssistantMessageInput({ text: 'hi', images: ['data:text/html,<script>'] })).toThrowError()
+  })
+
+  it('accepts jpeg and webp data URLs, not just png', () => {
+    expect(() => validateAssistantMessageInput({ text: 'hi', images: ['data:image/jpeg;base64,abc'] })).not.toThrow()
+    expect(() => validateAssistantMessageInput({ text: 'hi', images: ['data:image/webp;base64,abc'] })).not.toThrow()
+  })
+
   it('accepts images alone without text', () => {
     expect(validateAssistantMessageInput({ images: ['data:image/png;base64,abc'] }).text).toBe('')
+  })
+
+  it('measures the size cap from the decoded base64 payload, not the raw data-URL string length', () => {
+    // ~5,000,000 base64 characters decode to ~3.75 MB — under the 4 MB cap —
+    // even though the raw data-URL string itself is longer than 4 MB.
+    const base64 = 'A'.repeat(5_000_000)
+    expect(() => validateAssistantMessageInput({ text: 'hi', images: [`data:image/png;base64,${base64}`] })).not.toThrow()
+  })
+
+  it('still rejects when the decoded image data itself exceeds the cap', () => {
+    const base64 = 'A'.repeat(6_000_000) // decodes to ~4.5 MB
+    expect(() => validateAssistantMessageInput({ text: 'hi', images: [`data:image/png;base64,${base64}`] })).toThrowError()
   })
 })
 
@@ -186,7 +209,7 @@ describe('runChatTurn', () => {
     expect(detail.messages[0]).toMatchObject({ role: 'user', content: 'suche Dark Magician' })
     expect(detail.messages[1]).toMatchObject({ role: 'assistant', toolCalls: [{ name: 'search_catalog' }] })
     expect(detail.messages[2]).toMatchObject({ role: 'tool', toolName: 'search_catalog' })
-    expect(JSON.parse(detail.messages[2]!.content)).toEqual([expect.objectContaining({ name: 'Dark Magician' })])
+    expect(JSON.parse(detail.messages[2]!.content)).toMatchObject({ items: [expect.objectContaining({ name: 'Dark Magician' })] })
     expect(detail.messages[3]).toMatchObject({ role: 'assistant', content: 'Ich habe 1 Karte gefunden: Dark Magician' })
 
     // The conversation title is derived from the first user message.
@@ -292,12 +315,59 @@ describe('runChatTurn', () => {
     await runChatTurn(db, 'user-a', conversation.id, { text: 'weiter', images: NO_IMAGES }, model, emit)
 
     const sentMessages = calls[0]!.messages
-    // 30 prior messages (of 35) plus the current turn's user message.
-    expect(sentMessages).toHaveLength(31)
+    // The count trim keeps the newest 30 (i=5..34); i=5 is an assistant
+    // message, so the window-must-start-on-`user` sanitization drops it too,
+    // leaving i=6..34 (29) plus the current turn's user message.
+    expect(sentMessages).toHaveLength(30)
     const sentText = JSON.stringify(sentMessages)
     expect(sentText).not.toContain('old message 0"')
     expect(sentText).not.toContain('old message 4"')
+    expect(sentText).not.toContain('old message 5"')
+    expect(sentText).toContain('old message 6')
     expect(sentText).toContain('old message 34')
+  })
+
+  it('sanitizes a history window that would otherwise start mid tool-call sequence', async () => {
+    const conversation = createConversation(db, 'user-a')
+    const base = Date.parse('2024-01-01T00:00:00Z')
+    let seq = 0
+    const insert = (fields: { role: 'user' | 'assistant' | 'tool', content: string, toolCalls?: Array<{ id: string, name: string, arguments: Record<string, unknown> }>, toolCallId?: string, toolName?: string }) => {
+      seq += 1
+      db.insert(schema.assistantMessage).values({
+        id: `hist-${seq}`,
+        conversationId: conversation.id,
+        createdAt: new Date(base + seq * 1000),
+        ...fields,
+      }).run()
+    }
+
+    // The oldest two rows are a tool-call group (an assistant `tool_calls`
+    // message immediately followed by its `tool` result). 31 rows total, so
+    // the 30-message count trim drops exactly the assistant row, leaving its
+    // `tool` row as the would-be first message of the window — the orphan
+    // scenario finding #1 describes.
+    insert({ role: 'assistant', content: '', toolCalls: [{ id: 'call-1', name: 'search_catalog', arguments: { query: 'x' } }] })
+    insert({ role: 'tool', content: '[]', toolCallId: 'call-1', toolName: 'search_catalog' })
+    for (let i = 0; i < 29; i++) {
+      insert({ role: i % 2 === 0 ? 'user' : 'assistant', content: `old message ${i}` })
+    }
+
+    const { model, calls } = scriptedChatModel([textResult('ok')])
+    const { emit } = collectEvents()
+
+    await runChatTurn(db, 'user-a', conversation.id, { text: 'weiter', images: NO_IMAGES }, model, emit)
+
+    const sentMessages = calls[0]!.messages
+    // The window must start on a `user` message, and must never contain a
+    // lone `tool` row without its assistant `tool_calls` message right before it.
+    expect(sentMessages[0]).toEqual({ role: 'user', content: [{ type: 'text', text: 'old message 0' }] })
+    for (let i = 0; i < sentMessages.length; i++) {
+      if (sentMessages[i]!.role === 'tool') {
+        expect(sentMessages[i - 1]).toBeDefined()
+        expect(sentMessages[i - 1]!.role).toBe('assistant')
+        expect((sentMessages[i - 1] as { tool_calls?: unknown[] }).tool_calls?.length).toBeGreaterThan(0)
+      }
+    }
   })
 
   it('does not resend image bytes from history — only the current turn carries image_url parts', async () => {
@@ -310,6 +380,137 @@ describe('runChatTurn', () => {
 
     const historyUserMessage = calls[0]!.messages[0]
     expect(historyUserMessage).toEqual({ role: 'user', content: [{ type: 'text', text: 'was ist das' }] })
+  })
+
+  it('sets the conversation title from the first user message even when the turn itself fails', async () => {
+    const conversation = createConversation(db, 'user-a')
+    const model: DeckAssistantModel = {
+      id: 'broken',
+      generate: async () => { throw new Error('not used') },
+      chat: async () => {
+        throw Object.assign(new Error('down'), { statusCode: 502, statusMessage: 'Der KI-Assistent ist derzeit nicht erreichbar.' })
+      },
+    }
+
+    await runChatTurn(db, 'user-a', conversation.id, { text: 'Hallo Assistent', images: NO_IMAGES }, model, () => {})
+
+    const detail = getConversationDetail(db, 'user-a', conversation.id)
+    expect(detail.conversation.title).toBe('Hallo Assistent')
+    // The user message alone must already have moved the conversation off
+    // "just created" — not only a turn that completes successfully.
+    expect(new Date(detail.conversation.updatedAt).getTime()).toBeGreaterThan(new Date(detail.conversation.createdAt).getTime() - 1)
+  })
+
+  it('bumps updatedAt on every persisted message, not only at the end of a successful turn', async () => {
+    const conversation = createConversation(db, 'user-a')
+    const createdAt = getConversationDetail(db, 'user-a', conversation.id).conversation.updatedAt
+
+    const { model } = scriptedChatModel([
+      toolCallResult('search_catalog', { query: 'Dark Magician' }),
+      textResult('Ich habe 1 Karte gefunden: Dark Magician'),
+    ])
+    await runChatTurn(db, 'user-a', conversation.id, { text: 'suche Dark Magician', images: NO_IMAGES }, model, () => {})
+
+    const detail = getConversationDetail(db, 'user-a', conversation.id)
+    // user, assistant(tool_calls), tool, assistant(final) — every one of
+    // those persists and should have bumped `updatedAt` at least once.
+    expect(detail.messages).toHaveLength(4)
+    expect(new Date(detail.conversation.updatedAt).getTime()).toBeGreaterThanOrEqual(new Date(createdAt).getTime())
+  })
+
+  it('honours finishReason "length": appends a note to the answer and stops the loop', async () => {
+    const conversation = createConversation(db, 'user-a')
+    const { model, calls } = scriptedChatModel([
+      { text: 'Das ist eine unvollständige Antwort', toolCalls: [], finishReason: 'length' },
+    ])
+    const { events, emit } = collectEvents()
+
+    await runChatTurn(db, 'user-a', conversation.id, { text: 'frag was langes', images: NO_IMAGES }, model, emit)
+
+    expect(calls).toHaveLength(1)
+    const messageEnd = events.find(event => event.type === 'message_end')
+    expect(messageEnd).toMatchObject({ message: { content: expect.stringContaining('(Antwort wurde gekürzt)') } })
+    expect(messageEnd).toMatchObject({ message: { content: expect.stringContaining('Das ist eine unvollständige Antwort') } })
+  })
+
+  it('honours finishReason "length" on a tool-call round too — stops instead of continuing the loop', async () => {
+    const conversation = createConversation(db, 'user-a')
+    const { model, calls } = scriptedChatModel([
+      { text: '', toolCalls: [{ id: 'call-1', name: 'search_catalog', arguments: '{"query":"Dark' }], finishReason: 'length' },
+      textResult('sollte nicht aufgerufen werden'),
+    ])
+    const { events, emit } = collectEvents()
+
+    await runChatTurn(db, 'user-a', conversation.id, { text: 'frag was langes', images: NO_IMAGES }, model, emit)
+
+    // Only the first (truncated) round is ever sent to the model.
+    expect(calls).toHaveLength(1)
+    expect(events.some(event => event.type === 'tool_call')).toBe(false)
+    const messageEnd = events.find(event => event.type === 'message_end')
+    expect(messageEnd).toMatchObject({ message: { content: expect.stringContaining('(Antwort wurde gekürzt)') } })
+  })
+
+  it('replaces a content_filter or empty final answer with a German fallback', async () => {
+    const conversation = createConversation(db, 'user-a')
+    const { model } = scriptedChatModel([{ text: '', toolCalls: [], finishReason: 'content_filter' }])
+    const { events, emit } = collectEvents()
+
+    await runChatTurn(db, 'user-a', conversation.id, { text: 'hallo', images: NO_IMAGES }, model, emit)
+
+    const messageEnd = events.find(event => event.type === 'message_end')
+    expect(messageEnd).toMatchObject({ message: { content: expect.stringContaining('keine Antwort erzeugen') } })
+  })
+
+  it('replaces an empty final answer (finishReason "stop") with a German fallback', async () => {
+    const conversation = createConversation(db, 'user-a')
+    const { model } = scriptedChatModel([{ text: '', toolCalls: [], finishReason: 'stop' }])
+    const { events, emit } = collectEvents()
+
+    await runChatTurn(db, 'user-a', conversation.id, { text: 'hallo', images: NO_IMAGES }, model, emit)
+
+    const messageEnd = events.find(event => event.type === 'message_end')
+    expect(messageEnd).toMatchObject({ message: { content: expect.stringContaining('keine Antwort erzeugen') } })
+  })
+
+  it('runs a tool with a German error result instead of {} when the accumulated arguments are invalid JSON', async () => {
+    const conversation = createConversation(db, 'user-a')
+    const { model } = scriptedChatModel([
+      { text: '', toolCalls: [{ id: 'call-1', name: 'search_catalog', arguments: '{"query": "Dark' }], finishReason: 'tool_calls' },
+      textResult('ok'),
+    ])
+    const { events, emit } = collectEvents()
+
+    await runChatTurn(db, 'user-a', conversation.id, { text: 'suche', images: NO_IMAGES }, model, emit)
+
+    const toolResultEvent = events.find(event => event.type === 'tool_result')
+    expect(toolResultEvent).toMatchObject({ ok: false, summary: 'Ungültige Argumente' })
+
+    const detail = getConversationDetail(db, 'user-a', conversation.id)
+    const toolMessage = detail.messages.find(message => message.role === 'tool')!
+    expect(JSON.parse(toolMessage.content)).toEqual({ error: 'Ungültige Argumente' })
+  })
+
+  it('replaces an over-budget tool result with a valid JSON error envelope instead of truncating the JSON string', async () => {
+    const conversation = createConversation(db, 'user-a')
+    // A description long enough to push the serialized get_card result past
+    // the 8000-character tool-result budget.
+    db.update(schema.catalogCard)
+      .set({ desc: 'x'.repeat(9000) })
+      .where(eq(schema.catalogCard.id, CARD.darkMagician))
+      .run()
+
+    const { model } = scriptedChatModel([
+      toolCallResult('get_card', { id: CARD.darkMagician }),
+      textResult('ok'),
+    ])
+    const { emit } = collectEvents()
+
+    await runChatTurn(db, 'user-a', conversation.id, { text: 'details bitte', images: NO_IMAGES }, model, emit)
+
+    const detail = getConversationDetail(db, 'user-a', conversation.id)
+    const toolMessage = detail.messages.find(message => message.role === 'tool')!
+    // Must stay valid, parseable JSON — never a mid-string cut.
+    expect(JSON.parse(toolMessage.content)).toEqual({ error: 'Ergebnis zu groß', hint: 'Bitte enger suchen.' })
   })
 })
 

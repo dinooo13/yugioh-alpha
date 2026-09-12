@@ -918,6 +918,38 @@ describe('chat()', () => {
     expect(result.text).toBe('Hallo')
   })
 
+  it('joins multiple "data:" lines of one event with \\n before parsing, per the SSE spec', async () => {
+    // A provider that pretty-prints or otherwise chunks one event's JSON
+    // across several `data:` lines must have them joined with `\n` before
+    // parsing — each line here carries a substring of one JSON document.
+    const multiLineEvent = 'data: {"choices":\ndata: [{"delta":{"content":"Hallo"}}]}\n\n'
+    const { fetch: fetchImpl } = sseFetchReturning([multiLineEvent, 'data: [DONE]\n\n'])
+    const model = createOpenAiCompatibleModel({ baseUrl: 'https://api.openai.com/v1', apiKey: 'sk-test', model: 'gpt-4o-mini', fetch: fetchImpl })
+    const { handlers } = collectHandlers()
+
+    const result = await model.chat(chatBaseInput, handlers)
+
+    expect(result.text).toBe('Hallo')
+  })
+
+  it('maps a mid-stream read error (dropped connection) to the German 502, not a raw error', async () => {
+    const fetchImpl = (async () => {
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(sseLine({ choices: [{ delta: { content: 'Hal' } }] })))
+          controller.error(new Error('connection reset'))
+        },
+      })
+      return { status: 200, body: stream } as unknown as Response
+    }) as unknown as typeof fetch
+    const model = createOpenAiCompatibleModel({ baseUrl: 'https://api.openai.com/v1', apiKey: 'sk-test', model: 'gpt-4o-mini', fetch: fetchImpl })
+
+    await expect(model.chat(chatBaseInput, collectHandlers().handlers)).rejects.toMatchObject({
+      statusCode: 502,
+      statusMessage: 'Der KI-Assistent ist derzeit nicht erreichbar.',
+    })
+  })
+
   it('sends x-opencode-session (the conversation id), a User-Agent header, and accept: text/event-stream', async () => {
     const { fetch: fetchImpl, calls } = sseFetchReturning([sseLine({ choices: [{ delta: {}, finish_reason: 'stop' }] }), 'data: [DONE]\n\n'])
     const model = createOpenAiCompatibleModel({ baseUrl: 'https://opencode.ai/zen/go/v1', apiKey: 'go-key', model: 'glm-5.3-flash', fetch: fetchImpl })
@@ -1134,5 +1166,30 @@ describe('fake model chat()', () => {
     const result = await model.chat({ sessionId: 's', system: 'sys', messages: [userText('Hallo!')], tools: [] }, noopHandlers())
 
     expect(result).toEqual({ text: 'Testantwort: Hallo!', toolCalls: [], finishReason: 'stop' })
+  })
+
+  it('does not treat "versuche"/"untersuche" as a search intent — word boundaries only', async () => {
+    const model = createFakeModel()
+    const result = await model.chat({ sessionId: 's', system: 'sys', messages: [userText('ich versuche das Deck zu bauen')], tools: [] }, noopHandlers())
+
+    // No search intent detected: falls through to the plain echo, not a
+    // search_catalog tool call.
+    expect(result.toolCalls).toEqual([])
+    expect(result.text).toBe('Testantwort: ich versuche das Deck zu bauen')
+  })
+
+  it('falls back to the last few words (not the whole sentence) when the search keyword can\'t be isolated', async () => {
+    const model = createFakeModel()
+    // "such" appears but not as its own standalone match for the capture
+    // regex (there is no text following a recognized keyword form here other
+    // than as part of a longer word) — use a message where the keyword sits
+    // at the very end with nothing to capture after it.
+    const result = await model.chat({ sessionId: 's', system: 'sys', messages: [userText('Karten für mein Deck suche')], tools: [] }, noopHandlers())
+
+    expect(result.toolCalls[0]!.name).toBe('search_catalog')
+    const args = JSON.parse(result.toolCalls[0]!.arguments) as { query: string }
+    // Falls back to the last 1-3 words, never the entire sentence.
+    expect(args.query.split(/\s+/).length).toBeLessThanOrEqual(3)
+    expect(args.query).not.toContain('Karten für mein Deck')
   })
 })
