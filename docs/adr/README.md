@@ -16,3 +16,4 @@ mark the old as superseded.
 | [0006](0006-ai-deck-assistant.md) | AI deck assistant | Accepted |
 | [0007](0007-sharing-and-profile-model.md) | Sharing and profile model | Accepted |
 | [0008](0008-tournament-model.md) | Tournament model | Accepted |
+| [0009](0009-openai-compatible-assistant-provider.md) | OpenAI-compatible assistant provider | Accepted |
