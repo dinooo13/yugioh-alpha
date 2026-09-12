@@ -10,13 +10,13 @@ import { createDeck, getDeckDetail, listDecks, updateDeck, upsertDeckCard } from
 import { createRuleFormat, deleteRuleFormat, seedBuiltinFormats, validateRuleFormatInput } from '../../server/utils/rule-formats'
 import {
   applyAction,
-  ASSISTANT_TOOL_RESULT_MAX_ITEMS,
   ASSISTANT_TOOLS,
   rejectAction,
   runTool,
   toolDefinitions,
 } from '../../server/utils/assistant-tools'
 import type { ToolOutcome } from '../../server/utils/assistant-tools'
+import { getAssistantLimits } from '../../server/utils/assistant-limits'
 import type { AssistantActionKind } from '../../shared/assistant-chat'
 
 const CARD = {
@@ -161,11 +161,12 @@ describe('search_catalog', () => {
     expect(await statusOf(() => tool('search_catalog').run({ db, userId: 'user-a' }, 'nope'))).toBe(400)
   })
 
-  it('caps the result at ASSISTANT_TOOL_RESULT_MAX_ITEMS and respects a smaller limit', async () => {
+  it('caps the result at getAssistantLimits().toolResultItems and respects a smaller limit', async () => {
     const now = new Date()
-    const extraCards = Array.from({ length: 25 }, (_, i) => ({
+    const { toolResultItems } = getAssistantLimits()
+    const extraCards = Array.from({ length: toolResultItems + 10 }, (_, i) => ({
       id: 90_000_000 + i,
-      name: `Filler Card ${String(i).padStart(2, '0')}`,
+      name: `Filler Card ${String(i).padStart(3, '0')}`,
       type: 'Normal Monster',
       desc: 'x',
       syncedAt: now,
@@ -174,7 +175,7 @@ describe('search_catalog', () => {
 
     const full = await tool('search_catalog').run({ db, userId: 'user-a' }, { query: 'Filler Card' })
     const fullResult = full.result as { items: unknown[], truncated: boolean }
-    expect(fullResult.items).toHaveLength(ASSISTANT_TOOL_RESULT_MAX_ITEMS)
+    expect(fullResult.items).toHaveLength(toolResultItems)
     expect(fullResult.truncated).toBe(true)
 
     const limited = await tool('search_catalog').run({ db, userId: 'user-a' }, { query: 'Filler Card', limit: 3 })

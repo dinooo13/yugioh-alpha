@@ -15,6 +15,7 @@ import {
   validateAssistantMessageInput,
 } from '../../server/utils/assistant-chat'
 import type { AssistantMessageInput, ChatTurnEvent } from '../../server/utils/assistant-chat'
+import { getAssistantLimits } from '../../server/utils/assistant-limits'
 
 const CARD = {
   darkMagician: 46986414,
@@ -110,11 +111,11 @@ describe('validateAssistantMessageInput', () => {
   })
 
   it('rejects text over the length limit', () => {
-    expect(() => validateAssistantMessageInput({ text: 'x'.repeat(4001) })).toThrowError()
+    expect(() => validateAssistantMessageInput({ text: 'x'.repeat(20_001) })).toThrowError()
   })
 
-  it('rejects more than 3 images', () => {
-    const images = Array.from({ length: 4 }, () => 'data:image/png;base64,abc')
+  it('rejects more than 6 images', () => {
+    const images = Array.from({ length: 7 }, () => 'data:image/png;base64,abc')
     expect(() => validateAssistantMessageInput({ text: 'hi', images })).toThrowError()
   })
 
@@ -137,14 +138,14 @@ describe('validateAssistantMessageInput', () => {
   })
 
   it('measures the size cap from the decoded base64 payload, not the raw data-URL string length', () => {
-    // ~5,000,000 base64 characters decode to ~3.75 MB — under the 4 MB cap —
-    // even though the raw data-URL string itself is longer than 4 MB.
-    const base64 = 'A'.repeat(5_000_000)
+    // ~15,000,000 base64 characters decode to ~10.7 MB — under the 12 MB
+    // cap — even though the raw data-URL string itself is longer than that.
+    const base64 = 'A'.repeat(15_000_000)
     expect(() => validateAssistantMessageInput({ text: 'hi', images: [`data:image/png;base64,${base64}`] })).not.toThrow()
   })
 
   it('still rejects when the decoded image data itself exceeds the cap', () => {
-    const base64 = 'A'.repeat(6_000_000) // decodes to ~4.5 MB
+    const base64 = 'A'.repeat(20_000_000) // decodes to ~14.3 MB
     expect(() => validateAssistantMessageInput({ text: 'hi', images: [`data:image/png;base64,${base64}`] })).toThrowError()
   })
 })
@@ -263,9 +264,11 @@ describe('runChatTurn', () => {
 
     await runChatTurn(db, 'user-a', conversation.id, { text: 'endlos', images: NO_IMAGES }, model, emit)
 
-    // 8 rounds, each with a tool call — the model is never asked a 9th time.
-    expect(calls).toHaveLength(8)
-    expect(events.filter(event => event.type === 'tool_call')).toHaveLength(8)
+    // `maxToolRounds` rounds, each with a tool call — the model is never
+    // asked one round more than that.
+    const { maxToolRounds } = getAssistantLimits()
+    expect(calls).toHaveLength(maxToolRounds)
+    expect(events.filter(event => event.type === 'tool_call')).toHaveLength(maxToolRounds)
     expect(events.at(-1)).toMatchObject({ type: 'message_end' })
 
     const detail = getConversationDetail(db, 'user-a', conversation.id)
@@ -299,7 +302,13 @@ describe('runChatTurn', () => {
   it('trims history to the most recent messages, oldest dropped first', async () => {
     const conversation = createConversation(db, 'user-a')
     const base = Date.parse('2024-01-01T00:00:00Z')
-    for (let i = 0; i < 35; i++) {
+    const { historyMessages } = getAssistantLimits()
+    // 5 more than the cap, so the count trim's boundary (index
+    // `totalMessages - historyMessages` = 5) lands on an odd/assistant
+    // message, same as the original 35-message/30-cap fixture — exercising
+    // the window-must-start-on-`user` sanitization drop below too.
+    const totalMessages = historyMessages + 5
+    for (let i = 0; i < totalMessages; i++) {
       db.insert(schema.assistantMessage).values({
         id: `hist-${i}`,
         conversationId: conversation.id,
@@ -315,16 +324,17 @@ describe('runChatTurn', () => {
     await runChatTurn(db, 'user-a', conversation.id, { text: 'weiter', images: NO_IMAGES }, model, emit)
 
     const sentMessages = calls[0]!.messages
-    // The count trim keeps the newest 30 (i=5..34); i=5 is an assistant
-    // message, so the window-must-start-on-`user` sanitization drops it too,
-    // leaving i=6..34 (29) plus the current turn's user message.
-    expect(sentMessages).toHaveLength(30)
+    // The count trim keeps the newest `historyMessages` (i=5..totalMessages-1);
+    // i=5 is an assistant message, so the window-must-start-on-`user`
+    // sanitization drops it too, leaving i=6..totalMessages-1 plus the
+    // current turn's user message.
+    expect(sentMessages).toHaveLength(historyMessages)
     const sentText = JSON.stringify(sentMessages)
     expect(sentText).not.toContain('old message 0"')
     expect(sentText).not.toContain('old message 4"')
     expect(sentText).not.toContain('old message 5"')
     expect(sentText).toContain('old message 6')
-    expect(sentText).toContain('old message 34')
+    expect(sentText).toContain(`old message ${totalMessages - 1}`)
   })
 
   it('sanitizes a history window that would otherwise start mid tool-call sequence', async () => {
@@ -342,13 +352,14 @@ describe('runChatTurn', () => {
     }
 
     // The oldest two rows are a tool-call group (an assistant `tool_calls`
-    // message immediately followed by its `tool` result). 31 rows total, so
-    // the 30-message count trim drops exactly the assistant row, leaving its
-    // `tool` row as the would-be first message of the window — the orphan
-    // scenario finding #1 describes.
+    // message immediately followed by its `tool` result). `historyMessages + 1`
+    // rows total, so the count trim drops exactly the assistant row, leaving
+    // its `tool` row as the would-be first message of the window — the
+    // orphan scenario finding #1 describes.
+    const { historyMessages } = getAssistantLimits()
     insert({ role: 'assistant', content: '', toolCalls: [{ id: 'call-1', name: 'search_catalog', arguments: { query: 'x' } }] })
     insert({ role: 'tool', content: '[]', toolCallId: 'call-1', toolName: 'search_catalog' })
-    for (let i = 0; i < 29; i++) {
+    for (let i = 0; i < historyMessages - 1; i++) {
       insert({ role: i % 2 === 0 ? 'user' : 'assistant', content: `old message ${i}` })
     }
 
@@ -493,9 +504,9 @@ describe('runChatTurn', () => {
   it('replaces an over-budget tool result with a valid JSON error envelope instead of truncating the JSON string', async () => {
     const conversation = createConversation(db, 'user-a')
     // A description long enough to push the serialized get_card result past
-    // the 8000-character tool-result budget.
+    // the configured tool-result budget (`getAssistantLimits().toolResultChars`).
     db.update(schema.catalogCard)
-      .set({ desc: 'x'.repeat(9000) })
+      .set({ desc: 'x'.repeat(getAssistantLimits().toolResultChars + 1000) })
       .where(eq(schema.catalogCard.id, CARD.darkMagician))
       .run()
 
