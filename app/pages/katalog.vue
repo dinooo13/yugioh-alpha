@@ -110,6 +110,32 @@ const { data: facets } = await useFetch<CatalogFacets>('/api/catalog/facets', {
   default: () => ({ types: [], attributes: [], races: [], levels: [], sets: [] }),
 })
 
+// Seeds the "Zur Wunschliste" toggle state per card (Phase 6). A Set keeps the
+// per-card lookup below cheap regardless of how many cards are on the page.
+const { data: wishlistIds } = await useFetch<{ ids: number[] }>('/api/wishlist/ids', {
+  headers: import.meta.server ? useRequestHeaders(['cookie']) : undefined,
+  default: () => ({ ids: [] }),
+})
+const wishlistedCardIds = ref<Set<number>>(new Set())
+watch(wishlistIds, (value) => {
+  wishlistedCardIds.value = new Set(value?.ids ?? [])
+}, { immediate: true })
+
+function isWishlisted(cardId: number) {
+  return wishlistedCardIds.value.has(cardId)
+}
+
+function onWishlistChanged(cardId: number, inWishlist: boolean) {
+  const next = new Set(wishlistedCardIds.value)
+  if (inWishlist) {
+    next.add(cardId)
+  }
+  else {
+    next.delete(cardId)
+  }
+  wishlistedCardIds.value = next
+}
+
 const {
   data: cards,
   pending,
@@ -394,12 +420,16 @@ async function reloadCards() {
       v-else
       class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6"
     >
-      <button
+      <div
         v-for="card in cards.items"
         :key="card.id"
-        type="button"
-        class="group min-w-0 overflow-hidden rounded-md border border-gray-200 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
+        role="button"
+        tabindex="0"
+        :aria-label="card.name"
+        class="group min-w-0 cursor-pointer overflow-hidden rounded-md border border-gray-200 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
         @click="openCard(card.id)"
+        @keydown.enter="openCard(card.id)"
+        @keydown.space.prevent="openCard(card.id)"
       >
         <div class="aspect-[3/4.35] bg-gray-100">
           <img
@@ -441,8 +471,15 @@ async function reloadCards() {
               Lv {{ card.level }}
             </UBadge>
           </div>
+          <WishlistAddToWishlistButton
+            :catalog-card-id="card.id"
+            :in-wishlist="isWishlisted(card.id)"
+            @click.stop
+            @keydown.stop
+            @changed="value => onWishlistChanged(card.id, value)"
+          />
         </div>
-      </button>
+      </div>
     </section>
 
     <div

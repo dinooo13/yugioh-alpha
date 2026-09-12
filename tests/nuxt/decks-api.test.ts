@@ -28,6 +28,7 @@ import {
 } from '../../server/utils/decks'
 import { createCollection } from '../../server/utils/collections'
 import { addOwnedCard, validateInventoryInput } from '../../server/utils/inventory'
+import { setShareState } from '../../server/utils/sharing'
 
 const CARD = {
   darkMagician: 46986414,
@@ -420,6 +421,18 @@ describe('deck persistence', () => {
     // Editing the copy leaves the original alone.
     upsertDeckCard(db, 'user-a', copy.id, { catalogCardId: CARD.darkMagician, section: 'main', quantity: 1 })
     expect(getDeckDetail(db, 'user-a', deck.id).counts.main).toBe(3)
+  })
+
+  it('never inherits the source deck\'s share — the copy is always private with no token', () => {
+    const deck = createDeck(db, 'user-a', { name: 'Shared', description: null })
+    setShareState(db, 'user-a', 'deck', deck.id, { visibility: 'link' })
+
+    const copy = duplicateDeck(db, 'user-a', deck.id)
+
+    expect(copy.visibility).toBe('private')
+
+    const copyRow = db.select().from(schema.deck).where(eq(schema.deck.id, copy.id)).get()
+    expect(copyRow?.shareToken).toBeNull()
   })
 
   it('removes the deck cards when the deck is deleted', () => {

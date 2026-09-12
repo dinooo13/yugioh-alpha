@@ -253,6 +253,13 @@ Product outcome:
 
 Users can compare collections and decks with other players when they choose to share them.
 
+Implemented: public profiles at `/spieler/<handle>` with an editable profile under `/profil`,
+plus per-resource sharing (privat, nur über Link, öffentlich, oder für einzelne Spieler
+freigegeben) for decks, single collections, and the whole inventory — shared views are read-only
+and never disclose the owner's availability data. Includes a wishlist under `/wunschliste` that
+can be published on the profile. Trading is explicitly out of scope. See
+[`docs/adr/0007-sharing-and-profile-model.md`](adr/0007-sharing-and-profile-model.md).
+
 ### Phase 7: Tournament Mode
 
 Goal: Track tournaments and match results inside the app.

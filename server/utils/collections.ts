@@ -3,6 +3,7 @@ import { createError } from 'h3'
 import { randomUUID } from 'node:crypto'
 import type { useDb } from '../db'
 import { collection, ownedCard } from '../db/schema'
+import { deleteGrantsForResource } from './sharing'
 
 type Db = ReturnType<typeof useDb>
 
@@ -186,6 +187,8 @@ export async function deleteCollection(db: Db, userId: string, id: string) {
   if (deleted.length === 0) {
     notFound()
   }
+
+  deleteGrantsForResource(db, 'collection', id)
 }
 
 export function listCollections(db: Db, userId: string) {
@@ -194,6 +197,7 @@ export function listCollections(db: Db, userId: string) {
       id: collection.id,
       name: collection.name,
       description: collection.description,
+      visibility: collection.visibility,
       createdAt: collection.createdAt,
       updatedAt: collection.updatedAt,
       cardCount: sql<number>`coalesce(sum(${ownedCard.quantity}), 0)`,

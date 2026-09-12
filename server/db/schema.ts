@@ -1,6 +1,7 @@
 import { relations } from 'drizzle-orm'
 import { sqliteTable, text, integer, index, uniqueIndex } from 'drizzle-orm/sqlite-core'
 import type { RuleSet } from '../../shared/rule-formats'
+import type { ShareResourceType, Visibility, WishlistVisibility } from '../../shared/sharing'
 
 // Better Auth core tables (email/password only).
 // Generated to match Better Auth's expected schema for the Drizzle adapter (provider: "sqlite").
@@ -177,11 +178,16 @@ export const collection = sqliteTable(
       .references(() => user.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     description: text('description'),
+    // Sharing state (Phase 6). 'private' is the default for every existing collection.
+    visibility: text('visibility').notNull().default('private').$type<Visibility>(),
+    // Secret, regenerable link token. NULL while the collection is private.
+    shareToken: text('share_token').unique(),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
     updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
   },
   table => [
     index('idx_collection_user').on(table.userId),
+    index('idx_collection_user_visibility').on(table.userId, table.visibility),
   ],
 )
 
@@ -298,12 +304,17 @@ export const deck = sqliteTable(
     // Deleting a format un-assigns it instead of deleting decks.
     formatId: text('format_id')
       .references(() => ruleFormat.id, { onDelete: 'set null' }),
+    // Sharing state (Phase 6). 'private' is the default for every existing deck.
+    visibility: text('visibility').notNull().default('private').$type<Visibility>(),
+    // Secret, regenerable link token. NULL while the deck is private.
+    shareToken: text('share_token').unique(),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
     updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
   },
   table => [
     index('idx_deck_user').on(table.userId),
     index('idx_deck_format').on(table.formatId),
+    index('idx_deck_user_visibility').on(table.userId, table.visibility),
   ],
 )
 
@@ -352,4 +363,108 @@ export const deckCardRelations = relations(deckCard, ({ one }) => ({
     fields: [deckCard.catalogCardId],
     references: [catalogCard.id],
   }),
+}))
+
+// Sharing and profile model (Phase 6, see docs/adr/0007-sharing-and-profile-model.md).
+
+// Public identity for the sharing features. Deliberately NOT columns on
+// better-auth's `user` table: that schema is generated to match the Drizzle
+// adapter's expectations. The row is created lazily on first read
+// (`ensureProfile`), so users registered before Phase 6 need no backfill.
+export const userProfile = sqliteTable(
+  'user_profile',
+  {
+    userId: text('user_id')
+      .primaryKey()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    // URL slug, 3–30 chars of [a-z0-9-]; the identity in every /spieler/:handle route.
+    handle: text('handle').notNull().unique(),
+    displayName: text('display_name').notNull(),
+    bio: text('bio'),
+    // Sharing state of the *whole* inventory ("Alle Karten"), the one shareable
+    // resource that has no row of its own. resourceId for grants is the user id.
+    inventoryVisibility: text('inventory_visibility')
+      .notNull()
+      .default('private')
+      .$type<Visibility>(),
+    inventoryShareToken: text('inventory_share_token').unique(),
+    // Wishlist is public-or-not only: no token, no per-user grants (see ADR 0007).
+    wishlistVisibility: text('wishlist_visibility')
+      .notNull()
+      .default('private')
+      .$type<WishlistVisibility>(),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+  },
+  table => [
+    index('idx_user_profile_display_name').on(table.displayName),
+  ],
+)
+
+export const userProfileRelations = relations(userProfile, ({ one }) => ({
+  user: one(user, { fields: [userProfile.userId], references: [user.id] }),
+}))
+
+// "Shared with selected users" for any shareable resource. Generic on purpose:
+// deck, collection and the whole inventory share one grant mechanism, so the
+// sharing API and the share modal are written once.
+//
+// `resourceId` is polymorphic (deck.id | collection.id | user.id for 'inventory')
+// and therefore has NO foreign key. Grants are removed explicitly when the
+// resource dies (deleteGrantsForResource in deleteDeck/deleteCollection); both
+// user references cascade, so deleting an account removes grants in both roles.
+export const shareGrant = sqliteTable(
+  'share_grant',
+  {
+    id: text('id').primaryKey(),
+    resourceType: text('resource_type').notNull().$type<ShareResourceType>(),
+    resourceId: text('resource_id').notNull(),
+    ownerUserId: text('owner_user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    grantedUserId: text('granted_user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+  },
+  table => [
+    uniqueIndex('idx_share_grant_unique').on(table.resourceType, table.resourceId, table.grantedUserId),
+    index('idx_share_grant_resource').on(table.resourceType, table.resourceId),
+    index('idx_share_grant_granted_user').on(table.grantedUserId),
+    index('idx_share_grant_owner').on(table.ownerUserId),
+  ],
+)
+
+export const shareGrantRelations = relations(shareGrant, ({ one }) => ({
+  owner: one(user, { fields: [shareGrant.ownerUserId], references: [user.id], relationName: 'shareGrantOwner' }),
+  grantedUser: one(user, { fields: [shareGrant.grantedUserId], references: [user.id], relationName: 'shareGrantTarget' }),
+}))
+
+// "Cards I am looking for" (Phase 6, the roadmap's optional wishlist concept).
+// Like owned_card and deck_card it references the catalog, never an owned row,
+// and stacks with a quantity instead of one row per copy.
+export const wishlistItem = sqliteTable(
+  'wishlist_item',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    catalogCardId: integer('catalog_card_id')
+      .notNull()
+      .references(() => catalogCard.id, { onDelete: 'cascade' }),
+    quantity: integer('quantity').notNull().default(1),
+    note: text('note'),
+    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+  },
+  table => [
+    uniqueIndex('idx_wishlist_item_unique').on(table.userId, table.catalogCardId),
+    index('idx_wishlist_item_user').on(table.userId),
+  ],
+)
+
+export const wishlistItemRelations = relations(wishlistItem, ({ one }) => ({
+  user: one(user, { fields: [wishlistItem.userId], references: [user.id] }),
+  catalogCard: one(catalogCard, { fields: [wishlistItem.catalogCardId], references: [catalogCard.id] }),
 }))

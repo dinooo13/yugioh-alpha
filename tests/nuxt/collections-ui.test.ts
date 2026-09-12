@@ -3,9 +3,16 @@ import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
 import CollectionFormModal from '~/components/collections/CollectionFormModal.vue'
 import DefaultLayout from '~/layouts/default.vue'
 
+// The sidebar's user block (and with it "Profil"/"Abmelden") only renders
+// once a session is present — stub the module directly rather than relying
+// on a real `/api/auth/get-session` round trip in the test environment.
+vi.mock('~/utils/session', () => ({
+  getAuthSession: vi.fn(() => Promise.resolve({ session: {}, user: { email: 'fabian@example.com' } })),
+}))
+
 const fetchState = vi.hoisted(() => ({
   collections: {
-    items: [] as Array<{ id: string, name: string, description: string | null, cardCount: number }>,
+    items: [] as Array<{ id: string, name: string, description: string | null, cardCount: number, visibility?: string }>,
     allCount: 0,
   },
   routePath: '/inventar',
@@ -23,6 +30,21 @@ mockNuxtImport('useRoute', () => {
   return () => ({
     path: fetchState.routePath,
     query: {},
+  })
+})
+
+describe('default layout navigation and user block', () => {
+  it('lists "Wunschliste" in the nav and keeps a "Profil" button next to "Abmelden"', async () => {
+    fetchState.collections = { items: [], allCount: 0 }
+    fetchState.routePath = '/inventar'
+
+    const component = await mountSuspended(DefaultLayout)
+
+    expect(component.text()).toContain('Wunschliste')
+
+    const buttons = component.findAll('button, a')
+    expect(buttons.some(button => button.text().includes('Profil'))).toBe(true)
+    expect(component.findAll('button').some(button => button.text().includes('Abmelden'))).toBe(true)
   })
 })
 

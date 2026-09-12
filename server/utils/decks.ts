@@ -10,6 +10,7 @@ import { evaluateDeck } from '../../shared/rule-formats'
 import type { DeckValidation, RuleSet } from '../../shared/rule-formats'
 import { loadCardDataForValidation } from './deck-validation'
 import { requireAssignableFormat, ruleFormatsById } from './rule-formats'
+import { deleteGrantsForResource } from './sharing'
 import {
   allowedSectionsForCard,
   DECK_LIMITS,
@@ -19,6 +20,7 @@ import {
   isSectionAllowedForCard,
 } from '../../shared/deck-sections'
 import type { DeckSection, DeckSectionCard } from '../../shared/deck-sections'
+import type { Visibility } from '../../shared/sharing'
 
 type Db = ReturnType<typeof useDb>
 
@@ -125,6 +127,8 @@ export interface DeckDetail {
   format: DeckFormatRef | null
   /** Recomputed on every read/write; null while no format is assigned. */
   validation: DeckValidation | null
+  /** Sharing state (Phase 6). */
+  visibility: Visibility
 }
 
 function badRequest(message: string): never {
@@ -388,7 +392,9 @@ function assertSectionAllowed(card: DeckSectionCard, section: DeckSection) {
 }
 
 // Monsters first, then spells, then traps — the conventional deck-list order.
-function cardCategoryRank(type: string): number {
+// Exported for reuse by server/utils/shared-views.ts (the shared deck view
+// sorts sections identically to buildDeckDetail).
+export function cardCategoryRank(type: string): number {
   if (type.toLowerCase().includes('spell')) {
     return 1
   }
@@ -398,9 +404,12 @@ function cardCategoryRank(type: string): number {
   return 0
 }
 
-function buildWarnings(
+// Exported for reuse by server/utils/shared-views.ts: warnings are computed
+// from counts/quantities only (no ownership data), so they are safe to reuse
+// verbatim in the shared (read-only) deck view.
+export function buildWarnings(
   counts: { main: number, extra: number, side: number },
-  rows: DeckCardRow[],
+  rows: Array<{ catalogCardId: number, name: string, quantity: number }>,
 ): DeckWarning[] {
   const warnings: DeckWarning[] = []
 
@@ -564,6 +573,7 @@ function buildDeckDetail(db: Db, userId: string, deckRow: typeof deck.$inferSele
       ? { id: formatRow.id, name: formatRow.name, isBuiltin: formatRow.isBuiltin }
       : null,
     validation: buildValidation(db, formatRow?.rules, rows),
+    visibility: deckRow.visibility,
   }
 }
 
@@ -692,6 +702,8 @@ export function deleteDeck(db: Db, userId: string, deckId: string) {
   if (deleted.length === 0) {
     notFound()
   }
+
+  deleteGrantsForResource(db, 'deck', deckId)
 }
 
 export function duplicateDeck(db: Db, userId: string, deckId: string): DeckDetail {
@@ -706,6 +718,9 @@ export function duplicateDeck(db: Db, userId: string, deckId: string): DeckDetai
       name: duplicateNameFor(source.name),
       description: source.description,
       formatId: source.formatId,
+      // The copy never inherits a share: always private with no token.
+      visibility: 'private',
+      shareToken: null,
       createdAt: now,
       updatedAt: now,
     })
@@ -885,6 +900,8 @@ export interface DeckListItem {
   legal: boolean | null
   createdAt: Date
   updatedAt: Date
+  /** Sharing state (Phase 6). */
+  visibility: Visibility
 }
 
 // Upper bound on the decks scanned when filtering by legality: legality is
@@ -1034,6 +1051,7 @@ export function listDecks(db: Db, userId: string, options: DeckListOptions = {})
       legal: format ? legalityByDeck.get(row.id) ?? null : null,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
+      visibility: row.visibility,
     }
   })
 

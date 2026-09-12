@@ -226,6 +226,33 @@ reports the feature as disabled and the UI shows a notice instead of the
 assistant panels. See
 [`docs/adr/0006-ai-deck-assistant.md`](./docs/adr/0006-ai-deck-assistant.md).
 
+## Teilen & Profile
+
+Every user has a public profile at `/spieler/<Nutzername>`, editable under `/profil` (display
+name, username/handle, bio). Decks, single collections, and the whole inventory ("Alle Karten")
+can each be shared independently by setting a visibility — `Privat`, `Nur über Link`, or
+`Öffentlich` — plus, orthogonally, granting access to specific players by username through the
+same "Teilen" modal. A link-shared or public resource is reachable at its `/spieler/<Nutzername>/...`
+URL (with `?token=` for link sharing); an unknown, private, or revoked resource always renders the
+same "Nicht gefunden oder nicht freigegeben." card, so nothing about its existence leaks through
+the UI.
+
+Shared views are strictly read-only and never disclose ownership data: a shared deck shows card
+names and quantities, its format, and its legality, but not `owned`/`usedInDeck`/shortfall; a
+shared collection or the shared inventory lists cards aggregated per catalog card, searchable and
+paginated, without notes, condition, or language. See
+[`docs/adr/0007-sharing-and-profile-model.md`](./docs/adr/0007-sharing-and-profile-model.md).
+
+## Wunschliste
+
+`/wunschliste` is a personal "cards I'm looking for" list, added from the catalog with a
+"Zur Wunschliste" toggle on each card. Each entry has a quantity and an optional note (e.g. "1st
+Edition bitte"). A profile setting ("Wunschliste öffentlich zeigen") publishes the list — with its
+notes, but never the owned-copy counts that are private inventory information — on the public
+profile page for other players to see. Trading against a wishlist is explicitly out of scope for
+this phase; see
+[`docs/adr/0007-sharing-and-profile-model.md`](./docs/adr/0007-sharing-and-profile-model.md).
+
 ## Quality Checks
 
 ```bash
