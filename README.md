@@ -241,7 +241,7 @@ read and validate a deck) and, for anything that would change data — adding
 cards to the inventory, creating a deck, changing a deck's cards — it only
 ever proposes a **pending action**, shown as a card with `Übernehmen` /
 `Verwerfen` buttons; nothing is written until the user confirms it. A
-message can include up to 3 photos (resized client-side before upload) that
+message can include up to 6 photos (resized client-side before upload) that
 the model identifies against the catalog, and the composer offers voice
 dictation via the browser's Web Speech API, reusing the same feature
 detection Schnellerfassung's old Sprache mode used.
@@ -253,7 +253,10 @@ specifically for turns that include an image; see [`.env.example`](./.env.exampl
 Providers that require OpenCode Go's session header get it automatically —
 every request (chat and the deck assistant alike) sends
 `x-opencode-session` and a `User-Agent` identifying this app, no
-configuration needed. See
+configuration needed. Its operational limits (tool-calling rounds per turn,
+tool result size, history window, model call timeout) are configurable via
+`NUXT_ASSISTANT_LIMITS_*`; see [`.env.example`](./.env.example) and
+`server/utils/assistant-limits.ts`. See
 [`docs/adr/0010-chat-assistant-with-tools.md`](./docs/adr/0010-chat-assistant-with-tools.md).
 
 ## Teilen & Profile

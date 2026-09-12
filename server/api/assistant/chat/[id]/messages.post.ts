@@ -74,7 +74,7 @@ export default defineEventHandler(async (event) => {
   let input: AssistantMessageInput
   try {
     // `content-length` is checked before the body is ever read into memory —
-    // the precise 4 MB/3-image validation below still runs afterwards, this
+    // the precise 12 MB/6-image validation below still runs afterwards, this
     // only rejects a body that's already unreasonable up front.
     const contentLength = Number(getRequestHeader(event, 'content-length'))
     if (Number.isFinite(contentLength) && contentLength > MAX_REQUEST_BODY_BYTES) {

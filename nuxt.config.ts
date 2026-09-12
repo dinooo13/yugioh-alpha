@@ -49,6 +49,20 @@ export default defineNuxtConfig({
       // Phase 8 chat assistant: model used for any turn that includes an
       // image, when set. Empty = use `model` for those turns too.
       visionModel: '',
+      // Phase 8 chat assistant: operational limits, all overridable via
+      // NUXT_ASSISTANT_LIMITS_*. See server/utils/assistant-limits.ts
+      // (getAssistantLimits) for validation/fallback and .env.example for a
+      // documented, commented-out block of these same defaults. Values
+      // below double as the defaults `getAssistantLimits()` falls back to
+      // when an override is missing or not a sane positive integer.
+      limits: {
+        maxToolRounds: 24,
+        toolResultItems: 100,
+        toolResultChars: 60_000,
+        historyMessages: 120,
+        historyChars: 160_000,
+        timeoutMs: 300_000,
+      },
     },
     public: {
       betterAuthUrl: process.env.BETTER_AUTH_URL || 'http://localhost:3000',

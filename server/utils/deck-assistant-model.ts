@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url'
 import { createError } from 'h3'
 import type { AssistantMode, DeckAssistantStatus } from '../../shared/deck-assistant'
 import type { DeckSection } from '../../shared/deck-sections'
+import { DEFAULT_ASSISTANT_TIMEOUT_MS, getAssistantLimits } from './assistant-limits'
 
 /** One card in the candidate pool the model may pick from — see buildPool in deck-assistant.ts. */
 export interface AssistantPoolCard {
@@ -182,13 +183,12 @@ function buildRequestHeaders(apiKey: string, sessionId: string): Record<string, 
 //
 // Talks to any Chat Completions endpoint that follows the OpenAI schema —
 // OpenAI itself, OpenRouter, Ollama, LM Studio, OpenCode Zen, etc. — over
-// plain `fetch`, non-streaming, with a 120s timeout. Structured output is
-// requested via `response_format: { type: 'json_schema', ... }`; servers
-// that don't support it answer with 400/422, in which case we fall back to
-// `json_object` mode (schema appended to the system prompt as an
-// instruction), and finally to no `response_format` at all.
-
-const REQUEST_TIMEOUT_MS = 120_000
+// plain `fetch`, non-streaming, with a configurable timeout (default 300s,
+// see `DEFAULT_ASSISTANT_TIMEOUT_MS` / `getAssistantLimits().timeoutMs`).
+// Structured output is requested via `response_format: { type: 'json_schema',
+// ... }`; servers that don't support it answer with 400/422, in which case
+// we fall back to `json_object` mode (schema appended to the system prompt
+// as an instruction), and finally to no `response_format` at all.
 
 export interface CreateOpenAiCompatibleModelOptions {
   baseUrl: string
@@ -204,6 +204,14 @@ export interface CreateOpenAiCompatibleModelOptions {
    * (`NUXT_ASSISTANT_VISION_MODEL` / `runtimeConfig.assistant.visionModel`).
    */
   visionModel?: string
+  /**
+   * Per-request timeout, in milliseconds, for both `generate()` and
+   * `chat()` (`NUXT_ASSISTANT_LIMITS_TIMEOUT_MS` /
+   * `getAssistantLimits().timeoutMs`). Defaults to
+   * `DEFAULT_ASSISTANT_TIMEOUT_MS` when omitted, e.g. for tests that
+   * construct a model directly.
+   */
+  timeoutMs?: number
   /** Injectable for tests. */
   fetch?: typeof fetch
 }
@@ -219,9 +227,10 @@ async function postChatCompletion(
   apiKey: string,
   sessionId: string,
   body: Record<string, unknown>,
+  timeoutMs: number,
 ): Promise<ChatCompletionOutcome> {
   const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
   try {
     const response = await fetchImpl(`${baseUrl}/chat/completions`, {
       method: 'POST',
@@ -398,6 +407,7 @@ export function createOpenAiCompatibleModel(options: CreateOpenAiCompatibleModel
   const model = options.model
   const reasoningEffort = (options.reasoningEffort ?? '').trim()
   const visionModel = (options.visionModel ?? '').trim()
+  const timeoutMs = options.timeoutMs ?? DEFAULT_ASSISTANT_TIMEOUT_MS
   const fetchImpl = options.fetch ?? fetch
 
   return {
@@ -438,7 +448,7 @@ export function createOpenAiCompatibleModel(options: CreateOpenAiCompatibleModel
           ...(attempt.responseFormat ? { response_format: attempt.responseFormat } : {}),
         }
 
-        const outcome = await postChatCompletion(fetchImpl, baseUrl, apiKey, sessionId, body)
+        const outcome = await postChatCompletion(fetchImpl, baseUrl, apiKey, sessionId, body, timeoutMs)
 
         if (outcome.kind === 'timeout' || outcome.kind === 'network-error') {
           assistantError(502, 'Der KI-Assistent ist derzeit nicht erreichbar.')
@@ -474,7 +484,7 @@ export function createOpenAiCompatibleModel(options: CreateOpenAiCompatibleModel
       }
 
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
       // Combine our own request timeout with the caller's cancellation
       // signal (the turn's "Abbrechen") — either one aborts the same
       // in-flight fetch/stream read; `signal?.aborted` below is what tells
@@ -944,6 +954,7 @@ export function useDeckAssistantModel(): DeckAssistantModel | null {
       model: resolveModelId(config),
       reasoningEffort: resolveReasoningEffort(config),
       visionModel: resolveVisionModel(config) || undefined,
+      timeoutMs: getAssistantLimits().timeoutMs,
     })
   }
   return null

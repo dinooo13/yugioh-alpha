@@ -23,9 +23,11 @@ import { getCatalogCardDetail } from './catalog-search'
 import { requireCollectionOwnedByUser, listCollections } from './collections'
 import {
   addOwnedCardsBulkSync,
+  INVENTORY_BULK_MAX_ITEMS,
   validateInventoryBulkInput,
 } from './inventory'
 import type { InventoryInput } from './inventory'
+import { getAssistantLimits } from './assistant-limits'
 import {
   createDeck,
   DECK_NAME_MAX_LENGTH,
@@ -45,11 +47,16 @@ import type { AssistantActionKind } from '../../shared/assistant-chat'
 
 type Db = ReturnType<typeof useDb>
 
-/** Every read tool's result array is trimmed to at most this many rows. */
-export const ASSISTANT_TOOL_RESULT_MAX_ITEMS = 20
 const GET_CARD_PRINTINGS_MAX = 10
-/** Row-scan bound for `search_inventory`'s per-card aggregation — see its query. */
-const SEARCH_INVENTORY_ROW_SCAN_MAX = 500
+/**
+ * Row-scan bound for `search_inventory`'s per-card aggregation (see its
+ * query) — a multiple of the configured item cap (`getAssistantLimits()
+ * .toolResultItems`), well above what any real collection needs to answer a
+ * name/collection-filtered lookup, since the final result is capped to that
+ * same item cap anyway. Bounds the worst case (a huge inventory, scanned
+ * again on every tool call in a loop).
+ */
+const SEARCH_INVENTORY_ROW_SCAN_MULTIPLIER = 25
 
 export interface ToolRunContext {
   db: Db
@@ -138,16 +145,16 @@ function clampLimit(value: unknown, fallback: number, max: number): number {
   return Math.min(numberValue, max)
 }
 
-function capItems<T>(items: T[], max = ASSISTANT_TOOL_RESULT_MAX_ITEMS): T[] {
+function capItems<T>(items: T[], max = getAssistantLimits().toolResultItems): T[] {
   return items.slice(0, max)
 }
 
 /**
  * Caps an already fully-materialized array *before* serialization and
  * reports whether it was cut, plus the true total — so the model can say
- * "mindestens 20" instead of quietly treating the capped count as complete.
+ * "mindestens N" instead of quietly treating the capped count as complete.
  */
-function capResult<T>(items: T[], max = ASSISTANT_TOOL_RESULT_MAX_ITEMS): { items: T[], truncated: boolean, total: number } {
+function capResult<T>(items: T[], max = getAssistantLimits().toolResultItems): { items: T[], truncated: boolean, total: number } {
   return { items: items.slice(0, max), truncated: items.length > max, total: items.length }
 }
 
@@ -156,7 +163,8 @@ function capResult<T>(items: T[], max = ASSISTANT_TOOL_RESULT_MAX_ITEMS): { item
 function toolSearchCatalog(db: Db, args: unknown) {
   const record = requireArgs(args)
   const query = optionalString(record, 'query') ?? ''
-  const limit = clampLimit(record.limit, ASSISTANT_TOOL_RESULT_MAX_ITEMS, ASSISTANT_TOOL_RESULT_MAX_ITEMS)
+  const itemsCap = getAssistantLimits().toolResultItems
+  const limit = clampLimit(record.limit, itemsCap, itemsCap)
 
   const where = query !== '' ? sqlLikeName(query) : undefined
   // Fetch one row past the limit so we can report `truncated` without a
@@ -266,11 +274,7 @@ function toolSearchInventory(db: Db, userId: string, args: unknown) {
     .innerJoin(catalogCard, eq(ownedCard.catalogCardId, catalogCard.id))
     .leftJoin(collection, eq(ownedCard.collectionId, collection.id))
     .where(and(...clauses))
-    // Bounds the worst case (a huge inventory, scanned again on every tool
-    // call in a loop) — well above what any real collection needs to answer
-    // a name/collection-filtered lookup, since the final result is capped to
-    // ASSISTANT_TOOL_RESULT_MAX_ITEMS anyway.
-    .limit(SEARCH_INVENTORY_ROW_SCAN_MAX)
+    .limit(getAssistantLimits().toolResultItems * SEARCH_INVENTORY_ROW_SCAN_MULTIPLIER)
     .all()
 
   interface Aggregate {
@@ -318,7 +322,7 @@ function toolListCollections(db: Db, userId: string) {
 function toolListDecks(db: Db, userId: string, args: unknown) {
   const record = requireArgs(args)
   const query = optionalString(record, 'query')
-  const { items, total } = listDecks(db, userId, { q: query, pageSize: ASSISTANT_TOOL_RESULT_MAX_ITEMS })
+  const { items, total } = listDecks(db, userId, { q: query, pageSize: getAssistantLimits().toolResultItems })
 
   const mapped = items.map(item => ({
     id: item.id,
@@ -448,8 +452,11 @@ async function toolUpdateDeckCards(db: Db, userId: string, args: unknown): Promi
   if (!Array.isArray(rawChanges) || rawChanges.length === 0) {
     badRequest('changes must be a non-empty array')
   }
-  if (rawChanges.length > ASSISTANT_TOOL_RESULT_MAX_ITEMS) {
-    badRequest(`changes must contain at most ${ASSISTANT_TOOL_RESULT_MAX_ITEMS} entries`)
+  // Matches (and never exceeds) the bulk inventory endpoint's own cap
+  // (`INVENTORY_BULK_MAX_ITEMS`, server/utils/inventory.ts) — a deck-cards
+  // write is no less bounded than an inventory one.
+  if (rawChanges.length > INVENTORY_BULK_MAX_ITEMS) {
+    badRequest(`changes must contain at most ${INVENTORY_BULK_MAX_ITEMS} entries`)
   }
 
   const changes: DeckCardInput[] = rawChanges.map(raw => validateDeckCardInput(raw))
@@ -477,7 +484,10 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
       required: ['query'],
       properties: {
         query: { type: 'string', description: 'Kartenname oder Teil davon' },
-        limit: { type: 'integer', description: `Maximale Trefferzahl (Standard/Maximum: ${ASSISTANT_TOOL_RESULT_MAX_ITEMS})` },
+        // The real number is filled in by `toolDefinitions()` below, from
+        // `getAssistantLimits()` — this array is built once at module load,
+        // so the live (possibly overridden) limit can't be baked in here.
+        limit: { type: 'integer', description: 'Maximale Trefferzahl (Standard = Maximum)' },
       },
     },
     run: async (ctx, args) => ({ result: toolSearchCatalog(ctx.db, args) }),
@@ -646,10 +656,26 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
   },
 ]
 
+/** Patches `search_catalog`'s `limit` param description with the live configured cap — the rest of `ASSISTANT_TOOLS` needs no per-call values. */
+function toolParameters(tool: AssistantTool, toolResultItems: number): Record<string, unknown> {
+  if (tool.name !== 'search_catalog') {
+    return tool.parameters
+  }
+  const properties = tool.parameters.properties as Record<string, unknown>
+  return {
+    ...tool.parameters,
+    properties: {
+      ...properties,
+      limit: { type: 'integer', description: `Maximale Trefferzahl (Standard/Maximum: ${toolResultItems})` },
+    },
+  }
+}
+
 export function toolDefinitions(): ToolDefinition[] {
+  const { toolResultItems } = getAssistantLimits()
   return ASSISTANT_TOOLS.map(tool => ({
     type: 'function',
-    function: { name: tool.name, description: tool.description, parameters: tool.parameters },
+    function: { name: tool.name, description: tool.description, parameters: toolParameters(tool, toolResultItems) },
   }))
 }
 
