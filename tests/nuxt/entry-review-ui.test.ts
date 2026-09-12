@@ -192,17 +192,17 @@ describe('EntryReviewTable', () => {
     rows[1]!.language = 'fr'
 
     const component = await mountTable(rows)
-    expect(component.text()).toContain('EN · Near Mint · Unlimited')
-    expect(component.text()).toContain('FR · Near Mint · Unlimited')
+    expect(component.text()).toContain('EN · Neuwertig (Near Mint) · Unlimitiert')
+    expect(component.text()).toContain('FR · Neuwertig (Near Mint) · Unlimitiert')
 
     const vm = component.vm as unknown as { defaults: { language: string, condition: string } }
     vm.defaults.language = 'de'
     vm.defaults.condition = 'played'
     await nextTick()
 
-    expect(component.text()).toContain('DE · Played · Unlimited')
+    expect(component.text()).toContain('DE · Bespielt (Played) · Unlimitiert')
     // The per-row override survives a defaults change.
-    expect(component.text()).toContain('FR · Played · Unlimited')
+    expect(component.text()).toContain('FR · Bespielt (Played) · Unlimitiert')
   })
 
   it('preselects the collection the user came from', async () => {

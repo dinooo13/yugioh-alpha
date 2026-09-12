@@ -9,6 +9,7 @@
 
 import { DECK_SECTIONS, DECK_SECTION_LABELS } from './deck-sections'
 import type { DeckSection } from './deck-sections'
+import { pluralize } from './plural'
 
 export const RULE_FORMAT_NAME_MAX_LENGTH = 80
 export const RULE_FORMAT_DESCRIPTION_MAX_LENGTH = 500
@@ -533,7 +534,7 @@ function deckSizeIssues(rules: Rule[], counts: Record<DeckSection, number>): Val
         severity: 'error',
         code: 'deck_size_min',
         section: rule.section,
-        message: `Das ${label} hat ${count} Karten, mindestens ${rule.min} sind erforderlich.`,
+        message: `Das ${label} hat ${pluralize(count, 'Karte', 'Karten')}, mindestens ${rule.min} sind erforderlich.`,
       })
     }
     if (rule.max !== undefined && count > rule.max) {
@@ -541,7 +542,7 @@ function deckSizeIssues(rules: Rule[], counts: Record<DeckSection, number>): Val
         severity: 'error',
         code: 'deck_size_max',
         section: rule.section,
-        message: `Das ${label} hat ${count} Karten, höchstens ${rule.max} sind erlaubt.`,
+        message: `Das ${label} hat ${pluralize(count, 'Karte', 'Karten')}, höchstens ${rule.max} sind erlaubt.`,
       })
     }
   }

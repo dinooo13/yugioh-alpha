@@ -264,20 +264,23 @@ export const ENTRY_LANGUAGE_ITEMS = [
   { label: 'KO', value: 'ko' },
 ]
 
+// German-first labels, with the English term the community actually uses in
+// parentheses (UX review #9) — the stored `value`s are unchanged so this is
+// purely a display concern.
 export const ENTRY_CONDITION_ITEMS = [
-  { label: 'Mint', value: 'mint' },
-  { label: 'Near Mint', value: 'near_mint' },
-  { label: 'Excellent', value: 'excellent' },
-  { label: 'Good', value: 'good' },
-  { label: 'Light Played', value: 'light_played' },
-  { label: 'Played', value: 'played' },
-  { label: 'Poor', value: 'poor' },
+  { label: 'Makellos (Mint)', value: 'mint' },
+  { label: 'Neuwertig (Near Mint)', value: 'near_mint' },
+  { label: 'Sehr gut (Excellent)', value: 'excellent' },
+  { label: 'Gut (Good)', value: 'good' },
+  { label: 'Leicht bespielt (Lightly Played)', value: 'light_played' },
+  { label: 'Bespielt (Played)', value: 'played' },
+  { label: 'Schlecht (Poor)', value: 'poor' },
 ]
 
 export const ENTRY_EDITION_ITEMS = [
-  { label: '1st Edition', value: 'first' },
-  { label: 'Unlimited', value: 'unlimited' },
-  { label: 'Limited', value: 'limited' },
+  { label: '1. Auflage', value: 'first' },
+  { label: 'Unlimitiert', value: 'unlimited' },
+  { label: 'Limitiert', value: 'limited' },
 ]
 
 function labelOf(items: Array<{ label: string, value: string }>, value: string): string {

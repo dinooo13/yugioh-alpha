@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { ENTRY_CONDITION_ITEMS, ENTRY_EDITION_ITEMS } from '~/utils/card-entry'
+
 interface PrintingOption {
   id: string
   setName: string
@@ -53,21 +55,8 @@ const languageItems = [
   { label: 'KO', value: 'ko' },
 ]
 
-const conditionItems = [
-  { label: 'Mint', value: 'mint' },
-  { label: 'Near Mint', value: 'near_mint' },
-  { label: 'Excellent', value: 'excellent' },
-  { label: 'Good', value: 'good' },
-  { label: 'Light Played', value: 'light_played' },
-  { label: 'Played', value: 'played' },
-  { label: 'Poor', value: 'poor' },
-]
-
-const editionItems = [
-  { label: '1st Edition', value: 'first' },
-  { label: 'Unlimited', value: 'unlimited' },
-  { label: 'Limited', value: 'limited' },
-]
+const conditionItems = ENTRY_CONDITION_ITEMS
+const editionItems = ENTRY_EDITION_ITEMS
 
 const noPrintingValue = '__no_printing__'
 const noCollectionValue = '__no_collection__'
@@ -88,7 +77,7 @@ const errorMessage = ref('')
 const isEditing = computed(() => Boolean(props.initialValues?.id))
 const title = computed(() => isEditing.value ? 'Karte bearbeiten' : 'Karte hinzufügen')
 const printingItems = computed(() => [
-  { label: 'Keine bestimmte Edition', value: noPrintingValue },
+  { label: 'Keine bestimmte Set-Ausgabe', value: noPrintingValue },
   ...(props.card?.printings ?? []).map(printing => ({
     label: `${printing.id}${printing.setName ? ` · ${printing.setName}` : ''}${printing.rarity ? ` · ${printing.rarity}` : ''}`,
     value: printing.id,
@@ -218,7 +207,10 @@ async function save() {
             />
           </UFormField>
 
-          <UFormField label="Edition">
+          <UFormField
+            label="Auflage"
+            help="Wie oft diese Karte gedruckt wurde (Erstauflage/Unlimitiert)."
+          >
             <USelect
               v-model="form.edition"
               :items="editionItems"
@@ -226,7 +218,10 @@ async function save() {
           </UFormField>
         </div>
 
-        <UFormField label="Printing">
+        <UFormField
+          label="Set-Ausgabe"
+          help="Das konkrete Set/die Rarität, in der du diese Karte besitzt."
+        >
           <USelect
             v-model="form.printingId"
             :items="printingItems"

@@ -65,6 +65,7 @@ function select(item: UserSearchItem) {
       icon="i-lucide-search"
       placeholder="Nutzername oder Anzeigename..."
       aria-label="Spieler suchen"
+      autofocus
     />
 
     <ul

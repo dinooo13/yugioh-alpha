@@ -43,6 +43,7 @@ const { data, pending } = await useFetch<{ items: CatalogCard[] }>('/api/invento
       icon="i-lucide-search"
       placeholder="Katalog durchsuchen..."
       aria-label="Katalog durchsuchen"
+      autofocus
     />
 
     <div class="max-h-96 overflow-y-auto rounded-md border border-gray-200 bg-white">

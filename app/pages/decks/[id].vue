@@ -495,6 +495,17 @@ async function addCard(card: SourceCard, section: DeckSection) {
   await setQuantity(card.catalogCardId, section, quantityInSection(card.catalogCardId, section) + 1)
 }
 
+/**
+ * Set only when *every* section button for this card is disallowed by its
+ * card type (never just because a mutation is in flight) — the per-button
+ * `title` tooltip alone left mouse-only users with three identically grey
+ * buttons and no visible explanation (UX review #13).
+ */
+function allSectionsDisallowedReason(card: SourceCard): string | null {
+  const disallowed = DECK_SECTIONS.every(section => !isSectionAllowedForCard(card, section))
+  return disallowed ? `${card.name} kann in keine Sektion dieses Decks aufgenommen werden.` : null
+}
+
 async function removeCard(row: DeckCardRow) {
   if (isMutating.value) {
     return
@@ -546,12 +557,17 @@ async function onDeckSaved(saved: { id: string }) {
   deck.value = await $fetch<DeckDetail>(`/api/decks/${saved.id}`)
 }
 
+const { confirm } = useConfirm()
+
 async function deleteDeck() {
   if (!deck.value) {
     return
   }
 
-  const confirmed = window.confirm(`"${deck.value.name}" wirklich löschen?`)
+  const confirmed = await confirm({
+    title: 'Deck löschen',
+    description: `"${deck.value.name}" wirklich löschen?`,
+  })
   if (!confirmed) {
     return
   }
@@ -654,7 +670,7 @@ async function deleteDeck() {
           <UButton
             icon="i-lucide-trash-2"
             color="error"
-            variant="outline"
+            variant="ghost"
             label="Löschen"
             @click="deleteDeck"
           />
@@ -700,7 +716,7 @@ async function deleteDeck() {
       </section>
 
       <UAlert
-        v-if="warnings.length > 0"
+        v-if="warnings.length > 0 && !deck.format && counts.total > 0"
         color="warning"
         variant="subtle"
         icon="i-lucide-triangle-alert"
@@ -778,7 +794,13 @@ async function deleteDeck() {
               v-else-if="sourceCards.length === 0"
               class="mt-3 text-sm text-gray-500"
             >
-              Keine Karten gefunden.
+              Keine Karten gefunden. Aktiviere „Auch Katalogkarten anzeigen“ oder
+              <NuxtLink
+                to="/inventar"
+                class="font-medium text-primary"
+              >
+                erfasse Karten im Inventar
+              </NuxtLink>.
             </p>
 
             <ul
@@ -841,6 +863,15 @@ async function deleteDeck() {
                       @click="addCard(card, section)"
                     />
                   </div>
+                  <!-- Disabled buttons alone only explain themselves through
+                       a native `title` tooltip, which mouse-only users never
+                       see (UX review #13) — spell the reason out. -->
+                  <p
+                    v-if="allSectionsDisallowedReason(card)"
+                    class="mt-1 text-xs text-red-600"
+                  >
+                    {{ allSectionsDisallowedReason(card) }}
+                  </p>
                 </div>
               </li>
             </ul>
