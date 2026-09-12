@@ -20,8 +20,9 @@ import type {
 } from './deck-assistant-model'
 import { runTool, toolDefinitions } from './assistant-tools'
 import type { AssistantProposedAction } from './assistant-tools'
+import { getAssistantLimits } from './assistant-limits'
+import type { AssistantLimits } from './assistant-limits'
 import {
-  ASSISTANT_MAX_TOOL_ROUNDS,
   ASSISTANT_MESSAGE_IMAGES_MAX,
   ASSISTANT_MESSAGE_TEXT_MAX,
   ASSISTANT_MESSAGE_TOTAL_BYTES_MAX,
@@ -44,16 +45,14 @@ const DEFAULT_CONVERSATION_TITLE = 'Neue Unterhaltung'
 const CONVERSATION_TITLE_MAX_LENGTH = 80
 const CONVERSATION_LIST_MAX = 50
 
-// The model sees at most this many prior messages, oldest dropped first once
-// the total character budget below is exceeded — see docs/adr/0010's
-// "History" decision.
-const HISTORY_MESSAGE_LIMIT = 30
-const HISTORY_CHAR_LIMIT = 24_000
-
-// Every tool result the model sees is capped, independent of a tool's own
-// item cap (assistant-tools.ts), so one oversized result can't blow up the
-// history budget.
-const TOOL_RESULT_MAX_CHARS = 8000
+// The model sees at most `limits.historyMessages` prior messages, oldest
+// dropped first once `limits.historyChars` is exceeded — see docs/adr/0010's
+// "History" decision. Every tool result the model sees is independently
+// capped at `limits.toolResultChars`, on top of each read tool's own item
+// cap (assistant-tools.ts), so one oversized result can't blow up the
+// history budget. Both, plus the tool-round cap below, come from
+// `getAssistantLimits()` (server/utils/assistant-limits.ts) — configurable
+// via `runtimeConfig.assistant.limits` / `NUXT_ASSISTANT_LIMITS_*`.
 
 const TURN_TIMEOUT_MS = 5 * 60 * 1000
 
@@ -323,20 +322,20 @@ function sanitizeHistoryWindow(rows: MessageRow[]): MessageRow[] {
   return sanitized
 }
 
-function loadHistory(db: Db, conversationId: string): MessageRow[] {
+function loadHistory(db: Db, conversationId: string, limits: AssistantLimits): MessageRow[] {
   const rows = db
     .select()
     .from(assistantMessage)
     .where(eq(assistantMessage.conversationId, conversationId))
     .orderBy(desc(assistantMessage.createdAt))
-    .limit(HISTORY_MESSAGE_LIMIT)
+    .limit(limits.historyMessages)
     .all()
 
   const oldestFirst = rows.reverse()
 
   let totalChars = oldestFirst.reduce((sum, row) => sum + row.content.length, 0)
   const trimmed = [...oldestFirst]
-  while (totalChars > HISTORY_CHAR_LIMIT && trimmed.length > 1) {
+  while (totalChars > limits.historyChars && trimmed.length > 1) {
     const removed = trimmed.shift()!
     totalChars -= removed.content.length
   }
@@ -422,9 +421,9 @@ function summarizeToolOutcome(ok: boolean, resultOrError: unknown): string {
 // of being cut off mid-string — a truncated JSON document is not just
 // unreadable for a human, it's not parseable at all, so a model asked to
 // reason about "the tool result" gets a syntax-broken blob instead of data.
-function serializeToolResult(value: unknown): string {
+function serializeToolResult(value: unknown, maxChars: number): string {
   const json = JSON.stringify(value ?? null)
-  if (json.length <= TOOL_RESULT_MAX_CHARS) {
+  if (json.length <= maxChars) {
     return json
   }
   return JSON.stringify({ error: 'Ergebnis zu groß', hint: 'Bitte enger suchen.' })
@@ -510,8 +509,8 @@ export type ChatTurnEvent =
 
 /**
  * Runs one user turn to completion: persists the user message, drives the
- * model through up to `ASSISTANT_MAX_TOOL_ROUNDS` tool-calling rounds (each
- * tool call validated and executed via `runTool`, a write tool's outcome
+ * model through up to `getAssistantLimits().maxToolRounds` tool-calling
+ * rounds (each tool call validated and executed via `runTool`, a write tool's outcome
  * persisted as a pending `assistantAction`), and persists/emits the final
  * assistant answer. Never throws: any failure is reported as an `error`
  * event, with nothing further persisted.
@@ -533,7 +532,8 @@ export async function runChatTurn(
 ): Promise<void> {
   requireOwnConversation(db, userId, conversationId)
 
-  const priorHistory = loadHistory(db, conversationId)
+  const limits = getAssistantLimits()
+  const priorHistory = loadHistory(db, conversationId, limits)
   const isFirstMessage = priorHistory.length === 0
 
   const attachments = input.images.map((_, index) => ({ kind: 'image' as const, label: `Foto ${index + 1}` }))
@@ -573,7 +573,7 @@ export async function runChatTurn(
     let finalText: string | null = null
     let aborted = false
 
-    for (let round = 0; round < ASSISTANT_MAX_TOOL_ROUNDS; round++) {
+    for (let round = 0; round < limits.maxToolRounds; round++) {
       if (signal?.aborted) {
         aborted = true
         break
@@ -670,7 +670,7 @@ export async function runChatTurn(
           }
         }
 
-        const toolContent = serializeToolResult(resultForModel)
+        const toolContent = serializeToolResult(resultForModel, limits.toolResultChars)
         insertMessage(db, conversationId, {
           role: 'tool',
           content: toolContent,

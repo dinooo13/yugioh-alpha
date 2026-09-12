@@ -63,11 +63,13 @@ export interface AssistantConversationDetail {
 }
 
 // --- Limits, shared by client-side validation and the server ------------------
+// (Not part of the configurable `runtimeConfig.assistant.limits` set — see
+// server/utils/assistant-limits.ts for the six operational limits that are;
+// these three are validated client-side too, so they stay plain constants.)
 
-export const ASSISTANT_MESSAGE_TEXT_MAX = 4000
-export const ASSISTANT_MESSAGE_IMAGES_MAX = 3
-export const ASSISTANT_MESSAGE_TOTAL_BYTES_MAX = 4 * 1024 * 1024
-export const ASSISTANT_MAX_TOOL_ROUNDS = 8
+export const ASSISTANT_MESSAGE_TEXT_MAX = 20_000
+export const ASSISTANT_MESSAGE_IMAGES_MAX = 6
+export const ASSISTANT_MESSAGE_TOTAL_BYTES_MAX = 12 * 1024 * 1024
 
 // --- SSE event payloads for POST /api/assistant/chat/:id/messages ------------
 

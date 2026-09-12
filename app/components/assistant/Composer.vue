@@ -70,7 +70,7 @@ const totalImageBytes = computed(() => images.value.reduce((sum, image) => sum +
 const canSend = computed(() =>
   !props.disabled && !props.streaming && !isProcessingImage.value && (text.value.trim() !== '' || images.value.length > 0))
 
-// --- Images: max 3, resized client-side to ≤1280px JPEG q0.85 -------------
+// --- Images: max 6, resized client-side to ≤1280px JPEG q0.85 -------------
 
 interface ImageSource {
   width: number
@@ -158,7 +158,7 @@ async function onFilesSelected(event: Event) {
     for (const file of files.slice(0, free)) {
       const dataUrl = await resizeImageToDataUrl(file)
       if (totalImageBytes.value + dataUrl.length > ASSISTANT_MESSAGE_TOTAL_BYTES_MAX) {
-        errorMessage.value = 'Die Bilder sind zusammen zu groß (max. 4 MB). Entferne eins oder nutze ein kleineres Foto.'
+        errorMessage.value = 'Die Bilder sind zusammen zu groß (max. 12 MB). Entferne eins oder nutze ein kleineres Foto.'
         break
       }
       images.value = [...images.value, dataUrl]

@@ -133,12 +133,12 @@ Conversations, messages, and actions are persisted
 image only ever travels with the one request it was sent in and never
 inflates the database or a later prompt. Rebuilding a model call's history
 sends the system prompt plus the most recent messages (assistant/user/tool),
-capped at 30 messages and ~24,000 characters total, oldest dropped first
+capped at 120 messages and ~160,000 characters total, oldest dropped first
 once either limit is exceeded — a long-running conversation degrades
 gracefully into "the last N exchanges" rather than failing or silently
 growing the request without bound. Every tool result the model sees is
-independently capped at 8,000 characters, on top of each read tool's own
-20-item result cap, so one oversized result can't itself blow the whole
+independently capped at 60,000 characters, on top of each read tool's own
+100-item result cap, so one oversized result can't itself blow the whole
 turn's budget.
 
 The system prompt tells the model that card text and user notes surfaced
@@ -151,12 +151,19 @@ was.
 
 ### Loop and request limits
 
-At most 8 tool-calling rounds per user turn
-(`ASSISTANT_MAX_TOOL_ROUNDS`), a 5-minute wall-clock budget per turn, and
+At most 24 tool-calling rounds per user turn
+(`getAssistantLimits().maxToolRounds`), a 5-minute wall-clock budget per turn, and
 one turn running at a time per user (an in-memory lock, the same pattern
 `suggest.post.ts` already used for the deck assistant) — a second message
 sent while one is still streaming gets `409`, rather than two turns
 interleaving tool calls against the same conversation.
+
+Limits are configurable: the tool-round cap, both history limits, the tool
+result budget, the read tools' item cap, and the model call timeout are all
+read from `runtimeConfig.assistant.limits` via `getAssistantLimits()`
+(`server/utils/assistant-limits.ts`), overridable per deployment through the
+six `NUXT_ASSISTANT_LIMITS_*` env vars documented in `.env.example` — a
+garbage or missing override falls back to the defaults quoted above.
 
 ## Consequences
 
