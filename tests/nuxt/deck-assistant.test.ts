@@ -24,6 +24,7 @@ import type {
   DeckAssistantModel,
 } from '../../server/utils/deck-assistant-model'
 import type { DeckAssistantRequest } from '../../shared/deck-assistant'
+import { DEFAULT_ASSISTANT_TIMEOUT_MS } from '../../server/utils/assistant-limits'
 
 const CARD = {
   darkMagician: 46986414,
@@ -729,7 +730,7 @@ describe('OpenAI-compatible model', () => {
         statusCode: 502,
         statusMessage: 'Der KI-Assistent ist derzeit nicht erreichbar.',
       })
-      await vi.advanceTimersByTimeAsync(120_000)
+      await vi.advanceTimersByTimeAsync(DEFAULT_ASSISTANT_TIMEOUT_MS)
       await pending
     }
     finally {

@@ -5,7 +5,7 @@ import { mountSuspended } from '@nuxt/test-utils/runtime'
 import AssistantComposer from '~/components/assistant/Composer.vue'
 import { ASSISTANT_MESSAGE_IMAGES_MAX } from '~~/shared/assistant-chat'
 
-// Covers review finding #15's Composer gap: the 3-image limit message, that
+// Covers review finding #15's Composer gap: the image-count limit message, that
 // `canSend` (and so the Send button) is false while an image is still being
 // processed (#8), and Enter/Shift+Enter behaving as send/newline.
 
@@ -52,23 +52,24 @@ afterEach(() => {
 })
 
 describe('AssistantComposer', () => {
-  it('rejects a 4th image with a German error once 3 are already attached', async () => {
+  it('rejects one image over the limit with a German error once the cap is already attached', async () => {
     stubCanvas()
     vi.stubGlobal('createImageBitmap', vi.fn(() => Promise.resolve(fakeBitmap())))
 
     const component = await mountSuspended(AssistantComposer)
 
-    await selectFiles(component, [pngFile('a.png'), pngFile('b.png'), pngFile('c.png')])
+    const atCap = Array.from({ length: ASSISTANT_MESSAGE_IMAGES_MAX }, (_, i) => pngFile(`${i}.png`))
+    await selectFiles(component, atCap)
     await flushPromises()
-    expect(component.findAll('img').length).toBe(3)
+    expect(component.findAll('img').length).toBe(ASSISTANT_MESSAGE_IMAGES_MAX)
     expect(component.text()).not.toContain('höchstens')
 
-    await selectFiles(component, [pngFile('d.png')])
+    await selectFiles(component, [pngFile('one-too-many.png')])
     await flushPromises()
 
     expect(component.text()).toContain(`Es sind höchstens ${ASSISTANT_MESSAGE_IMAGES_MAX} Bilder pro Nachricht erlaubt.`)
-    // Still only the first 3 — the 4th was never added.
-    expect(component.findAll('img').length).toBe(3)
+    // Still only the cap's worth — the extra one was never added.
+    expect(component.findAll('img').length).toBe(ASSISTANT_MESSAGE_IMAGES_MAX)
   })
 
   it('disables Senden while an image is still being processed, and re-enables it once done (#8)', async () => {
