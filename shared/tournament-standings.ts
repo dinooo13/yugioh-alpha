@@ -41,14 +41,17 @@ export interface StandingsRow {
   dropped: boolean
 }
 
-const POINTS_WIN = 3
-const POINTS_DRAW = 1
+// Canonical home for the scoring constants; `shared/tournaments.ts` re-exports
+// these rather than redeclaring them, so the pairing/round-creation path and
+// the standings path can never drift apart.
+export const POINTS_WIN = 3
+export const POINTS_DRAW = 1
 
 /** Floor applied to every *own* win rate before it is averaged into an opponent rate. */
 export const MIN_WIN_RATE = 1 / 3
 
 /** A bye is scored as a 2–0 win (3 match points). */
-const BYE_GAMES = 2
+export const BYE_GAMES = 2
 
 interface Accumulator {
   matchesPlayed: number

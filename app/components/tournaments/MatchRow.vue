@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { TOURNAMENT_ERROR_MESSAGES } from '~~/shared/tournaments'
+import { MAX_GAMES_PER_MATCH, TOURNAMENT_ERROR_MESSAGES } from '~~/shared/tournaments'
 import type { TournamentDetail, TournamentErrorCode, TournamentMatchDto } from '~~/shared/tournaments'
 import { apiErrorCode, apiErrorMessage } from '~/utils/card-entry'
 
@@ -59,8 +59,11 @@ async function submitResult(a: number, b: number) {
   }
 }
 
+/** `v-model.number` leaves a cleared input as `""`; treat that as 0 rather than posting it. */
 function saveForm() {
-  submitResult(gamesA.value, gamesB.value)
+  const a = typeof gamesA.value === 'number' ? gamesA.value : 0
+  const b = typeof gamesB.value === 'number' ? gamesB.value : 0
+  submitResult(a, b)
 }
 
 const winnerName = computed(() => {
@@ -148,6 +151,7 @@ function onChipClick(slot: 'a' | 'b') {
           v-model.number="gamesA"
           type="number"
           min="0"
+          :max="MAX_GAMES_PER_MATCH"
           size="xs"
           class="w-16"
           :aria-label="`Spiele ${match.participantAName}`"
@@ -157,6 +161,7 @@ function onChipClick(slot: 'a' | 'b') {
           v-model.number="gamesB"
           type="number"
           min="0"
+          :max="MAX_GAMES_PER_MATCH"
           size="xs"
           class="w-16"
           :aria-label="`Spiele ${match.participantBName}`"

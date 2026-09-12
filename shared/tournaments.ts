@@ -3,6 +3,11 @@
 
 import type { StandingsRow } from './tournament-standings'
 
+// Scoring constants live in tournament-standings.ts (the standings path);
+// re-exported here so the pairing/round-creation path (server/utils/tournaments.ts)
+// uses the same values instead of a second, independently-maintained copy.
+export { BYE_GAMES, POINTS_DRAW, POINTS_WIN } from './tournament-standings'
+
 // --- Enums + labels --------------------------------------------------------
 
 export const TOURNAMENT_STATUSES = ['registration', 'running', 'finished'] as const
@@ -44,17 +49,19 @@ export const TOURNAMENT_DESCRIPTION_MAX_LENGTH = 500
 export const PARTICIPANT_NAME_MAX_LENGTH = 60
 export const MIN_PARTICIPANTS_TO_START = 2
 export const MAX_PARTICIPANTS = 64
-export const MAX_PLANNED_ROUNDS = 20
+/**
+ * Highest round robin (an even, `MAX_PARTICIPANTS`-sized field) needs
+ * `MAX_PARTICIPANTS - 1` rounds; keep the manual Swiss cap in sync with it so
+ * `plannedRounds` always fits regardless of pairing system (see D-round-robin
+ * cap in the tournament review).
+ */
+export const MAX_PLANNED_ROUNDS = MAX_PARTICIPANTS - 1
 /** Sanity cap per side of a match result (best-of-3 … best-of-9). */
 export const MAX_GAMES_PER_MATCH = 9
 /** Games recorded for the winner when a result is entered as a plain win. */
 export const DEFAULT_WIN_GAMES = 2
 /** Games recorded for both sides when a result is entered as a plain draw. */
 export const DEFAULT_DRAW_GAMES = 1
-/** A bye is scored as a 2–0 win (3 match points). */
-export const BYE_GAMES = 2
-export const POINTS_WIN = 3
-export const POINTS_DRAW = 1
 export const POINTS_LOSS = 0
 /** Deck snapshot keeps at most this many rule-violation messages. */
 export const MAX_SNAPSHOT_ISSUES = 10
