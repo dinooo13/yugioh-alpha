@@ -24,7 +24,8 @@ Open a PR against `main` using the [PR template](../.github/PULL_REQUEST_TEMPLAT
 - Keep PRs focused and reviewable; describe what was verified and what couldn't be.
 - CI (lint, typecheck, unit tests, Playwright E2E — see `.github/workflows/`) must pass
   before merging.
-- Merge with a merge commit.
+- Merge by rebase: the `main` ruleset requires a linear history and only allows rebase merges
+  (`gh pr merge --rebase`).
 
 ## 4. Definition of done
 
