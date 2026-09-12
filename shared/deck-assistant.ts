@@ -115,8 +115,10 @@ export interface DeckAssistantResult {
 
 export interface DeckAssistantStatus {
   enabled: boolean
-  provider: 'anthropic' | 'fake' | null
+  provider: 'openai' | 'fake' | null
   model: string | null
+  /** For provider 'openai': the endpoint's host (never a key), so the UI can say which one is used. */
+  baseUrl?: string | null
 }
 
 export function isPlayStyleId(value: unknown): value is PlayStyleId {

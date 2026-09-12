@@ -1,19 +1,15 @@
 // The AI deck assistant's model abstraction: a small interface the core
 // logic (server/utils/deck-assistant.ts) drives, plus two implementations —
-// a real Anthropic-backed model and a deterministic, network-free "fake" used
-// in tests and whenever no API key is configured for local/dev use.
+// a real model reached over any OpenAI-compatible Chat Completions endpoint,
+// and a deterministic, network-free "fake" used in tests and whenever no
+// provider is configured for local/dev use.
 //
 // The server never trusts what a model returns: `generate` hands back
 // `unknown`, and every field is defensively validated by the caller.
 
-import Anthropic from '@anthropic-ai/sdk'
 import { createError } from 'h3'
 import type { AssistantMode, DeckAssistantStatus } from '../../shared/deck-assistant'
 import type { DeckSection } from '../../shared/deck-sections'
-
-export type AssistantEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
-
-const ASSISTANT_EFFORTS: readonly AssistantEffort[] = ['low', 'medium', 'high', 'xhigh', 'max']
 
 /** One card in the candidate pool the model may pick from — see buildPool in deck-assistant.ts. */
 export interface AssistantPoolCard {
@@ -72,98 +68,198 @@ export interface DeckAssistantModel {
   generate(input: AssistantModelInput): Promise<unknown>
 }
 
-function normalizeEffort(value: unknown): AssistantEffort {
-  return typeof value === 'string' && (ASSISTANT_EFFORTS as readonly string[]).includes(value)
-    ? value as AssistantEffort
-    : 'high'
-}
-
-// --- Anthropic-backed model --------------------------------------------------
-
-export interface CreateAnthropicModelOptions {
-  apiKey?: string
-  model: string
-  effort: AssistantEffort
-  /** Injectable for tests — an already-constructed (or mocked) SDK client. */
-  client?: Anthropic
-}
-
 function assistantError(statusCode: number, message: string): never {
   throw createError({ statusCode, statusMessage: message, message })
 }
 
-export function createAnthropicModel(options: CreateAnthropicModelOptions): DeckAssistantModel {
-  const client = options.client ?? new Anthropic(options.apiKey ? { apiKey: options.apiKey } : {})
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+// --- OpenAI-compatible model --------------------------------------------------
+//
+// Talks to any Chat Completions endpoint that follows the OpenAI schema —
+// OpenAI itself, OpenRouter, Ollama, LM Studio, OpenCode Zen, etc. — over
+// plain `fetch`, non-streaming, with a 120s timeout. Structured output is
+// requested via `response_format: { type: 'json_schema', ... }`; servers
+// that don't support it answer with 400/422, in which case we fall back to
+// `json_object` mode (schema appended to the system prompt as an
+// instruction), and finally to no `response_format` at all.
+
+const REQUEST_TIMEOUT_MS = 120_000
+
+export interface CreateOpenAiCompatibleModelOptions {
+  baseUrl: string
+  apiKey?: string
+  model: string
+  /** Injectable for tests. */
+  fetch?: typeof fetch
+}
+
+type ChatCompletionOutcome =
+  | { kind: 'response', status: number, json: unknown }
+  | { kind: 'timeout' }
+  | { kind: 'network-error' }
+
+async function postChatCompletion(
+  fetchImpl: typeof fetch,
+  baseUrl: string,
+  apiKey: string,
+  body: Record<string, unknown>,
+): Promise<ChatCompletionOutcome> {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+  try {
+    const response = await fetchImpl(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        ...(apiKey !== '' ? { authorization: `Bearer ${apiKey}` } : {}),
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    })
+    let json: unknown = null
+    try {
+      json = await response.json()
+    }
+    catch {
+      json = null
+    }
+    return { kind: 'response', status: response.status, json }
+  }
+  catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      return { kind: 'timeout' }
+    }
+    return { kind: 'network-error' }
+  }
+  finally {
+    clearTimeout(timeoutId)
+  }
+}
+
+function extractMessageText(message: unknown): string {
+  if (!isRecord(message)) {
+    return ''
+  }
+  const content = message.content
+  if (typeof content === 'string') {
+    return content
+  }
+  if (Array.isArray(content)) {
+    return content
+      .filter((part): part is { type: string, text: string } =>
+        isRecord(part) && part.type === 'text' && typeof part.text === 'string')
+      .map(part => part.text)
+      .join('')
+  }
+  return ''
+}
+
+function stripCodeFences(text: string): string {
+  const trimmed = text.trim()
+  const match = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i)
+  return match?.[1] ?? trimmed
+}
+
+function parseChatCompletionBody(json: unknown): unknown {
+  if (!isRecord(json)) {
+    assistantError(502, 'Ungültige Antwort des Assistenten.')
+  }
+  const choice = Array.isArray(json.choices) ? json.choices[0] : undefined
+  if (!isRecord(choice)) {
+    assistantError(502, 'Ungültige Antwort des Assistenten.')
+  }
+
+  if (choice.finish_reason === 'length') {
+    assistantError(502, 'Die Antwort des Assistenten war zu lang oder unvollständig.')
+  }
+  if (choice.finish_reason === 'content_filter') {
+    assistantError(502, 'Der Assistent hat die Anfrage abgelehnt.')
+  }
+
+  const text = stripCodeFences(extractMessageText(choice.message))
+  try {
+    return JSON.parse(text)
+  }
+  catch {
+    assistantError(502, 'Ungültige Antwort des Assistenten.')
+  }
+}
+
+/** Whether a response_format the server rejected should be retried in a more compatible mode. */
+function isUnsupportedResponseFormat(status: number): boolean {
+  return status === 400 || status === 422
+}
+
+export function createOpenAiCompatibleModel(options: CreateOpenAiCompatibleModelOptions): DeckAssistantModel {
+  const baseUrl = options.baseUrl.replace(/\/+$/, '')
+  const apiKey = options.apiKey ?? ''
   const model = options.model
-  const effort = options.effort
+  const fetchImpl = options.fetch ?? fetch
 
   return {
     id: model,
     async generate(input: AssistantModelInput): Promise<unknown> {
-      let response: Anthropic.Beta.BetaMessage
-      try {
-        // Non-streaming would time out well before a 60-card deck's worth of
-        // adaptive thinking + reasons finishes generating at this max_tokens.
-        const stream = client.beta.messages.stream({
-          model,
-          max_tokens: 64000,
-          betas: ['server-side-fallback-2026-07-01'],
-          fallbacks: 'default',
-          thinking: { type: 'adaptive' },
-          output_config: {
-            effort,
-            format: { type: 'json_schema', schema: input.schema },
-          },
-          // No cache_control here: the stable, cacheable prefix is the
-          // context block below it, not this short instruction text.
+      const userContent = `${input.context}\n\n${input.prompt}`
+
+      // Three attempts, most-structured first: json_schema, then json_object
+      // (with the schema folded into the system prompt), then no
+      // response_format at all — each only tried when the previous one was
+      // rejected as unsupported (400/422), never on any other failure.
+      const attempts: Array<{ system: string, responseFormat: Record<string, unknown> | null }> = [
+        {
           system: input.system,
-          messages: [{
-            role: 'user',
-            content: [
-              { type: 'text', text: input.context, cache_control: { type: 'ephemeral' } },
-              { type: 'text', text: input.prompt },
-            ],
-          }],
-        })
-        response = await stream.finalMessage()
-      }
-      catch (error) {
-        if (error instanceof Anthropic.AuthenticationError) {
-          assistantError(503, 'KI-Assistent ist nicht korrekt konfiguriert.')
+          responseFormat: { type: 'json_schema', json_schema: { name: 'deck_assistant', schema: input.schema } },
+        },
+        {
+          system: `${input.system}\n\nAntworte ausschließlich mit einem JSON-Objekt nach diesem Schema: ${JSON.stringify(input.schema)}`,
+          responseFormat: { type: 'json_object' },
+        },
+        {
+          system: input.system,
+          responseFormat: null,
+        },
+      ]
+
+      for (const [i, attempt] of attempts.entries()) {
+        const isLastAttempt = i === attempts.length - 1
+        const body: Record<string, unknown> = {
+          model,
+          messages: [
+            { role: 'system', content: attempt.system },
+            { role: 'user', content: userContent },
+          ],
+          temperature: 0.2,
+          ...(attempt.responseFormat ? { response_format: attempt.responseFormat } : {}),
         }
-        if (error instanceof Anthropic.RateLimitError) {
-          assistantError(503, 'Der KI-Assistent ist ausgelastet, bitte später erneut versuchen.')
-        }
-        if (error instanceof Anthropic.APIError) {
+
+        const outcome = await postChatCompletion(fetchImpl, baseUrl, apiKey, body)
+
+        if (outcome.kind === 'timeout' || outcome.kind === 'network-error') {
           assistantError(502, 'Der KI-Assistent ist derzeit nicht erreichbar.')
         }
-        throw error
+
+        const { status, json } = outcome
+        if (status === 401 || status === 403) {
+          assistantError(503, 'KI-Assistent ist nicht korrekt konfiguriert.')
+        }
+        if (status === 429) {
+          assistantError(503, 'Der KI-Assistent ist ausgelastet, bitte später erneut versuchen.')
+        }
+        if (!isLastAttempt && isUnsupportedResponseFormat(status)) {
+          continue
+        }
+        if (status < 200 || status >= 300) {
+          assistantError(502, 'Der KI-Assistent ist derzeit nicht erreichbar.')
+        }
+
+        return parseChatCompletionBody(json)
       }
 
-      if (response.stop_reason === 'refusal') {
-        assistantError(502, 'Der Assistent hat die Anfrage abgelehnt.')
-      }
-      if (response.stop_reason === 'max_tokens') {
-        assistantError(502, 'Die Antwort des Assistenten war zu lang oder unvollständig.')
-      }
-
-      // With `fallbacks: 'default'`, a mid-stream refusal can leave the
-      // declined model's partial text ahead of a `fallback` block, followed
-      // by the fallback model's complete answer — the answer we want is
-      // always the LAST text block, never the first.
-      const textBlock = response.content.findLast(
-        (block): block is Anthropic.Beta.BetaTextBlock => block.type === 'text',
-      )
-      if (!textBlock) {
-        assistantError(502, 'Ungültige Antwort des Assistenten.')
-      }
-
-      try {
-        return JSON.parse(textBlock.text)
-      }
-      catch {
-        assistantError(502, 'Ungültige Antwort des Assistenten.')
-      }
+      // Unreachable: the loop always returns or throws on its last iteration.
+      assistantError(502, 'Der KI-Assistent ist derzeit nicht erreichbar.')
     },
   }
 }
@@ -271,30 +367,62 @@ export function createFakeModel(): DeckAssistantModel {
 
 export interface DeckAssistantRuntimeConfig {
   provider: string
+  baseUrl: string
   apiKey: string
   model: string
-  effort: string
 }
 
-type Provider = 'anthropic' | 'fake' | null
+type Provider = 'openai' | 'fake' | null
+
+const DEFAULT_BASE_URL = 'https://api.openai.com/v1'
+const DEFAULT_MODEL = 'gpt-4o-mini'
+
+function normalizeBaseUrl(value: string | undefined): string {
+  return (value ?? '').trim().replace(/\/+$/, '')
+}
+
+function resolveBaseUrl(config: DeckAssistantRuntimeConfig): string {
+  const trimmed = normalizeBaseUrl(config.baseUrl)
+  return trimmed !== '' ? trimmed : DEFAULT_BASE_URL
+}
+
+/** Whether the caller pointed the assistant at something other than the default OpenAI endpoint. */
+function hasCustomBaseUrl(config: DeckAssistantRuntimeConfig): boolean {
+  const trimmed = normalizeBaseUrl(config.baseUrl)
+  return trimmed !== '' && trimmed !== DEFAULT_BASE_URL
+}
+
+function resolveApiKey(config: DeckAssistantRuntimeConfig): string {
+  const trimmed = (config.apiKey ?? '').trim()
+  if (trimmed !== '') {
+    return trimmed
+  }
+  return (process.env.OPENAI_API_KEY ?? '').trim()
+}
+
+function resolveModelId(config: DeckAssistantRuntimeConfig): string {
+  const trimmed = (config.model ?? '').trim()
+  return trimmed !== '' ? trimmed : DEFAULT_MODEL
+}
 
 function resolveProvider(config: DeckAssistantRuntimeConfig): Provider {
   const raw = (config.provider ?? '').trim().toLowerCase()
   if (raw === 'fake') {
     return 'fake'
   }
-  if (raw === 'anthropic') {
-    return 'anthropic'
+  if (raw === 'openai') {
+    return 'openai'
   }
-  if (raw === '' && ((config.apiKey ?? '').trim() !== '' || Boolean(process.env.ANTHROPIC_API_KEY))) {
-    return 'anthropic'
+  if (raw === '') {
+    // Auto: an API key (config or OPENAI_API_KEY) implies a real endpoint is
+    // wanted; so does a base URL explicitly changed away from the default,
+    // for keyless local servers (Ollama, LM Studio) that never carry a key.
+    const hasKey = resolveApiKey(config) !== ''
+    if (hasKey || hasCustomBaseUrl(config)) {
+      return 'openai'
+    }
   }
   return null
-}
-
-function resolveModelId(config: DeckAssistantRuntimeConfig): string {
-  const trimmed = (config.model ?? '').trim()
-  return trimmed !== '' ? trimmed : 'claude-opus-5'
 }
 
 export function useDeckAssistantModel(): DeckAssistantModel | null {
@@ -304,12 +432,11 @@ export function useDeckAssistantModel(): DeckAssistantModel | null {
   if (provider === 'fake') {
     return createFakeModel()
   }
-  if (provider === 'anthropic') {
-    const apiKey = (config.apiKey ?? '').trim()
-    return createAnthropicModel({
+  if (provider === 'openai') {
+    return createOpenAiCompatibleModel({
+      baseUrl: resolveBaseUrl(config),
+      apiKey: resolveApiKey(config),
       model: resolveModelId(config),
-      effort: normalizeEffort(config.effort),
-      ...(apiKey !== '' ? { apiKey } : {}),
     })
   }
   return null
@@ -320,10 +447,19 @@ export function getDeckAssistantStatus(): DeckAssistantStatus {
   const provider = resolveProvider(config)
 
   if (provider === 'fake') {
-    return { enabled: true, provider: 'fake', model: FAKE_MODEL_ID }
+    return { enabled: true, provider: 'fake', model: FAKE_MODEL_ID, baseUrl: null }
   }
-  if (provider === 'anthropic') {
-    return { enabled: true, provider: 'anthropic', model: resolveModelId(config) }
+  if (provider === 'openai') {
+    const baseUrl = resolveBaseUrl(config)
+    let host = baseUrl
+    try {
+      host = new URL(baseUrl).host
+    }
+    catch {
+      // Keep the raw (already-validated-enough-to-configure) string if it
+      // somehow isn't a parseable URL — still never a secret.
+    }
+    return { enabled: true, provider: 'openai', model: resolveModelId(config), baseUrl: host }
   }
-  return { enabled: false, provider: null, model: null }
+  return { enabled: false, provider: null, model: null, baseUrl: null }
 }
