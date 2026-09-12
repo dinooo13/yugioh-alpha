@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { PublicProfileResponse } from '~~/shared/sharing'
+import type { PublicProfileResponse, SharedWishlistResponse } from '~~/shared/sharing'
 
 definePageMeta({ layout: 'public' })
 
@@ -12,6 +12,18 @@ const { data, error } = await useFetch<PublicProfileResponse>(
     headers: import.meta.server ? useRequestHeaders(['cookie']) : undefined,
   },
 )
+
+// Separate call, mirroring the dedicated `/api/profiles/:handle/wishlist`
+// endpoint (§3.2 #13): the main profile response only carries a count, not
+// the items themselves. 404s silently (hidden wishlist) — `wishlistItems`
+// then just stays empty, same as any other not-shared section on this page.
+const { data: wishlistData } = await useFetch<SharedWishlistResponse>(
+  () => `/api/profiles/${handle.value}/wishlist`,
+  {
+    headers: import.meta.server ? useRequestHeaders(['cookie']) : undefined,
+  },
+)
+const wishlistItems = computed(() => wishlistData.value?.items ?? [])
 
 useHead({
   title: computed(() => `${data.value?.profile.displayName ?? 'Profil'} – yugioh alpha`),
@@ -164,6 +176,19 @@ const isEmpty = computed(() => {
           <p class="mt-1 text-sm text-gray-500">
             {{ data.wishlist.itemCount }} Karten
           </p>
+          <ul
+            v-if="wishlistItems.length > 0"
+            class="mt-3 divide-y divide-gray-100"
+          >
+            <li
+              v-for="item in wishlistItems"
+              :key="item.id"
+              class="flex items-center justify-between gap-3 py-2 text-sm"
+            >
+              <span class="truncate text-gray-900">{{ item.name }}</span>
+              <span class="shrink-0 font-semibold tabular-nums text-gray-700">{{ item.quantity }}×</span>
+            </li>
+          </ul>
         </section>
       </template>
     </template>
