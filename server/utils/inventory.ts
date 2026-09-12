@@ -333,6 +333,35 @@ export function validateInventoryBulkInput(db: Db, userId: string, body: unknown
 }
 
 /**
+ * Synchronous core of `addOwnedCardsBulk`, without opening its own
+ * transaction — for a caller (e.g. the chat assistant's `applyAction`) that
+ * needs to run this alongside other writes inside one transaction of its
+ * own. Assumes `db` already is (or stands in for) that transaction.
+ */
+export function addOwnedCardsBulkSync(
+  db: Db,
+  userId: string,
+  inputs: InventoryInput[],
+): InventoryBulkResult {
+  const items: OwnedCardRow[] = []
+  let created = 0
+  let merged = 0
+
+  for (const input of inputs) {
+    const result = upsertOwnedCardRow(db, userId, input)
+    items.push(result.row)
+    if (result.merged) {
+      merged += 1
+    }
+    else {
+      created += 1
+    }
+  }
+
+  return { created, merged, items }
+}
+
+/**
  * Writes every already-validated item in a single transaction (all or
  * nothing), reusing the same dedup semantics as `addOwnedCard`.
  */
@@ -341,26 +370,9 @@ export async function addOwnedCardsBulk(
   userId: string,
   inputs: InventoryInput[],
 ): Promise<InventoryBulkResult> {
-  return db.transaction((tx) => {
-    const items: OwnedCardRow[] = []
-    let created = 0
-    let merged = 0
-
-    for (const input of inputs) {
-      // better-sqlite3 transactions are synchronous; `tx` exposes the same
-      // query builder surface as the root client here.
-      const result = upsertOwnedCardRow(tx as unknown as Db, userId, input)
-      items.push(result.row)
-      if (result.merged) {
-        merged += 1
-      }
-      else {
-        created += 1
-      }
-    }
-
-    return { created, merged, items }
-  })
+  // better-sqlite3 transactions are synchronous; `tx` exposes the same query
+  // builder surface as the root client here.
+  return db.transaction(tx => addOwnedCardsBulkSync(tx as unknown as Db, userId, inputs))
 }
 
 export async function updateOwnedCard(

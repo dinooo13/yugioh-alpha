@@ -647,8 +647,8 @@ export const assistantConversation = sqliteTable(
       .references(() => user.id, { onDelete: 'cascade' }),
     // Seeded from the first user message (truncated), shown in the conversation list.
     title: text('title').notNull(),
-    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-    updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
   },
   table => [
     index('idx_assistant_conversation_user_updated').on(table.userId, table.updatedAt),
@@ -673,7 +673,7 @@ export const assistantMessage = sqliteTable(
     // Image attachments are never persisted as bytes — only a label survives
     // (see ADR 0010): [{ kind: 'image', label }].
     attachments: text('attachments', { mode: 'json' }).$type<Array<{ kind: 'image', label: string }>>(),
-    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   },
   table => [
     index('idx_assistant_message_conversation_created').on(table.conversationId, table.createdAt),
@@ -700,8 +700,8 @@ export const assistantAction = sqliteTable(
     summary: text('summary').notNull(),
     status: text('status').notNull().$type<'pending' | 'applied' | 'rejected' | 'failed'>().default('pending'),
     result: text('result', { mode: 'json' }).$type<unknown>(),
-    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-    resolvedAt: integer('resolved_at', { mode: 'timestamp' }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    resolvedAt: integer('resolved_at', { mode: 'timestamp_ms' }),
   },
   table => [
     index('idx_assistant_action_user_status').on(table.userId, table.status),

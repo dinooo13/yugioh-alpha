@@ -6,7 +6,9 @@
 // **pending action** description instead. The chat engine
 // (server/utils/assistant-chat.ts) persists that as an `assistantAction` row
 // and only `applyAction` below actually calls the existing, already-tested
-// write utils (`addOwnedCardsBulk`, `createDeck`, `upsertDeckCard`).
+// write utils (`addOwnedCardsBulkSync`, `createDeck`, `upsertDeckCard`),
+// re-validating the stored payload and running every write of one action
+// inside a single transaction.
 //
 // Every tool is user-scoped: `run(ctx, args)` only ever touches `ctx.userId`'s
 // own rows, and a referenced deck/collection/action that belongs to someone
@@ -20,7 +22,7 @@ import type { ToolDefinition } from './deck-assistant-model'
 import { getCatalogCardDetail } from './catalog-search'
 import { requireCollectionOwnedByUser, listCollections } from './collections'
 import {
-  addOwnedCardsBulk,
+  addOwnedCardsBulkSync,
   validateInventoryBulkInput,
 } from './inventory'
 import type { InventoryInput } from './inventory'
@@ -46,6 +48,8 @@ type Db = ReturnType<typeof useDb>
 /** Every read tool's result array is trimmed to at most this many rows. */
 export const ASSISTANT_TOOL_RESULT_MAX_ITEMS = 20
 const GET_CARD_PRINTINGS_MAX = 10
+/** Row-scan bound for `search_inventory`'s per-card aggregation — see its query. */
+const SEARCH_INVENTORY_ROW_SCAN_MAX = 500
 
 export interface ToolRunContext {
   db: Db
@@ -138,6 +142,15 @@ function capItems<T>(items: T[], max = ASSISTANT_TOOL_RESULT_MAX_ITEMS): T[] {
   return items.slice(0, max)
 }
 
+/**
+ * Caps an already fully-materialized array *before* serialization and
+ * reports whether it was cut, plus the true total — so the model can say
+ * "mindestens 20" instead of quietly treating the capped count as complete.
+ */
+function capResult<T>(items: T[], max = ASSISTANT_TOOL_RESULT_MAX_ITEMS): { items: T[], truncated: boolean, total: number } {
+  return { items: items.slice(0, max), truncated: items.length > max, total: items.length }
+}
+
 // --- Read tools ----------------------------------------------------------------
 
 function toolSearchCatalog(db: Db, args: unknown) {
@@ -146,6 +159,9 @@ function toolSearchCatalog(db: Db, args: unknown) {
   const limit = clampLimit(record.limit, ASSISTANT_TOOL_RESULT_MAX_ITEMS, ASSISTANT_TOOL_RESULT_MAX_ITEMS)
 
   const where = query !== '' ? sqlLikeName(query) : undefined
+  // Fetch one row past the limit so we can report `truncated` without a
+  // separate COUNT query — the exact total beyond that isn't needed, only
+  // whether there is more.
   const rows = db
     .select({
       id: catalogCard.id,
@@ -161,14 +177,17 @@ function toolSearchCatalog(db: Db, args: unknown) {
     .from(catalogCard)
     .where(where)
     .orderBy(asc(catalogCard.name))
-    .limit(limit)
+    .limit(limit + 1)
     .all()
 
-  if (rows.length === 0) {
-    return []
+  const truncated = rows.length > limit
+  const capped = truncated ? rows.slice(0, limit) : rows
+
+  if (capped.length === 0) {
+    return { items: [], truncated: false }
   }
 
-  const ids = rows.map(row => row.id)
+  const ids = capped.map(row => row.id)
   const images = db
     .select({ cardId: catalogCardImage.cardId, imageSmall: catalogCardImage.imageUrlSmall })
     .from(catalogCardImage)
@@ -183,7 +202,7 @@ function toolSearchCatalog(db: Db, args: unknown) {
     }
   }
 
-  return rows.map(row => ({ ...row, imageSmall: imageByCard.get(row.id) ?? null }))
+  return { items: capped.map(row => ({ ...row, imageSmall: imageByCard.get(row.id) ?? null })), truncated }
 }
 
 // A plain (unescaped) substring match is enough for a model-driven lookup
@@ -215,6 +234,7 @@ async function toolGetCard(db: Db, args: unknown) {
     archetype: detail.card.archetype,
     banlistInfo: detail.card.banlistInfo,
     printings: capItems(detail.printings, GET_CARD_PRINTINGS_MAX),
+    printingsTruncated: detail.printings.length > GET_CARD_PRINTINGS_MAX,
   }
 }
 
@@ -246,6 +266,11 @@ function toolSearchInventory(db: Db, userId: string, args: unknown) {
     .innerJoin(catalogCard, eq(ownedCard.catalogCardId, catalogCard.id))
     .leftJoin(collection, eq(ownedCard.collectionId, collection.id))
     .where(and(...clauses))
+    // Bounds the worst case (a huge inventory, scanned again on every tool
+    // call in a loop) — well above what any real collection needs to answer
+    // a name/collection-filtered lookup, since the final result is capped to
+    // ASSISTANT_TOOL_RESULT_MAX_ITEMS anyway.
+    .limit(SEARCH_INVENTORY_ROW_SCAN_MAX)
     .all()
 
   interface Aggregate {
@@ -282,26 +307,28 @@ function toolSearchInventory(db: Db, userId: string, args: unknown) {
       collections: [...entry.collections.values()],
     }))
 
-  return capItems(items)
+  return capResult(items)
 }
 
 function toolListCollections(db: Db, userId: string) {
   const { items } = listCollections(db, userId)
-  return capItems(items.map(item => ({ id: item.id, name: item.name, cardCount: item.cardCount })))
+  return capResult(items.map(item => ({ id: item.id, name: item.name, cardCount: item.cardCount })))
 }
 
 function toolListDecks(db: Db, userId: string, args: unknown) {
   const record = requireArgs(args)
   const query = optionalString(record, 'query')
-  const { items } = listDecks(db, userId, { q: query, pageSize: ASSISTANT_TOOL_RESULT_MAX_ITEMS })
+  const { items, total } = listDecks(db, userId, { q: query, pageSize: ASSISTANT_TOOL_RESULT_MAX_ITEMS })
 
-  return items.map(item => ({
+  const mapped = items.map(item => ({
     id: item.id,
     name: item.name,
     formatName: item.formatName,
     counts: { main: item.mainCount, extra: item.extraCount, side: item.sideCount, total: item.cardCount },
     legal: item.legal,
   }))
+
+  return { items: mapped, truncated: total > mapped.length, total }
 }
 
 function deckRowView(row: DeckCardRow, section: DeckSection) {
@@ -331,7 +358,7 @@ function toolGetDeck(db: Db, userId: string, args: unknown) {
 
 function toolListFormats(db: Db, userId: string) {
   const { items } = listRuleFormats(db, userId)
-  return capItems(items.map(item => ({ id: item.id, name: item.name, isBuiltin: item.isBuiltin })))
+  return capResult(items.map(item => ({ id: item.id, name: item.name, isBuiltin: item.isBuiltin })))
 }
 
 function toolValidateDeck(db: Db, userId: string, args: unknown) {
@@ -658,25 +685,66 @@ function errorMessage(error: unknown): string {
   return 'Unbekannter Fehler beim Anwenden des Vorschlags.'
 }
 
-async function executeActionPayload(db: Db, userId: string, action: AssistantActionRow): Promise<unknown> {
+/**
+ * Re-validates a pending action's stored payload against the *current* state
+ * of the world (deck ownership, catalog card existence, section legality,
+ * quantity bounds) before executing it — the payload was validated once when
+ * the tool call first proposed it, but time has passed since (cards can be
+ * deleted from the catalog, formats removed, decks deleted) and nothing
+ * stops a payload row from being anything the `assistant_action` schema
+ * allows. Reuses the same validators as the tool layer and the deck/
+ * inventory APIs themselves, so this is defense-in-depth, not the only line
+ * of defense.
+ *
+ * Must run synchronously inside the caller's transaction (`applyAction`) —
+ * every write util invoked here (`addOwnedCardsBulkSync`, `createDeck`,
+ * `updateDeck`, `upsertDeckCard`) is synchronous itself.
+ */
+function executeActionPayload(db: Db, userId: string, action: AssistantActionRow): unknown {
   switch (action.kind) {
     case 'add_to_inventory': {
       const payload = action.payload as unknown as { items: unknown }
       const inputs = validateInventoryBulkInput(db, userId, { items: payload.items })
-      return addOwnedCardsBulk(db, userId, inputs)
+      return addOwnedCardsBulkSync(db, userId, inputs)
     }
     case 'create_deck': {
-      const payload = action.payload as unknown as { name: string, description: string | null, formatId: string | null, cards: DeckCardInput[] }
-      const detail = createDeck(db, userId, { name: payload.name, description: payload.description }, payload.cards)
+      const payload = action.payload as unknown as {
+        name: string
+        description: string | null
+        formatId: string | null
+        cards: unknown
+      }
+      const cards = validateDeckCreateCardsInput({ cards: payload.cards ?? [] }) ?? []
+      const missingIds = missingCatalogCardIds(db, cards.map(card => card.catalogCardId))
+      if (missingIds.length > 0) {
+        badRequest(`Unbekannte Karten-IDs: ${missingIds.join(', ')}`)
+      }
+      assertCardsFitSections(db, cards)
+
+      // `createDeck` and the optional format assignment both run here, inside
+      // the caller's transaction (`applyAction`) — `updateDeck` re-validates
+      // the format itself (`requireAssignableFormat`), so a format removed
+      // since the action was proposed fails *after* `createDeck` already
+      // wrote the deck row; the transaction rolls that back too, leaving no
+      // orphan deck.
+      const detail = createDeck(db, userId, { name: payload.name, description: payload.description }, cards)
       if (payload.formatId) {
         return updateDeck(db, userId, detail.id, { formatId: payload.formatId })
       }
       return detail
     }
     case 'update_deck_cards': {
-      const payload = action.payload as unknown as { deckId: string, changes: DeckCardInput[] }
+      const payload = action.payload as unknown as { deckId: string, changes: unknown }
+      const rawChanges = Array.isArray(payload.changes) ? payload.changes : []
+      const changes: DeckCardInput[] = rawChanges.map(raw => validateDeckCardInput(raw))
+      const missingIds = missingCatalogCardIds(db, changes.map(change => change.catalogCardId))
+      if (missingIds.length > 0) {
+        badRequest(`Unbekannte Karten-IDs: ${missingIds.join(', ')}`)
+      }
+      assertCardsFitSections(db, changes)
+
       let detail: DeckDetail | undefined
-      for (const change of payload.changes) {
+      for (const change of changes) {
         detail = upsertDeckCard(db, userId, payload.deckId, change)
       }
       return detail
@@ -686,18 +754,41 @@ async function executeActionPayload(db: Db, userId: string, action: AssistantAct
   }
 }
 
-/** Applies a pending action's payload with the existing, already-tested write utils. 409 if not pending. */
+/**
+ * Applies a pending action's payload with the existing, already-tested write
+ * utils. Concurrency-safe: the pending → applied transition is claimed with
+ * one conditional `UPDATE ... WHERE status = 'pending'` before anything is
+ * executed, so two concurrent applies of the same action can never both run
+ * it — the loser's `WHERE` matches no row and gets 409. The payload's writes
+ * all run inside one transaction, so a failure partway through (a card
+ * deleted from the catalog mid-flight, a format removed) leaves no partial
+ * deck/inventory changes — only the action's own status moves to `failed`.
+ */
 export async function applyAction(db: Db, userId: string, actionId: string): Promise<AssistantActionRow> {
-  const action = requireOwnAction(db, userId, actionId)
-  if (action.status !== 'pending') {
+  // 404 for a foreign/missing action, independent of its status.
+  requireOwnAction(db, userId, actionId)
+
+  const claimed = db
+    .update(assistantAction)
+    .set({ status: 'applied', resolvedAt: new Date() })
+    .where(and(
+      eq(assistantAction.id, actionId),
+      eq(assistantAction.userId, userId),
+      eq(assistantAction.status, 'pending'),
+    ))
+    .returning()
+    .all()
+
+  if (claimed.length === 0) {
     conflict('Dieser Vorschlag wurde bereits bearbeitet.')
   }
+  const action = claimed[0]!
 
   try {
-    const result = await executeActionPayload(db, userId, action)
+    const result = db.transaction(tx => executeActionPayload(tx as unknown as Db, userId, action))
     const [updated] = db
       .update(assistantAction)
-      .set({ status: 'applied', result: result ?? null, resolvedAt: new Date() })
+      .set({ result: result ?? null })
       .where(eq(assistantAction.id, actionId))
       .returning()
       .all()
@@ -706,7 +797,7 @@ export async function applyAction(db: Db, userId: string, actionId: string): Pro
   catch (error) {
     const [updated] = db
       .update(assistantAction)
-      .set({ status: 'failed', result: { error: errorMessage(error) }, resolvedAt: new Date() })
+      .set({ status: 'failed', result: { error: errorMessage(error) } })
       .where(eq(assistantAction.id, actionId))
       .returning()
       .all()

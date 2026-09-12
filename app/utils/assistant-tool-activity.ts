@@ -62,6 +62,13 @@ export function summarizeStoredToolResult(content: string): ToolResultSummary {
   if (Array.isArray(parsed)) {
     return { ok: true, summary: `${parsed.length} Ergebnis(se)` }
   }
+  // The capped read tools (server/utils/assistant-tools.ts capResult) wrap
+  // their array in `{ items, truncated, total? }` instead of returning it
+  // bare, so a cap isn't mistaken for the true count.
+  if (isRecord(parsed) && Array.isArray(parsed.items)) {
+    const count = parsed.items.length
+    return { ok: true, summary: parsed.truncated === true ? `mindestens ${count} Ergebnis(se)` : `${count} Ergebnis(se)` }
+  }
   if (isRecord(parsed) && typeof parsed.summary === 'string') {
     return { ok: true, summary: parsed.summary }
   }
