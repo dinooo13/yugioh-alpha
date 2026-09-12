@@ -34,6 +34,14 @@ function findButton(component: Awaited<ReturnType<typeof mountSuspended>>, label
   return component.findAll('button').find((button: DOMWrapper<Element>) => button.text().includes(label))
 }
 
+// happy-dom does not run the implicit form submission that a real browser
+// performs when a `type="submit"` button is clicked, so submit the request
+// form directly (the page only reacts to the form's `submit` event).
+async function submitRequestForm(component: Awaited<ReturnType<typeof mountSuspended>>) {
+  await component.find('form').trigger('submit')
+  await flushPromises()
+}
+
 function buildResult(overrides: Partial<DeckAssistantResult> = {}): DeckAssistantResult {
   return {
     mode: 'build',
@@ -94,8 +102,7 @@ describe('AI deck assistant page', () => {
     const component = await mountSuspended(AssistantPage)
     expect(findButton(component, 'Vorschläge erzeugen')).toBeTruthy()
 
-    await findButton(component, 'Vorschläge erzeugen')!.trigger('click')
-    await flushPromises()
+    await submitRequestForm(component)
 
     const text = component.text()
     expect(text).toContain('Testvorschlag des deterministischen Assistenten')
@@ -122,8 +129,7 @@ describe('AI deck assistant page', () => {
     vi.stubGlobal('$fetch', fetchMock)
 
     const component = await mountSuspended(AssistantPage)
-    await findButton(component, 'Vorschläge erzeugen')!.trigger('click')
-    await flushPromises()
+    await submitRequestForm(component)
 
     expect(component.text()).toContain('Keine fehlenden Karten.')
   })
