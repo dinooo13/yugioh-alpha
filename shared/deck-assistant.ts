@@ -119,6 +119,12 @@ export interface DeckAssistantStatus {
   model: string | null
   /** For provider 'openai': the endpoint's host (never a key), so the UI can say which one is used. */
   baseUrl?: string | null
+  /** Phase 8: whether the chat assistant (`/assistent`) is usable — same as `enabled`. */
+  chat: boolean
+  /** Whether chat turns may include images — true whenever the assistant is enabled. */
+  vision: boolean
+  /** The model used for image-containing chat turns when NUXT_ASSISTANT_VISION_MODEL is set; null = falls back to `model`. */
+  visionModel: string | null
 }
 
 export function isPlayStyleId(value: unknown): value is PlayStyleId {

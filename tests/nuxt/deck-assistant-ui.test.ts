@@ -75,12 +75,12 @@ function buildResult(overrides: Partial<DeckAssistantResult> = {}): DeckAssistan
 
 afterEach(() => {
   vi.unstubAllGlobals()
-  state.status = { enabled: true, provider: 'fake', model: 'fake' }
+  state.status = { enabled: true, provider: 'fake', model: 'fake', chat: true, vision: true, visionModel: null }
 })
 
 describe('AI deck assistant page', () => {
   it('shows a configuration alert and hides the form when the assistant is disabled', async () => {
-    state.status = { enabled: false, provider: null, model: null }
+    state.status = { enabled: false, provider: null, model: null, chat: false, vision: false, visionModel: null }
 
     const component = await mountSuspended(AssistantPage)
     const text = component.text()

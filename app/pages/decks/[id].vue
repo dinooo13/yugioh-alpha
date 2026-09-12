@@ -195,7 +195,7 @@ const formatItems = computed(() => [
 
 const { data: assistantStatus } = await useFetch<DeckAssistantStatus>('/api/assistant/status', {
   headers: import.meta.server ? useRequestHeaders(['cookie']) : undefined,
-  default: () => ({ enabled: false, provider: null, model: null }),
+  default: () => ({ enabled: false, provider: null, model: null, chat: false, vision: false, visionModel: null }),
 })
 
 // --- Sharing (Phase 6) -------------------------------------------------------
