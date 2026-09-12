@@ -21,6 +21,7 @@ const {
   isLoading,
   loadError,
   isStreaming,
+  isCancelling,
   sendError,
   load,
   send,
@@ -28,11 +29,31 @@ const {
   updateAction,
 } = useAssistantThread(conversationId)
 
+// Below `lg` there's no room for the conversation list aside — it lives in
+// this slideover instead, opened from the "Unterhaltungen" button in the
+// thread header (mirrors app/layouts/default.vue's mobile nav drawer).
+const isConversationsOpen = ref(false)
+
 watch(conversationId, () => {
+  isConversationsOpen.value = false
   load()
-}, { immediate: true })
+})
+
+async function sendMessage(payload: { text: string, images: string[] }) {
+  await send(payload)
+  // The conversation's title (derived from its first message) and its
+  // position in the list (most-recently-updated first) can both change
+  // after any turn — cheap enough to just always refresh rather than
+  // tracking "was this the first message".
+  await refreshConversations()
+}
 
 onMounted(async () => {
+  // Awaited so the optimistic echo `send()` below adds to `messages` isn't
+  // immediately wiped out by this request's own response landing after it
+  // (see useAssistantThread.load(), which replaces `messages` wholesale).
+  await load()
+
   // The conversation list on this page is fetched independently from the
   // one on /assistent — refresh so a conversation just created there (or by
   // this page's own "Neue Unterhaltung") shows up right away.
@@ -44,7 +65,7 @@ onMounted(async () => {
   const promptQuery = route.query.prompt
   if (typeof promptQuery === 'string' && promptQuery !== '') {
     await router.replace({ query: {} })
-    await send({ text: promptQuery, images: [] })
+    await sendMessage({ text: promptQuery, images: [] })
   }
 })
 
@@ -74,7 +95,7 @@ async function onDeleted(id: string) {
 
     <div
       v-else
-      class="flex h-[calc(100vh-8rem)] gap-4"
+      class="flex h-[calc(100dvh-8rem)] gap-4"
     >
       <aside class="hidden w-64 shrink-0 rounded-md border border-gray-200 bg-white lg:block">
         <AssistantConversationList
@@ -85,11 +106,36 @@ async function onDeleted(id: string) {
         />
       </aside>
 
+      <USlideover
+        v-model:open="isConversationsOpen"
+        side="left"
+        title="Unterhaltungen"
+        class="lg:hidden"
+      >
+        <template #body>
+          <AssistantConversationList
+            :items="conversations"
+            :active-id="conversationId"
+            @created="onCreated"
+            @deleted="onDeleted"
+          />
+        </template>
+      </USlideover>
+
       <section class="flex min-w-0 flex-1 flex-col rounded-md border border-gray-200 bg-white">
-        <header class="border-b border-gray-200 px-4 py-3">
-          <h1 class="truncate text-base font-semibold text-gray-900">
+        <header class="flex items-center justify-between gap-2 border-b border-gray-200 px-4 py-3">
+          <h1 class="min-w-0 truncate text-base font-semibold text-gray-900">
             {{ conversation?.title ?? 'Assistent' }}
           </h1>
+          <UButton
+            icon="i-lucide-menu"
+            label="Unterhaltungen"
+            color="neutral"
+            variant="outline"
+            size="xs"
+            class="shrink-0 lg:hidden"
+            @click="() => { isConversationsOpen = true }"
+          />
         </header>
 
         <p
@@ -114,7 +160,8 @@ async function onDeleted(id: string) {
 
           <AssistantComposer
             :streaming="isStreaming"
-            @send="send"
+            :cancelling="isCancelling"
+            @send="sendMessage"
             @cancel="cancel"
           />
         </template>
