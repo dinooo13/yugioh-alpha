@@ -1,0 +1,167 @@
+<script setup lang="ts">
+import type { WishlistItemView, WishlistResponse } from '~~/shared/sharing'
+
+const PAGE_SIZE = 24
+
+useHead({ title: 'Wunschliste – yugioh alpha' })
+
+const searchInput = ref('')
+const debouncedSearch = ref('')
+const page = ref(1)
+
+let debounceTimer: ReturnType<typeof setTimeout> | undefined
+watch(searchInput, (value) => {
+  clearTimeout(debounceTimer)
+  debounceTimer = setTimeout(() => {
+    debouncedSearch.value = value.trim()
+    page.value = 1
+  }, 300)
+})
+
+const query = computed(() => ({
+  q: debouncedSearch.value || undefined,
+  page: page.value,
+  pageSize: PAGE_SIZE,
+}))
+
+const { data, pending, refresh } = await useFetch<WishlistResponse>('/api/wishlist', {
+  query,
+  headers: import.meta.server ? useRequestHeaders(['cookie']) : undefined,
+  default: () => ({ items: [], total: 0, page: 1, pageSize: PAGE_SIZE }),
+  watch: [query],
+})
+
+const items = computed(() => data.value?.items ?? [])
+const total = computed(() => data.value?.total ?? 0)
+const totalPages = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)))
+
+function onUpdated(updated: WishlistItemView) {
+  if (!data.value) {
+    return
+  }
+  data.value = {
+    ...data.value,
+    items: data.value.items.map(item => (item.id === updated.id ? updated : item)),
+  }
+}
+
+async function onRemoved(id: string) {
+  if (!data.value) {
+    return
+  }
+  data.value = {
+    ...data.value,
+    items: data.value.items.filter(item => item.id !== id),
+    total: Math.max(0, data.value.total - 1),
+  }
+  // The removed row may have been the last one on the page — reconcile with
+  // the server rather than leaving a stale empty page.
+  if (data.value.items.length === 0 && page.value > 1) {
+    page.value -= 1
+  }
+  else {
+    await refresh()
+  }
+}
+
+function previousPage() {
+  page.value = Math.max(1, page.value - 1)
+}
+function nextPage() {
+  page.value = Math.min(totalPages.value, page.value + 1)
+}
+</script>
+
+<template>
+  <div class="space-y-6">
+    <div>
+      <h1 class="text-2xl font-semibold text-gray-900">
+        Wunschliste
+      </h1>
+      <p class="mt-1 text-sm text-gray-500">
+        {{ total }} Karte<span v-if="total !== 1">n</span>
+      </p>
+    </div>
+
+    <UInput
+      v-model="searchInput"
+      icon="i-lucide-search"
+      placeholder="Wunschliste durchsuchen..."
+      aria-label="Wunschliste durchsuchen"
+      class="w-full max-w-xl"
+    />
+
+    <div
+      v-if="pending"
+      class="space-y-2"
+    >
+      <USkeleton
+        v-for="n in 3"
+        :key="n"
+        class="h-20 w-full"
+      />
+    </div>
+
+    <div
+      v-else-if="items.length === 0"
+      class="flex flex-col items-center rounded-md border border-gray-200 bg-white px-6 py-12 text-center"
+    >
+      <div class="flex size-12 items-center justify-center rounded-full bg-gray-100 text-gray-500">
+        <UIcon
+          name="i-lucide-heart"
+          class="size-6"
+        />
+      </div>
+      <h2 class="mt-4 text-base font-semibold text-gray-900">
+        Noch keine Karten auf der Wunschliste.
+      </h2>
+      <p class="mt-1 max-w-sm text-sm text-gray-500">
+        Füge Karten im Katalog zu deiner Wunschliste hinzu.
+      </p>
+      <UButton
+        icon="i-lucide-book-open"
+        label="Zum Katalog"
+        class="mt-4"
+        to="/katalog"
+      />
+    </div>
+
+    <ul
+      v-else
+      class="divide-y divide-gray-100 rounded-md border border-gray-200 bg-white"
+    >
+      <WishlistRow
+        v-for="item in items"
+        :key="item.id"
+        :item="item"
+        @updated="onUpdated"
+        @removed="onRemoved"
+      />
+    </ul>
+
+    <div
+      v-if="total > PAGE_SIZE"
+      class="flex items-center justify-center gap-2"
+    >
+      <UButton
+        icon="i-lucide-chevron-left"
+        color="neutral"
+        variant="outline"
+        :disabled="page <= 1"
+        aria-label="Vorherige Seite"
+        @click="previousPage"
+      />
+      <span class="min-w-28 text-center text-sm text-gray-600">
+        Seite {{ page }} / {{ totalPages }}
+      </span>
+      <UButton
+        icon="i-lucide-chevron-right"
+        color="neutral"
+        variant="outline"
+        :disabled="page >= totalPages"
+        aria-label="Nächste Seite"
+        @click="nextPage"
+      />
+    </div>
+  </div>
+</template>
