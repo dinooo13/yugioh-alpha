@@ -1,7 +1,8 @@
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
 import { drizzle } from 'drizzle-orm/better-sqlite3'
+import { eq } from 'drizzle-orm'
 import Database from 'better-sqlite3'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as schema from '../../server/db/schema'
 import { createDeck, deleteDeck, upsertDeckCard } from '../../server/utils/decks'
 import { seedBuiltinFormats } from '../../server/utils/rule-formats'
@@ -178,6 +179,10 @@ describe('participants', () => {
     id = createTournament(db, 'user-a', validateTournamentInput({ name: 'Teilnehmer', includeSelf: false })).id
   })
 
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('adds a participant by email, case-insensitively, and never leaks the email', () => {
     const detail = addParticipant(db, 'user-a', id, validateParticipantInput({ email: 'B@Example.com' }))
 
@@ -222,6 +227,46 @@ describe('participants', () => {
     }
     expect(() => addParticipant(db, 'user-a', id, validateParticipantInput({ name: 'Once too many' })))
       .toThrow(expect.objectContaining({ statusCode: 409, data: { code: 'too_many_participants' } }))
+  })
+
+  it('renumbers seeds contiguously after removing a participant during registration', () => {
+    addParticipant(db, 'user-a', id, validateParticipantInput({ name: 'Alice' }))
+    const afterBob = addParticipant(db, 'user-a', id, validateParticipantInput({ name: 'Bob' }))
+    addParticipant(db, 'user-a', id, validateParticipantInput({ name: 'Carla' }))
+    const bobId = afterBob.participants.find(p => p.name === 'Bob')!.id
+
+    const detail = removeParticipant(db, 'user-a', id, bobId)
+
+    // Was [1, 3] before the fix (Bob's seed 2 left a gap); now contiguous.
+    expect(detail.participants.map(p => p.seed)).toEqual([1, 2])
+    expect(detail.participants.map(p => p.name)).toEqual(['Alice', 'Carla'])
+  })
+
+  it('bumps tournament.updatedAt on every participant mutation', () => {
+    // Fake timers give each step a strictly later, deterministic instant —
+    // real-clock timestamps taken microseconds apart can tie and would let a
+    // missing `updatedAt` bump pass unnoticed.
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2999-01-01T00:00:00.000Z'))
+
+    const rowUpdatedAt = () => db.select().from(schema.tournament).where(eq(schema.tournament.id, id)).get()!.updatedAt.getTime()
+
+    const initial = rowUpdatedAt()
+
+    vi.setSystemTime(new Date('2999-01-01T00:01:00.000Z'))
+    const detail = addParticipant(db, 'user-a', id, validateParticipantInput({ name: 'Alice' }))
+    expect(rowUpdatedAt()).toBeGreaterThan(initial)
+    const afterAdd = rowUpdatedAt()
+
+    const participantId = detail.participants[0]!.id
+    vi.setSystemTime(new Date('2999-01-01T00:02:00.000Z'))
+    updateParticipant(db, 'user-a', id, participantId, { name: 'Alicia' })
+    expect(rowUpdatedAt()).toBeGreaterThan(afterAdd)
+    const afterUpdate = rowUpdatedAt()
+
+    vi.setSystemTime(new Date('2999-01-01T00:03:00.000Z'))
+    removeParticipant(db, 'user-a', id, participantId)
+    expect(rowUpdatedAt()).toBeGreaterThan(afterUpdate)
   })
 })
 
@@ -583,6 +628,76 @@ describe('pairing swaps', () => {
   })
 })
 
+describe('pairing swaps — six players', () => {
+  let db: TestDb
+  let id: string
+  let detail: TournamentDetail
+
+  beforeEach(() => {
+    db = createTestDb()
+    seedUsersAndCatalog(db)
+    id = createTournament(db, 'user-a', validateTournamentInput({ name: 'Tausch mit sechs', includeSelf: false })).id
+    for (const name of ['Alice', 'Bob', 'Carla', 'Dave', 'Erin', 'Finn']) {
+      addParticipant(db, 'user-a', id, validateParticipantInput({ name }))
+    }
+    detail = startTournament(db, 'user-a', id)
+  })
+
+  it('rejects a swap between two unreported tables once a third table in the round has a reported result', () => {
+    const [matchA, matchB, matchC] = detail.currentRound!.matches
+    expect(detail.currentRound!.matches).toHaveLength(3)
+
+    // Table 3 gets a result; tables 1 and 2 (the ones being swapped) stay
+    // untouched. Before this fix, swapPairing only inspected the two matches
+    // named in the request, so this swap would have gone through even though
+    // results already exist elsewhere in the round.
+    reportMatchResult(db, 'user-a', id, matchC!.id, { gamesA: 2, gamesB: 0 })
+
+    expect(() => swapPairing(db, 'user-a', id, {
+      matchAId: matchA!.id,
+      slotA: 'b',
+      matchBId: matchB!.id,
+      slotB: 'a',
+    })).toThrow(expect.objectContaining({ statusCode: 409, data: { code: 'results_reported' } }))
+  })
+})
+
+describe('organizer-only enforcement', () => {
+  let db: TestDb
+  let id: string
+  let matchId: string
+  let roundId: string
+
+  beforeEach(() => {
+    db = createTestDb()
+    seedUsersAndCatalog(db)
+    id = createTournament(db, 'user-a', validateTournamentInput({ name: 'Nur Turnierleitung' })).id
+    addParticipant(db, 'user-a', id, validateParticipantInput({ email: 'b@example.com' }))
+    const started = startTournament(db, 'user-a', id)
+    matchId = started.currentRound!.matches[0]!.id
+    roundId = started.currentRound!.id
+  })
+
+  const operations: Array<{ name: string, run: (db: TestDb, userId: string, id: string) => unknown }> = [
+    { name: 'startTournament', run: (db, userId, id) => startTournament(db, userId, id) },
+    { name: 'createNextRound', run: (db, userId, id) => createNextRound(db, userId, id) },
+    { name: 'reportMatchResult', run: (db, userId, id) => reportMatchResult(db, userId, id, matchId, { gamesA: 2, gamesB: 0 }) },
+    { name: 'completeRound', run: (db, userId, id) => completeRound(db, userId, id, roundId) },
+    { name: 'finishTournament', run: (db, userId, id) => finishTournament(db, userId, id) },
+    { name: 'deleteTournament', run: (db, userId, id) => deleteTournament(db, userId, id) },
+  ]
+
+  it.each(operations)('rejects $name from a linked participant with 403 organizer_only', ({ run }) => {
+    expect(() => run(db, 'user-b', id))
+      .toThrow(expect.objectContaining({ statusCode: 403, data: { code: 'organizer_only' } }))
+  })
+
+  it.each(operations)('reports $name as 404 for an outsider, not 403', ({ run }) => {
+    expect(() => run(db, 'user-c', id))
+      .toThrow(expect.objectContaining({ statusCode: 404 }))
+  })
+})
+
 describe('finishing a tournament', () => {
   let db: TestDb
   let id: string
@@ -615,8 +730,10 @@ describe('finishing a tournament', () => {
 
     expect(() => startTournament(db, 'user-a', id))
       .toThrow(expect.objectContaining({ statusCode: 409 }))
+    // A finished tournament reports its own status-specific code, not the
+    // registration-phase fallback the call site passes in.
     expect(() => addParticipant(db, 'user-a', id, validateParticipantInput({ name: 'Zu spät' })))
-      .toThrow(expect.objectContaining({ statusCode: 409 }))
+      .toThrow(expect.objectContaining({ statusCode: 409, data: { code: 'tournament_finished' } }))
     expect(() => updateTournament(db, 'user-a', id, { name: 'x' }))
       .toThrow(expect.objectContaining({ statusCode: 409, data: { code: 'tournament_finished' } }))
   })
