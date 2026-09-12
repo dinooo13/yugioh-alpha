@@ -317,7 +317,7 @@ describe('turnier detail page — standings', () => {
 })
 
 describe('turnier detail page — participant role', () => {
-  it('hides organizer-only controls and shows the participant banner', async () => {
+  it('hides organizer-only controls, shows the participant banner, and reminds an undecked linked participant to register (#31)', async () => {
     state.tournament = tournamentDetail({
       role: 'participant',
       selfParticipantId: 'p-2',
@@ -334,9 +334,29 @@ describe('turnier detail page — participant role', () => {
     expect(text).not.toContain('Nächste Runde')
     expect(text).not.toContain('Teilnehmer hinzufügen')
     expect(text).toContain('Du nimmst an diesem Turnier teil')
+    expect(text).toContain('Melde dein Deck an, bevor das Turnier startet.')
 
+    // One "Deck anmelden" button in the reminder banner, one on Alice's own row.
     const deckButtons = component.findAll('button').filter(button => button.text() === 'Deck anmelden')
-    expect(deckButtons).toHaveLength(1)
+    expect(deckButtons).toHaveLength(2)
+  })
+
+  it('does not show the deck reminder once the participant has registered a deck', async () => {
+    state.tournament = tournamentDetail({
+      role: 'participant',
+      selfParticipantId: 'p-2',
+      participants: [
+        participant({ id: 'p-1', name: 'Organizer', isSelf: false }),
+        participant({ id: 'p-2', name: 'Alice', isSelf: true, deckId: 'deck-1', deckName: 'Alice-Deck' }),
+      ],
+    })
+
+    const component = await mountSuspended(TurnierDetailPage)
+    const text = component.text()
+
+    expect(text).not.toContain('Melde dein Deck an, bevor das Turnier startet.')
+    expect(component.findAll('button').filter(button => button.text() === 'Deck anmelden')).toHaveLength(0)
+    expect(component.findAll('button').filter(button => button.text() === 'Deck ändern')).toHaveLength(1)
   })
 })
 

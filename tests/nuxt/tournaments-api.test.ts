@@ -761,6 +761,8 @@ describe('listing tournaments', () => {
   })
 
   it('separates organized tournaments from participations and filters by status', () => {
+    // Organizer also plays (`includeSelf` defaults to true), so "organized"
+    // has a genuine participant row for user-a too.
     const organized = createTournament(db, 'user-a', validateTournamentInput({ name: 'Von A' })).id
     addParticipant(db, 'user-a', organized, validateParticipantInput({ email: 'b@example.com' }))
 
@@ -778,11 +780,31 @@ describe('listing tournaments', () => {
     const asOrganizer = listTournaments(db, 'user-a', { role: 'organizer' })
     expect(asOrganizer.items.map(item => item.id).sort()).toEqual([organized, finishedId].sort())
 
+    // "participant" does not exclude tournaments user-a also organizes: they
+    // have a real participant row in "organized" (self-registered), so it
+    // shows under both roles. "finishedId" used `includeSelf: false`, so
+    // user-a never gets a participant row there and it stays organizer-only.
     const asParticipant = listTournaments(db, 'user-a', { role: 'participant' })
-    expect(asParticipant.items.map(item => item.id)).toEqual([joined])
+    expect(asParticipant.items.map(item => item.id).sort()).toEqual([organized, joined].sort())
 
     const finishedList = listTournaments(db, 'user-a', { status: 'finished' })
     expect(finishedList.items.map(item => item.id)).toEqual([finishedId])
+
+    // Regression for #32: "Meine Turniere" + "Abgeschlossen" (role +
+    // explicit status, no hardcoded `active`) must still surface an
+    // organizer's own finished tournament.
+    const ownFinished = listTournaments(db, 'user-a', { role: 'organizer', status: 'finished' })
+    expect(ownFinished.items.map(item => item.id)).toEqual([finishedId])
+
+    // Regression for #32: an organizer who also plays their own finished
+    // tournament sees it under "Teilnahmen" + "Abgeschlossen" too.
+    let organizedDetail = startTournament(db, 'user-a', organized)
+    organizedDetail = reportBothMatches(db, organized, organizedDetail)
+    completeRound(db, 'user-a', organized, organizedDetail.rounds[0]!.id)
+    finishTournament(db, 'user-a', organized)
+
+    const ownFinishedAsParticipant = listTournaments(db, 'user-a', { role: 'participant', status: 'finished' })
+    expect(ownFinishedAsParticipant.items.map(item => item.id)).toEqual([organized])
   })
 
   it('paginates results', () => {
