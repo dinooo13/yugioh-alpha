@@ -11,10 +11,8 @@ type Db = ReturnType<typeof useDb>
 export const MAX_ENTRY_QUANTITY = 99
 /** Upper bound for how many lines one suggest request may carry. */
 export const MAX_ENTRY_LINES = 50
-/** Upper bound for a single free-text field (textarea or OCR dump). */
+/** Upper bound for a single free-text field (the Liste textarea). */
 export const MAX_ENTRY_TEXT_LENGTH = 20_000
-/** How many extracted OCR strings are looked up for a single photo. */
-const MAX_OCR_LOOKUPS = 6
 /** Candidate rows the name prefilter may return before scoring. */
 const CANDIDATE_POOL_LIMIT = 200
 /** Fuzzy candidates below this similarity are noise and get dropped. */
@@ -24,12 +22,10 @@ const MAX_SUGGEST_LIMIT = 20
 
 // Set codes look like "SDY-006", "LOB-005", "LDS2-EN018", "YS17-EN041".
 const SET_CODE_SOURCE = '[A-Z0-9]{2,5}-[A-Z]{0,3}\\d{3}'
-const SET_CODE_ANYWHERE = new RegExp(SET_CODE_SOURCE, 'gi')
 const SET_CODE_EXACT = new RegExp(`^${SET_CODE_SOURCE}$`, 'i')
 const SET_CODE_PARENTHESIZED = new RegExp(`\\((${SET_CODE_SOURCE})\\)`, 'i')
 // YGOPRODeck passcodes are 8 digits (the catalog card id).
 const PASSCODE_EXACT = /^\d{8}$/
-const PASSCODE_ANYWHERE = /\b\d{8}\b/g
 // A line that is only a quantity ("3", "3x") names no card at all.
 const QUANTITY_ONLY = /^\d{1,3}\s*[x×*]?$/i
 
@@ -205,57 +201,6 @@ export function parseEntryText(text: string): ParsedEntryLine[] {
     .split(/\r?\n/)
     .map(line => parseEntryLine(line))
     .filter(parsed => parsed.query !== '')
-}
-
-/**
- * Turns raw OCR output into plausible lookup strings. Set codes and
- * passcodes come first because they identify a card exactly, followed by
- * lines that look like a card name. Lines that are mostly digits or symbols
- * (ATK/DEF rows, copyright footers, card text fragments) are dropped.
- */
-export function extractCardCandidatesFromOcrText(text: string): string[] {
-  const exact: string[] = []
-  const names: string[] = []
-  const seen = new Set<string>()
-
-  function push(target: string[], value: string) {
-    const key = value.toLowerCase()
-    if (value === '' || seen.has(key)) {
-      return
-    }
-    seen.add(key)
-    target.push(value)
-  }
-
-  for (const rawLine of text.split(/\r?\n/)) {
-    const line = rawLine.replace(/\s+/g, ' ').trim()
-    if (line === '') {
-      continue
-    }
-
-    for (const match of line.matchAll(SET_CODE_ANYWHERE)) {
-      push(exact, match[0].toUpperCase())
-    }
-    for (const match of line.matchAll(PASSCODE_ANYWHERE)) {
-      push(exact, match[0])
-    }
-
-    // Drop leading/trailing decoration OCR likes to invent around a title.
-    const cleaned = line.replace(/^[^\p{L}\p{N}]+/u, '').replace(/[^\p{L}\p{N})]+$/u, '').trim()
-    if (cleaned.length < 3) {
-      continue
-    }
-
-    const letters = (cleaned.match(/\p{L}/gu) ?? []).length
-    const others = cleaned.replace(/\s/g, '').length - letters
-    if (letters < 3 || others > letters) {
-      continue
-    }
-
-    push(names, cleaned)
-  }
-
-  return [...exact, ...names]
 }
 
 function escapeLikeTerm(term: string): string {
@@ -538,50 +483,6 @@ export function resolveEntryLine(db: Db, parsed: ParsedEntryLine): ParsedEntryLi
   return exact ? { raw: parsed.raw, quantity: 1, query: rawLine } : parsed
 }
 
-/**
- * One photo is one card. The extracted strings (set code, passcode, name
- * lines) are looked up individually and merged into a single result: the
- * best identifier becomes the row, every other lookup only contributes
- * alternative candidates.
- */
-export function suggestFromOcrText(
-  db: Db,
-  text: string,
-  options: { limit?: number } = {},
-): EntrySuggestResult | null {
-  const limit = normalizeLimit(options.limit)
-  const parsedLines = extractCardCandidatesFromOcrText(text)
-    .slice(0, MAX_OCR_LOOKUPS)
-    .map(candidate => parseEntryLine(candidate))
-    .filter(parsed => parsed.query !== '')
-
-  if (parsedLines.length === 0) {
-    return null
-  }
-
-  const primary = parsedLines.find(parsed => parsed.setCode)
-    ?? parsedLines.find(parsed => parsed.passcode !== undefined)
-    ?? parsedLines[0]!
-
-  const merged = new Map<number, ScoredCandidate>()
-  for (const parsed of parsedLines) {
-    for (const [cardId, candidate] of collectScoredCandidates(db, parsed, limit)) {
-      const existing = merged.get(cardId)
-      merged.set(cardId, existing ? betterCandidate(existing, candidate) : candidate)
-    }
-  }
-
-  const input: ParsedEntryLine = { raw: primary.raw, quantity: 1, query: primary.query }
-  if (primary.setCode) {
-    input.setCode = primary.setCode
-  }
-  if (primary.passcode !== undefined) {
-    input.passcode = primary.passcode
-  }
-
-  return { input, candidates: withDisplayData(db, rankCandidates([...merged.values()], limit)) }
-}
-
 function badRequest(message: string): never {
   throw createError({ statusCode: 400, statusMessage: message })
 }
@@ -592,7 +493,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 export interface SuggestRequest {
   lines: ParsedEntryLine[]
-  ocrText?: string
   limit: number
 }
 
@@ -612,22 +512,19 @@ export function parseSuggestLimit(limit: unknown): number {
 }
 
 /**
- * Validates and normalizes the three input modes (Liste textarea, per-item
- * list, raw OCR text). Sizes and line counts are checked *before* anything is
- * parsed, so an oversized payload is rejected instead of being tokenized.
+ * Validates and normalizes the two input modes (Liste textarea, per-item
+ * list). Sizes and line counts are checked *before* anything is parsed, so
+ * an oversized payload is rejected instead of being tokenized.
  */
 export function parseSuggestRequest(body: unknown): SuggestRequest {
   if (!isRecord(body)) {
     badRequest('Request body must be an object')
   }
 
-  const { text, items, ocrText } = body
+  const { text, items } = body
 
   if (text !== undefined && typeof text !== 'string') {
     badRequest('text must be a string')
-  }
-  if (ocrText !== undefined && typeof ocrText !== 'string') {
-    badRequest('ocrText must be a string')
   }
   if (items !== undefined && !Array.isArray(items)) {
     badRequest('items must be an array of strings')
@@ -635,9 +532,6 @@ export function parseSuggestRequest(body: unknown): SuggestRequest {
 
   if (typeof text === 'string' && text.length > MAX_ENTRY_TEXT_LENGTH) {
     badRequest(`text must be at most ${MAX_ENTRY_TEXT_LENGTH} characters`)
-  }
-  if (typeof ocrText === 'string' && ocrText.length > MAX_ENTRY_TEXT_LENGTH) {
-    badRequest(`ocrText must be at most ${MAX_ENTRY_TEXT_LENGTH} characters`)
   }
 
   const lineCount = (typeof text === 'string' ? countLines(text) : 0) + (Array.isArray(items) ? items.length : 0)
@@ -661,29 +555,20 @@ export function parseSuggestRequest(body: unknown): SuggestRequest {
     }
   }
 
-  const trimmedOcrText = typeof ocrText === 'string' ? ocrText.trim() : ''
-  if (lines.length === 0 && trimmedOcrText === '') {
+  if (lines.length === 0) {
     badRequest('No card lines to look up')
   }
 
-  const request: SuggestRequest = { lines, limit: parseSuggestLimit(body.limit) }
-  if (trimmedOcrText !== '') {
-    request.ocrText = ocrText as string
-  }
-
-  return request
+  return { lines, limit: parseSuggestLimit(body.limit) }
 }
 
-/**
- * Runs the catalog lookup for a validated request: one result per typed /
- * dictated line, plus at most one result for an OCR'd photo.
- */
+/** Runs the catalog lookup for a validated request: one result per typed line. */
 export function suggestForRequest(db: Db, request: SuggestRequest): EntrySuggestResult[] {
   // Repeated lines ("3x Kuriboh" twice, a pasted list with duplicates) are a
   // common case and each lookup scans the catalog — do it once per query.
   const cache = new Map<string, EntryCandidate[]>()
 
-  const results: EntrySuggestResult[] = request.lines.map((line) => {
+  return request.lines.map((line) => {
     const input = resolveEntryLine(db, line)
     const cacheKey = `${input.query.toLowerCase()}|${input.setCode ?? ''}|${input.passcode ?? ''}`
     const cached = cache.get(cacheKey)
@@ -694,13 +579,4 @@ export function suggestForRequest(db: Db, request: SuggestRequest): EntrySuggest
 
     return { input, candidates }
   })
-
-  if (request.ocrText) {
-    const ocrResult = suggestFromOcrText(db, request.ocrText, { limit: request.limit })
-    if (ocrResult) {
-      results.push(ocrResult)
-    }
-  }
-
-  return results
 }

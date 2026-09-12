@@ -36,19 +36,15 @@ test.describe('Schnellerfassung', () => {
     await expect(page.getByText('Pot of Greed').first()).toBeVisible()
   })
 
-  test('offers photo and speech input modes', async ({ page }) => {
+  // Photo/voice input moved to the chat assistant (see e2e/assistant-chat.spec.ts,
+  // added alongside docs in the following stage) — /inventar/erfassen now only
+  // links there instead of offering its own Foto/Sprache modes.
+  test('points to the assistant for photo input', async ({ page }) => {
     await registerAndLogin(page)
     await page.goto('/inventar/erfassen')
 
-    await page.getByRole('button', { name: 'Foto' }).click()
-    await expect(page.getByText('Foto der Karte aufnehmen oder hierher ziehen')).toBeVisible()
-    await expect(page.getByLabel('Kartenfoto auswählen')).toBeVisible()
-
-    await page.getByRole('button', { name: 'Sprache' }).click()
-    // Headless Chromium exposes the Web Speech API constructor but cannot
-    // actually record, so accept either the controls or the fallback hint.
-    const controls = page.getByRole('button', { name: 'Aufnahme starten' })
-    const hint = page.getByText('Spracheingabe wird hier nicht unterstützt')
-    await expect(controls.or(hint)).toBeVisible()
+    await expect(page.getByText('Karten per Foto? Nutze den Assistenten')).toBeVisible()
+    await page.getByRole('link', { name: 'Zum Assistenten' }).click()
+    await expect(page).toHaveURL(/\/assistent/)
   })
 })
