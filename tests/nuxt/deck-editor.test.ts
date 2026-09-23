@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
+import type { DOMWrapper } from '@vue/test-utils'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
-import { USelect } from '#components'
+import { DecksDeckFormModal, UDropdownMenu, USelect } from '#components'
 import DeckEditorPage from '~/pages/decks/[id].vue'
 import { optionLabels, selectWithOption } from './fixtures/select-wrapper'
 import type { DeckValidation } from '~~/shared/rule-formats'
@@ -655,5 +656,247 @@ describe('deck editor rule validation', () => {
 
     expect(component.find('[aria-label="Regelprüfung Status"]').text()).toBe('Nicht legal – 1 Problem')
     vi.unstubAllGlobals()
+  })
+})
+
+describe('deck editor header and row layout', () => {
+  it('keeps rename and delete in the "Weitere Aktionen" menu at every width', async () => {
+    state.source = { items: [], total: 0 }
+    state.deck = deckDetail({ main: [row({ name: 'Dark Magician', section: 'main' })] })
+
+    const component = await mountSuspended(DeckEditorPage)
+    const buttonTexts = component.findAll('button').map(button => button.text())
+
+    // No standalone buttons: one code path, no duplicate markup per breakpoint.
+    expect(buttonTexts).not.toContain('Umbenennen')
+    expect(buttonTexts).not.toContain('Löschen')
+    expect(component.find('[aria-label="Weitere Aktionen"]').exists()).toBe(true)
+    expect(component.find('[aria-label="Weitere Aktionen"]').classes()).toContain('tap-target')
+
+    // The menu teleports its content, so drive its items directly.
+    const menus = component.findAllComponents(UDropdownMenu) as unknown as Array<{ props: (key: string) => unknown }>
+    const menu = menus.find(candidate =>
+      (candidate.props('items') as Array<Array<{ label: string }>>).flat().some(item => item.label === 'Umbenennen'))
+    expect(menu).toBeTruthy()
+    const items = (menu!.props('items') as Array<Array<{ label: string, onSelect: () => void }>>).flat()
+    expect(items.map(item => item.label)).toEqual(['Umbenennen', 'Löschen'])
+
+    expect(component.findComponent(DecksDeckFormModal).props('open')).toBe(false)
+    items[0]!.onSelect()
+    await component.vm.$nextTick()
+    expect(component.findComponent(DecksDeckFormModal).props('open')).toBe(true)
+  })
+
+  it('lets a long deck name wrap instead of truncating it', async () => {
+    state.source = { items: [], total: 0 }
+    state.deck = deckDetail({})
+
+    const component = await mountSuspended(DeckEditorPage)
+
+    expect(component.findAll('h1')).toHaveLength(1)
+    expect(component.find('h1').text()).toBe('Test Deck')
+    expect(component.find('h1').classes()).not.toContain('truncate')
+  })
+
+  it('gives the row controls and the add buttons 44px tap targets on phones', async () => {
+    state.deck = deckDetail({ main: [row({ name: 'Dark Magician', section: 'main' })] })
+    state.source = {
+      items: [{
+        catalogCardId: 46986414,
+        name: 'Dark Magician',
+        type: 'Normal Monster',
+        attribute: 'DARK',
+        race: 'Spellcaster',
+        level: 7,
+        imageSmall: null,
+        totalQuantity: 1,
+      }],
+      total: 1,
+    }
+
+    const component = await mountSuspended(DeckEditorPage)
+
+    for (const label of [
+      'Eine Kopie von Dark Magician aus dem Main Deck entfernen',
+      'Eine Kopie von Dark Magician zum Main Deck hinzufügen',
+      'Dark Magician verschieben',
+      'Dark Magician aus dem Main Deck entfernen',
+      'Dark Magician zum Main Deck hinzufügen',
+      'Dark Magician zum Extra Deck hinzufügen',
+      'Dark Magician zum Side Deck hinzufügen',
+    ]) {
+      expect(component.find(`[aria-label="${label}"]`).classes(), label).toContain('tap-target')
+    }
+    expect(component.find('[aria-controls="deck-add-panel-body"]').classes()).toContain('tap-target')
+
+    // The full name stays available when it wraps onto a second line.
+    expect(component.find('p[title="Dark Magician"]').classes()).toContain('line-clamp-2')
+  })
+})
+
+describe('deck editor add panel paging', () => {
+  function inventoryItems(count: number, offset = 0) {
+    return Array.from({ length: count }, (_, index) => ({
+      catalogCardId: 1000 + offset + index,
+      name: `Karte ${String(offset + index + 1).padStart(2, '0')}`,
+      type: 'Normal Monster',
+      attribute: 'DARK',
+      race: 'Spellcaster',
+      level: 4,
+      imageSmall: null,
+      totalQuantity: 1,
+    }))
+  }
+
+  function catalogItems(count: number, offset = 0) {
+    return Array.from({ length: count }, (_, index) => ({
+      id: 2000 + offset + index,
+      name: `Katalogkarte ${String(offset + index + 1).padStart(2, '0')}`,
+      type: 'Normal Monster',
+      frameType: 'normal',
+      attribute: 'DARK',
+      race: 'Spellcaster',
+      level: 4,
+      imageSmall: null,
+    }))
+  }
+
+  interface Wrapper {
+    findAll: (selector: string) => Array<DOMWrapper<Element>>
+  }
+
+  const panelCards = (component: Wrapper) => component.findAll('#deck-add-panel-body li')
+  const loadMoreButton = (component: Wrapper) =>
+    component.findAll('button').find(button => button.text() === 'Mehr laden')
+
+  function stubSourceFetch(handler: (url: string, options?: { query?: Record<string, unknown> }) => Promise<unknown>) {
+    const mock = vi.fn((url: string, options?: { query?: Record<string, unknown> }) => (
+      url.startsWith('/api/inventory/') || url.startsWith('/api/catalog/')
+        ? handler(url, options)
+        : Promise.resolve(null)
+    ))
+    vi.stubGlobal('$fetch', mock)
+    return mock
+  }
+
+  it('shows how many of the matches are listed and appends the next page', async () => {
+    state.deck = deckDetail({})
+    state.source = { items: inventoryItems(12), total: 14 }
+    const fetchMock = stubSourceFetch(() => Promise.resolve({ items: inventoryItems(2, 12), total: 14 }))
+
+    const component = await mountSuspended(DeckEditorPage)
+
+    expect(panelCards(component)).toHaveLength(12)
+    expect(component.text()).toContain('12 von 14 Karten')
+    expect(loadMoreButton(component)).toBeTruthy()
+
+    await loadMoreButton(component)!.trigger('click')
+    await flushPromises()
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/inventory/search', {
+      query: expect.objectContaining({ page: 2, pageSize: 12, sort: 'name' }),
+    })
+    expect(panelCards(component)).toHaveLength(14)
+    expect(component.text()).toContain('Karte 14')
+    expect(component.text()).toContain('14 Karten')
+    expect(component.text()).not.toContain('von 14 Karten')
+    expect(loadMoreButton(component)).toBeUndefined()
+  })
+
+  it('fetches the owned totals of a further catalog page', async () => {
+    state.deck = deckDetail({})
+    state.source = { items: catalogItems(12), total: 14 }
+    const fetchMock = stubSourceFetch((url) => {
+      if (url === '/api/catalog/cards') {
+        return Promise.resolve({ items: catalogItems(2, 12), total: 14 })
+      }
+      if (url === '/api/inventory/owned-quantities') {
+        return Promise.resolve({ 2012: 4 })
+      }
+      return Promise.resolve(null)
+    })
+
+    const component = await mountSuspended(DeckEditorPage)
+    await component.find('[role="checkbox"]').trigger('click')
+    await flushPromises()
+
+    await loadMoreButton(component)!.trigger('click')
+    await flushPromises()
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/catalog/cards', {
+      query: expect.objectContaining({ page: 2, pageSize: 12 }),
+    })
+    expect(fetchMock).toHaveBeenCalledWith('/api/inventory/owned-quantities', { query: { ids: '2012,2013' } })
+
+    const loaded = panelCards(component).find(item => item.text().includes('Katalogkarte 13'))
+    expect(loaded).toBeTruthy()
+    expect(loaded!.text()).toContain('Besitz: 4')
+  })
+
+  it('starts over at the first page when a filter changes', async () => {
+    state.deck = deckDetail({})
+    state.source = { items: inventoryItems(12), total: 14 }
+    stubSourceFetch(() => Promise.resolve({ items: inventoryItems(2, 12), total: 14 }))
+
+    const component = await mountSuspended(DeckEditorPage)
+    await loadMoreButton(component)!.trigger('click')
+    await flushPromises()
+    expect(panelCards(component)).toHaveLength(14)
+
+    await selectWithOption(component.findAllComponents(USelect), '__all_types__')!.setValue('Normal Monster')
+    await flushPromises()
+
+    expect(panelCards(component)).toHaveLength(12)
+    expect(component.text()).toContain('12 von 14 Karten')
+    expect(loadMoreButton(component)).toBeTruthy()
+  })
+
+  it('drops a page that arrives after the filters changed', async () => {
+    state.deck = deckDetail({})
+    state.source = { items: inventoryItems(12), total: 14 }
+    let resolvePage: ((page: unknown) => void) | undefined
+    stubSourceFetch(() => new Promise((resolve) => {
+      resolvePage = resolve
+    }))
+
+    const component = await mountSuspended(DeckEditorPage)
+    await loadMoreButton(component)!.trigger('click')
+
+    await selectWithOption(component.findAllComponents(USelect), '__all_types__')!.setValue('Normal Monster')
+    await flushPromises()
+
+    resolvePage!({ items: inventoryItems(2, 12), total: 14 })
+    await flushPromises()
+
+    expect(panelCards(component)).toHaveLength(12)
+    expect(component.text()).not.toContain('Karte 13')
+    expect(component.text()).toContain('12 von 14 Karten')
+    expect(loadMoreButton(component)).toBeTruthy()
+  })
+
+  it('reports a failed page and keeps the list', async () => {
+    state.deck = deckDetail({})
+    state.source = { items: inventoryItems(12), total: 14 }
+    stubSourceFetch(() => Promise.reject(new Error('offline')))
+
+    const component = await mountSuspended(DeckEditorPage)
+    await loadMoreButton(component)!.trigger('click')
+    await flushPromises()
+
+    expect(component.text()).toContain('Weitere Karten konnten nicht geladen werden.')
+    expect(panelCards(component)).toHaveLength(12)
+    expect(loadMoreButton(component)).toBeTruthy()
+  })
+
+  it('offers no "Mehr laden" when every match is listed', async () => {
+    state.deck = deckDetail({})
+    state.source = { items: inventoryItems(12), total: 12 }
+
+    const component = await mountSuspended(DeckEditorPage)
+
+    expect(panelCards(component)).toHaveLength(12)
+    expect(component.text()).toContain('12 Karten')
+    expect(component.text()).not.toContain('von 12 Karten')
+    expect(loadMoreButton(component)).toBeUndefined()
   })
 })

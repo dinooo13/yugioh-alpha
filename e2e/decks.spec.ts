@@ -6,6 +6,8 @@ import { acceptConfirm } from './helpers/confirm'
 // (server/db/fixtures/catalog-fixture.ts).
 const DARK_MAGICIAN = 46986414
 const STARDUST_DRAGON = 44508094
+const ODD_EYES_PENDULUM_DRAGON = 16178681
+const BLUE_EYES_ULTIMATE_DRAGON = 23995346
 
 test.describe('deckbuilder', () => {
   test('builds a deck from owned cards and tracks availability', async ({ page }) => {
@@ -143,5 +145,92 @@ test.describe('deckbuilder on a phone', () => {
 
     await page.getByRole('button', { name: 'Ausblenden', exact: true }).click()
     await expect(search).toBeHidden()
+  })
+
+  test('renames and deletes the deck from the "Weitere Aktionen" menu', async ({ page }) => {
+    await registerAndLogin(page)
+
+    const response = await page.request.post('/api/decks', { data: { name: 'Menü Deck' } })
+    expect(response.ok()).toBe(true)
+    const deck = await response.json() as { id: string }
+
+    await page.goto(`/decks/${deck.id}`)
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Menü Deck')
+
+    await page.getByRole('button', { name: 'Weitere Aktionen' }).click()
+    await page.getByRole('menuitem', { name: 'Umbenennen' }).click()
+    const dialog = page.getByRole('dialog')
+    await dialog.getByLabel('Deckname').fill('Umbenanntes Deck')
+    await dialog.getByRole('button', { name: 'Speichern' }).click()
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Umbenanntes Deck')
+
+    await page.getByRole('button', { name: 'Weitere Aktionen' }).click()
+    await page.getByRole('menuitem', { name: 'Löschen' }).click()
+    await acceptConfirm(page)
+    await expect(page).toHaveURL('/decks')
+  })
+})
+
+test.describe('deckbuilder at 1024px', () => {
+  // The `lg` breakpoint: the sidebar and the sticky add panel both take their
+  // width here, which used to squeeze the title to "Cyb…" (#40).
+  test.use({ viewport: { width: 1024, height: 768 } })
+
+  test('keeps the deck name and card names readable and pages the add panel', async ({ page }) => {
+    await registerAndLogin(page)
+
+    const deckName = 'Cyber Dragon Infinity Kontrolle Deck'
+    const response = await page.request.post('/api/decks', {
+      data: {
+        name: deckName,
+        cards: [
+          { catalog_card_id: ODD_EYES_PENDULUM_DRAGON, section: 'main', quantity: 1 },
+          { catalog_card_id: BLUE_EYES_ULTIMATE_DRAGON, section: 'extra', quantity: 1 },
+        ],
+      },
+    })
+    expect(response.ok()).toBe(true)
+    const deck = await response.json() as { id: string }
+
+    await page.goto(`/decks/${deck.id}`)
+
+    // The title shows in full — no ellipsis.
+    const heading = page.getByRole('heading', { level: 1 })
+    await expect(heading).toHaveText(deckName)
+    expect(await heading.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
+
+    // Card names get real width and are not clipped.
+    for (const cardName of ['Odd-Eyes Pendulum Dragon', 'Blue-Eyes Ultimate Dragon']) {
+      const nameLine = page.locator(`p[title="${cardName}"]`)
+      await expect(nameLine).toHaveText(cardName)
+      const box = await nameLine.boundingBox()
+      expect(box!.width, `${cardName} width`).toBeGreaterThanOrEqual(150)
+      expect(
+        await nameLine.evaluate(element => element.scrollHeight <= element.clientHeight + 1),
+        `${cardName} clipped`,
+      ).toBe(true)
+    }
+
+    const horizontalOverflow = await page.evaluate(() =>
+      document.documentElement.scrollWidth - document.documentElement.clientWidth)
+    expect(horizontalOverflow).toBeLessThanOrEqual(0)
+
+    await expect(page.getByRole('button', { name: 'Teilen' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Weitere Aktionen' })).toBeVisible()
+    await expect(page.getByRole('combobox', { name: 'Format' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Karten hinzufügen', exact: true })).toBeHidden()
+
+    // --- "Mehr laden" in the add panel (#31) ----------------------------------
+    await page.getByRole('checkbox', { name: 'Auch Katalogkarten anzeigen' }).click()
+    const countLine = page.getByText(/^\s*12 von \d+ Karten\s*$/)
+    await expect(countLine).toBeVisible()
+    const total = Number((await countLine.textContent())!.match(/von (\d+)/)![1])
+
+    await page.getByRole('button', { name: 'Mehr laden' }).click()
+    // Alphabetically the 14th fixture card, i.e. on page 2.
+    await expect(page.getByRole('button', { name: 'Summoned Skull zum Main Deck hinzufügen', exact: true })).toBeVisible()
+    if (total <= 24) {
+      await expect(page.getByRole('button', { name: 'Mehr laden' })).toHaveCount(0)
+    }
   })
 })

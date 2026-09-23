@@ -2,6 +2,9 @@ import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 import { registerAndLogin } from './helpers/auth'
 
+// Passcode from the seeded E2E catalog fixture (server/db/fixtures/catalog-fixture.ts).
+const DARK_MAGICIAN = 46986414
+
 async function expectSkipLinkWorks(page: Page, path: string) {
   await page.goto(path)
   await page.waitForLoadState('networkidle')
@@ -44,5 +47,44 @@ test.describe('accessibility basics', () => {
       expect(box!.width, `${name} width`).toBeGreaterThanOrEqual(44)
       expect(box!.height, `${name} height`).toBeGreaterThanOrEqual(44)
     }
+  })
+
+  test('the deck editor row controls and add buttons are 44px touch targets on phones', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await registerAndLogin(page)
+
+    const inventoryResponse = await page.request.post('/api/inventory', {
+      data: { catalog_card_id: DARK_MAGICIAN, quantity: 1 },
+    })
+    expect(inventoryResponse.ok()).toBe(true)
+    const deckResponse = await page.request.post('/api/decks', {
+      data: { name: 'Tap Deck', cards: [{ catalog_card_id: DARK_MAGICIAN, section: 'main', quantity: 1 }] },
+    })
+    expect(deckResponse.ok()).toBe(true)
+    const deck = await deckResponse.json() as { id: string }
+
+    await page.goto(`/decks/${deck.id}`)
+    await page.waitForLoadState('networkidle')
+
+    const expectTapTarget = async (name: string) => {
+      const box = await page.getByRole('button', { name, exact: true }).boundingBox()
+      expect(box, name).not.toBeNull()
+      expect(box!.width, `${name} width`).toBeGreaterThanOrEqual(44)
+      expect(box!.height, `${name} height`).toBeGreaterThanOrEqual(44)
+    }
+
+    for (const name of [
+      'Eine Kopie von Dark Magician aus dem Main Deck entfernen',
+      'Eine Kopie von Dark Magician zum Main Deck hinzufügen',
+      'Dark Magician verschieben',
+      'Dark Magician aus dem Main Deck entfernen',
+      'Weitere Aktionen',
+    ]) {
+      await expectTapTarget(name)
+    }
+
+    await page.getByRole('button', { name: 'Karten hinzufügen', exact: true }).click()
+    await expect(page.getByRole('button', { name: 'Dark Magician zum Main Deck hinzufügen', exact: true })).toBeVisible()
+    await expectTapTarget('Dark Magician zum Main Deck hinzufügen')
   })
 })

@@ -23,10 +23,12 @@ withDefaults(defineProps<{
 
 <template>
   <header class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-    <div class="min-w-0">
+    <!-- `flex-1`, so content in the default slot (e.g. a toolbar) can span
+         the full width; the actions box stays pinned right. -->
+    <div class="min-w-0 flex-1">
       <h1
         class="text-2xl font-semibold text-gray-900"
-        :class="{ truncate }"
+        :class="truncate ? 'truncate' : 'break-words'"
       >
         <slot name="title">
           {{ title }}
