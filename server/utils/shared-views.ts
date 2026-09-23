@@ -52,6 +52,9 @@ function loadSharedDeckCardRows(db: Db, deckId: string): SharedDeckCardRow[] {
       atk: catalogCard.atk,
       def: catalogCard.def,
       imageSmall: sql<string | null>`min(${catalogCardImage.imageUrlSmall})`,
+      // Same artwork as `imageSmall`: both URLs only differ in the directory,
+      // so min() picks the same image id.
+      imageLarge: sql<string | null>`min(${catalogCardImage.imageUrl})`,
     })
     .from(deckCard)
     .innerJoin(catalogCard, eq(deckCard.catalogCardId, catalogCard.id))
@@ -212,6 +215,7 @@ function listAggregatedCards(db: Db, where: SQL, options: SharedCardListOptions)
           atk: catalogCard.atk,
           def: catalogCard.def,
           imageSmall: sql<string | null>`min(${catalogCardImage.imageUrlSmall})`,
+          imageLarge: sql<string | null>`min(${catalogCardImage.imageUrl})`,
         })
         .from(catalogCard)
         .leftJoin(catalogCardImage, eq(catalogCardImage.cardId, catalogCard.id))
@@ -235,6 +239,7 @@ function listAggregatedCards(db: Db, where: SQL, options: SharedCardListOptions)
       atk: display?.atk ?? null,
       def: display?.def ?? null,
       imageSmall: display?.imageSmall ?? null,
+      imageLarge: display?.imageLarge ?? null,
       quantity: row.quantity,
     }
   })

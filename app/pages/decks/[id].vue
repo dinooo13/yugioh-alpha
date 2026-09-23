@@ -800,18 +800,11 @@ async function deleteDeck() {
                 class="flex items-center gap-3 px-4 py-2"
                 :class="issueCardIds.has(row.catalogCardId) ? 'bg-red-50' : undefined"
               >
-                <img
-                  v-if="row.imageSmall"
+                <CardThumb
                   :src="row.imageSmall"
                   :alt="row.name"
-                  class="h-14 w-10 shrink-0 rounded object-cover"
-                >
-                <div
-                  v-else
-                  class="flex h-14 w-10 shrink-0 items-center justify-center rounded bg-gray-100 text-xs text-gray-400"
-                >
-                  —
-                </div>
+                  size="sm"
+                />
 
                 <div class="min-w-0 flex-1">
                   <p class="truncate text-sm font-medium text-gray-900">
@@ -994,18 +987,11 @@ async function deleteDeck() {
                     :key="card.catalogCardId"
                     class="flex gap-3 py-3"
                   >
-                    <img
-                      v-if="card.imageSmall"
+                    <CardThumb
                       :src="card.imageSmall"
                       :alt="card.name"
-                      class="h-16 w-11 shrink-0 rounded object-cover"
-                    >
-                    <div
-                      v-else
-                      class="flex h-16 w-11 shrink-0 items-center justify-center rounded bg-gray-100 text-xs text-gray-400"
-                    >
-                      —
-                    </div>
+                      size="md"
+                    />
 
                     <div class="min-w-0 flex-1">
                       <p class="truncate text-sm font-medium text-gray-900">

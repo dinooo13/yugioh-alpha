@@ -61,18 +61,11 @@ const { data, pending } = await useFetch<{ items: CatalogCard[] }>('/api/invento
         class="flex w-full items-center gap-3 border-b border-gray-100 px-3 py-2 text-left last:border-b-0 hover:bg-gray-50"
         @click="emit('select', card)"
       >
-        <img
-          v-if="card.imageUrlSmall"
+        <CardThumb
           :src="card.imageUrlSmall"
           :alt="card.name"
-          class="h-14 w-10 rounded object-cover"
-        >
-        <div
-          v-else
-          class="flex h-14 w-10 items-center justify-center rounded bg-gray-100 text-xs text-gray-400"
-        >
-          —
-        </div>
+          size="sm"
+        />
         <span class="min-w-0">
           <span class="block truncate text-sm font-medium text-gray-900">{{ card.name }}</span>
           <span class="block truncate text-xs text-gray-500">{{ card.type }}</span>

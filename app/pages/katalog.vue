@@ -194,7 +194,6 @@ const cardsTotalLabel = computed(() => {
   const total = cards.value.total
   return `${total.toLocaleString('de-DE')} ${total === 1 ? 'Karte' : 'Karten'}`
 })
-const primaryImage = computed(() => detail.value?.images[0]?.imageUrl ?? detail.value?.images[0]?.imageUrlSmall ?? null)
 
 watch(selectedCardId, async (cardId) => {
   detail.value = null
@@ -462,21 +461,12 @@ async function onAddedToInventory() {
         @keydown.enter="openCard(card.id)"
         @keydown.space.prevent="openCard(card.id)"
       >
-        <div class="aspect-[3/4.35] bg-gray-100">
-          <img
-            v-if="card.imageSmall"
-            :src="card.imageSmall"
-            :alt="card.name"
-            loading="lazy"
-            class="h-full w-full object-cover"
-          >
-          <div
-            v-else
-            class="flex h-full items-center justify-center px-3 text-center text-xs text-gray-400"
-          >
-            Kein Bild
-          </div>
-        </div>
+        <!-- Plain thumbnail: the whole tile is already the button. -->
+        <CardThumb
+          :src="card.imageSmall"
+          :alt="card.name"
+          size="full"
+        />
         <div class="space-y-1 p-3">
           <h2 class="line-clamp-2 min-h-10 text-sm font-semibold leading-5 text-gray-900 group-hover:text-primary">
             {{ card.name }}
@@ -588,12 +578,15 @@ async function onAddedToInventory() {
             v-else-if="detail"
             class="space-y-6"
           >
-            <img
-              v-if="primaryImage"
-              :src="primaryImage"
+            <CardThumb
+              :src="detail.images[0]?.imageUrlSmall"
+              :src-large="detail.images[0]?.imageUrl"
               :alt="detail.card.name"
-              class="mx-auto w-full max-w-xs rounded-md border border-gray-200"
-            >
+              size="full"
+              sizes="320px"
+              loading="eager"
+              class="mx-auto max-w-xs"
+            />
 
             <div class="space-y-2">
               <h3 class="text-xl font-semibold text-gray-900">

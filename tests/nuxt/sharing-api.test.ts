@@ -423,6 +423,25 @@ describe('buildSharedDeckView', () => {
     expect(view.validation).toBeNull()
     expect(view.isOwner).toBe(false)
   })
+
+  it('returns the small and the large scan of the same artwork for click-to-enlarge', () => {
+    const db = createTestDb()
+    seedUsersAndCatalog(db)
+    db.insert(schema.catalogCardImage).values([
+      { id: 46986414, cardId: CARD.darkMagician, imageUrl: 'https://img/cards/46986414.jpg', imageUrlSmall: 'https://img/cards_small/46986414.jpg' },
+      { id: 46986415, cardId: CARD.darkMagician, imageUrl: 'https://img/cards/46986415.jpg', imageUrlSmall: 'https://img/cards_small/46986415.jpg' },
+    ]).run()
+    const deckId = createDeck(db, 'user-a', { name: 'Deck', description: null }).id
+    upsertDeckCard(db, 'user-a', deckId, { catalogCardId: CARD.darkMagician, section: 'main', quantity: 1 })
+    const deckRow = db.select().from(schema.deck).where(eq(schema.deck.id, deckId)).get()!
+
+    const view = buildSharedDeckView(db, deckRow, toPublicProfile(ensureProfile(db, 'user-a')))
+
+    expect(view.sections.main[0]).toMatchObject({
+      imageSmall: 'https://img/cards_small/46986414.jpg',
+      imageLarge: 'https://img/cards/46986414.jpg',
+    })
+  })
 })
 
 describe('listSharedCollection', () => {
@@ -476,7 +495,7 @@ describe('listSharedInventory', () => {
 
     expect(page.total).toBe(1)
     expect(page.items).toHaveLength(1)
-    expect(page.items[0]).toMatchObject({ catalogCardId: CARD.darkMagician, quantity: 5 })
+    expect(page.items[0]).toMatchObject({ catalogCardId: CARD.darkMagician, quantity: 5, imageSmall: null, imageLarge: null })
   })
 
   it('filters by name and clamps the page size', async () => {
