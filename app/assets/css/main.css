@@ -15,3 +15,18 @@
   --color-brand-900: #352396;
   --color-brand-950: #1f1465;
 }
+
+/*
+ * 44px touch targets below `lg` (WCAG 2.5.5). Nuxt UI's `size` prop isn't
+ * responsive, and switching it in JS would mismatch between SSR and
+ * hydration — so compact icon buttons keep their desktop size and only grow
+ * their hit box here. `justify-content` keeps the icon centered once a
+ * square button gets wider than its content.
+ */
+@utility tap-target {
+  @media (width < 64rem) {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    justify-content: center;
+  }
+}

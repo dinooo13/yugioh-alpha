@@ -13,13 +13,6 @@ const emit = defineEmits<{
 const breakdown = computed(() => props.item.collectionBreakdown ?? [])
 const showInline = computed(() => breakdown.value.length <= 2)
 const subtitle = computed(() => cardSubtitle(props.item))
-
-const imageSrc = computed(() => props.item.imageLarge ?? props.item.imageSmall)
-// Small (168px) and full (421px) scans of the same artwork — let the browser
-// pick the cheapest one that is still sharp at the rendered tile width.
-const imageSrcset = computed(() => props.item.imageSmall && props.item.imageLarge
-  ? `${props.item.imageSmall} 168w, ${props.item.imageLarge} 421w`
-  : undefined)
 </script>
 
 <template>
@@ -27,25 +20,17 @@ const imageSrcset = computed(() => props.item.imageSmall && props.item.imageLarg
     <button
       type="button"
       :aria-label="`${item.name} vergrößern`"
-      class="block aspect-[59/86] w-full bg-gray-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+      class="block w-full cursor-zoom-in focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
       @click="emit('preview')"
     >
-      <img
-        v-if="imageSrc"
-        :src="imageSrc"
-        :srcset="imageSrcset"
-        sizes="(min-width: 1280px) 270px, (min-width: 640px) 30vw, 48vw"
+      <!-- Not `enlargeable`: the tile's own preview modal shows more than the scan. -->
+      <CardThumb
+        :src="item.imageSmall"
+        :src-large="item.imageLarge"
         :alt="item.name"
-        loading="lazy"
-        decoding="async"
-        class="h-full w-full object-contain"
-      >
-      <span
-        v-else
-        class="flex h-full items-center justify-center px-3 text-center text-xs text-gray-400"
-      >
-        Kein Bild
-      </span>
+        size="full"
+        sizes="(min-width: 1280px) 270px, (min-width: 640px) 30vw, 48vw"
+      />
     </button>
 
     <div class="space-y-2 p-3">

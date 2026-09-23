@@ -13,6 +13,8 @@ watch(() => route.fullPath, () => {
 
 <template>
   <div class="flex min-h-dvh flex-col bg-gray-50 lg:flex-row">
+    <LayoutSkipLink />
+
     <header class="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3 lg:hidden">
       <NuxtLink
         to="/"
@@ -28,6 +30,7 @@ watch(() => route.fullPath, () => {
         color="neutral"
         variant="ghost"
         aria-label="Menü öffnen"
+        class="tap-target"
         @click="() => { isMobileNavOpen = true }"
       />
     </header>
@@ -57,7 +60,11 @@ watch(() => route.fullPath, () => {
       </template>
     </USlideover>
 
-    <main class="min-w-0 flex-1 p-4 lg:p-8">
+    <main
+      id="main-content"
+      tabindex="-1"
+      class="min-w-0 flex-1 p-4 focus:outline-none lg:p-8"
+    >
       <slot />
     </main>
 

@@ -36,22 +36,12 @@ const languageLabel = computed(() => props.item.language.toUpperCase())
   <!-- One markup for every width: stacked on phones, a single row from `sm`
        up. No column header — each attribute is a labelled badge instead. -->
   <li class="flex gap-3 px-4 py-3 sm:items-center">
-    <div class="w-16 shrink-0 sm:w-12">
-      <img
-        v-if="item.imageUrlSmall"
-        :src="item.imageUrlSmall"
-        :alt="item.cardName"
-        loading="lazy"
-        decoding="async"
-        class="aspect-[59/86] w-full rounded bg-gray-100 object-contain"
-      >
-      <div
-        v-else
-        class="flex aspect-[59/86] w-full items-center justify-center rounded bg-gray-100 text-xs text-gray-400"
-      >
-        —
-      </div>
-    </div>
+    <CardThumb
+      :src="item.imageUrlSmall"
+      :alt="item.cardName"
+      size="lg"
+      class="sm:w-12"
+    />
 
     <div class="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
       <div class="min-w-0 flex-1 space-y-1">

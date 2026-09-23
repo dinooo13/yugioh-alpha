@@ -23,6 +23,8 @@ const loginTarget = computed(() => ({ path: '/login', query: { redirect: route.f
 
 <template>
   <div class="min-h-screen bg-gray-50">
+    <LayoutSkipLink />
+
     <header class="border-b border-gray-200 bg-white">
       <div class="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
         <NuxtLink
@@ -64,7 +66,11 @@ const loginTarget = computed(() => ({ path: '/login', query: { redirect: route.f
       </div>
     </header>
 
-    <main class="mx-auto max-w-5xl px-4 py-8 sm:px-6">
+    <main
+      id="main-content"
+      tabindex="-1"
+      class="mx-auto max-w-5xl px-4 py-8 focus:outline-none sm:px-6"
+    >
       <slot />
     </main>
   </div>
