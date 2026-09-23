@@ -113,6 +113,8 @@ function deckDetail(
     },
     limits: { mainMin: 40, mainMax: 60, extraMax: 15, sideMax: 15, maxCopies: 3 },
     warnings,
+    cover: null as { catalogCardId: number, name: string, imageSmall: string | null, imageLarge: string | null } | null,
+    coverIsChosen: false,
   }
 }
 
@@ -283,7 +285,7 @@ describe('deck editor', () => {
     expect(component.find('[aria-label="Eine Kopie von Dark Magician zum Main Deck hinzufügen"]').exists()).toBe(true)
     expect(component.find('[aria-label="Eine Kopie von Dark Magician aus dem Main Deck entfernen"]').exists()).toBe(true)
     expect(component.find('[aria-label="Dark Magician aus dem Main Deck entfernen"]').exists()).toBe(true)
-    expect(component.find('[aria-label="Dark Magician verschieben"]').exists()).toBe(true)
+    expect(component.find('[aria-label="Optionen für Dark Magician"]').exists()).toBe(true)
   })
 })
 
@@ -719,7 +721,7 @@ describe('deck editor header and row layout', () => {
     for (const label of [
       'Eine Kopie von Dark Magician aus dem Main Deck entfernen',
       'Eine Kopie von Dark Magician zum Main Deck hinzufügen',
-      'Dark Magician verschieben',
+      'Optionen für Dark Magician',
       'Dark Magician aus dem Main Deck entfernen',
       'Dark Magician zum Main Deck hinzufügen',
       'Dark Magician zum Extra Deck hinzufügen',
@@ -731,6 +733,142 @@ describe('deck editor header and row layout', () => {
 
     // The full name stays available when it wraps onto a second line.
     expect(component.find('p[title="Dark Magician"]').classes()).toContain('line-clamp-2')
+  })
+})
+
+describe('deck editor cover card', () => {
+  const DARK_MAGICIAN = 46986414
+  const POT_OF_GREED = 55144522
+
+  type MenuItem = { label: string, icon?: string, disabled?: boolean, onSelect: () => void }
+  type MenuWrapper = { props: (key: string) => unknown }
+
+  function stubDeckFetch(handler: (url: string, options?: Record<string, unknown>) => Promise<unknown>) {
+    const mock = vi.fn((url: string, options?: Record<string, unknown>) => (
+      url.startsWith('/api/decks/')
+        ? handler(url, options)
+        : Promise.resolve(null)
+    ))
+    vi.stubGlobal('$fetch', mock)
+    return mock
+  }
+
+  function coverOf(catalogCardId: number, name: string) {
+    return { catalogCardId, name, imageSmall: null, imageLarge: null }
+  }
+
+  /** Dark Magician in Main and Side, Pot of Greed in Main; the rule picks Dark Magician. */
+  function coverDeck(cover: { id: number, name: string } | null = { id: DARK_MAGICIAN, name: 'Dark Magician' }, coverIsChosen = false) {
+    return {
+      ...deckDetail({
+        main: [
+          row({ name: 'Dark Magician', section: 'main', usedInDeck: 2 }),
+          row({ catalogCardId: POT_OF_GREED, name: 'Pot of Greed', type: 'Spell Card', frameType: 'spell', attribute: null, race: 'Normal', level: null, atk: null, def: null, section: 'main' }),
+        ],
+        side: [row({ name: 'Dark Magician', section: 'side', usedInDeck: 2 })],
+      }),
+      cover: cover ? coverOf(cover.id, cover.name) : null,
+      coverIsChosen,
+    }
+  }
+
+  // The menus teleport their content, so drive their items directly. A row's
+  // move items name the sections it is *not* in.
+  function rowMenu(component: Awaited<ReturnType<typeof mountSuspended>>, name: string, section: DeckSection): MenuItem[] {
+    const menus = component.findAllComponents(UDropdownMenu) as unknown as Array<MenuWrapper & { find: (selector: string) => { exists: () => boolean } }>
+    const others = (['main', 'extra', 'side'] as const)
+      .filter(other => other !== section)
+      .map(other => `Nach ${{ main: 'Main Deck', extra: 'Extra Deck', side: 'Side Deck' }[other]}`)
+    const menu = menus.find((candidate) => {
+      const labels = (candidate.props('items') as MenuItem[][]).flat().map(item => item.label)
+      return candidate.find(`[aria-label="Optionen für ${name}"]`).exists()
+        && others.every(label => labels.includes(label))
+    })
+    expect(menu, `${name} (${section})`).toBeTruthy()
+    return (menu!.props('items') as MenuItem[][]).flat()
+  }
+
+  function rowItem(component: Awaited<ReturnType<typeof mountSuspended>>, name: string, section: DeckSection) {
+    const sectionLabel = { main: 'Main Deck', extra: 'Extra Deck', side: 'Side Deck' }[section]
+    const item = component.findAll('li').find(li => li.find(`[aria-label="${name} aus dem ${sectionLabel} entfernen"]`).exists())
+    expect(item, `${name} (${section})`).toBeTruthy()
+    return item!
+  }
+
+  it('offers "Als Titelkarte festlegen" in Main/Extra row menus, next to the moves, but not for Side rows', async () => {
+    state.source = { items: [], total: 0 }
+    state.deck = coverDeck()
+
+    const component = await mountSuspended(DeckEditorPage)
+
+    const potMenu = rowMenu(component, 'Pot of Greed', 'main')
+    expect(potMenu.map(item => item.label)).toEqual(['Nach Extra Deck', 'Nach Side Deck', 'Als Titelkarte festlegen'])
+
+    const sideMenu = rowMenu(component, 'Dark Magician', 'side')
+    expect(sideMenu.map(item => item.label)).toEqual(['Nach Main Deck', 'Nach Extra Deck'])
+
+    // The menu button is the "Optionen für …" row menu.
+    const button = component.find('[aria-label="Optionen für Pot of Greed"]')
+    expect(button.classes()).toContain('tap-target')
+  })
+
+  it('PATCHes the chosen cover and shows the response\'s "Titelkarte" badge', async () => {
+    state.source = { items: [], total: 0 }
+    state.deck = coverDeck()
+
+    const fetchMock = stubDeckFetch(() => Promise.resolve(coverDeck({ id: POT_OF_GREED, name: 'Pot of Greed' }, true)))
+    const component = await mountSuspended(DeckEditorPage)
+
+    rowMenu(component, 'Pot of Greed', 'main').find(item => item.label === 'Als Titelkarte festlegen')!.onSelect()
+    await flushPromises()
+    await component.vm.$nextTick()
+
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).startsWith('/api/decks/'))).toEqual([[
+      '/api/decks/deck-1',
+      { method: 'PATCH', body: { coverCardId: POT_OF_GREED } },
+    ]])
+    expect(rowItem(component, 'Pot of Greed', 'main').text()).toContain('Titelkarte')
+    expect(rowItem(component, 'Pot of Greed', 'main').text()).not.toContain('Titelkarte (automatisch)')
+    expect(rowItem(component, 'Dark Magician', 'main').text()).not.toContain('Titelkarte')
+  })
+
+  it('marks a rule-picked cover as automatic on its Main row only, and lets the user pin it', async () => {
+    state.source = { items: [], total: 0 }
+    state.deck = coverDeck()
+
+    const component = await mountSuspended(DeckEditorPage)
+
+    expect(rowItem(component, 'Dark Magician', 'main').text()).toContain('Titelkarte (automatisch)')
+    expect(rowItem(component, 'Dark Magician', 'side').text()).not.toContain('Titelkarte')
+    expect(rowItem(component, 'Pot of Greed', 'main').text()).not.toContain('Titelkarte')
+    expect(component.findAll('li').filter(li => li.text().includes('Titelkarte'))).toHaveLength(1)
+
+    expect(rowMenu(component, 'Dark Magician', 'main').map(item => item.label)).toContain('Als Titelkarte festlegen')
+  })
+
+  it('offers "Titelkarte automatisch wählen" on a chosen cover, which PATCHes null', async () => {
+    state.source = { items: [], total: 0 }
+    state.deck = coverDeck({ id: POT_OF_GREED, name: 'Pot of Greed' }, true)
+
+    const fetchMock = stubDeckFetch(() => Promise.resolve(coverDeck()))
+    const component = await mountSuspended(DeckEditorPage)
+
+    expect(rowItem(component, 'Pot of Greed', 'main').text()).toContain('Titelkarte')
+
+    const potMenu = rowMenu(component, 'Pot of Greed', 'main')
+    expect(potMenu.map(item => item.label)).not.toContain('Als Titelkarte festlegen')
+    // Other Main rows can still take over as the chosen cover.
+    expect(rowMenu(component, 'Dark Magician', 'main').map(item => item.label)).toContain('Als Titelkarte festlegen')
+
+    potMenu.find(item => item.label === 'Titelkarte automatisch wählen')!.onSelect()
+    await flushPromises()
+    await component.vm.$nextTick()
+
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).startsWith('/api/decks/'))).toEqual([[
+      '/api/decks/deck-1',
+      { method: 'PATCH', body: { coverCardId: null } },
+    ]])
+    expect(rowItem(component, 'Dark Magician', 'main').text()).toContain('Titelkarte (automatisch)')
   })
 })
 
