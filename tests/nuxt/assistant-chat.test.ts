@@ -20,6 +20,7 @@ import { getAssistantLimits } from '../../server/utils/assistant-limits'
 import { applyAction } from '../../server/utils/assistant-tools'
 import { createDeck, deleteDeck, updateDeck, upsertDeckCard } from '../../server/utils/decks'
 import { createRuleFormat, validateRuleFormatInput } from '../../server/utils/rule-formats'
+import { ASSISTANT_CONVERSATION_TITLE_MAX, deckConversationTitle } from '../../shared/assistant-chat'
 
 const CARD = {
   darkMagician: 46986414,
@@ -562,6 +563,19 @@ describe('validateCreateConversationInput (POST /api/assistant/chat body)', () =
   })
 })
 
+describe('deckConversationTitle', () => {
+  it('is "Deck: <name>" for a short name', () => {
+    expect(deckConversationTitle('Magier')).toBe('Deck: Magier')
+  })
+
+  it('truncates to ASSISTANT_CONVERSATION_TITLE_MAX with an ellipsis', () => {
+    const title = deckConversationTitle('x'.repeat(80))
+    expect(title).toHaveLength(ASSISTANT_CONVERSATION_TITLE_MAX)
+    expect(title.startsWith('Deck: xxx')).toBe(true)
+    expect(title.endsWith('…')).toBe(true)
+  })
+})
+
 describe('deck-linked conversations (ADR 0011)', () => {
   function seedDeck(userId = 'user-a', name = 'Magier-Deck') {
     const deck = createDeck(db, userId, { name, description: null })
@@ -631,6 +645,8 @@ describe('deck-linked conversations (ADR 0011)', () => {
     expect(system).toMatch(/Legalität: nicht legal – Dark Magician: 2 Kopien/)
     expect(system).toContain(`${CARD.darkMagician}|Dark Magician|main|2|0`)
     expect(system).toContain(`update_deck_cards mit deckId=${deck.id}`)
+    expect(system).toContain('set_deck_format')
+    expect(system).toContain('sein Format nur über set_deck_format mit dieser deckId')
 
     expect(getConversationDetail(db, 'user-a', conversation.id).conversation.title).toBe('Deck: Magier-Deck')
   })

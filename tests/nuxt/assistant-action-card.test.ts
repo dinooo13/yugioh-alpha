@@ -104,4 +104,60 @@ describe('AssistantActionCard', () => {
     expect(link.exists()).toBe(true)
     expect(link.text()).toContain('Deck öffnen')
   })
+
+  function formatAction(overrides: Partial<AssistantActionView> = {}): AssistantActionView {
+    return {
+      id: 'action-2',
+      messageId: 'm1',
+      kind: 'set_deck_format',
+      summary: 'Format von Deck "Magier" ändern: kein Format → TCG',
+      payload: {
+        deckId: 'deck-1',
+        deckName: 'Magier',
+        formatId: 'tcg',
+        formatName: 'TCG',
+        previousFormatId: null,
+        previousFormatName: null,
+        preview: {
+          formatId: 'tcg',
+          formatName: 'TCG',
+          counts: { main: 40, extra: 0, side: 0, total: 40 },
+          validation: { legal: false, issues: ['Pot of Greed: verboten'] },
+          missing: [],
+        },
+      },
+      status: 'pending',
+      ...overrides,
+    }
+  }
+
+  it('shows a set_deck_format proposal: label, summary, preview, and the old/new format in the details', async () => {
+    const component = await mountSuspended(ActionCard, { props: { action: formatAction() } })
+    expect(component.text()).toContain('Deck-Format ändern')
+    expect(component.text()).toContain('Format von Deck "Magier" ändern: kein Format → TCG')
+    const preview = component.find('[data-testid="action-preview"]')
+    expect(preview.exists()).toBe(true)
+    expect(preview.text()).toContain('Nicht legal – 1 Problem')
+    expect(preview.text()).toContain('Pot of Greed: verboten')
+
+    const toggle = component.findAll('button').find(button => button.text().includes('Details anzeigen'))
+    await toggle!.trigger('click')
+    const text = component.text()
+    expect(text).toContain('Deck: Magier')
+    expect(text).toContain('Bisheriges Format: Kein Format')
+    expect(text).toContain('Neues Format: TCG')
+    expect(component.find('table').exists()).toBe(false)
+  })
+
+  it('offers "Deck öffnen" once a set_deck_format proposal was applied', async () => {
+    const pending = await mountSuspended(ActionCard, { props: { action: formatAction() } })
+    expect(pending.find('a[href^="/decks/"]').exists()).toBe(false)
+
+    const applied = await mountSuspended(ActionCard, {
+      props: { action: formatAction({ status: 'applied', result: { id: 'deck-1', name: 'Magier' } }) },
+    })
+    const link = applied.find('a[href="/decks/deck-1"]')
+    expect(link.exists()).toBe(true)
+    expect(link.text()).toContain('Deck öffnen')
+  })
 })

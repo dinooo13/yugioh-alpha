@@ -81,7 +81,7 @@ function columnLabel(column: string): string {
   return FIELD_LABELS[column] ?? column
 }
 
-// --- Proposal preview (create_deck / update_deck_cards, ADR 0011) ------------
+// --- Proposal preview (create_deck / update_deck_cards / set_deck_format, ADR 0011) ---
 
 interface DeckPreview {
   counts: { main: number, extra: number, side: number }
@@ -128,9 +128,11 @@ const legalityBadge = computed(() => {
   return { color: 'error' as const, label: `Nicht legal – ${count} ${count === 1 ? 'Problem' : 'Probleme'}` }
 })
 
-// An applied create_deck stores the new deck's detail as its result.
-const createdDeckId = computed(() => {
-  if (props.action.kind !== 'create_deck' || props.action.status !== 'applied') {
+// An applied create_deck / set_deck_format stores the (new or updated) deck's
+// detail as its result — link to it.
+const openDeckId = computed(() => {
+  const { kind, status } = props.action
+  if ((kind !== 'create_deck' && kind !== 'set_deck_format') || status !== 'applied') {
     return null
   }
   const result = props.action.result
@@ -145,8 +147,9 @@ function displayValue(column: string, value: unknown): string {
 }
 
 // Top-level scalars worth showing above the row table (e.g. create_deck's
-// name/formatId, update_deck_cards' deckId) — arrays are rendered as rows
-// instead, everything else in the payload is internal detail.
+// name/formatId, update_deck_cards' deckId, set_deck_format's old/new format)
+// — arrays are rendered as rows instead, everything else in the payload is
+// internal detail.
 const metaEntries = computed(() => {
   const entries: Array<{ label: string, value: string }> = []
   const payload = props.action.payload
@@ -156,7 +159,11 @@ const metaEntries = computed(() => {
   if (typeof payload.deckName === 'string' || typeof payload.deckId === 'string') {
     entries.push({ label: 'Deck', value: String(payload.deckName ?? payload.deckId) })
   }
-  if (typeof payload.formatName === 'string' || typeof payload.formatId === 'string') {
+  if (props.action.kind === 'set_deck_format') {
+    entries.push({ label: 'Bisheriges Format', value: typeof payload.previousFormatName === 'string' ? payload.previousFormatName : 'Kein Format' })
+    entries.push({ label: 'Neues Format', value: typeof payload.formatName === 'string' ? payload.formatName : 'Kein Format' })
+  }
+  else if (typeof payload.formatName === 'string' || typeof payload.formatId === 'string') {
     entries.push({ label: 'Format', value: String(payload.formatName ?? payload.formatId) })
   }
   return entries
@@ -377,8 +384,8 @@ async function reject() {
       </div>
 
       <UButton
-        v-if="createdDeckId"
-        :to="`/decks/${createdDeckId}`"
+        v-if="openDeckId"
+        :to="`/decks/${openDeckId}`"
         size="xs"
         color="neutral"
         variant="outline"

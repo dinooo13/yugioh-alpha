@@ -46,7 +46,7 @@ export interface AssistantMessageView {
   createdAt: string
 }
 
-export type AssistantActionKind = 'add_to_inventory' | 'create_deck' | 'update_deck_cards'
+export type AssistantActionKind = 'add_to_inventory' | 'create_deck' | 'update_deck_cards' | 'set_deck_format'
 export type AssistantActionStatus = 'pending' | 'applied' | 'rejected' | 'failed'
 
 export interface AssistantActionView {
@@ -71,6 +71,22 @@ export interface AssistantConversationDeckRef {
   name: string
 }
 
+/** Max length of a conversation title (server-side truncation and the default deck title). */
+export const ASSISTANT_CONVERSATION_TITLE_MAX = 80
+
+/**
+ * The default title of a deck-linked conversation ("Deck: <name>"), truncated
+ * to `ASSISTANT_CONVERSATION_TITLE_MAX` like every other title. The thread
+ * page compares against it to tell whether the title still just repeats the
+ * deck chip (#48).
+ */
+export function deckConversationTitle(deckName: string): string {
+  const title = `Deck: ${deckName}`
+  return title.length > ASSISTANT_CONVERSATION_TITLE_MAX
+    ? `${title.slice(0, ASSISTANT_CONVERSATION_TITLE_MAX - 1)}…`
+    : title
+}
+
 export interface AssistantConversationSummary {
   id: string
   title: string
@@ -86,8 +102,10 @@ export interface AssistantConversationDetail {
 }
 
 /**
- * What a proposed deck (a `create_deck` / `update_deck_cards` action, or a
- * `validate_deck` call with `cards`/`changes`) would look like: counts,
+ * What a proposed deck (a `create_deck` / `update_deck_cards` /
+ * `set_deck_format` action — the latter previews the deck's unchanged cards
+ * in the new format — or a `validate_deck` call with `cards`/`changes`)
+ * would look like: counts,
  * legality from the rule engine, and the cards the user doesn't own enough
  * copies of. Computed when the proposal is made and stored in the action's
  * `payload.preview` — a snapshot, not re-evaluated on read.
@@ -136,12 +154,14 @@ export const ASSISTANT_TOOL_LABELS: Record<string, string> = {
   add_to_inventory: 'Schlägt vor, Karten ins Inventar aufzunehmen',
   create_deck: 'Schlägt ein neues Deck vor',
   update_deck_cards: 'Schlägt Deck-Änderungen vor',
+  set_deck_format: 'Schlägt eine Formatänderung vor',
 }
 
 export const ASSISTANT_ACTION_KIND_LABELS: Record<AssistantActionKind, string> = {
   add_to_inventory: 'Karten ins Inventar aufnehmen',
   create_deck: 'Neues Deck anlegen',
   update_deck_cards: 'Deck-Karten ändern',
+  set_deck_format: 'Deck-Format ändern',
 }
 
 export const ASSISTANT_ACTION_STATUS_LABELS: Record<AssistantActionStatus, string> = {
