@@ -19,7 +19,10 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      // Chromium sends `Accept-Language: en-US` by default; pin German so the
+      // German assertions don't depend on the browser once Accept-Language
+      // detection is switched on (ADR 0014).
+      use: { ...devices['Desktop Chrome'], locale: 'de-DE' },
     },
   ],
   webServer: {
