@@ -50,20 +50,18 @@ const isEmpty = computed(() => {
     <SharingNotFoundNotice v-if="error" />
 
     <template v-else-if="data">
-      <header class="rounded-md border border-gray-200 bg-white p-6">
-        <h1 class="text-2xl font-semibold text-gray-900">
-          {{ data.profile.displayName }}
-        </h1>
-        <p class="text-sm text-gray-500">
-          @{{ data.profile.handle }}
-        </p>
+      <LayoutPageHeader
+        :title="data.profile.displayName"
+        :description="`@${data.profile.handle}`"
+        class="rounded-md border border-gray-200 bg-white p-6"
+      >
         <p
           v-if="data.profile.bio"
           class="mt-3 max-w-prose text-sm text-gray-700"
         >
           {{ data.profile.bio }}
         </p>
-      </header>
+      </LayoutPageHeader>
 
       <!-- The owner sees their own profile through the visitor's lens —
            say so, so private items (badged below) aren't mistaken for shared. -->
@@ -85,26 +83,28 @@ const isEmpty = computed(() => {
         </template>
       </UAlert>
 
-      <div
+      <LayoutEmptyState
         v-if="isEmpty && data.viewer.isOwner"
-        class="flex flex-col items-center gap-3 rounded-md border border-dashed border-gray-300 bg-white px-6 py-12 text-center text-sm text-gray-500"
+        icon="i-lucide-eye-off"
+        title="Du teilst aktuell nichts."
+        description="Decks, Sammlungen, Inventar und Wunschliste sind privat, bis du sie teilst."
       >
-        <p>Du teilst aktuell nichts.</p>
-        <UButton
-          label="Sichtbarkeit verwalten"
-          color="neutral"
-          variant="outline"
-          size="sm"
-          to="/profil"
-        />
-      </div>
+        <template #actions>
+          <UButton
+            label="Sichtbarkeit verwalten"
+            color="neutral"
+            variant="outline"
+            size="sm"
+            to="/profil"
+          />
+        </template>
+      </LayoutEmptyState>
 
-      <p
+      <LayoutEmptyState
         v-else-if="isEmpty"
-        class="rounded-md border border-dashed border-gray-300 bg-white px-6 py-12 text-center text-sm text-gray-500"
-      >
-        Dieses Profil teilt aktuell nichts.
-      </p>
+        icon="i-lucide-eye-off"
+        title="Dieses Profil teilt aktuell nichts."
+      />
 
       <template v-else>
         <section

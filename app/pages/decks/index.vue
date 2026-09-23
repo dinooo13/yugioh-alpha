@@ -228,7 +228,7 @@ function statusLabel(deck: DeckListItem) {
   if (deck.complete) {
     return 'Alle Karten im Besitz'
   }
-  return deck.missingCount === 1 ? '1 fehlt im Besitz' : `${deck.missingCount} fehlen im Besitz`
+  return `${pluralize(deck.missingCount, 'fehlt', 'fehlen')} im Besitz`
 }
 
 function statusColor(deck: DeckListItem) {
@@ -241,17 +241,11 @@ function statusColor(deck: DeckListItem) {
 
 <template>
   <div class="space-y-6">
-    <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-      <div>
-        <h1 class="text-2xl font-semibold text-gray-900">
-          Decks
-        </h1>
-        <p class="mt-1 text-sm text-gray-500">
-          {{ total }} Deck<span v-if="total !== 1">s</span>
-        </p>
-      </div>
-
-      <div class="flex flex-wrap gap-2">
+    <LayoutPageHeader
+      title="Decks"
+      :description="pluralize(total, 'Deck', 'Decks')"
+    >
+      <template #actions>
         <UButton
           icon="i-lucide-sparkles"
           color="neutral"
@@ -264,8 +258,8 @@ function statusColor(deck: DeckListItem) {
           label="Neues Deck"
           @click="openCreate"
         />
-      </div>
-    </div>
+      </template>
+    </LayoutPageHeader>
 
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
       <UInput
@@ -307,47 +301,30 @@ function statusColor(deck: DeckListItem) {
       />
     </div>
 
-    <div
+    <LayoutEmptyState
       v-else-if="decks.length === 0 && !debouncedSearch"
-      class="flex flex-col items-center rounded-md border border-gray-200 bg-white px-6 py-12 text-center"
+      icon="i-lucide-layers"
+      title="Noch keine Decks"
+      description="Lege dein erstes Deck an und fülle es mit Karten aus deinem Inventar."
     >
-      <div class="flex size-12 items-center justify-center rounded-full bg-gray-100 text-gray-500">
-        <UIcon
-          name="i-lucide-layers"
-          class="size-6"
+      <template #actions>
+        <UButton
+          icon="i-lucide-plus"
+          label="Neues Deck"
+          @click="openCreate"
         />
-      </div>
-      <h2 class="mt-4 text-base font-semibold text-gray-900">
-        Noch keine Decks
-      </h2>
-      <p class="mt-1 max-w-sm text-sm text-gray-500">
-        Lege dein erstes Deck an und fülle es mit Karten aus deinem Inventar.
-      </p>
-      <UButton
-        icon="i-lucide-plus"
-        label="Neues Deck"
-        class="mt-4"
-        @click="openCreate"
-      />
-    </div>
+      </template>
+    </LayoutEmptyState>
 
-    <div
+    <LayoutEmptyState
       v-else-if="decks.length === 0"
-      class="flex flex-col items-center rounded-md border border-gray-200 bg-white px-6 py-12 text-center"
+      icon="i-lucide-search-x"
+      title="Keine Decks gefunden"
     >
-      <div class="flex size-12 items-center justify-center rounded-full bg-gray-100 text-gray-500">
-        <UIcon
-          name="i-lucide-search-x"
-          class="size-6"
-        />
-      </div>
-      <h2 class="mt-4 text-base font-semibold text-gray-900">
-        Keine Decks gefunden
-      </h2>
-      <p class="mt-1 max-w-sm text-sm text-gray-500">
+      <template #description>
         Kein Deckname und keine enthaltene Karte passt zu "{{ debouncedSearch }}".
-      </p>
-    </div>
+      </template>
+    </LayoutEmptyState>
 
     <ul
       v-else

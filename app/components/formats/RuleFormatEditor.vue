@@ -23,6 +23,7 @@ import type {
   RuleSet,
 } from '~~/shared/rule-formats'
 import { DECK_SECTION_LABELS, DECK_SECTIONS } from '~~/shared/deck-sections'
+import { pluralize } from '~~/shared/plural'
 import type { DeckSection } from '~~/shared/deck-sections'
 
 interface FormatInitialValues {
@@ -795,7 +796,7 @@ async function save() {
         <UBadge
           :color="checkResult.legal ? 'success' : 'error'"
           variant="subtle"
-          :label="checkResult.legal ? 'Legal' : `Nicht legal – ${checkResult.issues.length} Problem${checkResult.issues.length === 1 ? '' : 'e'}`"
+          :label="checkResult.legal ? 'Legal' : `Nicht legal – ${pluralize(checkResult.issues.length, 'Problem', 'Probleme')}`"
         />
         <ul class="mt-2 list-inside list-disc space-y-0.5 text-sm text-gray-700">
           <li

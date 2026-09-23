@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { pluralize } from '~~/shared/plural'
 import type { WishlistItemView, WishlistResponse } from '~~/shared/sharing'
 
 const PAGE_SIZE = 24
@@ -79,17 +80,11 @@ function nextPage() {
 
 <template>
   <div class="space-y-6">
-    <div class="flex flex-wrap items-center justify-between gap-3">
-      <div>
-        <h1 class="text-2xl font-semibold text-gray-900">
-          Wunschliste
-        </h1>
-        <p class="mt-1 text-sm text-gray-500">
-          {{ total }} Karte<span v-if="total !== 1">n</span>
-        </p>
-      </div>
-
-      <div class="flex items-center gap-2">
+    <LayoutPageHeader
+      title="Wunschliste"
+      :description="pluralize(total, 'Karte', 'Karten')"
+    >
+      <template #actions>
         <SharingVisibilityBadge :visibility="ownProfile?.wishlistVisibility ?? null" />
         <NuxtLink
           to="/profil#wunschliste"
@@ -97,8 +92,8 @@ function nextPage() {
         >
           Sichtbarkeit ändern
         </NuxtLink>
-      </div>
-    </div>
+      </template>
+    </LayoutPageHeader>
 
     <UInput
       v-model="searchInput"
@@ -119,29 +114,20 @@ function nextPage() {
       />
     </div>
 
-    <div
+    <LayoutEmptyState
       v-else-if="items.length === 0"
-      class="flex flex-col items-center rounded-md border border-gray-200 bg-white px-6 py-12 text-center"
+      icon="i-lucide-heart"
+      title="Noch keine Karten auf der Wunschliste."
+      description="Füge Karten im Katalog zu deiner Wunschliste hinzu."
     >
-      <div class="flex size-12 items-center justify-center rounded-full bg-gray-100 text-gray-500">
-        <UIcon
-          name="i-lucide-heart"
-          class="size-6"
+      <template #actions>
+        <UButton
+          icon="i-lucide-book-open"
+          label="Zum Katalog"
+          to="/katalog"
         />
-      </div>
-      <h2 class="mt-4 text-base font-semibold text-gray-900">
-        Noch keine Karten auf der Wunschliste.
-      </h2>
-      <p class="mt-1 max-w-sm text-sm text-gray-500">
-        Füge Karten im Katalog zu deiner Wunschliste hinzu.
-      </p>
-      <UButton
-        icon="i-lucide-book-open"
-        label="Zum Katalog"
-        class="mt-4"
-        to="/katalog"
-      />
-    </div>
+      </template>
+    </LayoutEmptyState>
 
     <ul
       v-else

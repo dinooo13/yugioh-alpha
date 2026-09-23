@@ -68,9 +68,7 @@ const wishlistPublic = computed({
 
 <template>
   <div class="max-w-2xl space-y-6">
-    <h1 class="text-2xl font-semibold text-gray-900">
-      Profil
-    </h1>
+    <LayoutPageHeader title="Profil" />
 
     <UAlert
       v-if="error"

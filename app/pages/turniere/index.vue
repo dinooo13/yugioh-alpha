@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { pluralize } from '~~/shared/plural'
 import {
   PAIRING_SYSTEM_LABELS,
   TOURNAMENT_STATUS_LABELS,
@@ -131,22 +132,18 @@ const emptyState = computed(() => {
 
 <template>
   <div class="space-y-6">
-    <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-      <div>
-        <h1 class="text-2xl font-semibold text-gray-900">
-          Turniere
-        </h1>
-        <p class="mt-1 text-sm text-gray-500">
-          {{ total }} Turnier{{ total === 1 ? '' : 'e' }}
-        </p>
-      </div>
-
-      <UButton
-        icon="i-lucide-plus"
-        label="Neues Turnier"
-        to="/turniere/neu"
-      />
-    </div>
+    <LayoutPageHeader
+      title="Turniere"
+      :description="pluralize(total, 'Turnier', 'Turniere')"
+    >
+      <template #actions>
+        <UButton
+          icon="i-lucide-plus"
+          label="Neues Turnier"
+          to="/turniere/neu"
+        />
+      </template>
+    </LayoutPageHeader>
 
     <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
       <div class="flex flex-wrap gap-2">
@@ -197,47 +194,37 @@ const emptyState = computed(() => {
       />
     </div>
 
-    <div
+    <LayoutEmptyState
       v-else-if="tournaments.length === 0"
-      class="flex flex-col items-center rounded-md border border-gray-200 bg-white px-6 py-12 text-center"
+      icon="i-lucide-trophy"
+      :title="emptyState.heading"
+      :description="emptyState.text"
     >
-      <div class="flex size-12 items-center justify-center rounded-full bg-gray-100 text-gray-500">
-        <UIcon
-          name="i-lucide-trophy"
-          class="size-6"
+      <p
+        v-if="showParticipantHint"
+        class="mt-1 max-w-sm text-sm text-gray-500"
+      >
+        Du nimmst an {{ pluralize(otherRoleTotal, 'Turnier', 'Turnieren') }} teil.
+      </p>
+      <template
+        v-if="showParticipantHint || emptyState.showButton"
+        #actions
+      >
+        <UButton
+          v-if="showParticipantHint"
+          color="primary"
+          variant="outline"
+          label="Eingeladene Turniere ansehen"
+          @click="selectRole('participant')"
         />
-      </div>
-      <h2 class="mt-4 text-base font-semibold text-gray-900">
-        {{ emptyState.heading }}
-      </h2>
-      <p
-        v-if="emptyState.text"
-        class="mt-1 max-w-sm text-sm text-gray-500"
-      >
-        {{ emptyState.text }}
-      </p>
-      <p
-        v-if="showParticipantHint"
-        class="mt-1 max-w-sm text-sm text-gray-500"
-      >
-        Du nimmst an {{ otherRoleTotal }} Turnier{{ otherRoleTotal === 1 ? '' : 'en' }} teil.
-      </p>
-      <UButton
-        v-if="showParticipantHint"
-        color="primary"
-        variant="outline"
-        label="Eingeladene Turniere ansehen"
-        class="mt-4"
-        @click="selectRole('participant')"
-      />
-      <UButton
-        v-if="emptyState.showButton"
-        icon="i-lucide-plus"
-        label="Neues Turnier"
-        class="mt-4"
-        to="/turniere/neu"
-      />
-    </div>
+        <UButton
+          v-if="emptyState.showButton"
+          icon="i-lucide-plus"
+          label="Neues Turnier"
+          to="/turniere/neu"
+        />
+      </template>
+    </LayoutEmptyState>
 
     <ul
       v-else

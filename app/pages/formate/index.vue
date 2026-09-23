@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { pluralize } from '~~/shared/plural'
+
 interface RuleFormatListItem {
   id: string
   name: string
@@ -56,28 +58,24 @@ async function deleteFormat(format: RuleFormatListItem) {
 }
 
 function ruleCountLabel(format: RuleFormatListItem) {
-  return `${format.ruleCount} Regel${format.ruleCount === 1 ? '' : 'n'}`
+  return pluralize(format.ruleCount, 'Regel', 'Regeln')
 }
 </script>
 
 <template>
   <div class="space-y-8">
-    <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-      <div>
-        <h1 class="text-2xl font-semibold text-gray-900">
-          Formate
-        </h1>
-        <p class="mt-1 text-sm text-gray-500">
-          Regelformate bestimmen, welche Karten und wie viele Kopien in einem Deck erlaubt sind.
-        </p>
-      </div>
-
-      <UButton
-        icon="i-lucide-plus"
-        label="Neues Format"
-        to="/formate/neu"
-      />
-    </div>
+    <LayoutPageHeader
+      title="Formate"
+      description="Regelformate bestimmen, welche Karten und wie viele Kopien in einem Deck erlaubt sind."
+    >
+      <template #actions>
+        <UButton
+          icon="i-lucide-plus"
+          label="Neues Format"
+          to="/formate/neu"
+        />
+      </template>
+    </LayoutPageHeader>
 
     <p
       v-if="errorMessage"
@@ -159,29 +157,21 @@ function ruleCountLabel(format: RuleFormatListItem) {
           Meine Formate
         </h2>
 
-        <div
+        <LayoutEmptyState
           v-if="ownFormats.length === 0"
-          class="flex flex-col items-center rounded-md border border-gray-200 bg-white px-6 py-12 text-center"
+          icon="i-lucide-scroll-text"
+          title="Noch keine eigenen Formate"
+          description="Lege ein eigenes Format mit deinen Hausregeln an oder klone ein offizielles Format."
+          :heading-level="3"
         >
-          <div class="flex size-12 items-center justify-center rounded-full bg-gray-100 text-gray-500">
-            <UIcon
-              name="i-lucide-scroll-text"
-              class="size-6"
+          <template #actions>
+            <UButton
+              icon="i-lucide-plus"
+              label="Neues Format"
+              to="/formate/neu"
             />
-          </div>
-          <h3 class="mt-4 text-base font-semibold text-gray-900">
-            Noch keine eigenen Formate
-          </h3>
-          <p class="mt-1 max-w-sm text-sm text-gray-500">
-            Lege ein eigenes Format mit deinen Hausregeln an oder klone ein offizielles Format.
-          </p>
-          <UButton
-            icon="i-lucide-plus"
-            label="Neues Format"
-            class="mt-4"
-            to="/formate/neu"
-          />
-        </div>
+          </template>
+        </LayoutEmptyState>
 
         <ul
           v-else
