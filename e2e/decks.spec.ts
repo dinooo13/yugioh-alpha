@@ -8,6 +8,7 @@ const DARK_MAGICIAN = 46986414
 const STARDUST_DRAGON = 44508094
 const ODD_EYES_PENDULUM_DRAGON = 16178681
 const BLUE_EYES_ULTIMATE_DRAGON = 23995346
+const POT_OF_GREED = 55144522
 
 test.describe('deckbuilder', () => {
   test('builds a deck from owned cards and tracks availability', async ({ page }) => {
@@ -168,6 +169,53 @@ test.describe('deckbuilder on a phone', () => {
     await page.getByRole('menuitem', { name: 'Löschen' }).click()
     await acceptConfirm(page)
     await expect(page).toHaveURL('/decks')
+  })
+
+  test('chooses the deck cover from a row menu (#49)', async ({ page }) => {
+    await registerAndLogin(page)
+
+    const response = await page.request.post('/api/decks', {
+      data: {
+        name: 'Titelkarten Deck',
+        cards: [
+          { catalog_card_id: DARK_MAGICIAN, section: 'main', quantity: 1 },
+          { catalog_card_id: POT_OF_GREED, section: 'main', quantity: 1 },
+        ],
+      },
+    })
+    expect(response.ok()).toBe(true)
+    const deck = await response.json() as { id: string }
+
+    // The fixture's card images are external, so the tile's cover is
+    // checked through the API instead of the <img>.
+    const listedCoverId = async () => {
+      const list = await (await page.request.get('/api/decks')).json() as {
+        items: Array<{ id: string, cover: { catalogCardId: number } | null }>
+      }
+      return list.items.find(item => item.id === deck.id)?.cover?.catalogCardId
+    }
+
+    await page.goto(`/decks/${deck.id}`)
+    const darkMagicianRow = page.locator('li:has(p[title="Dark Magician"])')
+    const potOfGreedRow = page.locator('li:has(p[title="Pot of Greed"])')
+
+    // By rule, the Main Deck monster is the cover.
+    await expect(darkMagicianRow.getByText('Titelkarte (automatisch)')).toBeVisible()
+    await expect(potOfGreedRow.getByText(/Titelkarte/)).toHaveCount(0)
+
+    await page.getByRole('button', { name: 'Optionen für Pot of Greed', exact: true }).click()
+    await page.getByRole('menuitem', { name: 'Als Titelkarte festlegen' }).click()
+
+    await expect(potOfGreedRow.getByText('Titelkarte', { exact: true })).toBeVisible()
+    await expect(darkMagicianRow.getByText(/Titelkarte/)).toHaveCount(0)
+    expect(await listedCoverId()).toBe(POT_OF_GREED)
+
+    await page.getByRole('button', { name: 'Optionen für Pot of Greed', exact: true }).click()
+    await page.getByRole('menuitem', { name: 'Titelkarte automatisch wählen' }).click()
+
+    await expect(darkMagicianRow.getByText('Titelkarte (automatisch)')).toBeVisible()
+    await expect(potOfGreedRow.getByText(/Titelkarte/)).toHaveCount(0)
+    expect(await listedCoverId()).toBe(DARK_MAGICIAN)
   })
 })
 

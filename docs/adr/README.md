@@ -19,3 +19,4 @@ mark the old as superseded.
 | [0009](0009-openai-compatible-assistant-provider.md) | OpenAI-compatible assistant provider | Accepted (structured-output parts superseded by [0011](0011-deck-assistance-in-chat.md)) |
 | [0010](0010-chat-assistant-with-tools.md) | Chat assistant with tools | Accepted (partly superseded by [0011](0011-deck-assistance-in-chat.md)) |
 | [0011](0011-deck-assistance-in-chat.md) | Deck assistance in the chat assistant | Accepted |
+| [0012](0012-deck-cover-card.md) | Deck cover card chosen by the user | Accepted |
