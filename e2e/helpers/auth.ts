@@ -44,3 +44,42 @@ export async function logout(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Abmelden' }).click()
   await expect(page).toHaveURL('/login')
 }
+
+export interface LoginCredentials {
+  email: string
+  password: string
+}
+
+/**
+ * Signs in through the `/login` form. Expects the page to already show the
+ * login form (e.g. after `logout()` or a redirect to `/login?redirect=...`),
+ * so a `redirect` query survives. Does not wait for the target page; callers
+ * assert the landing URL themselves.
+ */
+export async function loginViaForm(page: Page, { email, password }: LoginCredentials): Promise<void> {
+  await expect(page.getByRole('heading', { name: 'Anmelden' })).toBeVisible()
+  await page.getByLabel('E-Mail').fill(email)
+  await page.getByLabel('Passwort').fill(password)
+  await page.getByRole('button', { name: 'Anmelden' }).click()
+}
+
+/**
+ * Collects Vue hydration warnings and errors from the console and from
+ * uncaught page errors. Dev builds log "[Vue warn]: Hydration node mismatch
+ * ..."; prod builds only log "Hydration completed but contains mismatches.".
+ * Returns the live array, so assert on it at the end of the test.
+ */
+export function trackHydrationWarnings(page: Page): string[] {
+  const warnings: string[] = []
+  page.on('console', (message) => {
+    if (/hydration/i.test(message.text())) {
+      warnings.push(`[${message.type()}] ${message.text()}`)
+    }
+  })
+  page.on('pageerror', (error) => {
+    if (/hydration/i.test(error.message)) {
+      warnings.push(`[pageerror] ${error.message}`)
+    }
+  })
+  return warnings
+}
