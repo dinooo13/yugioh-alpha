@@ -1,0 +1,1 @@
+ALTER TABLE `deck` ADD `cover_card_id` integer REFERENCES catalog_card(id) ON UPDATE no action ON DELETE set null;

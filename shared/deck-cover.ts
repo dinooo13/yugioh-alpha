@@ -1,7 +1,8 @@
 /**
  * The card shown as a deck's cover image on deck tiles (#29).
  *
- * Picked by rule, not chosen by the user: the first-added Main Deck monster
+ * Chosen by the user (`deck.cover_card_id`, #49) while that card is in the
+ * Main/Extra Deck; otherwise picked by rule: the first-added Main Deck monster
  * (by `deck_card.created_at`, ties broken by the lower catalog card id), else
  * the first-added Main Deck card of any kind, else the first-added Extra Deck
  * card. The Side Deck is never used. A deck without Main or Extra Deck cards

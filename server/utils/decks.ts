@@ -131,6 +131,10 @@ export interface DeckDetail {
   validation: DeckValidation | null
   /** Sharing state (Phase 6). */
   visibility: Visibility
+  /** Effective cover (#49): the chosen card while it is in Main/Extra, else the rule's pick. */
+  cover: DeckCover | null
+  /** True when `cover` is the user's explicit choice, false when picked by rule. */
+  coverIsChosen: boolean
 }
 
 function badRequest(message: string): never {
@@ -190,6 +194,11 @@ export function validateDeckInput(body: unknown): DeckInput {
 export interface DeckUpdateInput extends Partial<DeckInput> {
   /** `null` removes the format assignment (validation off). */
   formatId?: string | null
+  /**
+   * The chosen cover card (#49, ADR 0012); `null` goes back to the rule's
+   * pick. Must be a Main or Extra Deck card of the deck (checked by updateDeck).
+   */
+  coverCardId?: number | null
 }
 
 export function validateDeckUpdateInput(body: unknown): DeckUpdateInput {
@@ -215,6 +224,22 @@ export function validateDeckUpdateInput(body: unknown): DeckUpdateInput {
     }
     else {
       input.formatId = rawFormatId
+    }
+  }
+
+  const rawCoverCardId = body.cover_card_id !== undefined ? body.cover_card_id : body.coverCardId
+  if (rawCoverCardId !== undefined) {
+    if (rawCoverCardId === null || rawCoverCardId === '') {
+      input.coverCardId = null
+    }
+    else {
+      const coverCardId = typeof rawCoverCardId === 'number'
+        ? rawCoverCardId
+        : typeof rawCoverCardId === 'string' ? Number(rawCoverCardId) : Number.NaN
+      if (!Number.isSafeInteger(coverCardId) || coverCardId < 1) {
+        badRequest('cover_card_id must be a positive integer or null')
+      }
+      input.coverCardId = coverCardId
     }
   }
 
@@ -534,6 +559,7 @@ function buildValidation(
 
 function buildDeckDetail(db: Db, userId: string, deckRow: typeof deck.$inferSelect): DeckDetail {
   const rows = loadDeckCardRows(db, userId, deckRow.id)
+  const cover = loadDeckCovers(db, [deckRow.id]).get(deckRow.id) ?? null
 
   const formatRow = deckRow.formatId
     ? db
@@ -579,6 +605,8 @@ function buildDeckDetail(db: Db, userId: string, deckRow: typeof deck.$inferSele
       : null,
     validation: buildValidation(db, formatRow?.rules, rows),
     visibility: deckRow.visibility,
+    cover,
+    coverIsChosen: cover !== null && cover.catalogCardId === deckRow.coverCardId,
   }
 }
 
@@ -673,13 +701,23 @@ export function updateDeck(db: Db, userId: string, deckId: string, patch: DeckUp
 
   // An empty patch is a no-op, not a touch: `updatedAt` drives the default
   // list sorting, so it must only move when something actually changed.
-  if (patch.name === undefined && patch.description === undefined && patch.formatId === undefined) {
+  if (
+    patch.name === undefined
+    && patch.description === undefined
+    && patch.formatId === undefined
+    && patch.coverCardId === undefined
+  ) {
     return buildDeckDetail(db, userId, current)
   }
 
-  // Only a built-in or one of the caller's own formats may be assigned.
+  // Validate everything before writing anything: only a built-in or one of
+  // the caller's own formats may be assigned, and only a Main/Extra Deck card
+  // of this deck may be chosen as its cover.
   if (typeof patch.formatId === 'string') {
     requireAssignableFormat(db, userId, patch.formatId)
+  }
+  if (typeof patch.coverCardId === 'number') {
+    assertCoverCandidate(db, deckId, patch.coverCardId)
   }
 
   const [updated] = db
@@ -688,6 +726,7 @@ export function updateDeck(db: Db, userId: string, deckId: string, patch: DeckUp
       name: patch.name ?? current.name,
       description: patch.description !== undefined ? patch.description : current.description,
       formatId: patch.formatId !== undefined ? patch.formatId : current.formatId,
+      coverCardId: patch.coverCardId !== undefined ? patch.coverCardId : current.coverCardId,
       updatedAt: new Date(),
     })
     .where(eq(deck.id, deckId))
@@ -695,6 +734,24 @@ export function updateDeck(db: Db, userId: string, deckId: string, patch: DeckUp
     .all()
 
   return buildDeckDetail(db, userId, updated!)
+}
+
+// A chosen cover must be one of the deck's own Main/Extra Deck cards — the
+// same candidates the rule picks from (Side Deck cards never are a cover).
+function assertCoverCandidate(db: Db, deckId: string, catalogCardId: number) {
+  const row = db
+    .select({ id: deckCard.id })
+    .from(deckCard)
+    .where(and(
+      eq(deckCard.deckId, deckId),
+      eq(deckCard.catalogCardId, catalogCardId),
+      inArray(deckCard.section, ['main', 'extra']),
+    ))
+    .get()
+
+  if (!row) {
+    badRequest('cover_card_id must be a Main or Extra Deck card of this deck')
+  }
 }
 
 export function deleteDeck(db: Db, userId: string, deckId: string) {
@@ -723,6 +780,8 @@ export function duplicateDeck(db: Db, userId: string, deckId: string): DeckDetai
       name: duplicateNameFor(source.name),
       description: source.description,
       formatId: source.formatId,
+      // The chosen cover (#49) carries over; its card rows are copied below.
+      coverCardId: source.coverCardId,
       // The copy never inherits a share: always private with no token.
       visibility: 'private',
       shareToken: null,
@@ -741,7 +800,8 @@ export function duplicateDeck(db: Db, userId: string, deckId: string): DeckDetai
       section: row.section,
       quantity: row.quantity,
       // Keep each row's original "added at" so the copy gets the same
-      // (first-added) cover card as the source deck (#29).
+      // cover card as the source deck even when it's picked by rule (#29) —
+      // a chosen cover (#49) is copied with the deck row above.
       createdAt: row.createdAt,
       updatedAt: now,
     }))).run()
@@ -925,14 +985,24 @@ function compareFirstAdded(a: DeckCoverCandidate, b: DeckCoverCandidate): number
 }
 
 /**
- * Picks a deck's cover card by the rule documented on {@link DeckCover}: the
+ * Picks a deck's cover card as documented on {@link DeckCover}. A
+ * `chosenCardId` (the deck's `cover_card_id`, #49) wins while that card has a
+ * Main or Extra Deck row among the candidates; otherwise — no choice, or the
+ * chosen card was removed or moved to the Side Deck — the rule applies: the
  * first-added Main Deck monster, else the first-added Main Deck card, else
  * the first-added Extra Deck card, else `null`. Side Deck rows are ignored.
  * `deck_card.created_at` has second precision, so cards added together (a
  * deck created in one call, a duplicate) tie and fall back to the lower
  * catalog card id — stable, if arbitrary.
  */
-export function pickDeckCover(rows: DeckCoverCandidate[]): DeckCover | null {
+export function pickDeckCover(rows: DeckCoverCandidate[], chosenCardId?: number | null): DeckCover | null {
+  const chosen = chosenCardId != null
+    ? rows.find(row => row.catalogCardId === chosenCardId && row.section !== 'side')
+    : undefined
+  if (chosen) {
+    return toDeckCover(chosen)
+  }
+
   const firstOf = (candidates: DeckCoverCandidate[]) => [...candidates].sort(compareFirstAdded)[0]
 
   const main = rows.filter(row => row.section === 'main')
@@ -940,20 +1010,23 @@ export function pickDeckCover(rows: DeckCoverCandidate[]): DeckCover | null {
     ?? firstOf(main)
     ?? firstOf(rows.filter(row => row.section === 'extra'))
 
-  if (!picked) {
-    return null
-  }
+  return picked ? toDeckCover(picked) : null
+}
+
+function toDeckCover(candidate: DeckCoverCandidate): DeckCover {
   return {
-    catalogCardId: picked.catalogCardId,
-    name: picked.name,
-    imageSmall: picked.imageSmall,
-    imageLarge: picked.imageLarge,
+    catalogCardId: candidate.catalogCardId,
+    name: candidate.name,
+    imageSmall: candidate.imageSmall,
+    imageLarge: candidate.imageLarge,
   }
 }
 
 /**
- * Cover cards for a set of decks in a single query (#29). Decks without a
- * cover are simply absent from the map. Callers must only pass deck ids the
+ * Cover cards for a set of decks in a single query (#29): the deck's chosen
+ * cover card (#49) while it is in the Main/Extra Deck, else the rule's pick
+ * (see {@link pickDeckCover}). Decks without a cover are simply absent from
+ * the map. Callers must only pass deck ids the
  * viewer may already see — this does no access check of its own.
  */
 export function loadDeckCovers(db: Db, deckIds: string[]): Map<string, DeckCover> {
@@ -965,6 +1038,7 @@ export function loadDeckCovers(db: Db, deckIds: string[]): Map<string, DeckCover
   const rows = db
     .select({
       deckId: deckCard.deckId,
+      chosenCardId: deck.coverCardId,
       catalogCardId: deckCard.catalogCardId,
       section: deckCard.section,
       createdAt: deckCard.createdAt,
@@ -974,6 +1048,7 @@ export function loadDeckCovers(db: Db, deckIds: string[]): Map<string, DeckCover
       imageLarge: sql<string | null>`min(${catalogCardImage.imageUrl})`,
     })
     .from(deckCard)
+    .innerJoin(deck, eq(deck.id, deckCard.deckId))
     .innerJoin(catalogCard, eq(deckCard.catalogCardId, catalogCard.id))
     .leftJoin(catalogCardImage, eq(catalogCardImage.cardId, catalogCard.id))
     .where(and(inArray(deckCard.deckId, deckIds), inArray(deckCard.section, ['main', 'extra'])))
@@ -981,14 +1056,16 @@ export function loadDeckCovers(db: Db, deckIds: string[]): Map<string, DeckCover
     .all()
 
   const rowsByDeck = new Map<string, DeckCoverCandidate[]>()
-  for (const { deckId, ...row } of rows) {
+  const chosenByDeck = new Map<string, number | null>()
+  for (const { deckId, chosenCardId, ...row } of rows) {
     const candidates = rowsByDeck.get(deckId) ?? []
     candidates.push({ ...row, section: row.section as DeckSection })
     rowsByDeck.set(deckId, candidates)
+    chosenByDeck.set(deckId, chosenCardId)
   }
 
   for (const [deckId, candidates] of rowsByDeck) {
-    const cover = pickDeckCover(candidates)
+    const cover = pickDeckCover(candidates, chosenByDeck.get(deckId))
     if (cover) {
       covers.set(deckId, cover)
     }
