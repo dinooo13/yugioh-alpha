@@ -30,7 +30,7 @@ async function mountModal(fetchMock: ReturnType<typeof vi.fn>) {
       resourceType: 'deck',
       resourceId: 'deck-1',
       resourceName: 'Test Deck',
-      sharePath: '/spieler/fabian/decks/deck-1',
+      sharePath: '/players/fabian/decks/deck-1',
     },
   })
   // The initial GET is fired reactively from a `watch(..., { immediate: true })`,
@@ -138,7 +138,7 @@ describe('sharing share modal', () => {
     await copyButton!.trigger('click')
     await flushPromises()
 
-    expect(writeText).toHaveBeenCalledWith('http://localhost:3000/spieler/fabian/decks/deck-1?token=abc')
+    expect(writeText).toHaveBeenCalledWith('http://localhost:3000/players/fabian/decks/deck-1?token=abc')
   })
 
   it('lists a granted user by display name and handle (never an email) and removes it', async () => {

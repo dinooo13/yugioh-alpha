@@ -26,7 +26,7 @@ test.describe('collections on the inventory page', () => {
       expect(response.ok()).toBe(true)
     }
 
-    await page.goto('/inventar')
+    await page.goto('/inventory')
     await page.waitForLoadState('networkidle')
 
     // The sidebar is plain navigation now (#41).
@@ -47,7 +47,7 @@ test.describe('collections on the inventory page', () => {
 
     // Back to all cards, assign Dark Magician to Box 1.
     await pickScope(page, /^Alle Sammlungen/)
-    await expect(page).toHaveURL(/\/inventar$/)
+    await expect(page).toHaveURL(/\/inventory$/)
     await expect(heading).toHaveText('Alle Karten')
     await page.getByRole('combobox', { name: 'Sammlung für Dark Magician' }).click()
     await page.getByRole('option', { name: 'Box 1', exact: true }).click()
@@ -60,7 +60,7 @@ test.describe('collections on the inventory page', () => {
 
     // Übersicht keeps the same scope.
     await page.getByRole('button', { name: 'Übersicht' }).click()
-    await expect(page).toHaveURL(/view=uebersicht/)
+    await expect(page).toHaveURL(/view=overview/)
     await expect(page).toHaveURL(/collectionId=/)
     await expect(page.getByLabel('Dark Magician vergrößern')).toBeVisible()
     await expect(page.getByLabel('Pot of Greed vergrößern')).toHaveCount(0)
@@ -68,7 +68,7 @@ test.describe('collections on the inventory page', () => {
     // "(keine Sammlung)": only the unassigned card, in both views.
     await pickScope(page, /^\(keine Sammlung\)/)
     await expect(heading).toHaveText('Ohne Sammlung')
-    await expect(page).toHaveURL(/view=uebersicht/)
+    await expect(page).toHaveURL(/view=overview/)
     await expect(page.getByLabel('Pot of Greed vergrößern')).toBeVisible()
     await expect(page.getByLabel('Dark Magician vergrößern')).toHaveCount(0)
     await page.getByRole('button', { name: 'Liste' }).click()
@@ -95,7 +95,7 @@ test.describe('collections on the inventory page', () => {
     // A public collection opens for anyone at the profile path.
     const { handle } = await (await page.request.get('/api/profile')).json()
     const collectionId = new URL(page.url()).searchParams.get('collectionId')
-    const publicUrl = new URL(`/spieler/${handle}/sammlungen/${collectionId}`, page.url()).toString()
+    const publicUrl = new URL(`/players/${handle}/collections/${collectionId}`, page.url()).toString()
     const anonymous = await browser.newContext()
     const anonymousPage = await anonymous.newPage()
     await anonymousPage.goto(publicUrl)
@@ -106,7 +106,7 @@ test.describe('collections on the inventory page', () => {
     // Delete: back to all cards, the cards stay.
     await openCollectionMenu(page, 'Binder', 'Löschen')
     await acceptConfirm(page)
-    await expect(page).toHaveURL('/inventar')
+    await expect(page).toHaveURL('/inventory')
     await expect(heading).toHaveText('Alle Karten')
     await expect(page.getByRole('combobox', { name: 'Sammlung für Dark Magician' })).toBeVisible()
   })
@@ -118,11 +118,11 @@ test.describe('collections on the inventory page', () => {
       expect(response.ok()).toBe(true)
     }
 
-    await page.goto('/inventar')
+    await page.goto('/inventory')
     await page.waitForLoadState('networkidle')
 
     await page.getByRole('button', { name: 'Übersicht' }).click()
-    await expect(page).toHaveURL(/view=uebersicht/)
+    await expect(page).toHaveURL(/view=overview/)
     await page.getByLabel('Dark Magician vergrößern').click()
     await page.getByRole('dialog').getByRole('button', { name: 'In Liste bearbeiten' }).click()
 
@@ -141,7 +141,7 @@ test.describe('collections on the inventory page', () => {
 
     // Back returns to the Übersicht.
     await page.goBack()
-    await expect(page).toHaveURL(/view=uebersicht/)
+    await expect(page).toHaveURL(/view=overview/)
     await expect(page.getByLabel('Dark Magician vergrößern')).toBeVisible()
   })
 })

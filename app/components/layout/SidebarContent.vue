@@ -6,18 +6,18 @@ import { getAuthSession } from '~/utils/session'
 const route = useRoute()
 
 // A nav entry stays highlighted on its sub-pages — the Schnellerfassung at
-// `/inventar/erfassen`, the deck editor at `/decks/:id`, and the format editor
-// at `/formate/:id` are child routes, not separate destinations, which an
+// `/inventory/quick-entry`, the deck editor at `/decks/:id`, and the format editor
+// at `/formats/:id` are child routes, not separate destinations, which an
 // exact link match misses.
 const navItems = computed<NavigationMenuItem[]>(() => [
   { label: 'Dashboard', icon: 'i-lucide-layout-dashboard', to: '/' },
-  { label: 'Inventar', icon: 'i-lucide-archive', to: '/inventar', active: route.path.startsWith('/inventar') },
-  { label: 'Katalog', icon: 'i-lucide-book-open', to: '/katalog' },
+  { label: 'Inventar', icon: 'i-lucide-archive', to: '/inventory', active: route.path.startsWith('/inventory') },
+  { label: 'Katalog', icon: 'i-lucide-book-open', to: '/catalog' },
   { label: 'Decks', icon: 'i-lucide-layers', to: '/decks', active: route.path.startsWith('/decks') },
-  { label: 'Assistent', icon: 'i-lucide-sparkles', to: '/assistent', active: route.path.startsWith('/assistent') },
-  { label: 'Formate', icon: 'i-lucide-scroll-text', to: '/formate', active: route.path.startsWith('/formate') },
-  { label: 'Wunschliste', icon: 'i-lucide-heart', to: '/wunschliste' },
-  { label: 'Turniere', icon: 'i-lucide-trophy', to: '/turniere', active: route.path.startsWith('/turniere') },
+  { label: 'Assistent', icon: 'i-lucide-sparkles', to: '/assistant', active: route.path.startsWith('/assistant') },
+  { label: 'Formate', icon: 'i-lucide-scroll-text', to: '/formats', active: route.path.startsWith('/formats') },
+  { label: 'Wunschliste', icon: 'i-lucide-heart', to: '/wishlist' },
+  { label: 'Turniere', icon: 'i-lucide-trophy', to: '/tournaments', active: route.path.startsWith('/tournaments') },
 ])
 
 const session = ref(await getAuthSession(
@@ -31,7 +31,7 @@ onMounted(async () => {
 })
 
 // The default layout only renders behind the auth middleware, so the
-// profile request always has a session. Shared key: a rename on /profil
+// profile request always has a session. Shared key: a rename on /profile
 // shows here right away (#50).
 const { data: ownProfile } = await useOwnProfile()
 
@@ -41,7 +41,7 @@ const { data: ownProfile } = await useOwnProfile()
 const displayName = computed(() =>
   ownProfile.value?.displayName || session.value?.user.name || session.value?.user.email || '')
 // Same seed as the public profile (the handle), so the avatar has the same
-// colour here and on /spieler/<handle>.
+// colour here and on /players/<handle>.
 const avatarSeed = computed(() => ownProfile.value?.handle ?? session.value?.user.email ?? '')
 
 async function onLogout() {
@@ -79,7 +79,7 @@ async function onLogout() {
       <UButton
         icon="i-lucide-user"
         label="Profil"
-        to="/profil"
+        to="/profile"
         variant="ghost"
         color="neutral"
         block

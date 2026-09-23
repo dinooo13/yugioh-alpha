@@ -2,9 +2,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DOMWrapper, enableAutoUnmount } from '@vue/test-utils'
 import { nextTick, toValue } from 'vue'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
-import InventarPage from '~/pages/inventar/index.vue'
+import InventarPage from '~/pages/inventory/index.vue'
 
-// The global auth middleware would bounce `route: '/inventar?…'` to /login
+// The global auth middleware would bounce `route: '/inventory?…'` to /login
 // without a session — stub it so the page sees its own query.
 vi.mock('~/utils/session', () => ({
   getAuthSession: vi.fn(() => Promise.resolve({ session: {}, user: { email: 'fabian@example.com', name: 'Fabian Meyer' } })),
@@ -97,7 +97,7 @@ async function openUebersicht(component: Awaited<ReturnType<typeof mountSuspende
   await toggle!.trigger('click')
   const route = useRouter().currentRoute
   await vi.waitFor(() => {
-    expect(route.value.query.view).toBe('uebersicht')
+    expect(route.value.query.view).toBe('overview')
   })
   await nextTick()
 }
@@ -139,7 +139,7 @@ describe('inventory search panel (Übersicht)', () => {
       pageSize: 24,
     }
 
-    const component = await mountSuspended(InventarPage, { route: '/inventar' })
+    const component = await mountSuspended(InventarPage, { route: '/inventory' })
     await openUebersicht(component)
 
     const text = component.text()
@@ -167,7 +167,7 @@ describe('inventory search panel (Übersicht)', () => {
     await component.find('[aria-label="Blue-Eyes White Dragon vergrößern"]').trigger('click')
     await nextTick()
     await vi.waitFor(() => {
-      expect(body().find('a[href="/katalog?card=89631139"]').exists()).toBe(true)
+      expect(body().find('a[href="/catalog?card=89631139"]').exists()).toBe(true)
     })
     expect(body().text()).toContain('Im Katalog öffnen')
   })
@@ -178,7 +178,7 @@ describe('inventory search panel (Übersicht)', () => {
     state.search = { items: [], total: 0, page: 1, pageSize: 24 }
     state.searchPending = true
 
-    const component = await mountSuspended(InventarPage, { route: '/inventar' })
+    const component = await mountSuspended(InventarPage, { route: '/inventory' })
     await openUebersicht(component)
 
     expect(component.findAll('.aspect-\\[59\\/86\\].rounded-lg')).toHaveLength(12)
@@ -192,7 +192,7 @@ describe('inventory search panel (Übersicht)', () => {
     state.facets = { ...emptyFacets }
     state.search = { items: [], total: 0, page: 1, pageSize: 24 }
 
-    const component = await mountSuspended(InventarPage, { route: '/inventar' })
+    const component = await mountSuspended(InventarPage, { route: '/inventory' })
     await openUebersicht(component)
 
     expect(component.text()).toContain('Inventar ist leer')
@@ -206,7 +206,7 @@ describe('inventory search panel (Übersicht)', () => {
     state.facets = { ...emptyFacets }
     state.search = { items: [], total: 0, page: 1, pageSize: 24 }
 
-    const component = await mountSuspended(InventarPage, { route: '/inventar?collectionId=box-1' })
+    const component = await mountSuspended(InventarPage, { route: '/inventory?collectionId=box-1' })
     await openUebersicht(component)
 
     expect(component.text()).toContain('Keine Treffer für diese Filter')
@@ -236,12 +236,12 @@ function toggleButton(component: Awaited<ReturnType<typeof mountSuspended>>, lab
 }
 
 describe('view and card filter in the URL', () => {
-  it('renders "Übersicht" directly from ?view=uebersicht', async () => {
+  it('renders "Übersicht" directly from ?view=overview', async () => {
     state.inventory = { items: [], total: 0 }
     state.facets = { ...emptyFacets }
     state.search = { items: [blueEyes], total: 1, page: 1, pageSize: 24 }
 
-    const component = await mountSuspended(InventarPage, { route: '/inventar?view=uebersicht' })
+    const component = await mountSuspended(InventarPage, { route: '/inventory?view=overview' })
 
     expect(component.find('[aria-label="Blue-Eyes White Dragon vergrößern"]').exists()).toBe(true)
     expect(toggleButton(component, 'Übersicht').attributes('aria-pressed')).toBe('true')
@@ -254,14 +254,14 @@ describe('view and card filter in the URL', () => {
     state.search = { items: [blueEyes], total: 1, page: 1, pageSize: 24 }
     state.calls = []
 
-    const component = await mountSuspended(InventarPage, { route: '/inventar?collectionId=box-1' })
+    const component = await mountSuspended(InventarPage, { route: '/inventory?collectionId=box-1' })
     const route = useRouter().currentRoute
 
     // Typing a search flips to "Übersicht" — the watcher that used to flip
     // straight back after "In Liste bearbeiten".
     await component.find('input[aria-label="Inventar durchsuchen"]').setValue('Blue')
     await vi.waitFor(() => {
-      expect(route.value.query.view).toBe('uebersicht')
+      expect(route.value.query.view).toBe('overview')
     })
     await nextTick()
 
@@ -297,7 +297,7 @@ describe('view and card filter in the URL', () => {
     state.search = { items: [blueEyes], total: 1, page: 1, pageSize: 24 }
     state.calls = []
 
-    const component = await mountSuspended(InventarPage, { route: '/inventar?card=89631139' })
+    const component = await mountSuspended(InventarPage, { route: '/inventory?card=89631139' })
     const route = useRouter().currentRoute
 
     expect(lastQuery('/api/inventory')).toMatchObject({ catalogCardId: 89631139 })
@@ -306,7 +306,7 @@ describe('view and card filter in the URL', () => {
 
     await toggleButton(component, 'Übersicht').trigger('click')
     await vi.waitFor(() => {
-      expect(route.value.query).toEqual({ view: 'uebersicht' })
+      expect(route.value.query).toEqual({ view: 'overview' })
     })
 
     await toggleButton(component, 'Liste').trigger('click')
@@ -315,7 +315,7 @@ describe('view and card filter in the URL', () => {
     })
     expect(lastQuery('/api/inventory').catalogCardId).toBeUndefined()
 
-    await useRouter().replace('/inventar?card=89631139')
+    await useRouter().replace('/inventory?card=89631139')
     await vi.waitFor(() => {
       expect(component.find('[aria-label="Kartenfilter entfernen"]').exists()).toBe(true)
     })

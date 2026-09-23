@@ -8,7 +8,7 @@ const props = defineProps<{
   resourceType: ShareResourceType
   resourceId: string
   resourceName: string
-  /** App-relative path the share link points at, e.g. `/spieler/fabian/decks/deck-1`. */
+  /** App-relative path the share link points at, e.g. `/players/fabian/decks/deck-1`. */
   sharePath: string
 }>()
 
@@ -119,7 +119,7 @@ async function setVisibility(visibility: Visibility) {
 
 const shareUrl = computed(() => {
   // A `sharePath` built from an own profile that has not (yet) loaded its
-  // handle would produce a broken `/spieler//...` URL — defense in depth on
+  // handle would produce a broken `/players//...` URL — defense in depth on
   // top of the caller disabling "Teilen" until the handle is known.
   if (!state.value?.shareToken || props.sharePath.includes('//')) {
     return ''

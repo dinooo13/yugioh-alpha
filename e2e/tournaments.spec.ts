@@ -79,12 +79,12 @@ test.describe('tournaments', () => {
     expect(deckResponse.ok()).toBe(true)
 
     // --- Empty state, create the tournament ---------------------------------
-    await page.goto('/turniere')
+    await page.goto('/tournaments')
     await expect(page.getByText('Noch keine Turniere')).toBeVisible()
 
     // "Neues Turnier" is a `<UButton to="...">`, rendered as a link, not a button.
     await page.getByRole('link', { name: 'Neues Turnier' }).first().click()
-    await expect(page).toHaveURL('/turniere/neu')
+    await expect(page).toHaveURL('/tournaments/new')
 
     await fillReliably(page.getByLabel('Turniername'), 'Freitagsturnier')
     await page.getByLabel('Format').click()
@@ -96,7 +96,7 @@ test.describe('tournaments', () => {
 
     await page.getByRole('button', { name: 'Turnier anlegen' }).click()
 
-    await expect(page).toHaveURL(/\/turniere\/[0-9a-f-]{36}$/)
+    await expect(page).toHaveURL(/\/tournaments\/[0-9a-f-]{36}$/)
     await expect(page.getByRole('heading', { name: 'Freitagsturnier' })).toBeVisible()
     await expect(page.getByText('Anmeldung')).toBeVisible()
 
@@ -192,7 +192,7 @@ test.describe('tournaments', () => {
     expect(await nameAndPoints(3)).toEqual({ name: 'Alice', points: '0' })
 
     // --- History filter (#32: role and status are independent axes) ----------
-    await page.goto('/turniere')
+    await page.goto('/tournaments')
     // Default view is "Meine Turniere" + "Aktiv" — the now-finished tournament
     // is not an active one, so it's not here.
     await expect(page.getByRole('heading', { name: 'Freitagsturnier' })).toHaveCount(0)
@@ -209,12 +209,12 @@ test.describe('tournaments', () => {
 
     // --- Delete -----------------------------------------------------------------
     await page.getByRole('link', { name: 'Freitagsturnier' }).click()
-    await expect(page).toHaveURL(/\/turniere\/[0-9a-f-]{36}$/)
+    await expect(page).toHaveURL(/\/tournaments\/[0-9a-f-]{36}$/)
 
     await page.getByRole('button', { name: 'Turnier löschen' }).click()
     await acceptConfirm(page)
 
-    await expect(page).toHaveURL('/turniere')
+    await expect(page).toHaveURL('/tournaments')
     await expect(page.getByText('Noch keine Turniere')).toBeVisible()
   })
 
@@ -239,10 +239,10 @@ test.describe('tournaments', () => {
 
     // Organizer creates the tournament and adds B by e-mail.
     const organizer = await registerAndLogin(page)
-    await page.goto('/turniere/neu')
+    await page.goto('/tournaments/new')
     await fillReliably(page.getByLabel('Turniername'), 'Einladungsturnier')
     await page.getByRole('button', { name: 'Turnier anlegen' }).click()
-    await expect(page).toHaveURL(/\/turniere\/[0-9a-f-]{36}$/)
+    await expect(page).toHaveURL(/\/tournaments\/[0-9a-f-]{36}$/)
     const tournamentUrl = page.url()
 
     await page.getByRole('button', { name: 'Per E-Mail' }).click()
@@ -252,7 +252,7 @@ test.describe('tournaments', () => {
     await expect(page.getByRole('heading', { name: 'Teilnehmer (2)' })).toBeVisible()
 
     // B sees the tournament under "Teilnahmen" and can open it.
-    await bPage.goto('/turniere')
+    await bPage.goto('/tournaments')
     await bPage.getByRole('button', { name: 'Teilnahmen' }).click()
     await expect(bPage.getByRole('heading', { name: 'Einladungsturnier' })).toBeVisible()
 
@@ -288,10 +288,10 @@ test.describe('tournaments', () => {
   test('confirms before removing a participant and before finishing a tournament, and lets a cancelled confirm keep the previous state', async ({ page }) => {
     await registerAndLogin(page)
 
-    await page.goto('/turniere/neu')
+    await page.goto('/tournaments/new')
     await fillReliably(page.getByLabel('Turniername'), 'Bestätigungsturnier')
     await page.getByRole('button', { name: 'Turnier anlegen' }).click()
-    await expect(page).toHaveURL(/\/turniere\/[0-9a-f-]{36}$/)
+    await expect(page).toHaveURL(/\/tournaments\/[0-9a-f-]{36}$/)
 
     await page.getByRole('button', { name: 'Als Gast' }).click()
     const guestNameField = page.getByLabel('Name')
@@ -370,7 +370,7 @@ test.describe('tournaments', () => {
     }
 
     // --- Registration: participant cards + "Konto" legend ---------------------
-    await page.goto(`/turniere/${tournament.id}`)
+    await page.goto(`/tournaments/${tournament.id}`)
     await page.waitForLoadState('networkidle')
 
     await expect(participantRow(page, 'Gast Anton')).toBeVisible()

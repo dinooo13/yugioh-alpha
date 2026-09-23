@@ -17,7 +17,9 @@ export const BIO_MAX_LENGTH = 500
 /** Handles that would collide with a top-level route or look official. */
 export const RESERVED_HANDLES: ReadonlySet<string> = new Set([
   'admin', 'api', 'auth', 'login', 'register', 'profil', 'profile', 'spieler',
-  'decks', 'deck', 'inventar', 'katalog', 'formate', 'turniere', 'wunschliste',
+  'players', 'player', 'decks', 'deck', 'inventar', 'inventory', 'katalog',
+  'catalog', 'formate', 'formats', 'turniere', 'tournaments', 'wunschliste',
+  'wishlist', 'assistent', 'assistant',
   'me', 'neu', 'new', 'static', '_nuxt', 'assets',
 ])
 

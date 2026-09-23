@@ -28,7 +28,7 @@ test.describe('accessibility basics', () => {
     const profile = await (await page.request.get('/api/profile')).json() as { handle: string }
 
     await expectSkipLinkWorks(page, '/decks')
-    await expectSkipLinkWorks(page, `/spieler/${profile.handle}`)
+    await expectSkipLinkWorks(page, `/players/${profile.handle}`)
   })
 
   test('compact icon buttons are 44px touch targets on phones', async ({ page }) => {

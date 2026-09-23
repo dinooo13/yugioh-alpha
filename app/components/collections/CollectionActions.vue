@@ -93,12 +93,12 @@ async function onDelete(collection: CollectionItem) {
 }
 
 // Cheap, lazily creates the profile on first read — only needed to build the
-// "Teilen" share link (`/spieler/:handle/sammlungen/:id`).
+// "Teilen" share link (`/players/:handle/collections/:id`).
 const { data: ownProfile } = await useOwnProfile()
 
 const isShareOpen = ref(false)
 const sharingCollection = ref<CollectionItem | null>(null)
-const sharePath = computed(() => `/spieler/${ownProfile.value?.handle ?? ''}/sammlungen/${sharingCollection.value?.id ?? ''}`)
+const sharePath = computed(() => `/players/${ownProfile.value?.handle ?? ''}/collections/${sharingCollection.value?.id ?? ''}`)
 
 function openShare(collection: CollectionItem) {
   sharingCollection.value = collection
@@ -124,7 +124,7 @@ const menuItems = computed(() => {
       label: 'Teilen',
       icon: 'i-lucide-share-2',
       // Without a loaded handle, sharePath would resolve to a broken
-      // `/spieler//sammlungen/:id` link — keep the entry disabled until then.
+      // `/players//collections/:id` link — keep the entry disabled until then.
       disabled: !ownProfile.value?.handle,
       onSelect: () => openShare(collection),
     },

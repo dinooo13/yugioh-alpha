@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { getAuthSession } from '~/utils/session'
 
-// Shared by all four `/spieler/**` pages (profile, inventory, deck,
+// Shared by all four `/players/**` pages (profile, inventory, deck,
 // collection): every not-found/no-access case renders exactly this box
 // (ADR 0004 — a wrong handle, a missing/expired/wrong token and a revoked
 // grant must be indistinguishable). Duplicated as inline markup across the

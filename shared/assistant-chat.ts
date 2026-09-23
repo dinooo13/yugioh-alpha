@@ -12,7 +12,7 @@ export interface AssistantStatus {
   model: string | null
   /** For provider 'openai': the endpoint's host (never a key). */
   baseUrl?: string | null
-  /** Whether the chat assistant (`/assistent`) is usable — same as `enabled`. */
+  /** Whether the chat assistant (`/assistant`) is usable — same as `enabled`. */
   chat: boolean
   /** Whether chat turns may include images — true whenever the assistant is enabled. */
   vision: boolean

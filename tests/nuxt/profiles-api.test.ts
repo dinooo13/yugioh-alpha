@@ -86,6 +86,10 @@ describe('validateProfileUpdateInput', () => {
   it('rejects reserved handles', () => {
     expect(() => validateProfileUpdateInput({ handle: 'admin' })).toThrow(expect.objectContaining({ statusCode: 400 }))
     expect(() => validateProfileUpdateInput({ handle: 'spieler' })).toThrow(expect.objectContaining({ statusCode: 400 }))
+    // English route names (docs/adr/0013-english-url-scheme.md).
+    for (const handle of ['players', 'inventory', 'catalog', 'formats', 'tournaments', 'wishlist', 'assistant']) {
+      expect(() => validateProfileUpdateInput({ handle })).toThrow(expect.objectContaining({ statusCode: 400 }))
+    }
   })
 
   it('rejects an empty or overlong display name', () => {

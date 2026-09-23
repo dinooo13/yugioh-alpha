@@ -37,7 +37,7 @@ test.describe('Deck assistance in the chat', () => {
     // --- Deck editor → "Mit KI bearbeiten" ---------------------------------
     await page.goto(`/decks/${deck.id}`)
     await page.getByRole('link', { name: 'Mit KI bearbeiten', exact: true }).click()
-    await expect(page).toHaveURL(/\/assistent\/[0-9a-f-]+$/)
+    await expect(page).toHaveURL(/\/assistant\/[0-9a-f-]+$/)
 
     const deckChip = page.getByRole('link', { name: `Deck ${deckName} öffnen`, exact: true })
     await expect(deckChip).toBeVisible()
@@ -58,14 +58,14 @@ test.describe('Deck assistance in the chat', () => {
     // --- /decks → "Mit KI erstellen" ----------------------------------------
     await page.goto('/decks')
     await page.getByRole('link', { name: 'Mit KI erstellen', exact: true }).click()
-    await expect(page).toHaveURL(/\/assistent\/[0-9a-f-]+$/)
+    await expect(page).toHaveURL(/\/assistant\/[0-9a-f-]+$/)
     await expect(page.getByLabel('Nachricht', { exact: true }))
       .toHaveValue('Baue mir aus meinen Karten ein neues Deck. Format und Spielstil: ')
     await expect(page.getByRole('link', { name: /^Deck .* öffnen$/ })).toHaveCount(0)
 
     // --- An old /decks/assistent bookmark lands in the chat too --------------
     await page.goto('/decks/assistent')
-    await expect(page).toHaveURL(/\/assistent\/[0-9a-f-]+$/)
+    await expect(page).toHaveURL(/\/assistant\/[0-9a-f-]+$/)
     await expect(page.getByLabel('Nachricht', { exact: true }))
       .toHaveValue('Baue mir aus meinen Karten ein neues Deck. Format und Spielstil: ')
   })

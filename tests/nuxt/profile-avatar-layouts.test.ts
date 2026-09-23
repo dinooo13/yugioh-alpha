@@ -101,7 +101,7 @@ describe('public layout header avatar (#50)', () => {
     const component = await mountSuspended(PublicLayout, { slots })
     await flushPromises()
 
-    const link = component.find('a[href="/profil"]')
+    const link = component.find('a[href="/profile"]')
     expect(link.exists()).toBe(true)
     expect(link.attributes('aria-label')).toBe('Mein Profil')
     expect(link.find('[data-slot="fallback"][aria-hidden="true"]').text()).toBe('FM')
@@ -121,7 +121,7 @@ describe('public layout header avatar (#50)', () => {
     await flushPromises()
 
     expect(component.text()).toContain('Anmelden')
-    expect(component.find('a[href="/profil"]').exists()).toBe(false)
+    expect(component.find('a[href="/profile"]').exists()).toBe(false)
     expect(component.find('[data-slot="fallback"]').exists()).toBe(false)
     expect(state.profileOptions.at(-1)?.immediate).toBe(false)
     expect(execute).not.toHaveBeenCalled()

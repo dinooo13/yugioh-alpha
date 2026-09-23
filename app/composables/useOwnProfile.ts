@@ -3,8 +3,8 @@ import type { OwnProfile } from '~~/shared/sharing'
 /**
  * The signed-in user's own profile (lazily created server-side on first
  * read — see server/utils/profiles.ts ensureProfile). Used for the layout
- * avatars (sidebar user block, public header "Mein Profil", #50), the /profil
- * page, and to build `/spieler/:handle/...` share links (inventory collection
+ * avatars (sidebar user block, public header "Mein Profil", #50), the /profile
+ * page, and to build `/players/:handle/...` share links (inventory collection
  * menu, decks list, deck editor).
  *
  * A shared `key` means Nuxt dedupes this across every caller on the same

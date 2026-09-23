@@ -6,11 +6,11 @@ test.describe('wishlist', () => {
     await registerAndLogin(page)
     const profile = await (await page.request.get('/api/profile')).json()
 
-    await page.goto('/katalog')
+    await page.goto('/catalog')
     await page.getByLabel('Karten suchen').fill('Kuriboh')
 
     // Scope to the card tile (each has `role="button" aria-label="<name>"`,
-    // see app/pages/katalog.vue) — "Zur Wunschliste" itself is not unique
+    // see app/pages/catalog.vue) — "Zur Wunschliste" itself is not unique
     // across cards.
     const kuribohCard = page.getByLabel('Kuriboh', { exact: true })
     await expect(kuribohCard).toBeVisible()
@@ -19,11 +19,11 @@ test.describe('wishlist', () => {
     await expect(kuribohCard.getByRole('button', { name: 'Auf der Wunschliste' })).toBeVisible()
 
     await page.getByRole('link', { name: 'Wunschliste' }).click()
-    await expect(page).toHaveURL('/wunschliste')
+    await expect(page).toHaveURL('/wishlist')
     await expect(page.getByText('Kuriboh')).toBeVisible()
 
     // The wishlist's own visibility is now shown on the page itself, not
-    // just on /profil (UX review #22); it starts private.
+    // just on /profile (UX review #22); it starts private.
     await expect(page.getByText('Privat', { exact: true })).toBeVisible()
     await expect(page.getByRole('link', { name: 'Sichtbarkeit ändern' })).toBeVisible()
 
@@ -47,25 +47,25 @@ test.describe('wishlist', () => {
     await expect(page.getByLabel('Notiz für Kuriboh')).toHaveValue('1st Edition bitte')
 
     // Publish the wishlist and check it from an anonymous context.
-    await page.goto('/profil')
+    await page.goto('/profile')
     await page.getByLabel('Wunschliste öffentlich zeigen').click()
     // Same "Gespeichert" feedback as the profile form above it — previously
     // this switch gave no confirmation at all (UX review #22).
     await expect(page.getByText('Gespeichert').last()).toBeVisible()
 
-    await page.goto('/wunschliste')
+    await page.goto('/wishlist')
     await expect(page.getByText('Öffentlich', { exact: true })).toBeVisible()
 
     const anonContext = await browser.newContext()
     const anonPage = await anonContext.newPage()
-    await anonPage.goto(`/spieler/${profile.handle}`)
+    await anonPage.goto(`/players/${profile.handle}`)
     await expect(anonPage.getByRole('heading', { name: 'Wunschliste' })).toBeVisible()
     await expect(anonPage.getByText('Kuriboh')).toBeVisible()
     await expect(anonPage.getByText('3×')).toBeVisible()
     await anonContext.close()
 
     // Remove it again — the list goes back to its empty state.
-    await page.goto('/wunschliste')
+    await page.goto('/wishlist')
     await page.getByRole('button', { name: 'Entfernen', exact: true }).click()
     await expect(page.getByText('Noch keine Karten auf der Wunschliste.')).toBeVisible()
   })

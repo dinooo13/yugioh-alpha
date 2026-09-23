@@ -85,7 +85,7 @@ async function onDelete(item: AssistantConversationListItem) {
         class="group flex items-center"
       >
         <NuxtLink
-          :to="`/assistent/${item.id}`"
+          :to="`/assistant/${item.id}`"
           class="min-w-0 flex-1 truncate rounded-md px-2.5 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
           :class="{ 'bg-gray-100 font-medium text-gray-900': item.id === props.activeId }"
         >

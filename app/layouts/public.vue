@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { getAuthSession } from '~/utils/session'
 
-// Slim, session-optional shell for /spieler/** (Phase 6 shared views). Unlike
+// Slim, session-optional shell for /players/** (Phase 6 shared views). Unlike
 // `default.vue` this never fetches `/api/collections` or renders the owner
 // sidebar — both would be meaningless (and 401-noisy) for an anonymous
 // visitor. A session only changes the right-hand actions.
@@ -53,7 +53,7 @@ const loginTarget = computed(() => ({ path: '/login', query: { redirect: route.f
               :ui="{ label: 'hidden sm:inline' }"
               color="neutral"
               variant="ghost"
-              to="/profil"
+              to="/profile"
             >
               <template
                 v-if="ownProfile"

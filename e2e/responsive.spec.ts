@@ -25,7 +25,7 @@ test.describe('responsive layout at 390px', () => {
     const tournamentResponse = await page.request.post('/api/tournaments', { data: { name: 'Mobile-Test-Turnier' } })
     expect(tournamentResponse.ok()).toBe(true)
 
-    // An owned card so /inventar renders real list rows, not just the empty state.
+    // An owned card so /inventory renders real list rows, not just the empty state.
     const inventoryResponse = await page.request.post('/api/inventory', {
       data: { catalog_card_id: DARK_MAGICIAN, quantity: 1 },
     })
@@ -61,21 +61,21 @@ test.describe('responsive layout at 390px', () => {
 
     const profile = await (await page.request.get('/api/profile')).json() as { handle: string }
 
-    // `/spieler/**` uses the slim public layout — no sidebar, so no hamburger.
+    // `/players/**` uses the slim public layout — no sidebar, so no hamburger.
     const routes: Array<{ path: string, appShell: boolean }> = [
-      { path: '/inventar', appShell: true },
+      { path: '/inventory', appShell: true },
       { path: '/decks', appShell: true },
       { path: `/decks/${deck.id}`, appShell: true },
-      { path: `/turniere/${tournament.id}`, appShell: true },
-      { path: '/katalog', appShell: true },
-      { path: `/formate/${format.id}`, appShell: true },
-      { path: '/wunschliste', appShell: true },
-      { path: '/turniere', appShell: true },
-      { path: '/turniere/neu', appShell: true },
-      { path: '/formate', appShell: true },
-      { path: '/inventar/erfassen', appShell: true },
-      { path: `/spieler/${profile.handle}`, appShell: false },
-      { path: `/spieler/${profile.handle}/inventar`, appShell: false },
+      { path: `/tournaments/${tournament.id}`, appShell: true },
+      { path: '/catalog', appShell: true },
+      { path: `/formats/${format.id}`, appShell: true },
+      { path: '/wishlist', appShell: true },
+      { path: '/tournaments', appShell: true },
+      { path: '/tournaments/new', appShell: true },
+      { path: '/formats', appShell: true },
+      { path: '/inventory/quick-entry', appShell: true },
+      { path: `/players/${profile.handle}`, appShell: false },
+      { path: `/players/${profile.handle}/inventory`, appShell: false },
     ]
 
     for (const { path: route, appShell } of routes) {
@@ -98,7 +98,7 @@ test.describe('responsive layout at 390px', () => {
   // UX feedback: the "Liste" table collapsed its name column to 0px at 390px
   // and both views cropped the card art. Measures CSS boxes only — images are
   // hotlinked, so their natural size isn't reliable in CI.
-  test('inventar Liste und Übersicht sind bei 390px nutzbar', async ({ page }) => {
+  test('inventory Liste und Übersicht sind bei 390px nutzbar', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 })
     await registerAndLogin(page)
 
@@ -107,7 +107,7 @@ test.describe('responsive layout at 390px', () => {
     })
     expect(inventoryResponse.ok()).toBe(true)
 
-    await page.goto('/inventar')
+    await page.goto('/inventory')
     await page.waitForLoadState('networkidle')
 
     // Liste (default view)
@@ -153,7 +153,7 @@ test.describe('responsive layout at 390px', () => {
   test('hamburger opens a drawer with navigation and the user block', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 })
     await registerAndLogin(page)
-    await page.goto('/inventar')
+    await page.goto('/inventory')
     await page.waitForLoadState('networkidle')
 
     await page.getByRole('button', { name: 'Menü öffnen' }).click()

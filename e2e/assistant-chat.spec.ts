@@ -26,14 +26,14 @@ test.describe('Chat assistant', () => {
     expect(seedResponse.ok()).toBe(true)
 
     await page.getByRole('link', { name: 'Assistent', exact: true }).click()
-    await expect(page).toHaveURL('/assistent')
+    await expect(page).toHaveURL('/assistant')
 
-    // Fresh account: no conversations exist yet, so /assistent shows the
+    // Fresh account: no conversations exist yet, so /assistant shows the
     // empty state — its primary "Neue Unterhaltung" button (not one of the
     // example prompts below it) creates an empty conversation and navigates
     // straight into it, with nothing auto-sent.
     await page.getByRole('button', { name: 'Neue Unterhaltung', exact: true }).click()
-    await expect(page).toHaveURL(/\/assistent\/[0-9a-f-]+$/)
+    await expect(page).toHaveURL(/\/assistant\/[0-9a-f-]+$/)
 
     const nachricht = page.getByLabel('Nachricht', { exact: true })
     const senden = page.getByRole('button', { name: 'Senden', exact: true })
@@ -61,17 +61,17 @@ test.describe('Chat assistant', () => {
     await expect(nachricht).toBeEnabled()
 
     // --- applied for real: 1 seeded + 2 proposed = 3 -----------------------
-    await page.goto('/inventar')
+    await page.goto('/inventory')
     await page.getByRole('button', { name: 'Übersicht', exact: true }).click()
     await expect(page.getByText('Dark Magician').first()).toBeVisible()
     await expect(page.getByText('×3 ges.')).toBeVisible()
 
     // --- new conversation, image input --------------------------------------
-    await page.goto('/assistent')
+    await page.goto('/assistant')
     // A conversation exists now, so this redirects into it — the aside with
     // the conversation list (and "Neue Unterhaltung") is only reachable from
     // inside a thread, not from the bare empty state.
-    await expect(page).toHaveURL(/\/assistent\/[0-9a-f-]+$/)
+    await expect(page).toHaveURL(/\/assistant\/[0-9a-f-]+$/)
     const firstConversationUrl = page.url()
 
     // The app layout has its own `<aside>` sidebar (nav + collections) —
@@ -81,7 +81,7 @@ test.describe('Chat assistant', () => {
       has: page.getByRole('button', { name: 'Neue Unterhaltung', exact: true }),
     })
     await conversationAside.getByRole('button', { name: 'Neue Unterhaltung', exact: true }).click()
-    await expect(page).toHaveURL(/\/assistent\/[0-9a-f-]+$/)
+    await expect(page).toHaveURL(/\/assistant\/[0-9a-f-]+$/)
     await expect(page).not.toHaveURL(firstConversationUrl)
 
     // Both the hidden `<input type="file">` and the visible button that
@@ -121,7 +121,7 @@ test.describe('Chat assistant', () => {
       const createResponse = await page.request.post('/api/assistant/chat')
       expect(createResponse.ok()).toBe(true)
       const { id } = await createResponse.json() as { id: string }
-      await page.goto(`/assistent/${id}`)
+      await page.goto(`/assistant/${id}`)
 
       const nachricht = page.getByLabel('Nachricht', { exact: true })
       const senden = page.getByRole('button', { name: 'Senden', exact: true })
@@ -181,15 +181,15 @@ test.describe('Chat assistant', () => {
     })
   }
 
-  test('/inventar/erfassen points to the assistant instead of offering its own Foto/Sprache modes', async ({ page }) => {
+  test('/inventory/quick-entry points to the assistant instead of offering its own Foto/Sprache modes', async ({ page }) => {
     await registerAndLogin(page)
-    await page.goto('/inventar/erfassen')
+    await page.goto('/inventory/quick-entry')
 
     await expect(page.getByText('Karten per Foto? Nutze den Assistenten')).toBeVisible()
     await expect(page.getByRole('tab', { name: 'Foto' })).toHaveCount(0)
     await expect(page.getByRole('tab', { name: 'Sprache' })).toHaveCount(0)
 
     await page.getByRole('link', { name: 'Zum Assistenten', exact: true }).click()
-    await expect(page).toHaveURL(/\/assistent/)
+    await expect(page).toHaveURL(/\/assistant/)
   })
 })

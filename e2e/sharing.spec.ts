@@ -93,10 +93,10 @@ test.describe('sharing', () => {
     // name is also a heading on this very profile page, so the navigation
     // itself — not just the heading text — has to be awaited before reading
     // `pageB.url()` below.
-    await pageB.goto(`/spieler/${profileA.handle}`)
+    await pageB.goto(`/players/${profileA.handle}`)
     await expect(pageB.getByRole('heading', { name: 'Privates Deck' })).toBeVisible()
     await pageB.getByRole('link', { name: 'Privates Deck' }).click()
-    await expect(pageB).toHaveURL(/\/spieler\/.+\/decks\//)
+    await expect(pageB).toHaveURL(/\/players\/.+\/decks\//)
 
     await expect(pageB.getByRole('heading', { name: 'Privates Deck' })).toBeVisible()
     await expect(pageB.getByText('Teilen', { exact: true })).toHaveCount(0)
@@ -122,7 +122,7 @@ test.describe('sharing', () => {
     })
     expect(inventoryResponse.ok()).toBe(true)
 
-    await page.goto('/profil')
+    await page.goto('/profile')
     await page.getByRole('button', { name: 'Teilen' }).click()
     await page.getByRole('radio', { name: 'Öffentlich' }).click()
     await expect(page.getByRole('radio', { name: 'Öffentlich' })).toBeChecked()
@@ -130,7 +130,7 @@ test.describe('sharing', () => {
     const anonContext = await browser.newContext()
     const anonPage = await anonContext.newPage()
 
-    await anonPage.goto(`/spieler/${profileA.handle}`)
+    await anonPage.goto(`/players/${profileA.handle}`)
     await expect(anonPage.getByRole('heading', { name: 'Inventar' })).toBeVisible()
     await anonPage.getByRole('link', { name: 'Inventar ansehen' }).click()
 
@@ -146,12 +146,12 @@ test.describe('sharing', () => {
     await expect(anonPage.getByText('Dark Magician')).toHaveCount(0)
 
     // A hides the inventory again; the anonymous page then 404s.
-    await page.goto('/profil')
+    await page.goto('/profile')
     await page.getByRole('button', { name: 'Teilen' }).click()
     await page.getByRole('radio', { name: 'Privat' }).click()
     await expect(page.getByRole('radio', { name: 'Privat' })).toBeChecked()
 
-    await anonPage.goto(`/spieler/${profileA.handle}/inventar`)
+    await anonPage.goto(`/players/${profileA.handle}/inventory`)
     await expect(anonPage.getByText('Nicht gefunden oder nicht freigegeben.')).toBeVisible()
 
     await anonContext.close()
@@ -189,7 +189,7 @@ test.describe('sharing', () => {
     await page.getByRole('button', { name: 'Hinzufügen' }).click()
     await expect(page.getByText(`@${profileB.handle}`)).toBeVisible()
 
-    const deckPath = `/spieler/${profileA.handle}/decks/${deck.id}`
+    const deckPath = `/players/${profileA.handle}/decks/${deck.id}`
 
     // Signed out, B's grant is invisible to the server (grants are
     // user-bound) — the not-found box is correct, but it must not read like

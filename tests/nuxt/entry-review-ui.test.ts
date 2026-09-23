@@ -3,7 +3,7 @@ import { flushPromises } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import EntryReviewTable from '~/components/entry/EntryReviewTable.vue'
-import ErfassenPage from '~/pages/inventar/erfassen.vue'
+import ErfassenPage from '~/pages/inventory/quick-entry.vue'
 import {
   buildBulkEntries,
   chunkBulkEntries,
@@ -17,7 +17,7 @@ mockNuxtImport('useFetch', () => {
 })
 
 mockNuxtImport('useRoute', () => {
-  return () => ({ path: '/inventar/erfassen', query: {} })
+  return () => ({ path: '/inventory/quick-entry', query: {} })
 })
 
 mockNuxtImport('useToast', () => {

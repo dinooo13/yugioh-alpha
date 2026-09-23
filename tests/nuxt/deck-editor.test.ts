@@ -133,7 +133,7 @@ describe('deck editor: chat assistant entry point', () => {
 
     const link = component.findAll('a').find(anchor => anchor.text().includes('Mit KI bearbeiten'))
     expect(link).toBeTruthy()
-    expect(link!.attributes('href')).toBe('/assistent?deckId=deck-1')
+    expect(link!.attributes('href')).toBe('/assistant?deckId=deck-1')
     expect(component.text()).not.toContain('KI-Vorschläge')
   })
 
