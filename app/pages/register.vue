@@ -98,6 +98,7 @@ async function onSubmit() {
 
       <p
         v-if="error"
+        role="alert"
         class="text-sm text-red-600"
       >
         {{ error }}

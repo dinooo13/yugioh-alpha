@@ -95,6 +95,31 @@ describe('public profile page', () => {
 
     expect(component.text()).toContain('Dieses Profil teilt aktuell nichts.')
   })
+
+  it('does not show the owner preview notice to a visitor', async () => {
+    state.error = null
+    state.profile = profileResponse()
+
+    const component = await mountSuspended(SpielerIndexPage)
+
+    expect(component.text()).not.toContain('Vorschau deines Profils')
+    expect(component.text()).not.toContain('Sichtbarkeit verwalten')
+  })
+
+  it('shows the owner a preview notice and an owner-specific empty state', async () => {
+    state.error = null
+    state.profile = profileResponse({ viewer: { isAuthenticated: true, isOwner: true } })
+
+    const component = await mountSuspended(SpielerIndexPage)
+    const text = component.text()
+
+    expect(text).toContain('Vorschau deines Profils – private Inhalte siehst nur du.')
+    expect(text).toContain('Du teilst aktuell nichts.')
+    expect(text).not.toContain('Dieses Profil teilt aktuell nichts.')
+    const manageLinks = component.findAll('a[href="/profil"]')
+    expect(manageLinks.length).toBe(2)
+    expect(manageLinks[0]!.text()).toContain('Sichtbarkeit verwalten')
+  })
 })
 
 describe('shared not-found notice', () => {

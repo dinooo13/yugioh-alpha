@@ -24,7 +24,7 @@ const loginTarget = computed(() => ({ path: '/login', query: { redirect: route.f
 <template>
   <div class="min-h-screen bg-gray-50">
     <header class="border-b border-gray-200 bg-white">
-      <div class="mx-auto flex max-w-5xl items-center justify-between gap-4 px-6 py-4">
+      <div class="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
         <NuxtLink
           :to="session ? '/' : '/login'"
           class="flex items-center gap-2.5"
@@ -32,14 +32,16 @@ const loginTarget = computed(() => ({ path: '/login', query: { redirect: route.f
           <div class="flex size-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-white">
             Y
           </div>
-          <span class="text-base font-semibold text-gray-900">yugioh alpha</span>
+          <span class="whitespace-nowrap text-base font-semibold text-gray-900">yugioh alpha</span>
         </NuxtLink>
 
         <div class="flex items-center gap-2">
           <template v-if="session">
             <UButton
               label="Mein Profil"
+              aria-label="Mein Profil"
               icon="i-lucide-user"
+              :ui="{ label: 'hidden sm:inline' }"
               color="neutral"
               variant="ghost"
               to="/profil"
@@ -62,7 +64,7 @@ const loginTarget = computed(() => ({ path: '/login', query: { redirect: route.f
       </div>
     </header>
 
-    <main class="mx-auto max-w-5xl px-6 py-8">
+    <main class="mx-auto max-w-5xl px-4 py-8 sm:px-6">
       <slot />
     </main>
   </div>

@@ -154,6 +154,21 @@ describe('turnier detail page — organizer, registration', () => {
     expect(startButton2?.attributes('disabled')).toBeUndefined()
   })
 
+  it('spells out why "Turnier starten" is disabled as visible text, not only a tooltip', async () => {
+    state.tournament = tournamentDetail({ participants: [participant()], canStart: false })
+
+    const component = await mountSuspended(TurnierDetailPage)
+    const hint = component.findAll('p').find(p => p.text() === 'Mindestens 2 Teilnehmer nötig')
+    expect(hint).toBeTruthy()
+
+    state.tournament = tournamentDetail({
+      participants: [participant(), participant({ id: 'p-2', name: 'Alice', isSelf: false })],
+      canStart: true,
+    })
+    const component2 = await mountSuspended(TurnierDetailPage)
+    expect(component2.text()).not.toContain('Mindestens 2 Teilnehmer nötig')
+  })
+
   it('shows the add-participant form and a legality badge with issue count', async () => {
     state.tournament = tournamentDetail({
       participants: [
@@ -378,6 +393,24 @@ describe('turnier detail page — finished', () => {
     expect(text).not.toContain('Turnier abschließen')
     expect(text).toContain('Tabelle')
     expect(text).toContain('Organizer')
+  })
+
+  it('leads with the final table and drops the empty "Aktionen" column', async () => {
+    state.tournament = tournamentDetail({
+      status: 'finished',
+      finishedAt: '2025-01-05T00:00:00.000Z',
+      standings: [standing()],
+    })
+
+    const component = await mountSuspended(TurnierDetailPage)
+    const headings = component.findAll('h2').map(heading => heading.text())
+    const tableIndex = headings.findIndex(heading => heading.startsWith('Tabelle'))
+    const participantsIndex = headings.findIndex(heading => heading.startsWith('Teilnehmer'))
+
+    expect(tableIndex).toBeGreaterThanOrEqual(0)
+    expect(participantsIndex).toBeGreaterThan(tableIndex)
+    expect(headings.filter(heading => heading.startsWith('Tabelle'))).toHaveLength(1)
+    expect(component.findAll('th').map(th => th.text())).not.toContain('Aktionen')
   })
 })
 

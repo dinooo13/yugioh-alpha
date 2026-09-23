@@ -48,4 +48,20 @@ describe('login page', () => {
     expect(component.text()).toContain('E-Mail-Adresse oder Passwort ist falsch.')
     expect(component.text()).not.toContain('Invalid email or password')
   })
+
+  it('announces a failed login to assistive tech via role="alert"', async () => {
+    state.signInError = { code: 'INVALID_EMAIL_OR_PASSWORD', message: 'Invalid email or password' }
+    const component = await mountSuspended(LoginPage)
+
+    expect(component.find('[role="alert"]').exists()).toBe(false)
+
+    await component.find('input[type="email"]').setValue('ux@example.com')
+    await component.find('input[type="password"]').setValue('whatever')
+    await component.find('form').trigger('submit')
+    await component.vm.$nextTick()
+
+    const alert = component.find('[role="alert"]')
+    expect(alert.exists()).toBe(true)
+    expect(alert.text()).toBe('E-Mail-Adresse oder Passwort ist falsch.')
+  })
 })

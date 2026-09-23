@@ -5,6 +5,8 @@ const PAGE_SIZE = 24
 
 useHead({ title: 'Wunschliste – yugioh alpha' })
 
+const toast = useToast()
+
 const searchInput = ref('')
 const debouncedSearch = ref('')
 const page = ref(1)
@@ -48,6 +50,7 @@ function onUpdated(updated: WishlistItemView) {
 }
 
 async function onRemoved(id: string) {
+  toast.add({ title: 'Von der Wunschliste entfernt', color: 'success' })
   if (!data.value) {
     return
   }

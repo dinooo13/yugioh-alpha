@@ -102,23 +102,23 @@ function onSaved(result: { created: number, merged: number }) {
 
 <template>
   <div class="space-y-6">
-    <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-      <div>
-        <h1 class="text-2xl font-semibold text-gray-900">
-          Schnellerfassung
-        </h1>
-        <p class="mt-1 text-sm text-gray-500">
-          Karten als Liste tippen — und vor dem Speichern prüfen.
-        </p>
-      </div>
-
-      <UButton
-        to="/inventar"
-        icon="i-lucide-arrow-left"
-        color="neutral"
-        variant="outline"
-        label="Zum Inventar"
-      />
+    <div>
+      <NuxtLink
+        :to="{ path: '/inventar', query: presetCollectionId ? { collectionId: presetCollectionId } : {} }"
+        class="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900"
+      >
+        <UIcon
+          name="i-lucide-arrow-left"
+          class="size-4"
+        />
+        Zurück zum Inventar
+      </NuxtLink>
+      <h1 class="mt-2 text-2xl font-semibold text-gray-900">
+        Schnellerfassung
+      </h1>
+      <p class="mt-1 text-sm text-gray-500">
+        Karten als Liste tippen — und vor dem Speichern prüfen.
+      </p>
     </div>
 
     <UAlert
