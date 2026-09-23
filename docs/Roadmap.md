@@ -369,7 +369,23 @@ Status: F1 is implemented — every page moved to an English path (`/inventory`,
 `/catalog`, `/players/<handle>`, …) and old German URLs answer with a single
 `301` to their new one. See
 [`docs/adr/0013-english-url-scheme.md`](adr/0013-english-url-scheme.md).
-F2 and F3 are open.
+
+F2 is in progress, as four stacked PRs (F2a merged):
+
+- F2a — foundation: `@nuxtjs/i18n` with per-namespace de/en catalogues, the
+  locale resolution (profile → `ui_locale` cookie → Accept-Language → German)
+  rendered on the server, `user_profile.locale`, the "Anzeigesprache /
+  Interface language" switch (profile settings, login and public pages), and
+  the app shell, auth, profile and dashboard strings
+- F2b — the collection side (inventory, quick entry, catalog, collections,
+  wishlist, sharing, player pages)
+- F2c — decks, formats and tournaments, with validation messages as code +
+  parameters
+- F2d — the assistant, the final lint and copy gates, and Accept-Language
+  detection switched on (until then an English browser still gets German)
+
+See [`docs/adr/0014-ui-internationalisation.md`](adr/0014-ui-internationalisation.md).
+F3 is open.
 
 ## Recommended Build Order
 
