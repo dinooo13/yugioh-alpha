@@ -21,3 +21,4 @@ mark the old as superseded.
 | [0011](0011-deck-assistance-in-chat.md) | Deck assistance in the chat assistant | Accepted |
 | [0012](0012-deck-cover-card.md) | Deck cover card chosen by the user | Accepted |
 | [0013](0013-english-url-scheme.md) | English URL scheme and permanent redirects from German paths | Accepted |
+| [0014](0014-ui-internationalisation.md) | UI internationalisation (German and English) | Accepted |
