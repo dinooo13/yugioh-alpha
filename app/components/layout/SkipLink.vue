@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * "Zum Inhalt springen" — the first focusable element of a layout, visible
+ * "Skip to content" (`app.skipLink`) — the first focusable element of a layout, visible
  * only while focused. The plain `href` works without JavaScript; with it,
  * focus moves to the target directly instead of going through the router
  * (a hash navigation would change `route.fullPath`, which the default layout
@@ -10,9 +10,11 @@ const props = withDefaults(defineProps<{
   label?: string
   target?: string
 }>(), {
-  label: 'Zum Inhalt springen',
+  label: undefined,
   target: 'main-content',
 })
+
+const { t } = useI18n()
 
 function onClick() {
   const element = document.getElementById(props.target)
@@ -30,6 +32,6 @@ function onClick() {
     class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-white focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-gray-900 focus:shadow-lg focus:outline-2 focus:outline-primary"
     @click.prevent="onClick"
   >
-    {{ label }}
+    {{ label ?? t('app.skipLink') }}
   </a>
 </template>

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useConfirmDialogState } from '~/composables/useConfirm'
 
+const { t } = useI18n()
 const request = useConfirmDialogState()
 
 const open = computed({
@@ -21,7 +22,7 @@ function resolve(result: boolean) {
 <template>
   <UModal
     v-model:open="open"
-    :title="request?.title ?? 'Bestätigen'"
+    :title="request?.title ?? t('common.confirm')"
   >
     <template #body>
       <p class="text-sm text-gray-600">
@@ -32,12 +33,12 @@ function resolve(result: boolean) {
         <UButton
           color="neutral"
           variant="ghost"
-          :label="request?.cancelLabel ?? 'Abbrechen'"
+          :label="request?.cancelLabel ?? t('common.cancel')"
           @click="resolve(false)"
         />
         <UButton
           color="error"
-          :label="request?.confirmLabel ?? 'Bestätigen'"
+          :label="request?.confirmLabel ?? t('common.confirm')"
           @click="resolve(true)"
         />
       </div>

@@ -6,6 +6,7 @@ import { LayoutSidebarContent } from '#components'
 import PublicLayout from '~/layouts/public.vue'
 import { avatarColorClasses } from '~/utils/avatar'
 import type { OwnProfile } from '~~/shared/sharing'
+import { setTestLocale } from './fixtures/locale'
 
 type Session = { session: unknown, user: { name: string, email: string } }
 
@@ -44,6 +45,7 @@ function profile(overrides: Partial<OwnProfile> = {}): OwnProfile {
     bio: null,
     inventoryVisibility: 'private',
     wishlistVisibility: 'private',
+    locale: null,
     createdAt: '2025-01-01T00:00:00.000Z',
     updatedAt: '2025-01-01T00:00:00.000Z',
     ...overrides,
@@ -54,10 +56,40 @@ function signedIn(name = 'Account Name'): Session {
   return { session: { id: 'session-1' }, user: { name, email: 'ygo@example.com' } }
 }
 
-afterEach(() => {
+afterEach(async () => {
   state.session = null
   state.profile = null
   state.profileOptions = []
+  await setTestLocale('de')
+})
+
+describe('sidebar navigation', () => {
+  const navLabels = (component: { findAll: (selector: string) => { text: () => string }[] }) =>
+    component.findAll('nav a').map(link => link.text())
+
+  it('is German by default', async () => {
+    state.session = signedIn()
+    state.profile = profile()
+    state.execute = vi.fn()
+
+    const component = await mountSuspended(LayoutSidebarContent)
+
+    expect(navLabels(component)).toEqual(['Dashboard', 'Inventar', 'Katalog', 'Decks', 'Assistent', 'Formate', 'Wunschliste', 'Turniere'])
+    expect(component.text()).toContain('Abmelden')
+  })
+
+  it('switches to English', async () => {
+    await setTestLocale('en')
+    state.session = signedIn()
+    state.profile = profile()
+    state.execute = vi.fn()
+
+    const component = await mountSuspended(LayoutSidebarContent)
+
+    expect(navLabels(component)).toEqual(['Dashboard', 'Inventory', 'Catalog', 'Decks', 'Assistant', 'Formats', 'Wishlist', 'Tournaments'])
+    expect(component.text()).toContain('Profile')
+    expect(component.text()).toContain('Sign out')
+  })
 })
 
 describe('sidebar user block avatar (#50)', () => {
@@ -125,5 +157,18 @@ describe('public layout header avatar (#50)', () => {
     expect(component.find('[data-slot="fallback"]').exists()).toBe(false)
     expect(state.profileOptions.at(-1)?.immediate).toBe(false)
     expect(execute).not.toHaveBeenCalled()
+  })
+
+  it('offers the compact language switch and renders the header in English', async () => {
+    await setTestLocale('en')
+    state.session = null
+    state.profile = null
+    state.execute = vi.fn()
+
+    const component = await mountSuspended(PublicLayout, { slots })
+    await flushPromises()
+
+    expect(component.find('header button[aria-label="Interface language"]').exists()).toBe(true)
+    expect(component.find('header').text()).toContain('Sign in')
   })
 })

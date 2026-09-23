@@ -1,23 +1,26 @@
 <script setup lang="ts">
 import { authClient } from '~/utils/auth-client'
 import { waitForAuthSession } from '~/utils/session'
-import { authErrorMessage } from '~/utils/auth-errors'
+import { authErrorKey } from '~/utils/auth-errors'
 
 definePageMeta({ layout: 'auth' })
-useHead({ title: 'Anmelden – yugioh alpha' })
+
+const { t } = useI18n()
+usePageTitle('auth.login.title')
 
 const route = useRoute()
 
 const email = ref('')
 const password = ref('')
-const error = ref('')
+// A message key, so the error follows a language switch.
+const errorKey = ref('')
 const loading = ref(false)
 
 async function onSubmit() {
-  error.value = ''
+  errorKey.value = ''
 
   if (!email.value.trim() || !password.value) {
-    error.value = 'Bitte fülle alle Felder aus.'
+    errorKey.value = 'auth.allFieldsRequired'
     return
   }
 
@@ -29,7 +32,7 @@ async function onSubmit() {
   loading.value = false
 
   if (signInError) {
-    error.value = authErrorMessage(signInError, 'Anmeldung fehlgeschlagen. Bitte überprüfe deine Angaben.')
+    errorKey.value = authErrorKey(signInError) ?? 'auth.login.failed'
     return
   }
 
@@ -46,10 +49,10 @@ async function onSubmit() {
 <template>
   <div>
     <h1 class="text-xl font-semibold text-gray-900">
-      Anmelden
+      {{ t('auth.login.title') }}
     </h1>
     <p class="mt-1 text-sm text-gray-500">
-      Melde dich an, um auf deine Sammlung zuzugreifen.
+      {{ t('auth.login.description') }}
     </p>
 
     <form
@@ -57,19 +60,19 @@ async function onSubmit() {
       novalidate
       @submit.prevent="onSubmit"
     >
-      <UFormField label="E-Mail">
+      <UFormField :label="t('auth.fields.email')">
         <UInput
           v-model="email"
           type="email"
           name="email"
           autocomplete="email"
-          placeholder="du@example.com"
+          :placeholder="t('auth.fields.emailPlaceholder')"
           class="w-full"
           required
         />
       </UFormField>
 
-      <UFormField label="Passwort">
+      <UFormField :label="t('auth.fields.password')">
         <UInput
           v-model="password"
           type="password"
@@ -82,29 +85,35 @@ async function onSubmit() {
       </UFormField>
 
       <p
-        v-if="error"
+        v-if="errorKey"
         role="alert"
         class="text-sm text-red-600"
       >
-        {{ error }}
+        {{ t(errorKey) }}
       </p>
 
       <UButton
         type="submit"
-        label="Anmelden"
+        :label="t('auth.login.submit')"
         block
         :loading="loading"
       />
     </form>
 
-    <p class="mt-6 text-center text-sm text-gray-500">
-      Noch kein Konto?
-      <NuxtLink
-        to="/register"
-        class="font-medium text-primary"
-      >
-        Registrieren
-      </NuxtLink>
-    </p>
+    <i18n-t
+      keypath="auth.login.noAccount"
+      tag="p"
+      class="mt-6 text-center text-sm text-gray-500"
+      scope="global"
+    >
+      <template #link>
+        <NuxtLink
+          to="/register"
+          class="font-medium text-primary"
+        >
+          {{ t('auth.login.registerLink') }}
+        </NuxtLink>
+      </template>
+    </i18n-t>
   </div>
 </template>

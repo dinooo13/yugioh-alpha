@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { OwnProfile } from '~~/shared/sharing'
-import { apiErrorMessage } from '~/utils/card-entry'
+import { apiErrorCode } from '~/utils/card-entry'
 
 const HANDLE_PATTERN = /^[a-z0-9-]+$/
 
@@ -11,6 +11,9 @@ const props = defineProps<{
 const emit = defineEmits<{
   saved: [profile: OwnProfile]
 }>()
+
+const { t } = useI18n()
+const apiError = useApiError()
 
 const form = reactive({
   displayName: props.profile.displayName,
@@ -30,7 +33,7 @@ const isSubmitting = ref(false)
 const handleError = ref('')
 const displayNameError = ref('')
 const errorMessage = ref('')
-const successMessage = ref('')
+const saved = ref(false)
 // Shown once, right after a save that actually changed the handle (UX
 // review #23) — every `/players/<altes-handle>/...` link already handed out
 // breaks the moment this happens, and that consequence was previously
@@ -45,15 +48,15 @@ async function save() {
   errorMessage.value = ''
   handleError.value = ''
   displayNameError.value = ''
-  successMessage.value = ''
+  saved.value = false
   handleChangedNotice.value = false
 
   const handle = form.handle.trim().toLowerCase()
   if (handle.length < 3 || handle.length > 30 || !HANDLE_PATTERN.test(handle)) {
-    handleError.value = 'Nutzernamen dürfen nur Kleinbuchstaben, Ziffern und Bindestriche enthalten.'
+    handleError.value = t('profile.form.handleInvalid')
   }
   if (!form.displayName.trim()) {
-    displayNameError.value = 'Bitte einen Anzeigenamen angeben.'
+    displayNameError.value = t('profile.form.displayNameRequired')
   }
   if (handleError.value || displayNameError.value) {
     return
@@ -71,17 +74,21 @@ async function save() {
         bio: form.bio.trim() || null,
       },
     })
-    successMessage.value = 'Gespeichert'
+    saved.value = true
     handleChangedNotice.value = updated.handle !== previousHandle
     emit('saved', updated)
   }
   catch (error) {
     const statusCode = (error as { data?: { statusCode?: number } } | null)?.data?.statusCode
-    if (statusCode === 409) {
-      handleError.value = 'Es gibt bereits einen Spieler mit diesem Nutzernamen.'
+    const code = apiErrorCode(error)
+    if (statusCode === 409 || code?.startsWith('handle_')) {
+      handleError.value = statusCode === 409 ? t('errors.api.handle_taken') : apiError(error, 'profile.form.handleInvalid')
+    }
+    else if (code?.startsWith('display_name_')) {
+      displayNameError.value = apiError(error, 'profile.form.displayNameRequired')
     }
     else {
-      errorMessage.value = apiErrorMessage(error, 'Profil konnte nicht gespeichert werden.')
+      errorMessage.value = apiError(error, 'profile.form.saveFailed')
     }
   }
   finally {
@@ -96,40 +103,46 @@ async function save() {
     @submit.prevent="save"
   >
     <UFormField
-      label="Anzeigename"
+      :label="t('profile.form.displayName')"
       :error="displayNameError"
     >
       <UInput
         v-model="form.displayName"
         name="displayName"
         maxlength="60"
-        aria-label="Anzeigename"
+        :aria-label="t('profile.form.displayName')"
       />
     </UFormField>
 
     <UFormField
-      label="Nutzername"
+      :label="t('profile.form.handle')"
       :error="handleError"
     >
       <UInput
         v-model="form.handle"
         name="handle"
         maxlength="30"
-        aria-label="Nutzername"
+        :aria-label="t('profile.form.handle')"
       />
       <template #help>
-        Nur Kleinbuchstaben, Ziffern und Bindestriche, 3–30 Zeichen. Profil-URL:
-        <span class="font-medium text-gray-700">{{ handlePreview }}</span>
+        <i18n-t
+          keypath="profile.form.handleHelp"
+          scope="global"
+        >
+          <template #url>
+            <span class="font-medium text-gray-700">{{ handlePreview }}</span>
+          </template>
+        </i18n-t>
       </template>
     </UFormField>
 
-    <UFormField label="Über mich">
+    <UFormField :label="t('profile.form.bio')">
       <UTextarea
         v-model="form.bio"
         name="bio"
         :rows="3"
         maxlength="500"
-        aria-label="Über mich"
+        :aria-label="t('profile.form.bio')"
       />
     </UFormField>
 
@@ -141,16 +154,16 @@ async function save() {
       {{ errorMessage }}
     </p>
     <p
-      v-if="successMessage"
+      v-if="saved"
       class="text-sm text-emerald-600"
     >
-      {{ successMessage }}
+      {{ t('common.saved') }}
     </p>
     <p
       v-if="handleChangedNotice"
       class="text-sm text-amber-600"
     >
-      Bereits geteilte Links mit dem alten Nutzernamen funktionieren nicht mehr.
+      {{ t('profile.form.handleChanged') }}
     </p>
 
     <div class="flex justify-end">
@@ -158,7 +171,7 @@ async function save() {
         type="submit"
         icon="i-lucide-save"
         :loading="isSubmitting"
-        label="Speichern"
+        :label="t('common.save')"
       />
     </div>
   </form>

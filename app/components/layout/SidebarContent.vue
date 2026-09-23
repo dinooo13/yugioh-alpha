@@ -3,6 +3,7 @@ import type { NavigationMenuItem } from '@nuxt/ui'
 import { authClient } from '~/utils/auth-client'
 import { getAuthSession } from '~/utils/session'
 
+const { t } = useI18n()
 const route = useRoute()
 
 // A nav entry stays highlighted on its sub-pages — the Schnellerfassung at
@@ -10,14 +11,14 @@ const route = useRoute()
 // at `/formats/:id` are child routes, not separate destinations, which an
 // exact link match misses.
 const navItems = computed<NavigationMenuItem[]>(() => [
-  { label: 'Dashboard', icon: 'i-lucide-layout-dashboard', to: '/' },
-  { label: 'Inventar', icon: 'i-lucide-archive', to: '/inventory', active: route.path.startsWith('/inventory') },
-  { label: 'Katalog', icon: 'i-lucide-book-open', to: '/catalog' },
-  { label: 'Decks', icon: 'i-lucide-layers', to: '/decks', active: route.path.startsWith('/decks') },
-  { label: 'Assistent', icon: 'i-lucide-sparkles', to: '/assistant', active: route.path.startsWith('/assistant') },
-  { label: 'Formate', icon: 'i-lucide-scroll-text', to: '/formats', active: route.path.startsWith('/formats') },
-  { label: 'Wunschliste', icon: 'i-lucide-heart', to: '/wishlist' },
-  { label: 'Turniere', icon: 'i-lucide-trophy', to: '/tournaments', active: route.path.startsWith('/tournaments') },
+  { label: t('app.nav.dashboard'), icon: 'i-lucide-layout-dashboard', to: '/' },
+  { label: t('app.nav.inventory'), icon: 'i-lucide-archive', to: '/inventory', active: route.path.startsWith('/inventory') },
+  { label: t('app.nav.catalog'), icon: 'i-lucide-book-open', to: '/catalog' },
+  { label: t('app.nav.decks'), icon: 'i-lucide-layers', to: '/decks', active: route.path.startsWith('/decks') },
+  { label: t('app.nav.assistant'), icon: 'i-lucide-sparkles', to: '/assistant', active: route.path.startsWith('/assistant') },
+  { label: t('app.nav.formats'), icon: 'i-lucide-scroll-text', to: '/formats', active: route.path.startsWith('/formats') },
+  { label: t('app.nav.wishlist'), icon: 'i-lucide-heart', to: '/wishlist' },
+  { label: t('app.nav.tournaments'), icon: 'i-lucide-trophy', to: '/tournaments', active: route.path.startsWith('/tournaments') },
 ])
 
 const session = ref(await getAuthSession(
@@ -78,7 +79,7 @@ async function onLogout() {
       </div>
       <UButton
         icon="i-lucide-user"
-        label="Profil"
+        :label="t('app.sidebar.profile')"
         to="/profile"
         variant="ghost"
         color="neutral"
@@ -87,7 +88,7 @@ async function onLogout() {
       />
       <UButton
         icon="i-lucide-log-out"
-        label="Abmelden"
+        :label="t('app.sidebar.logout')"
         variant="ghost"
         color="neutral"
         block

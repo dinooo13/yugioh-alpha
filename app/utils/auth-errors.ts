@@ -1,27 +1,26 @@
 // better-auth surfaces its own English error strings via `error.message`
-// (e.g. "Password too short") — displaying those verbatim in an otherwise
-// fully German UI reads as a bug (UX review #3). `error.code` is the stable,
+// (e.g. "Password too short") — displaying those verbatim reads as a bug in
+// a translated UI (UX review #3). `error.code` is the stable,
 // locale-independent identifier better-auth attaches to every error body; we
-// map the ones our email/password flows can actually hit to German text and
-// fall back to a generic message for everything else.
-const AUTH_ERROR_MESSAGES: Record<string, string> = {
-  PASSWORD_TOO_SHORT: 'Das Passwort muss mindestens 8 Zeichen lang sein.',
-  PASSWORD_TOO_LONG: 'Das Passwort ist zu lang.',
-  USER_ALREADY_EXISTS: 'Diese E-Mail-Adresse ist bereits registriert.',
-  USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL: 'Diese E-Mail-Adresse ist bereits registriert.',
-  INVALID_EMAIL: 'Bitte gib eine gültige E-Mail-Adresse ein.',
-  INVALID_EMAIL_OR_PASSWORD: 'E-Mail-Adresse oder Passwort ist falsch.',
-}
+// translate the ones our email/password flows can actually hit
+// (`auth.errors.<CODE>`, ADR 0014) and let the caller fall back to a generic
+// message for everything else.
+const KNOWN_AUTH_ERROR_CODES: ReadonlySet<string> = new Set([
+  'PASSWORD_TOO_SHORT',
+  'PASSWORD_TOO_LONG',
+  'USER_ALREADY_EXISTS',
+  'USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL',
+  'INVALID_EMAIL',
+  'INVALID_EMAIL_OR_PASSWORD',
+])
 
 interface AuthClientError {
   code?: string | null
   message?: string | null
 }
 
-export function authErrorMessage(error: AuthClientError | null | undefined, fallback: string): string {
+/** The message key for a better-auth error, or null when the code isn't one we translate. */
+export function authErrorKey(error: AuthClientError | null | undefined): string | null {
   const code = error?.code
-  if (code && code in AUTH_ERROR_MESSAGES) {
-    return AUTH_ERROR_MESSAGES[code]!
-  }
-  return fallback
+  return code && KNOWN_AUTH_ERROR_CODES.has(code) ? `auth.errors.${code}` : null
 }

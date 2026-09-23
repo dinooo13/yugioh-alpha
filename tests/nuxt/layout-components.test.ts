@@ -1,10 +1,13 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { h } from 'vue'
 import { mountSuspended } from '@nuxt/test-utils/runtime'
 import PageHeader from '~/components/layout/PageHeader.vue'
 import BackLink from '~/components/layout/BackLink.vue'
 import EmptyState from '~/components/layout/EmptyState.vue'
 import SkipLink from '~/components/layout/SkipLink.vue'
+import { setTestLocale } from './fixtures/locale'
+
+afterEach(() => setTestLocale('de'))
 
 describe('LayoutPageHeader', () => {
   it('renders the title as the only h1, the description and the actions', async () => {
@@ -98,6 +101,13 @@ describe('LayoutSkipLink', () => {
     expect(component.attributes('href')).toBe('#main-content')
     expect(component.text()).toBe('Zum Inhalt springen')
     expect(component.classes()).toContain('sr-only')
+  })
+
+  it('uses an English default label in English', async () => {
+    await setTestLocale('en')
+    const component = await mountSuspended(SkipLink)
+
+    expect(component.text()).toBe('Skip to content')
   })
 
   it('moves focus to the target on activation', async () => {
