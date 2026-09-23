@@ -9,12 +9,13 @@ const inventoryState = vi.hoisted(() => ({
     items: [] as Array<Record<string, unknown>>,
     total: 0,
   },
+  pending: false,
 }))
 
 mockNuxtImport('useFetch', () => {
   return () => ({
     data: ref(inventoryState.response),
-    pending: ref(false),
+    pending: ref(inventoryState.pending),
     refresh: vi.fn(),
   })
 })
@@ -22,6 +23,7 @@ mockNuxtImport('useFetch', () => {
 describe('inventar page', () => {
   it('renders the empty inventory state', async () => {
     inventoryState.response = { items: [], total: 0 }
+    inventoryState.pending = false
 
     const component = await mountSuspended(InventarPage)
 
@@ -30,6 +32,7 @@ describe('inventar page', () => {
   })
 
   it('renders owned cards from the inventory API', async () => {
+    inventoryState.pending = false
     inventoryState.response = {
       total: 1,
       items: [
@@ -57,6 +60,30 @@ describe('inventar page', () => {
     expect(component.text()).toContain('Normal Monster')
     expect(component.text()).toContain('×3')
     expect(component.text()).toContain('NM')
+
+    // One responsive markup for every width — each control exists once.
+    expect(component.findAll('[aria-label="Sammlung für Dark Magician"]')).toHaveLength(1)
+    expect(component.findAll('[aria-label="Karte bearbeiten"]')).toHaveLength(1)
+    expect(component.findAll('[aria-label="Karte entfernen"]')).toHaveLength(1)
+
+    // The thumbnail keeps the whole card visible instead of cropping it.
+    const thumbnail = component.find('img[alt="Dark Magician"]')
+    expect(thumbnail.exists()).toBe(true)
+    expect(thumbnail.classes()).toContain('object-contain')
+    expect(thumbnail.classes()).not.toContain('object-cover')
+  })
+
+  it('renders skeleton rows while the list is loading', async () => {
+    inventoryState.response = { items: [], total: 0 }
+    inventoryState.pending = true
+
+    const component = await mountSuspended(InventarPage)
+
+    expect(component.text()).not.toContain('Inventar wird geladen...')
+    expect(component.find('ul[aria-busy="true"]').exists()).toBe(true)
+    expect(component.findAll('ul[aria-busy="true"] li')).toHaveLength(5)
+
+    inventoryState.pending = false
   })
 })
 
