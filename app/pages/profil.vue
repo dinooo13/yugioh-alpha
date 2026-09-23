@@ -3,6 +3,8 @@ import type { OwnProfile, Visibility } from '~~/shared/sharing'
 
 useHead({ title: 'Profil – yugioh alpha' })
 
+const toast = useToast()
+
 const { data: profile, pending, error } = await useFetch<OwnProfile>('/api/profile', {
   headers: import.meta.server ? useRequestHeaders(['cookie']) : undefined,
 })
@@ -47,6 +49,11 @@ async function setWishlistVisibility(makePublic: boolean) {
     wishlistVisibilitySavedTimer = setTimeout(() => {
       wishlistVisibilitySaved.value = false
     }, 2000)
+  }
+  catch {
+    // The switch is bound to `profile`, which stays untouched on failure,
+    // so it keeps showing the saved state — just tell the user why.
+    toast.add({ title: 'Sichtbarkeit konnte nicht gespeichert werden', color: 'error' })
   }
   finally {
     isSavingWishlistVisibility.value = false

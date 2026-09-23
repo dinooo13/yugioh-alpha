@@ -12,14 +12,17 @@ watch(() => route.fullPath, () => {
 </script>
 
 <template>
-  <div class="flex min-h-screen flex-col bg-gray-50 lg:flex-row">
+  <div class="flex min-h-dvh flex-col bg-gray-50 lg:flex-row">
     <header class="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3 lg:hidden">
-      <div class="flex items-center gap-2.5">
+      <NuxtLink
+        to="/"
+        class="flex items-center gap-2.5"
+      >
         <div class="flex size-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-white">
           Y
         </div>
         <span class="text-base font-semibold text-gray-900">yugioh alpha</span>
-      </div>
+      </NuxtLink>
       <UButton
         icon="i-lucide-menu"
         color="neutral"
@@ -30,12 +33,15 @@ watch(() => route.fullPath, () => {
     </header>
 
     <aside class="hidden w-64 shrink-0 flex-col border-r border-gray-200 bg-white lg:flex">
-      <div class="flex items-center gap-2.5 px-5 py-5">
+      <NuxtLink
+        to="/"
+        class="flex items-center gap-2.5 px-5 py-5"
+      >
         <div class="flex size-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-white">
           Y
         </div>
         <span class="text-base font-semibold text-gray-900">yugioh alpha</span>
-      </div>
+      </NuxtLink>
 
       <LayoutSidebarContent />
     </aside>

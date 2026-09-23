@@ -65,8 +65,42 @@ const isEmpty = computed(() => {
         </p>
       </header>
 
+      <!-- The owner sees their own profile through the visitor's lens —
+           say so, so private items (badged below) aren't mistaken for shared. -->
+      <UAlert
+        v-if="data.viewer.isOwner"
+        color="info"
+        variant="subtle"
+        icon="i-lucide-eye"
+        title="Vorschau deines Profils – private Inhalte siehst nur du."
+      >
+        <template #actions>
+          <UButton
+            label="Sichtbarkeit verwalten"
+            color="neutral"
+            variant="outline"
+            size="sm"
+            to="/profil"
+          />
+        </template>
+      </UAlert>
+
+      <div
+        v-if="isEmpty && data.viewer.isOwner"
+        class="flex flex-col items-center gap-3 rounded-md border border-dashed border-gray-300 bg-white px-6 py-12 text-center text-sm text-gray-500"
+      >
+        <p>Du teilst aktuell nichts.</p>
+        <UButton
+          label="Sichtbarkeit verwalten"
+          color="neutral"
+          variant="outline"
+          size="sm"
+          to="/profil"
+        />
+      </div>
+
       <p
-        v-if="isEmpty"
+        v-else-if="isEmpty"
         class="rounded-md border border-dashed border-gray-300 bg-white px-6 py-12 text-center text-sm text-gray-500"
       >
         Dieses Profil teilt aktuell nichts.

@@ -177,6 +177,26 @@ const finishTitle = computed(() => {
   }
   return undefined
 })
+
+// A `title` tooltip never shows on touch devices, so the reason the one
+// obvious next action is disabled is also spelled out under the buttons.
+const actionHint = computed(() => {
+  if (!tournament.value) {
+    return undefined
+  }
+  if (tournament.value.status === 'registration') {
+    return startTitle.value
+  }
+  if (tournament.value.status === 'running') {
+    const titles: Record<RunningAction, string | undefined> = {
+      complete: completeRoundTitle.value,
+      next: createRoundTitle.value,
+      finish: finishTitle.value,
+    }
+    return titles[primaryRunningAction.value]
+  }
+  return undefined
+})
 </script>
 
 <template>
@@ -256,50 +276,58 @@ const finishTitle = computed(() => {
 
         <div
           v-if="tournament.role === 'organizer'"
-          class="flex shrink-0 flex-wrap items-center gap-2"
+          class="flex shrink-0 flex-col gap-1.5 sm:items-end"
         >
-          <template v-if="tournament.status === 'registration'">
+          <div class="flex flex-wrap items-center gap-2 sm:justify-end">
+            <template v-if="tournament.status === 'registration'">
+              <UButton
+                label="Turnier starten"
+                color="primary"
+                :disabled="!tournament.canStart || busy"
+                :title="startTitle"
+                @click="startTournament"
+              />
+            </template>
+            <template v-else-if="tournament.status === 'running'">
+              <UButton
+                label="Runde abschließen"
+                :color="primaryRunningAction === 'complete' ? 'primary' : 'neutral'"
+                :variant="primaryRunningAction === 'complete' ? 'solid' : 'outline'"
+                :disabled="!tournament.canCompleteRound || busy"
+                :title="completeRoundTitle"
+                @click="completeRound"
+              />
+              <UButton
+                label="Nächste Runde"
+                :color="primaryRunningAction === 'next' ? 'primary' : 'neutral'"
+                :variant="primaryRunningAction === 'next' ? 'solid' : 'outline'"
+                :disabled="!tournament.canCreateRound || busy"
+                :title="createRoundTitle"
+                @click="createNextRound"
+              />
+              <UButton
+                label="Turnier abschließen"
+                :color="primaryRunningAction === 'finish' ? 'primary' : 'neutral'"
+                :variant="primaryRunningAction === 'finish' ? 'solid' : 'outline'"
+                :disabled="!tournament.canFinish || busy"
+                :title="finishTitle"
+                @click="onFinishClick"
+              />
+            </template>
             <UButton
-              label="Turnier starten"
-              color="primary"
-              :disabled="!tournament.canStart || busy"
-              :title="startTitle"
-              @click="startTournament"
+              color="error"
+              variant="outline"
+              label="Turnier löschen"
+              :disabled="busy"
+              @click="deleteTournament"
             />
-          </template>
-          <template v-else-if="tournament.status === 'running'">
-            <UButton
-              label="Runde abschließen"
-              :color="primaryRunningAction === 'complete' ? 'primary' : 'neutral'"
-              :variant="primaryRunningAction === 'complete' ? 'solid' : 'outline'"
-              :disabled="!tournament.canCompleteRound || busy"
-              :title="completeRoundTitle"
-              @click="completeRound"
-            />
-            <UButton
-              label="Nächste Runde"
-              :color="primaryRunningAction === 'next' ? 'primary' : 'neutral'"
-              :variant="primaryRunningAction === 'next' ? 'solid' : 'outline'"
-              :disabled="!tournament.canCreateRound || busy"
-              :title="createRoundTitle"
-              @click="createNextRound"
-            />
-            <UButton
-              label="Turnier abschließen"
-              :color="primaryRunningAction === 'finish' ? 'primary' : 'neutral'"
-              :variant="primaryRunningAction === 'finish' ? 'solid' : 'outline'"
-              :disabled="!tournament.canFinish || busy"
-              :title="finishTitle"
-              @click="onFinishClick"
-            />
-          </template>
-          <UButton
-            color="error"
-            variant="outline"
-            label="Turnier löschen"
-            :disabled="busy"
-            @click="deleteTournament"
-          />
+          </div>
+          <p
+            v-if="actionHint"
+            class="text-xs text-gray-500"
+          >
+            {{ actionHint }}
+          </p>
         </div>
       </div>
 
@@ -323,6 +351,13 @@ const finishTitle = computed(() => {
         {{ errorMessage }}
       </p>
 
+      <!-- Once finished, the final table is what people come for — lead with it. -->
+      <TournamentsStandingsTable
+        v-if="tournament.status === 'finished'"
+        :standings="tournament.standings"
+        :status="tournament.status"
+      />
+
       <TournamentsParticipantsPanel
         :tournament="tournament"
         @updated="onUpdated"
@@ -334,6 +369,7 @@ const finishTitle = computed(() => {
       />
 
       <TournamentsStandingsTable
+        v-if="tournament.status !== 'finished'"
         :standings="tournament.standings"
         :status="tournament.status"
       />

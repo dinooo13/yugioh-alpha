@@ -234,6 +234,14 @@ function managesOwnDeck(participant: TournamentParticipantDto): boolean {
     && !canRegisterDeck(participant)
 }
 
+// No row has anything to act on (e.g. a finished tournament, or a
+// participant viewing a running one) — drop the empty "Aktionen" column.
+const hasRowActions = computed(() =>
+  props.tournament.participants.some(participant =>
+    canRegisterDeck(participant)
+    || managesOwnDeck(participant)
+    || menuItemsFor(participant).length > 0))
+
 // The caller's own row, when they play in the tournament — used for the
 // "register before it starts" banner below (#31).
 const selfParticipant = computed(() =>
@@ -403,7 +411,10 @@ function capturedAtLabel(participant: TournamentParticipantDto): string | null {
             <th class="px-2 py-2">
               Deck
             </th>
-            <th class="px-2 py-2 text-right">
+            <th
+              v-if="hasRowActions"
+              class="px-2 py-2 text-right"
+            >
               Aktionen
             </th>
           </tr>
@@ -493,7 +504,10 @@ function capturedAtLabel(participant: TournamentParticipantDto): string | null {
                 class="text-gray-400"
               >Kein Deck</span>
             </td>
-            <td class="px-2 py-2">
+            <td
+              v-if="hasRowActions"
+              class="px-2 py-2"
+            >
               <div class="flex items-center justify-end gap-2">
                 <UButton
                   v-if="canRegisterDeck(participant)"
