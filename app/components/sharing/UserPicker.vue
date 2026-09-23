@@ -88,6 +88,7 @@ function select(item: UserSearchItem) {
         <UButton
           size="xs"
           label="Hinzufügen"
+          class="tap-target"
           @click="select(item)"
         />
       </li>

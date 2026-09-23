@@ -104,6 +104,7 @@ async function remove() {
           size="xs"
           :disabled="isSaving || item.quantity <= 1"
           :aria-label="`Ein Exemplar von ${item.name} entfernen`"
+          class="tap-target"
           @click="setQuantity(item.quantity - 1)"
         />
         <span
@@ -119,6 +120,7 @@ async function remove() {
           size="xs"
           :disabled="isSaving"
           :aria-label="`Ein Exemplar von ${item.name} hinzufügen`"
+          class="tap-target"
           @click="setQuantity(item.quantity + 1)"
         />
       </div>
@@ -129,6 +131,7 @@ async function remove() {
         variant="ghost"
         size="xs"
         label="Entfernen"
+        class="tap-target"
         @click="remove"
       />
     </div>

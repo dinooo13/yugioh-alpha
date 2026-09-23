@@ -27,7 +27,16 @@ const form = reactive({
 })
 
 const isSubmitting = ref(false)
+// Field-level problems go to their UFormField (wired up via
+// aria-describedby/aria-invalid); errorMessage is for the server's answer.
+const nameError = ref('')
 const errorMessage = ref('')
+
+watch(() => form.name, (name) => {
+  if (name.trim()) {
+    nameError.value = ''
+  }
+})
 
 const isEditing = computed(() => Boolean(props.initialValues?.id))
 const title = computed(() => isEditing.value ? 'Deck bearbeiten' : 'Neues Deck')
@@ -46,6 +55,7 @@ watch(
 
     form.name = props.initialValues?.name ?? ''
     form.description = props.initialValues?.description ?? ''
+    nameError.value = ''
     errorMessage.value = ''
   },
   { immediate: true },
@@ -53,7 +63,7 @@ watch(
 
 async function save() {
   if (!form.name.trim()) {
-    errorMessage.value = 'Bitte einen Namen angeben.'
+    nameError.value = 'Bitte einen Namen angeben.'
     return
   }
 
@@ -93,7 +103,10 @@ async function save() {
         class="space-y-4"
         @submit.prevent="save"
       >
-        <UFormField label="Name">
+        <UFormField
+          label="Name"
+          :error="nameError"
+        >
           <UInput
             v-model="form.name"
             name="name"
@@ -116,6 +129,7 @@ async function save() {
 
         <p
           v-if="errorMessage"
+          role="alert"
           class="text-sm text-red-600"
         >
           {{ errorMessage }}

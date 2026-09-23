@@ -25,6 +25,10 @@ watch(() => props.profile, (profile) => {
 })
 
 const isSubmitting = ref(false)
+// Field-level problems go to their UFormField (wired up via
+// aria-describedby/aria-invalid); errorMessage is for everything else.
+const handleError = ref('')
+const displayNameError = ref('')
 const errorMessage = ref('')
 const successMessage = ref('')
 // Shown once, right after a save that actually changed the handle (UX
@@ -39,17 +43,19 @@ const handlePreview = computed(() => `/spieler/${form.handle.trim().toLowerCase(
 
 async function save() {
   errorMessage.value = ''
+  handleError.value = ''
+  displayNameError.value = ''
   successMessage.value = ''
   handleChangedNotice.value = false
 
   const handle = form.handle.trim().toLowerCase()
   if (handle.length < 3 || handle.length > 30 || !HANDLE_PATTERN.test(handle)) {
-    errorMessage.value = 'Nutzernamen dürfen nur Kleinbuchstaben, Ziffern und Bindestriche enthalten.'
-    return
+    handleError.value = 'Nutzernamen dürfen nur Kleinbuchstaben, Ziffern und Bindestriche enthalten.'
   }
-
   if (!form.displayName.trim()) {
-    errorMessage.value = 'Bitte einen Anzeigenamen angeben.'
+    displayNameError.value = 'Bitte einen Anzeigenamen angeben.'
+  }
+  if (handleError.value || displayNameError.value) {
     return
   }
 
@@ -71,9 +77,12 @@ async function save() {
   }
   catch (error) {
     const statusCode = (error as { data?: { statusCode?: number } } | null)?.data?.statusCode
-    errorMessage.value = statusCode === 409
-      ? 'Es gibt bereits einen Spieler mit diesem Nutzernamen.'
-      : apiErrorMessage(error, 'Profil konnte nicht gespeichert werden.')
+    if (statusCode === 409) {
+      handleError.value = 'Es gibt bereits einen Spieler mit diesem Nutzernamen.'
+    }
+    else {
+      errorMessage.value = apiErrorMessage(error, 'Profil konnte nicht gespeichert werden.')
+    }
   }
   finally {
     isSubmitting.value = false
@@ -86,7 +95,10 @@ async function save() {
     class="space-y-4"
     @submit.prevent="save"
   >
-    <UFormField label="Anzeigename">
+    <UFormField
+      label="Anzeigename"
+      :error="displayNameError"
+    >
       <UInput
         v-model="form.displayName"
         name="displayName"
@@ -95,7 +107,10 @@ async function save() {
       />
     </UFormField>
 
-    <UFormField label="Nutzername">
+    <UFormField
+      label="Nutzername"
+      :error="handleError"
+    >
       <UInput
         v-model="form.handle"
         name="handle"
@@ -120,6 +135,7 @@ async function save() {
 
     <p
       v-if="errorMessage"
+      role="alert"
       class="text-sm text-red-600"
     >
       {{ errorMessage }}

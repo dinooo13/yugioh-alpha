@@ -96,7 +96,7 @@ async function onDelete(item: AssistantConversationListItem) {
           color="neutral"
           variant="ghost"
           size="xs"
-          class="shrink-0 opacity-0 group-hover:opacity-100"
+          class="tap-target shrink-0 opacity-0 group-hover:opacity-100"
           :aria-label="`'${item.title}' löschen`"
           :loading="deletingId === item.id"
           @click="onDelete(item)"

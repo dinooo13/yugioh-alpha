@@ -95,7 +95,7 @@ useHead({
               color="neutral"
               variant="link"
               size="xs"
-              class="px-0"
+              class="tap-target px-0"
               :label="open ? 'Details ausblenden' : 'Details anzeigen'"
               :trailing-icon="open ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'"
             />

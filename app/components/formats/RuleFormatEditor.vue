@@ -269,8 +269,18 @@ const description = ref(props.initialValues?.description ?? '')
 const rules = ref<EditableRule[]>((props.initialValues?.rules?.rules ?? []).map(toEditable))
 const cardNames = reactive<Record<string, string>>({ ...(props.initialValues?.cardNames ?? {}) })
 
+// The name check belongs to its UFormField (aria-describedby/aria-invalid);
+// errorMessage is for the server's answer.
+const nameError = ref('')
 const errorMessage = ref('')
 const isSaving = ref(false)
+const nameInput = useTemplateRef<{ inputRef: HTMLInputElement | null }>('nameInput')
+
+watch(name, (value) => {
+  if (value.trim()) {
+    nameError.value = ''
+  }
+})
 
 const isEditing = computed(() => Boolean(props.initialValues?.id))
 
@@ -398,7 +408,9 @@ function payload() {
 
 async function save() {
   if (!name.value.trim()) {
-    errorMessage.value = 'Bitte einen Namen angeben.'
+    nameError.value = 'Bitte einen Namen angeben.'
+    // The field sits far above the save button on a long rule list.
+    nameInput.value?.inputRef?.focus()
     return
   }
 
@@ -425,8 +437,12 @@ async function save() {
 <template>
   <div class="space-y-6">
     <div class="space-y-4 rounded-md border border-gray-200 bg-white p-4">
-      <UFormField label="Name">
+      <UFormField
+        label="Name"
+        :error="nameError"
+      >
         <UInput
+          ref="nameInput"
           v-model="name"
           :maxlength="RULE_FORMAT_NAME_MAX_LENGTH"
           :disabled="readonly"
@@ -488,6 +504,7 @@ async function save() {
               variant="ghost"
               size="xs"
               :aria-label="`Regel ${index + 1} entfernen`"
+              class="tap-target"
               @click="removeRule(index)"
             />
           </div>
@@ -752,6 +769,7 @@ async function save() {
             size="xs"
             :label="RULE_KIND_LABELS[kind]"
             :aria-label="`Regel hinzufügen: ${RULE_KIND_LABELS[kind]}`"
+            class="tap-target"
             @click="addRule(kind)"
           />
         </div>
@@ -811,6 +829,7 @@ async function save() {
 
     <p
       v-if="errorMessage"
+      role="alert"
       class="text-sm text-red-600"
     >
       {{ errorMessage }}

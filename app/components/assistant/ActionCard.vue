@@ -163,7 +163,7 @@ async function reject() {
         color="neutral"
         variant="link"
         size="xs"
-        class="mt-1 px-0"
+        class="tap-target mt-1 px-0"
         :label="isExpanded ? 'Details ausblenden' : 'Details anzeigen'"
         :trailing-icon="isExpanded ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'"
         @click="() => { isExpanded = !isExpanded }"
@@ -241,6 +241,7 @@ async function reject() {
           label="Übernehmen"
           :loading="isApplying"
           :disabled="isRejecting"
+          class="tap-target"
           @click="apply"
         />
         <UButton
@@ -251,6 +252,7 @@ async function reject() {
           label="Verwerfen"
           :loading="isRejecting"
           :disabled="isApplying"
+          class="tap-target"
           @click="reject"
         />
       </div>

@@ -204,3 +204,23 @@ describe('decks page rule formats', () => {
     expect(component.findComponent(DecksDeckFormModal).props('open')).toBe(false)
   })
 })
+
+describe('deck form modal', () => {
+  it('ties the empty-name error to the name field', async () => {
+    document.body.innerHTML = ''
+    await mountSuspended(DecksDeckFormModal, {
+      props: { open: true, initialValues: null },
+    })
+
+    document.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }))
+    await nextTick()
+
+    const input = document.querySelector<HTMLInputElement>('input[aria-label="Deckname"]')!
+    expect(input.getAttribute('aria-invalid')).toBe('true')
+    const describedBy = input.getAttribute('aria-describedby')!.split(' ')
+    const messages = describedBy.map(id => document.getElementById(id)?.textContent?.trim())
+    expect(messages).toContain('Bitte einen Namen angeben.')
+    // Server errors keep their own live region; nothing to announce yet.
+    expect(document.querySelector('[role="alert"]')).toBeNull()
+  })
+})
