@@ -102,8 +102,8 @@ match. Language, condition, edition, and collection come from a
 "Standardwerte" panel and can be overridden per row. Saving posts the rows to
 `POST /api/inventory/bulk` in batches of 50, each batch in one transaction.
 
-Recognizing a card from a photo, or dictating card names by voice, now lives
-in the chat assistant (`/assistent`, see below) instead of its own modes here
+Recognizing a card from a photo now lives in the chat assistant
+(`/assistent`, see below) instead of its own modes here
 — see [`docs/adr/0010-chat-assistant-with-tools.md`](./docs/adr/0010-chat-assistant-with-tools.md)
 (supersedes [`docs/adr/0003`](./docs/adr/0003-client-side-ocr-and-speech-entry.md)).
 
@@ -242,9 +242,8 @@ cards to the inventory, creating a deck, changing a deck's cards — it only
 ever proposes a **pending action**, shown as a card with `Übernehmen` /
 `Verwerfen` buttons; nothing is written until the user confirms it. A
 message can include up to 6 photos (resized client-side before upload) that
-the model identifies against the catalog, and the composer offers voice
-dictation via the browser's Web Speech API, reusing the same feature
-detection Schnellerfassung's old Sprache mode used.
+the model identifies against the catalog. Voice dictation is currently not
+offered (it was removed again because it didn't work reliably).
 
 Like the deck assistant, this works with any OpenAI-compatible Chat
 Completions endpoint that supports streaming and tool calls. An optional

@@ -177,6 +177,9 @@ images, without a model in the loop, is still open and depends on the locally
 cached card images that [ADR 0001](adr/0001-card-catalog-data-model.md) lists
 as follow-up work.
 
+Voice input is currently not offered: Web Speech dictation in the chat
+composer was removed because it didn't work reliably; it's open again.
+
 ### Phase 3: Deckbuilder
 
 Goal: Let users build and save decks from their own cards.
@@ -308,7 +311,7 @@ Scope:
   deck's cards) proposed as pending actions the user must confirm
 - image input (a card photo) identified by the model and confirmed against
   the catalog
-- voice dictation into the chat composer
+- ~~voice dictation into the chat composer~~ (removed, see below)
 - conversation list with rename-by-first-message titles and deletion
 
 Product outcome:
@@ -323,9 +326,10 @@ thread, a tool layer (`search_catalog`, `get_card`, `search_inventory`,
 `list_collections`, `list_decks`, `get_deck`, `list_formats`,
 `validate_deck`, plus the write tools `add_to_inventory`, `create_deck`, and
 `update_deck_cards`) that only ever produces a pending action for a write,
-shown as an action card the user applies or rejects. Image attachments and
-Web Speech dictation both live in the chat composer, replacing the Foto and
-Sprache modes `/inventar/erfassen` used to have; the Liste mode there is
+shown as an action card the user applies or rejects. Image attachments live
+in the chat composer, replacing the Foto mode `/inventar/erfassen` used to
+have (its Sprache mode was replaced by Web Speech dictation in the composer,
+since removed because it didn't work reliably); the Liste mode there is
 unchanged. Works with any OpenAI-compatible Chat Completions endpoint that
 supports streaming and tool calls, with an optional
 `NUXT_ASSISTANT_VISION_MODEL` override for image-containing turns. See
