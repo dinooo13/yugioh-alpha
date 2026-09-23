@@ -114,4 +114,15 @@ describe('AssistantComposer', () => {
     expect(cancelButton).toBeTruthy()
     expect(cancelButton!.attributes('disabled')).toBeDefined()
   })
+
+  it('offers no dictation even when the browser supports Web Speech', async () => {
+    vi.stubGlobal('SpeechRecognition', vi.fn())
+    vi.stubGlobal('webkitSpeechRecognition', vi.fn())
+
+    const component = await mountSuspended(AssistantComposer)
+
+    expect(component.find('button[aria-label="Aufnahme starten"]').exists()).toBe(false)
+    expect(component.text()).not.toContain('Sprache:')
+    expect(findButton(component, 'Deutsch')).toBeUndefined()
+  })
 })

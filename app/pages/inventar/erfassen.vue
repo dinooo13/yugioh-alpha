@@ -126,7 +126,7 @@ function onSaved(result: { created: number, merged: number }) {
       variant="subtle"
       icon="i-lucide-sparkles"
       title="Karten per Foto? Nutze den Assistenten"
-      description="Ein Kartenfoto erkennen, per Diktat erfassen oder direkt ein Deck bauen lassen — das übernimmt jetzt der Assistent."
+      description="Ein Kartenfoto erkennen oder direkt ein Deck bauen lassen — das übernimmt jetzt der Assistent."
     >
       <template #actions>
         <UButton

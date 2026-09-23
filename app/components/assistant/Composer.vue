@@ -5,38 +5,6 @@ import {
   ASSISTANT_MESSAGE_TOTAL_BYTES_MAX,
 } from '~~/shared/assistant-chat'
 
-// Dictation types/logic reused verbatim from app/pages/inventar/erfassen.vue
-// (see docs/adr/0010: voice dictation moved into the chat composer).
-interface SpeechRecognitionAlternativeLike {
-  transcript: string
-}
-
-interface SpeechRecognitionResultLike {
-  isFinal: boolean
-  0: SpeechRecognitionAlternativeLike
-}
-
-interface SpeechRecognitionEventLike {
-  resultIndex: number
-  results: {
-    length: number
-    [index: number]: SpeechRecognitionResultLike
-  }
-}
-
-interface SpeechRecognitionLike {
-  lang: string
-  continuous: boolean
-  interimResults: boolean
-  start: () => void
-  stop: () => void
-  onresult: ((event: SpeechRecognitionEventLike) => void) | null
-  onerror: ((event: { error?: string }) => void) | null
-  onend: (() => void) | null
-}
-
-type SpeechRecognitionCtor = new () => SpeechRecognitionLike
-
 const props = withDefaults(defineProps<{
   disabled?: boolean
   streaming?: boolean
@@ -200,96 +168,6 @@ function onKeydown(event: KeyboardEvent) {
     onSend()
   }
 }
-
-// --- Dictation (reused from app/pages/inventar/erfassen.vue) --------------
-
-const speechSupported = ref(false)
-const isListening = ref(false)
-const speechLanguage = ref<'de-DE' | 'en-US'>('de-DE')
-let recognition: SpeechRecognitionLike | null = null
-
-function speechRecognitionCtor(): SpeechRecognitionCtor | undefined {
-  if (!import.meta.client) {
-    return undefined
-  }
-  const scope = window as unknown as {
-    SpeechRecognition?: SpeechRecognitionCtor
-    webkitSpeechRecognition?: SpeechRecognitionCtor
-  }
-  return scope.SpeechRecognition ?? scope.webkitSpeechRecognition
-}
-
-onMounted(() => {
-  speechSupported.value = Boolean(speechRecognitionCtor())
-})
-
-function teardownRecognition() {
-  if (recognition) {
-    recognition.onresult = null
-    recognition.onerror = null
-    recognition.onend = null
-    recognition = null
-  }
-  isListening.value = false
-}
-
-function stopListening() {
-  recognition?.stop()
-  teardownRecognition()
-}
-
-function startListening() {
-  const Ctor = speechRecognitionCtor()
-  if (!Ctor) {
-    speechSupported.value = false
-    return
-  }
-
-  errorMessage.value = ''
-  recognition = new Ctor()
-  recognition.lang = speechLanguage.value
-  recognition.continuous = true
-  recognition.interimResults = false
-
-  recognition.onresult = (event) => {
-    for (let i = event.resultIndex; i < event.results.length; i += 1) {
-      const result = event.results[i]
-      if (result?.isFinal) {
-        const line = result[0].transcript.trim()
-        if (line !== '') {
-          text.value = text.value === '' ? line : `${text.value}\n${line}`
-        }
-      }
-    }
-  }
-  recognition.onerror = (event) => {
-    // "no-speech" (a pause) and "aborted" (our own stop) are not failures.
-    if (event.error !== 'no-speech' && event.error !== 'aborted') {
-      errorMessage.value = 'Die Spracherkennung wurde abgebrochen. Prüfe die Mikrofon-Freigabe.'
-    }
-    teardownRecognition()
-  }
-  recognition.onend = () => {
-    teardownRecognition()
-  }
-
-  recognition.start()
-  isListening.value = true
-}
-
-function toggleListening() {
-  if (isListening.value) {
-    stopListening()
-  }
-  else {
-    startListening()
-  }
-}
-
-onBeforeUnmount(() => {
-  recognition?.stop()
-  teardownRecognition()
-})
 </script>
 
 <template>
@@ -381,16 +259,6 @@ onBeforeUnmount(() => {
       />
 
       <UButton
-        v-if="speechSupported"
-        :icon="isListening ? 'i-lucide-square' : 'i-lucide-mic'"
-        :color="isListening ? 'error' : 'neutral'"
-        variant="outline"
-        :aria-label="isListening ? 'Aufnahme stoppen' : 'Aufnahme starten'"
-        :disabled="disabled"
-        @click="toggleListening"
-      />
-
-      <UButton
         v-if="!streaming"
         icon="i-lucide-send"
         label="Senden"
@@ -406,29 +274,6 @@ onBeforeUnmount(() => {
         :disabled="cancelling"
         @click="emit('cancel')"
       />
-    </div>
-
-    <div
-      v-if="speechSupported"
-      class="mt-2 flex items-center gap-2"
-    >
-      <span class="text-xs text-gray-400">Sprache:</span>
-      <UFieldGroup>
-        <UButton
-          label="Deutsch"
-          size="xs"
-          color="neutral"
-          :variant="speechLanguage === 'de-DE' ? 'solid' : 'outline'"
-          @click="() => { speechLanguage = 'de-DE' }"
-        />
-        <UButton
-          label="Englisch"
-          size="xs"
-          color="neutral"
-          :variant="speechLanguage === 'en-US' ? 'solid' : 'outline'"
-          @click="() => { speechLanguage = 'en-US' }"
-        />
-      </UFieldGroup>
     </div>
   </div>
 </template>
