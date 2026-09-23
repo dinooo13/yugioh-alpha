@@ -5,9 +5,9 @@ useHead({ title: 'Profil – yugioh alpha' })
 
 const toast = useToast()
 
-const { data: profile, pending, error } = await useFetch<OwnProfile>('/api/profile', {
-  headers: import.meta.server ? useRequestHeaders(['cookie']) : undefined,
-})
+// Shared with the layout avatar (useOwnProfile's key), so saving the form
+// updates the sidebar name and avatar too (#50).
+const { data: profile, pending, error } = await useOwnProfile()
 
 function onSaved(updated: OwnProfile) {
   profile.value = updated

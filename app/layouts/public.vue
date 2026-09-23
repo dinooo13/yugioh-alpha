@@ -9,9 +9,16 @@ const session = ref(await getAuthSession(
   import.meta.server ? useRequestHeaders(['cookie']) : undefined,
 ))
 
+// The "Mein Profil" avatar (#50). Anonymous visitors have no profile, so
+// the request only runs with a session.
+const { data: ownProfile, execute: loadOwnProfile } = await useOwnProfile({ immediate: Boolean(session.value) })
+
 onMounted(async () => {
   if (!session.value) {
     session.value = await getAuthSession()
+  }
+  if (session.value && !ownProfile.value) {
+    await loadOwnProfile()
   }
 })
 
@@ -42,12 +49,23 @@ const loginTarget = computed(() => ({ path: '/login', query: { redirect: route.f
             <UButton
               label="Mein Profil"
               aria-label="Mein Profil"
-              icon="i-lucide-user"
+              :icon="ownProfile ? undefined : 'i-lucide-user'"
               :ui="{ label: 'hidden sm:inline' }"
               color="neutral"
               variant="ghost"
               to="/profil"
-            />
+            >
+              <template
+                v-if="ownProfile"
+                #leading
+              >
+                <ProfileAvatar
+                  size="2xs"
+                  :name="ownProfile.displayName"
+                  :handle="ownProfile.handle"
+                />
+              </template>
+            </UButton>
             <UButton
               label="Zur App"
               icon="i-lucide-arrow-right"
