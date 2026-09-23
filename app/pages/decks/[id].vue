@@ -336,6 +336,20 @@ const sourceCards = computed<SourceCard[]>(() => (sourceData.value?.items ?? [])
 
 const sourceTotal = computed(() => sourceData.value?.total ?? 0)
 
+// The add panel sits below the deck on small screens and can be collapsed
+// there (CSS keeps it open from `lg` up). Seeded from the SSR payload, so
+// server and client agree — no viewport check, no hydration mismatch. An
+// empty deck starts expanded: adding cards is the only thing to do there.
+// A plain ref on purpose, so the panel does not snap shut after the first add.
+const isAddPanelOpen = ref((deck.value?.counts.total ?? 0) === 0)
+const addPanel = useTemplateRef<HTMLElement>('addPanel')
+
+async function openAddPanel() {
+  isAddPanelOpen.value = true
+  await nextTick()
+  addPanel.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
 // --- Deck helpers ----------------------------------------------------------
 
 const sections = computed(() => deck.value?.sections ?? { main: [], extra: [], side: [] })
@@ -636,6 +650,13 @@ async function deleteDeck() {
         </div>
 
         <div class="flex shrink-0 flex-wrap items-center gap-2">
+          <!-- Mobile shortcut: the add panel lives below the deck sections. -->
+          <UButton
+            icon="i-lucide-plus"
+            label="Karten hinzufügen"
+            class="lg:hidden"
+            @click="openAddPanel"
+          />
           <SharingVisibilityBadge :visibility="deck.visibility" />
           <USelect
             v-model="formatSelection"
@@ -742,141 +763,6 @@ async function deleteDeck() {
       </p>
 
       <div class="flex flex-col gap-6 lg:flex-row">
-        <aside class="w-full shrink-0 space-y-3 lg:w-96">
-          <div class="rounded-md border border-gray-200 bg-white p-4">
-            <h2 class="text-base font-semibold text-gray-900">
-              Aus Inventar hinzufügen
-            </h2>
-
-            <div class="mt-3 space-y-2">
-              <UInput
-                v-model="sourceSearch"
-                icon="i-lucide-search"
-                placeholder="Karte suchen..."
-                aria-label="Karten für das Deck suchen"
-              />
-              <div class="flex gap-2">
-                <USelect
-                  v-model="typeSelection"
-                  :items="typeItems"
-                  aria-label="Typ"
-                  class="flex-1"
-                />
-                <USelect
-                  v-model="attributeSelection"
-                  :items="attributeItems"
-                  aria-label="Attribut"
-                  class="flex-1"
-                />
-              </div>
-              <UCheckbox
-                v-model="includeCatalog"
-                label="Auch Katalogkarten anzeigen"
-              />
-            </div>
-
-            <p class="mt-3 text-xs text-gray-500">
-              {{ sourceTotal }} Karte<span v-if="sourceTotal !== 1">n</span>
-            </p>
-
-            <div
-              v-if="sourcePending"
-              class="mt-3 space-y-2"
-            >
-              <USkeleton
-                v-for="n in 3"
-                :key="n"
-                class="h-16 w-full"
-              />
-            </div>
-
-            <p
-              v-else-if="sourceCards.length === 0"
-              class="mt-3 text-sm text-gray-500"
-            >
-              Keine Karten gefunden. Aktiviere „Auch Katalogkarten anzeigen“ oder
-              <NuxtLink
-                to="/inventar"
-                class="font-medium text-primary"
-              >
-                erfasse Karten im Inventar
-              </NuxtLink>.
-            </p>
-
-            <ul
-              v-else
-              class="mt-3 divide-y divide-gray-100"
-            >
-              <li
-                v-for="card in sourceCards"
-                :key="card.catalogCardId"
-                class="flex gap-3 py-3"
-              >
-                <img
-                  v-if="card.imageSmall"
-                  :src="card.imageSmall"
-                  :alt="card.name"
-                  class="h-16 w-11 shrink-0 rounded object-cover"
-                >
-                <div
-                  v-else
-                  class="flex h-16 w-11 shrink-0 items-center justify-center rounded bg-gray-100 text-xs text-gray-400"
-                >
-                  —
-                </div>
-
-                <div class="min-w-0 flex-1">
-                  <p class="truncate text-sm font-medium text-gray-900">
-                    {{ card.name }}
-                  </p>
-                  <p class="truncate text-xs text-gray-500">
-                    {{ cardMetaLine(card) }}
-                  </p>
-                  <!-- Only cards already in the deck have a known status: the
-                       whole inventory is never validated. -->
-                  <UBadge
-                    v-if="statusLabelFor(card.catalogCardId)"
-                    class="mt-0.5"
-                    size="sm"
-                    variant="subtle"
-                    :color="statusColorFor(card.catalogCardId)"
-                    :label="statusLabelFor(card.catalogCardId) ?? ''"
-                  />
-                  <p class="mt-0.5 text-xs text-gray-500">
-                    Besitz: <span class="font-semibold tabular-nums">{{ card.owned }}</span>
-                    · im Deck: <span class="font-semibold tabular-nums">{{ usedByCard.get(card.catalogCardId) ?? 0 }}</span>
-                  </p>
-
-                  <div class="mt-1.5 flex flex-wrap gap-1">
-                    <UButton
-                      v-for="section in DECK_SECTIONS"
-                      :key="section"
-                      size="xs"
-                      :color="section === defaultSectionForCard(card) ? 'primary' : 'neutral'"
-                      :variant="section === defaultSectionForCard(card) ? 'solid' : 'outline'"
-                      :disabled="!isSectionAllowedForCard(card, section) || isMutating"
-                      :title="isSectionAllowedForCard(card, section)
-                        ? undefined
-                        : `${card.name} kann nicht ins ${DECK_SECTION_LABELS[section]}`"
-                      :label="`+ ${section === 'main' ? 'Main' : section === 'extra' ? 'Extra' : 'Side'}`"
-                      :aria-label="`${card.name} zum ${DECK_SECTION_LABELS[section]} hinzufügen`"
-                      @click="addCard(card, section)"
-                    />
-                  </div>
-                  <!-- Disabled buttons alone only explain themselves through
-                       a native `title` tooltip, which mouse-only users never
-                       see (UX review #13) — spell the reason out. -->
-                  <p
-                    v-if="allSectionsDisallowedReason(card)"
-                    class="mt-1 text-xs text-red-600"
-                  >
-                    {{ allSectionsDisallowedReason(card) }}
-                  </p>
-                </div>
-              </li>
-            </ul>
-          </div>
-        </aside>
 
         <div class="min-w-0 flex-1 space-y-6">
           <section
@@ -1007,6 +893,174 @@ async function deleteDeck() {
             </ul>
           </section>
         </div>
+
+        <aside
+          id="deck-add-panel"
+          ref="addPanel"
+          aria-labelledby="deck-add-panel-title"
+          class="w-full shrink-0 scroll-mt-4 lg:sticky lg:top-8 lg:w-80 lg:self-start xl:w-96"
+        >
+          <!-- On lg the panel sticks beside the deck and only the result list
+               scrolls; below lg it sits under the deck and can be collapsed. -->
+          <div class="flex flex-col rounded-md border border-gray-200 bg-white p-4 lg:max-h-[calc(100dvh-4rem)]">
+            <div class="flex items-center justify-between gap-2">
+              <h2
+                id="deck-add-panel-title"
+                class="text-base font-semibold text-gray-900"
+              >
+                Aus Inventar hinzufügen
+              </h2>
+              <UButton
+                class="lg:hidden"
+                color="neutral"
+                variant="ghost"
+                size="sm"
+                :label="isAddPanelOpen ? 'Ausblenden' : 'Anzeigen'"
+                :trailing-icon="isAddPanelOpen ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'"
+                :aria-expanded="isAddPanelOpen"
+                aria-controls="deck-add-panel-body"
+                @click="() => { isAddPanelOpen = !isAddPanelOpen }"
+              />
+            </div>
+
+            <div
+              id="deck-add-panel-body"
+              class="min-h-0 flex-1 flex-col"
+              :class="isAddPanelOpen ? 'flex' : 'hidden lg:flex'"
+            >
+              <div class="mt-3 shrink-0 space-y-2">
+                <UInput
+                  v-model="sourceSearch"
+                  icon="i-lucide-search"
+                  placeholder="Karte suchen..."
+                  aria-label="Karten für das Deck suchen"
+                  class="w-full"
+                />
+                <div class="flex gap-2">
+                  <USelect
+                    v-model="typeSelection"
+                    :items="typeItems"
+                    aria-label="Typ"
+                    class="flex-1"
+                  />
+                  <USelect
+                    v-model="attributeSelection"
+                    :items="attributeItems"
+                    aria-label="Attribut"
+                    class="flex-1"
+                  />
+                </div>
+                <UCheckbox
+                  v-model="includeCatalog"
+                  label="Auch Katalogkarten anzeigen"
+                />
+              </div>
+
+              <p class="mt-3 shrink-0 text-xs text-gray-500">
+                {{ sourceTotal }} Karte<span v-if="sourceTotal !== 1">n</span>
+              </p>
+
+              <div class="-mx-4 mt-3 min-h-0 flex-1 px-4 lg:overflow-y-auto">
+                <div
+                  v-if="sourcePending"
+                  class="space-y-2"
+                >
+                  <USkeleton
+                    v-for="n in 3"
+                    :key="n"
+                    class="h-16 w-full"
+                  />
+                </div>
+
+                <p
+                  v-else-if="sourceCards.length === 0"
+                  class="text-sm text-gray-500"
+                >
+                  Keine Karten gefunden. Aktiviere „Auch Katalogkarten anzeigen“ oder
+                  <NuxtLink
+                    to="/inventar"
+                    class="font-medium text-primary"
+                  >
+                    erfasse Karten im Inventar
+                  </NuxtLink>.
+                </p>
+
+                <ul
+                  v-else
+                  class="divide-y divide-gray-100"
+                >
+                  <li
+                    v-for="card in sourceCards"
+                    :key="card.catalogCardId"
+                    class="flex gap-3 py-3"
+                  >
+                    <img
+                      v-if="card.imageSmall"
+                      :src="card.imageSmall"
+                      :alt="card.name"
+                      class="h-16 w-11 shrink-0 rounded object-cover"
+                    >
+                    <div
+                      v-else
+                      class="flex h-16 w-11 shrink-0 items-center justify-center rounded bg-gray-100 text-xs text-gray-400"
+                    >
+                      —
+                    </div>
+
+                    <div class="min-w-0 flex-1">
+                      <p class="truncate text-sm font-medium text-gray-900">
+                        {{ card.name }}
+                      </p>
+                      <p class="truncate text-xs text-gray-500">
+                        {{ cardMetaLine(card) }}
+                      </p>
+                      <!-- Only cards already in the deck have a known status: the
+                           whole inventory is never validated. -->
+                      <UBadge
+                        v-if="statusLabelFor(card.catalogCardId)"
+                        class="mt-0.5"
+                        size="sm"
+                        variant="subtle"
+                        :color="statusColorFor(card.catalogCardId)"
+                        :label="statusLabelFor(card.catalogCardId) ?? ''"
+                      />
+                      <p class="mt-0.5 text-xs text-gray-500">
+                        Besitz: <span class="font-semibold tabular-nums">{{ card.owned }}</span>
+                        · im Deck: <span class="font-semibold tabular-nums">{{ usedByCard.get(card.catalogCardId) ?? 0 }}</span>
+                      </p>
+
+                      <div class="mt-1.5 flex flex-wrap gap-1">
+                        <UButton
+                          v-for="section in DECK_SECTIONS"
+                          :key="section"
+                          size="xs"
+                          :color="section === defaultSectionForCard(card) ? 'primary' : 'neutral'"
+                          :variant="section === defaultSectionForCard(card) ? 'solid' : 'outline'"
+                          :disabled="!isSectionAllowedForCard(card, section) || isMutating"
+                          :title="isSectionAllowedForCard(card, section)
+                            ? undefined
+                            : `${card.name} kann nicht ins ${DECK_SECTION_LABELS[section]}`"
+                          :label="`+ ${section === 'main' ? 'Main' : section === 'extra' ? 'Extra' : 'Side'}`"
+                          :aria-label="`${card.name} zum ${DECK_SECTION_LABELS[section]} hinzufügen`"
+                          @click="addCard(card, section)"
+                        />
+                      </div>
+                      <!-- Disabled buttons alone only explain themselves through
+                           a native `title` tooltip, which mouse-only users never
+                           see (UX review #13) — spell the reason out. -->
+                      <p
+                        v-if="allSectionsDisallowedReason(card)"
+                        class="mt-1 text-xs text-red-600"
+                      >
+                        {{ allSectionsDisallowedReason(card) }}
+                      </p>
+                    </div>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </aside>
       </div>
 
       <DecksDeckFormModal
