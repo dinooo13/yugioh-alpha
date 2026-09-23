@@ -1,4 +1,6 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
+import { pwaOptions } from './pwa.config'
+
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   devtools: { enabled: true },
@@ -75,33 +77,7 @@ export default defineNuxtConfig({
       meta: [{ name: 'theme-color', content: '#6D5DF6' }],
     },
   },
-  pwa: {
-    registerType: 'autoUpdate',
-    manifest: {
-      name: 'yugioh alpha',
-      short_name: 'yugioh alpha',
-      description: 'Verwaltung für Yu-Gi-Oh!-Sammlungen, Decks, Formate und Turniere',
-      lang: 'de',
-      display: 'standalone',
-      start_url: '/',
-      theme_color: '#6D5DF6',
-      background_color: '#ffffff',
-      icons: [
-        {
-          src: '/icon.svg',
-          sizes: 'any',
-          type: 'image/svg+xml',
-          purpose: 'any',
-        },
-      ],
-    },
-    workbox: {
-      globPatterns: ['**/*.{js,css,html,svg,png,ico,webmanifest}'],
-    },
-    devOptions: {
-      enabled: true,
-      type: 'module',
-      suppressWarnings: true,
-    },
-  },
+  // See pwa.config.ts: the service worker only precaches build assets and
+  // never answers page navigations (per-user SSR HTML).
+  pwa: pwaOptions,
 })
