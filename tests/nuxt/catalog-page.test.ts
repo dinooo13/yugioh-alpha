@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DOMWrapper } from '@vue/test-utils'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
-import KatalogPage from '~/pages/catalog.vue'
+import CatalogPage from '~/pages/catalog.vue'
 
 // UModal teleports its content to <body> (same note as in collections-ui.test.ts).
 function body() {
@@ -63,7 +63,7 @@ mockNuxtImport('useFetch', () => {
 
 describe('catalog page', () => {
   it('renders German catalog controls and result tiles', async () => {
-    const component = await mountSuspended(KatalogPage)
+    const component = await mountSuspended(CatalogPage)
 
     expect(component.text()).toContain('Katalog')
     expect(component.find('input[aria-label="Karten suchen"]').exists()).toBe(true)
@@ -77,7 +77,7 @@ describe('catalog page', () => {
   })
 
   it('opens the add-to-inventory modal pre-filled with the clicked card (#6)', async () => {
-    const component = await mountSuspended(KatalogPage)
+    const component = await mountSuspended(CatalogPage)
 
     const addButton = component.findAll('button').find(btn => btn.text() === 'Zum Inventar')
     expect(addButton).toBeTruthy()

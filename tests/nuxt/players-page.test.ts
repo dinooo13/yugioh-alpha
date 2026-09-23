@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
-import SpielerIndexPage from '~/pages/players/[handle]/index.vue'
-import SpielerDeckPage from '~/pages/players/[handle]/decks/[id].vue'
+import PlayerIndexPage from '~/pages/players/[handle]/index.vue'
+import PlayerDeckPage from '~/pages/players/[handle]/decks/[id].vue'
 import type { PublicProfileResponse, SharedDeckView } from '~~/shared/sharing'
 
 const state = vi.hoisted(() => ({
@@ -74,7 +74,7 @@ describe('public profile page', () => {
       inventory: { visible: true, cardCount: 120 },
     })
 
-    const component = await mountSuspended(SpielerIndexPage)
+    const component = await mountSuspended(PlayerIndexPage)
     const text = component.text()
 
     expect(text).toContain('Fabian')
@@ -92,7 +92,7 @@ describe('public profile page', () => {
     state.error = null
     state.profile = profileResponse({ inventory: { visible: false, cardCount: 0 } })
 
-    const component = await mountSuspended(SpielerIndexPage)
+    const component = await mountSuspended(PlayerIndexPage)
 
     expect(component.text()).not.toContain('Inventar ansehen')
   })
@@ -101,7 +101,7 @@ describe('public profile page', () => {
     state.error = null
     state.profile = profileResponse()
 
-    const component = await mountSuspended(SpielerIndexPage)
+    const component = await mountSuspended(PlayerIndexPage)
 
     expect(component.text()).toContain('Dieses Profil teilt aktuell nichts.')
   })
@@ -110,7 +110,7 @@ describe('public profile page', () => {
     state.error = null
     state.profile = profileResponse()
 
-    const component = await mountSuspended(SpielerIndexPage)
+    const component = await mountSuspended(PlayerIndexPage)
 
     expect(component.text()).not.toContain('Vorschau deines Profils')
     expect(component.text()).not.toContain('Sichtbarkeit verwalten')
@@ -120,7 +120,7 @@ describe('public profile page', () => {
     state.error = null
     state.profile = profileResponse({ viewer: { isAuthenticated: true, isOwner: true } })
 
-    const component = await mountSuspended(SpielerIndexPage)
+    const component = await mountSuspended(PlayerIndexPage)
     const text = component.text()
 
     expect(text).toContain('Vorschau deines Profils – private Inhalte siehst nur du.')
@@ -138,7 +138,7 @@ describe('shared not-found notice', () => {
     state.profile = null
     state.session = null
 
-    const component = await mountSuspended(SpielerIndexPage)
+    const component = await mountSuspended(PlayerIndexPage)
     await component.vm.$nextTick()
 
     expect(component.text()).toContain('Nicht gefunden oder nicht freigegeben.')
@@ -153,7 +153,7 @@ describe('shared not-found notice', () => {
     state.profile = null
     state.session = { session: {}, user: { email: 'other@example.com' } }
 
-    const component = await mountSuspended(SpielerIndexPage)
+    const component = await mountSuspended(PlayerIndexPage)
     await component.vm.$nextTick()
 
     expect(component.text()).toContain('Nicht gefunden oder nicht freigegeben.')
@@ -194,7 +194,7 @@ describe('public deck page', () => {
       isOwner: false,
     }
 
-    const component = await mountSuspended(SpielerDeckPage)
+    const component = await mountSuspended(PlayerDeckPage)
     const text = component.text()
 
     expect(text).toContain('Main Deck')
@@ -230,7 +230,7 @@ describe('public deck page', () => {
     state.error = null
     state.deck = baseDeck({ isOwner: false })
 
-    const component = await mountSuspended(SpielerDeckPage)
+    const component = await mountSuspended(PlayerDeckPage)
     const text = component.text()
 
     expect(text).not.toContain('Hinweise zum Deckaufbau')
@@ -252,7 +252,7 @@ describe('public deck page', () => {
     state.error = null
     state.deck = baseDeck({ isOwner: true })
 
-    const component = await mountSuspended(SpielerDeckPage)
+    const component = await mountSuspended(PlayerDeckPage)
 
     expect(component.text()).toContain('Hinweise zum Deckaufbau')
   })

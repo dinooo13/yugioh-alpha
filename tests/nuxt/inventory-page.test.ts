@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
 import AddToInventoryModal from '~/components/inventory/AddToInventoryModal.vue'
-import InventarPage from '~/pages/inventory/index.vue'
+import InventoryPage from '~/pages/inventory/index.vue'
 
 const inventoryState = vi.hoisted(() => ({
   response: {
@@ -25,7 +25,7 @@ describe('inventory page', () => {
     inventoryState.response = { items: [], total: 0 }
     inventoryState.pending = false
 
-    const component = await mountSuspended(InventarPage)
+    const component = await mountSuspended(InventoryPage)
 
     expect(component.text()).toContain('Keine Karten im Inventar')
     expect(component.text()).toContain('Karte hinzufügen')
@@ -54,7 +54,7 @@ describe('inventory page', () => {
       ],
     }
 
-    const component = await mountSuspended(InventarPage)
+    const component = await mountSuspended(InventoryPage)
 
     expect(component.text()).toContain('Dark Magician')
     expect(component.text()).toContain('Normal Monster')
@@ -77,7 +77,7 @@ describe('inventory page', () => {
     inventoryState.response = { items: [], total: 0 }
     inventoryState.pending = true
 
-    const component = await mountSuspended(InventarPage)
+    const component = await mountSuspended(InventoryPage)
 
     expect(component.text()).not.toContain('Inventar wird geladen...')
     expect(component.find('ul[aria-busy="true"]').exists()).toBe(true)

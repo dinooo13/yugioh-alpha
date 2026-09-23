@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
-import TurnierDetailPage from '~/pages/tournaments/[id].vue'
+import TournamentDetailPage from '~/pages/tournaments/[id].vue'
 import type {
   TournamentDetail,
   TournamentMatchDto,
@@ -141,7 +141,7 @@ describe('tournament detail page — organizer, registration', () => {
   it('disables "Turnier starten" with one participant and enables it with two', async () => {
     state.tournament = tournamentDetail({ participants: [participant()], canStart: false })
 
-    const component = await mountSuspended(TurnierDetailPage)
+    const component = await mountSuspended(TournamentDetailPage)
     const startButton = component.findAll('button').find(button => button.text() === 'Turnier starten')
     expect(startButton?.attributes('disabled')).toBeDefined()
 
@@ -149,7 +149,7 @@ describe('tournament detail page — organizer, registration', () => {
       participants: [participant(), participant({ id: 'p-2', name: 'Alice', isSelf: false })],
       canStart: true,
     })
-    const component2 = await mountSuspended(TurnierDetailPage)
+    const component2 = await mountSuspended(TournamentDetailPage)
     const startButton2 = component2.findAll('button').find(button => button.text() === 'Turnier starten')
     expect(startButton2?.attributes('disabled')).toBeUndefined()
   })
@@ -157,7 +157,7 @@ describe('tournament detail page — organizer, registration', () => {
   it('spells out why "Turnier starten" is disabled as visible text, not only a tooltip', async () => {
     state.tournament = tournamentDetail({ participants: [participant()], canStart: false })
 
-    const component = await mountSuspended(TurnierDetailPage)
+    const component = await mountSuspended(TournamentDetailPage)
     const hint = component.findAll('p').find(p => p.text() === 'Mindestens 2 Teilnehmer nötig')
     expect(hint).toBeTruthy()
 
@@ -165,7 +165,7 @@ describe('tournament detail page — organizer, registration', () => {
       participants: [participant(), participant({ id: 'p-2', name: 'Alice', isSelf: false })],
       canStart: true,
     })
-    const component2 = await mountSuspended(TurnierDetailPage)
+    const component2 = await mountSuspended(TournamentDetailPage)
     expect(component2.text()).not.toContain('Mindestens 2 Teilnehmer nötig')
   })
 
@@ -181,7 +181,7 @@ describe('tournament detail page — organizer, registration', () => {
       ],
     })
 
-    const component = await mountSuspended(TurnierDetailPage)
+    const component = await mountSuspended(TournamentDetailPage)
     const text = component.text()
 
     expect(text).toContain('Teilnehmer hinzufügen')
@@ -206,7 +206,7 @@ describe('tournament detail page — organizer, registration', () => {
       ],
     })
 
-    const component = await mountSuspended(TurnierDetailPage)
+    const component = await mountSuspended(TournamentDetailPage)
     const text = component.text()
 
     expect(text).toContain('Turnierdeck')
@@ -225,7 +225,7 @@ describe('tournament detail page — mobile cards and legends (#28)', () => {
       participants: [participant(), participant({ id: 'p-2', name: 'Gast Anton', linked: false, isSelf: false })],
     })
 
-    const component = await mountSuspended(TurnierDetailPage)
+    const component = await mountSuspended(TournamentDetailPage)
 
     expect(component.text()).toContain('„Konto“: Spieler mit eigenem Benutzerkonto')
     expect(component.text()).toContain('Gäste ohne Konto verwaltet die Turnierleitung.')
@@ -240,7 +240,7 @@ describe('tournament detail page — mobile cards and legends (#28)', () => {
       ],
     })
 
-    const component = await mountSuspended(TurnierDetailPage)
+    const component = await mountSuspended(TournamentDetailPage)
 
     expect(component.text()).not.toContain('„Konto“')
   })
@@ -250,7 +250,7 @@ describe('tournament detail page — mobile cards and legends (#28)', () => {
       participants: [participant({ deckId: 'deck-1', deckName: 'Turnierdeck' })],
     })
 
-    const component = await mountSuspended(TurnierDetailPage)
+    const component = await mountSuspended(TournamentDetailPage)
     const deckButton = component.findAll('button').find(button => button.text() === 'Deck ändern')
 
     expect(deckButton?.classes()).toContain('tap-target')
@@ -265,7 +265,7 @@ describe('tournament detail page — mobile cards and legends (#28)', () => {
       canEditPairings: true,
     })
 
-    const component = await mountSuspended(TurnierDetailPage)
+    const component = await mountSuspended(TournamentDetailPage)
     const buttonByText = (label: string) => component.findAll('button').find(button => button.text() === label)
 
     expect(buttonByText('2:0')?.classes()).toContain('tap-target')
@@ -281,7 +281,7 @@ describe('tournament detail page — mobile cards and legends (#28)', () => {
       standings: [standing()],
     })
 
-    const component = await mountSuspended(TurnierDetailPage)
+    const component = await mountSuspended(TournamentDetailPage)
 
     expect(component.text()).toContain('S-N-U = Siege–Niederlagen–Unentschieden')
     expect(component.text()).toContain('Punkte: Sieg 3, Unentschieden 1')
@@ -310,7 +310,7 @@ describe('tournament detail page — organizer, running', () => {
   it('shows the current round, table, names and result inputs', async () => {
     state.tournament = runningTournament()
 
-    const component = await mountSuspended(TurnierDetailPage)
+    const component = await mountSuspended(TournamentDetailPage)
     const text = component.text()
 
     expect(text).toContain('Runde 1')
@@ -324,7 +324,7 @@ describe('tournament detail page — organizer, running', () => {
   it('disables "Runde abschließen" while a result is missing', async () => {
     state.tournament = runningTournament()
 
-    const component = await mountSuspended(TurnierDetailPage)
+    const component = await mountSuspended(TournamentDetailPage)
     const completeButton = component.findAll('button').find(button => button.text() === 'Runde abschließen')
     expect(completeButton?.attributes('disabled')).toBeDefined()
   })
@@ -342,7 +342,7 @@ describe('tournament detail page — organizer, running', () => {
     ))
     vi.stubGlobal('$fetch', fetchMock)
 
-    const component = await mountSuspended(TurnierDetailPage)
+    const component = await mountSuspended(TournamentDetailPage)
     expect(state.getCallCount).toBe(1)
 
     const quickWinButton = component.findAll('button').find(button => button.text() === '2:0')
@@ -378,7 +378,7 @@ describe('tournament detail page — organizer, running', () => {
     tournament.currentRound = tournament.rounds[0]!
     state.tournament = tournament
 
-    const component = await mountSuspended(TurnierDetailPage)
+    const component = await mountSuspended(TournamentDetailPage)
 
     expect(component.text()).toContain('Freilos')
     expect(component.find('[aria-label="Spiele Organizer"]').exists()).toBe(false)
@@ -397,7 +397,7 @@ describe('tournament detail page — standings', () => {
       ],
     })
 
-    const component = await mountSuspended(TurnierDetailPage)
+    const component = await mountSuspended(TournamentDetailPage)
     const rows = component.findAll('tbody tr')
     const standingsRows = rows.filter(row => row.text().includes('Organizer') || row.text().includes('Alice'))
 
@@ -419,7 +419,7 @@ describe('tournament detail page — participant role', () => {
       ],
     })
 
-    const component = await mountSuspended(TurnierDetailPage)
+    const component = await mountSuspended(TournamentDetailPage)
     const text = component.text()
 
     expect(text).not.toContain('Turnier starten')
@@ -443,7 +443,7 @@ describe('tournament detail page — participant role', () => {
       ],
     })
 
-    const component = await mountSuspended(TurnierDetailPage)
+    const component = await mountSuspended(TournamentDetailPage)
     const text = component.text()
 
     expect(text).not.toContain('Melde dein Deck an, bevor das Turnier startet.')
@@ -460,7 +460,7 @@ describe('tournament detail page — finished', () => {
       standings: [standing()],
     })
 
-    const component = await mountSuspended(TurnierDetailPage)
+    const component = await mountSuspended(TournamentDetailPage)
     const text = component.text()
 
     expect(text).toContain('Dieses Turnier ist abgeschlossen und kann nicht mehr geändert werden.')
@@ -479,7 +479,7 @@ describe('tournament detail page — finished', () => {
       standings: [standing()],
     })
 
-    const component = await mountSuspended(TurnierDetailPage)
+    const component = await mountSuspended(TournamentDetailPage)
     const headings = component.findAll('h2').map(heading => heading.text())
     const tableIndex = headings.findIndex(heading => heading.startsWith('Tabelle'))
     const participantsIndex = headings.findIndex(heading => heading.startsWith('Teilnehmer'))
@@ -505,7 +505,7 @@ describe('tournament detail page — error mapping', () => {
     }))
     vi.stubGlobal('$fetch', fetchMock)
 
-    const component = await mountSuspended(TurnierDetailPage)
+    const component = await mountSuspended(TournamentDetailPage)
     await component.findAll('button').find(button => button.text() === 'Turnier starten')!.trigger('click')
     await flushPromises()
     await component.vm.$nextTick()

@@ -3,7 +3,7 @@ import { DOMWrapper, enableAutoUnmount } from '@vue/test-utils'
 import { defineComponent, nextTick, toValue } from 'vue'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
 import { UDropdownMenu } from '#components'
-import InventarPage from '~/pages/inventory/index.vue'
+import InventoryPage from '~/pages/inventory/index.vue'
 import AddToInventoryModal from '~/components/inventory/AddToInventoryModal.vue'
 import CollectionActions from '~/components/collections/CollectionActions.vue'
 import ConfirmDialog from '~/components/layout/ConfirmDialog.vue'
@@ -21,8 +21,8 @@ vi.mock('~/utils/session', () => ({
 // `useConfirm()` only settles with `ConfirmDialog` mounted alongside (it
 // normally lives in the default layout — see formats-page.test.ts).
 const PageWithConfirmDialog = defineComponent({
-  components: { InventarPage, ConfirmDialog },
-  template: '<div><InventarPage /><ConfirmDialog /></div>',
+  components: { InventoryPage, ConfirmDialog },
+  template: '<div><InventoryPage /><ConfirmDialog /></div>',
 })
 
 // UModal teleports its content to <body>.
@@ -129,7 +129,7 @@ function menuItem(component: Awaited<ReturnType<typeof mountSuspended>>, label: 
 
 describe('inventory collection scope from the URL', () => {
   it('scopes header, both views and the presets to ?collectionId=', async () => {
-    const component = await mountSuspended(InventarPage, { route: '/inventory?collectionId=col-1' })
+    const component = await mountSuspended(InventoryPage, { route: '/inventory?collectionId=col-1' })
 
     expect(component.find('h1').text()).toBe('Box 1')
     expect(component.text()).toContain('3 Karten')
@@ -145,7 +145,7 @@ describe('inventory collection scope from the URL', () => {
   })
 
   it('shows the cards without a collection for ?collectionId=__none__', async () => {
-    const component = await mountSuspended(InventarPage, { route: '/inventory?collectionId=__none__' })
+    const component = await mountSuspended(InventoryPage, { route: '/inventory?collectionId=__none__' })
 
     expect(component.find('h1').text()).toBe('Ohne Sammlung')
     expect(component.text()).toContain('2 Karten')
@@ -162,7 +162,7 @@ describe('inventory collection scope from the URL', () => {
   })
 
   it('writes a selected collection to the URL, and every consumer follows', async () => {
-    const component = await mountSuspended(InventarPage, { route: '/inventory' })
+    const component = await mountSuspended(InventoryPage, { route: '/inventory' })
     expect(component.find('h1').text()).toBe('Alle Karten')
     expect(component.text()).toContain('7 Karten')
 
@@ -185,7 +185,7 @@ describe('inventory collection scope from the URL', () => {
   })
 
   it('drops an unknown ?collectionId= once the collections are loaded', async () => {
-    await mountSuspended(InventarPage, { route: '/inventory?collectionId=gone&view=overview' })
+    await mountSuspended(InventoryPage, { route: '/inventory?collectionId=gone&view=overview' })
 
     await vi.waitFor(() => {
       expect(currentQuery()).toEqual({ view: 'overview' })
@@ -195,7 +195,7 @@ describe('inventory collection scope from the URL', () => {
 
 describe('inventory collection management', () => {
   it('creates a collection via "Neue Sammlung" and selects it', async () => {
-    const component = await mountSuspended(InventarPage, { route: '/inventory' })
+    const component = await mountSuspended(InventoryPage, { route: '/inventory' })
 
     await component.findAll('button').find(btn => btn.text() === 'Neue Sammlung')!.trigger('click')
     await vi.waitFor(() => {
@@ -218,7 +218,7 @@ describe('inventory collection management', () => {
   })
 
   it('opens the rename dialog pre-filled from "Umbenennen"', async () => {
-    const component = await mountSuspended(InventarPage, { route: '/inventory?collectionId=col-1' })
+    const component = await mountSuspended(InventoryPage, { route: '/inventory?collectionId=col-1' })
 
     menuItem(component, 'Umbenennen').onSelect()
 
@@ -229,7 +229,7 @@ describe('inventory collection management', () => {
   })
 
   it('opens the collection share dialog from "Teilen"', async () => {
-    const component = await mountSuspended(InventarPage, { route: '/inventory?collectionId=col-1' })
+    const component = await mountSuspended(InventoryPage, { route: '/inventory?collectionId=col-1' })
 
     const share = menuItem(component, 'Teilen') as { onSelect: () => void, disabled?: boolean }
     expect(share.disabled).toBe(false)

@@ -3,7 +3,7 @@ import { flushPromises } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import EntryReviewTable from '~/components/entry/EntryReviewTable.vue'
-import ErfassenPage from '~/pages/inventory/quick-entry.vue'
+import QuickEntryPage from '~/pages/inventory/quick-entry.vue'
 import {
   buildBulkEntries,
   chunkBulkEntries,
@@ -345,7 +345,7 @@ describe('Schnellerfassung page', () => {
     const fetchMock = vi.fn(async () => ({ results: [exactResult, noMatchResult] }))
     vi.stubGlobal('$fetch', fetchMock)
 
-    const component = await mountSuspended(ErfassenPage)
+    const component = await mountSuspended(QuickEntryPage)
     const textarea = component.find('textarea')
 
     await textarea.setValue('Dark Magician\nVöllig unbekannt')
