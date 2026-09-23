@@ -341,7 +341,7 @@ describe('bulk payload', () => {
 })
 
 describe('Schnellerfassung page', () => {
-  it('appends to the review queue on every "Vorschläge laden"', async () => {
+  it('appends to the review queue on every "Karten erkennen"', async () => {
     const fetchMock = vi.fn(async () => ({ results: [exactResult, noMatchResult] }))
     vi.stubGlobal('$fetch', fetchMock)
 
@@ -349,13 +349,13 @@ describe('Schnellerfassung page', () => {
     const textarea = component.find('textarea')
 
     await textarea.setValue('Dark Magician\nVöllig unbekannt')
-    await component.findAll('button').find(button => button.text().includes('Vorschläge laden'))!.trigger('click')
+    await component.findAll('button').find(button => button.text().includes('Karten erkennen'))!.trigger('click')
     await flushPromises()
 
     expect(component.text()).toContain('2 gesamt')
 
     await component.find('textarea').setValue('Dark Magician\nVöllig unbekannt')
-    await component.findAll('button').find(button => button.text().includes('Vorschläge laden'))!.trigger('click')
+    await component.findAll('button').find(button => button.text().includes('Karten erkennen'))!.trigger('click')
     await flushPromises()
 
     const suggestCalls = (fetchMock.mock.calls as unknown as Array<[string]>)
