@@ -22,6 +22,7 @@ onMounted(async () => {
   }
 })
 
+const { t } = useI18n()
 const route = useRoute()
 // Preserved across the login round-trip so a signed-out visitor lands back
 // on the shared link they came from (§4.2 #19) instead of the dashboard.
@@ -45,10 +46,14 @@ const loginTarget = computed(() => ({ path: '/login', query: { redirect: route.f
         </NuxtLink>
 
         <div class="flex items-center gap-2">
+          <LayoutLocaleSwitch
+            compact
+            collapse
+          />
           <template v-if="session">
             <UButton
-              label="Mein Profil"
-              aria-label="Mein Profil"
+              :label="t('app.publicHeader.myProfile')"
+              :aria-label="t('app.publicHeader.myProfile')"
               :icon="ownProfile ? undefined : 'i-lucide-user'"
               :ui="{ label: 'hidden sm:inline' }"
               color="neutral"
@@ -67,7 +72,7 @@ const loginTarget = computed(() => ({ path: '/login', query: { redirect: route.f
               </template>
             </UButton>
             <UButton
-              label="Zur App"
+              :label="t('app.publicHeader.toApp')"
               icon="i-lucide-arrow-right"
               variant="outline"
               color="neutral"
@@ -76,7 +81,7 @@ const loginTarget = computed(() => ({ path: '/login', query: { redirect: route.f
           </template>
           <UButton
             v-else
-            label="Anmelden"
+            :label="t('app.publicHeader.login')"
             icon="i-lucide-log-in"
             :to="loginTarget"
           />

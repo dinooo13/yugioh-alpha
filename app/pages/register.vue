@@ -1,25 +1,28 @@
 <script setup lang="ts">
 import { authClient } from '~/utils/auth-client'
 import { waitForAuthSession } from '~/utils/session'
-import { authErrorMessage } from '~/utils/auth-errors'
+import { authErrorKey } from '~/utils/auth-errors'
 
 definePageMeta({ layout: 'auth' })
-useHead({ title: 'Registrieren – yugioh alpha' })
+
+const { t } = useI18n()
+usePageTitle('auth.register.title')
 
 const name = ref('')
 const email = ref('')
 const password = ref('')
-const error = ref('')
+// A message key, so the error follows a language switch.
+const errorKey = ref('')
 const loading = ref(false)
 
 async function onSubmit() {
-  error.value = ''
+  errorKey.value = ''
 
   // Native `required` still blocks submission, but browsers only ever
-  // surface that as a focus + a non-localized tooltip — no visible German
+  // surface that as a focus + a non-localized tooltip — no visible
   // message on the page (UX review #3).
   if (!name.value.trim() || !email.value.trim() || !password.value) {
-    error.value = 'Bitte fülle alle Felder aus.'
+    errorKey.value = 'auth.allFieldsRequired'
     return
   }
 
@@ -32,7 +35,7 @@ async function onSubmit() {
   loading.value = false
 
   if (signUpError) {
-    error.value = authErrorMessage(signUpError, 'Registrierung fehlgeschlagen. Bitte versuche es erneut.')
+    errorKey.value = authErrorKey(signUpError) ?? 'auth.register.failed'
     return
   }
 
@@ -47,10 +50,10 @@ async function onSubmit() {
 <template>
   <div>
     <h1 class="text-xl font-semibold text-gray-900">
-      Registrieren
+      {{ t('auth.register.title') }}
     </h1>
     <p class="mt-1 text-sm text-gray-500">
-      Erstelle ein Konto, um deine Sammlung zu verwalten.
+      {{ t('auth.register.description') }}
     </p>
 
     <form
@@ -58,32 +61,32 @@ async function onSubmit() {
       novalidate
       @submit.prevent="onSubmit"
     >
-      <UFormField label="Name">
+      <UFormField :label="t('auth.fields.name')">
         <UInput
           v-model="name"
           name="name"
           autocomplete="name"
-          placeholder="Dein Name"
+          :placeholder="t('auth.fields.namePlaceholder')"
           class="w-full"
           required
         />
       </UFormField>
 
-      <UFormField label="E-Mail">
+      <UFormField :label="t('auth.fields.email')">
         <UInput
           v-model="email"
           type="email"
           name="email"
           autocomplete="email"
-          placeholder="du@example.com"
+          :placeholder="t('auth.fields.emailPlaceholder')"
           class="w-full"
           required
         />
       </UFormField>
 
       <UFormField
-        label="Passwort"
-        help="Mindestens 8 Zeichen"
+        :label="t('auth.fields.password')"
+        :help="t('auth.register.passwordHelp')"
       >
         <UInput
           v-model="password"
@@ -97,29 +100,35 @@ async function onSubmit() {
       </UFormField>
 
       <p
-        v-if="error"
+        v-if="errorKey"
         role="alert"
         class="text-sm text-red-600"
       >
-        {{ error }}
+        {{ t(errorKey) }}
       </p>
 
       <UButton
         type="submit"
-        label="Registrieren"
+        :label="t('auth.register.submit')"
         block
         :loading="loading"
       />
     </form>
 
-    <p class="mt-6 text-center text-sm text-gray-500">
-      Bereits ein Konto?
-      <NuxtLink
-        to="/login"
-        class="font-medium text-primary"
-      >
-        Anmelden
-      </NuxtLink>
-    </p>
+    <i18n-t
+      keypath="auth.register.hasAccount"
+      tag="p"
+      class="mt-6 text-center text-sm text-gray-500"
+      scope="global"
+    >
+      <template #link>
+        <NuxtLink
+          to="/login"
+          class="font-medium text-primary"
+        >
+          {{ t('auth.register.loginLink') }}
+        </NuxtLink>
+      </template>
+    </i18n-t>
   </div>
 </template>

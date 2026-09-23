@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { pluralize } from '~~/shared/plural'
-
-useHead({ title: 'Dashboard – yugioh alpha' })
+const { t } = useI18n()
+const formatCount = useCount()
+usePageTitle('dashboard.title')
 
 // Cheap counts for the onboarding cards (UX review #2) — each list endpoint
 // already reports a `total`, so a `pageSize: 1` request is enough; no need
@@ -43,28 +43,28 @@ interface OnboardingCard {
 const cards = computed<OnboardingCard[]>(() => [
   {
     icon: 'i-lucide-archive',
-    title: 'Inventar',
+    title: t('dashboard.cards.inventory.title'),
     count: inventoryCount.value,
-    description: pluralize(inventoryCount.value, 'Karte im Bestand', 'Karten im Bestand'),
-    cta: 'Karten erfassen',
+    description: formatCount('dashboard.cards.inventory.count', inventoryCount.value),
+    cta: t('dashboard.cards.inventory.cta'),
     to: '/inventory/quick-entry',
     listTo: '/inventory',
   },
   {
     icon: 'i-lucide-layers',
-    title: 'Decks',
+    title: t('dashboard.cards.decks.title'),
     count: deckCount.value,
-    description: pluralize(deckCount.value, 'angelegtes Deck', 'angelegte Decks'),
-    cta: 'Deck anlegen',
+    description: formatCount('dashboard.cards.decks.count', deckCount.value),
+    cta: t('dashboard.cards.decks.cta'),
     to: '/decks?new=1',
     listTo: '/decks',
   },
   {
     icon: 'i-lucide-trophy',
-    title: 'Turniere',
+    title: t('dashboard.cards.tournaments.title'),
     count: tournamentCount.value,
-    description: pluralize(tournamentCount.value, 'Turnier', 'Turniere'),
-    cta: 'Turnier anlegen',
+    description: formatCount('dashboard.cards.tournaments.count', tournamentCount.value),
+    cta: t('dashboard.cards.tournaments.cta'),
     to: '/tournaments/new',
     listTo: '/tournaments',
   },
@@ -74,8 +74,8 @@ const cards = computed<OnboardingCard[]>(() => [
 <template>
   <div class="space-y-6">
     <LayoutPageHeader
-      title="Dashboard"
-      description="Willkommen bei yugioh alpha — hier siehst du deinen Bestand, deine Decks und anstehende Turniere auf einen Blick."
+      :title="t('dashboard.title')"
+      :description="t('dashboard.description')"
     />
 
     <UAlert
@@ -83,13 +83,13 @@ const cards = computed<OnboardingCard[]>(() => [
       color="primary"
       variant="subtle"
       icon="i-lucide-sparkles"
-      title="Los geht's: Erfasse deine ersten Karten"
-      description="Dein Inventar ist noch leer. Erfasse ein paar Karten, um danach dein erstes Deck zusammenzustellen und Turniere zu spielen."
+      :title="t('dashboard.firstRun.title')"
+      :description="t('dashboard.firstRun.description')"
     >
       <template #actions>
         <UButton
           icon="i-lucide-zap"
-          label="Karten erfassen"
+          :label="t('dashboard.firstRun.cta')"
           to="/inventory/quick-entry"
         />
       </template>
@@ -98,7 +98,7 @@ const cards = computed<OnboardingCard[]>(() => [
     <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
       <div
         v-for="card in cards"
-        :key="card.title"
+        :key="card.to"
         class="flex flex-col rounded-md border border-gray-200 bg-white p-5"
       >
         <div class="flex items-center gap-2.5">

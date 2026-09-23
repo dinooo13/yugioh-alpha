@@ -1,6 +1,7 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mountSuspended } from '@nuxt/test-utils/runtime'
 import LoginPage from '~/pages/login.vue'
+import { setTestLocale } from './fixtures/locale'
 
 const state = vi.hoisted(() => ({
   signInError: null as { code?: string, message?: string } | null,
@@ -17,6 +18,8 @@ vi.mock('~/utils/auth-client', () => ({
 vi.mock('~/utils/session', () => ({
   waitForAuthSession: vi.fn(async () => true),
 }))
+
+afterEach(() => setTestLocale('de'))
 
 describe('login page', () => {
   it('renders the German login form', async () => {
@@ -63,5 +66,34 @@ describe('login page', () => {
     const alert = component.find('[role="alert"]')
     expect(alert.exists()).toBe(true)
     expect(alert.text()).toBe('E-Mail-Adresse oder Passwort ist falsch.')
+  })
+
+  it('renders in English, including translated better-auth errors', async () => {
+    await setTestLocale('en')
+    state.signInError = { code: 'INVALID_EMAIL_OR_PASSWORD', message: 'Invalid email or password' }
+    const component = await mountSuspended(LoginPage)
+
+    expect(component.find('h1').text()).toBe('Sign in')
+    expect(component.text()).toContain('No account yet? Register')
+    expect(component.find('input[type="email"]').attributes('placeholder')).toBe('you@example.com')
+
+    await component.find('input[type="email"]').setValue('ux@example.com')
+    await component.find('input[type="password"]').setValue('whatever')
+    await component.find('form').trigger('submit')
+    await component.vm.$nextTick()
+
+    expect(component.find('[role="alert"]').text()).toBe('The email address or password is incorrect.')
+  })
+
+  it('falls back to a generic message for an unknown better-auth code', async () => {
+    state.signInError = { code: 'SOMETHING_NEW', message: 'Something new' }
+    const component = await mountSuspended(LoginPage)
+
+    await component.find('input[type="email"]').setValue('ux@example.com')
+    await component.find('input[type="password"]').setValue('whatever')
+    await component.find('form').trigger('submit')
+    await component.vm.$nextTick()
+
+    expect(component.find('[role="alert"]').text()).toBe('Anmeldung fehlgeschlagen. Bitte überprüfe deine Angaben.')
   })
 })

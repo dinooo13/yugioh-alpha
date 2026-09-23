@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
-import ProfilPage from '~/pages/profile.vue'
+import { ULocaleSelect } from '#components'
+import ProfilePage from '~/pages/profile.vue'
 import type { OwnProfile } from '~~/shared/sharing'
+import { setTestLocale } from './fixtures/locale'
 
 function profile(overrides: Partial<OwnProfile> = {}): OwnProfile {
   return {
@@ -12,6 +14,7 @@ function profile(overrides: Partial<OwnProfile> = {}): OwnProfile {
     bio: null,
     inventoryVisibility: 'private',
     wishlistVisibility: 'private',
+    locale: null,
     createdAt: '2025-01-01T00:00:00.000Z',
     updatedAt: '2025-01-01T00:00:00.000Z',
     ...overrides,
@@ -24,8 +27,11 @@ mockNuxtImport('useFetch', () => {
   return () => ({ data: ref(state.profile), pending: ref(false), error: ref(null), refresh: vi.fn() })
 })
 
-afterEach(() => {
+afterEach(async () => {
   vi.unstubAllGlobals()
+  useNuxtData('own-profile').data.value = undefined
+  document.cookie = 'ui_locale=; Max-Age=0; path=/'
+  await setTestLocale('de')
 })
 
 describe('profile page', () => {
@@ -33,7 +39,7 @@ describe('profile page', () => {
     state.profile = profile()
     vi.stubGlobal('$fetch', vi.fn(() => Promise.resolve(state.profile)))
 
-    const component = await mountSuspended(ProfilPage)
+    const component = await mountSuspended(ProfilePage)
     const text = component.text()
 
     expect(text).toContain('Anzeigename')
@@ -48,7 +54,7 @@ describe('profile page', () => {
     state.profile = profile()
     vi.stubGlobal('$fetch', vi.fn(() => Promise.resolve(state.profile)))
 
-    const component = await mountSuspended(ProfilPage)
+    const component = await mountSuspended(ProfilePage)
     const text = component.text()
 
     expect(text).toContain('Nur Kleinbuchstaben, Ziffern und Bindestriche, 3–30 Zeichen')
@@ -68,7 +74,7 @@ describe('profile page', () => {
     state.profile = profile({ handle: 'fabian' })
     vi.stubGlobal('$fetch', vi.fn(() => Promise.resolve(profile({ handle: 'fabian-neu' }))))
 
-    const component = await mountSuspended(ProfilPage)
+    const component = await mountSuspended(ProfilePage)
     await component.find('input[aria-label="Nutzername"]').setValue('fabian-neu')
     await component.find('form').trigger('submit')
     await flushPromises()
@@ -81,7 +87,7 @@ describe('profile page', () => {
     state.profile = profile({ handle: 'fabian' })
     vi.stubGlobal('$fetch', vi.fn(() => Promise.resolve(profile({ handle: 'fabian' }))))
 
-    const component = await mountSuspended(ProfilPage)
+    const component = await mountSuspended(ProfilePage)
     await component.find('form').trigger('submit')
     await flushPromises()
     await component.vm.$nextTick()
@@ -93,7 +99,7 @@ describe('profile page', () => {
     state.profile = profile({ wishlistVisibility: 'private' })
     vi.stubGlobal('$fetch', vi.fn(() => Promise.resolve(profile({ wishlistVisibility: 'public' }))))
 
-    const component = await mountSuspended(ProfilPage)
+    const component = await mountSuspended(ProfilePage)
     const toggle = component.find('button[aria-label="Wunschliste öffentlich zeigen"]')
     expect(toggle.exists()).toBe(true)
 
@@ -111,11 +117,86 @@ describe('profile page', () => {
     })
     vi.stubGlobal('$fetch', vi.fn(() => Promise.reject(conflict)))
 
-    const component = await mountSuspended(ProfilPage)
+    const component = await mountSuspended(ProfilePage)
     await component.find('form').trigger('submit')
     await flushPromises()
     await component.vm.$nextTick()
 
     expect(component.text()).toContain('Es gibt bereits einen Spieler mit diesem Nutzernamen.')
+  })
+
+  it('shows a coded server error in German instead of the raw statusMessage', async () => {
+    state.profile = profile()
+    const rejected = Object.assign(new Error('Bad Request'), {
+      data: { statusCode: 400, statusMessage: 'bio must be at most 500 characters', data: { code: 'bio_too_long' } },
+    })
+    vi.stubGlobal('$fetch', vi.fn(() => Promise.reject(rejected)))
+
+    const component = await mountSuspended(ProfilePage)
+    await component.find('form').trigger('submit')
+    await flushPromises()
+
+    expect(component.text()).toContain('Der Text „Über mich“ darf höchstens 500 Zeichen lang sein.')
+    expect(component.text()).not.toContain('bio must be at most')
+  })
+
+  it('shows the settings card with the interface language switch', async () => {
+    state.profile = profile()
+    vi.stubGlobal('$fetch', vi.fn(() => Promise.resolve(state.profile)))
+
+    const component = await mountSuspended(ProfilePage)
+
+    expect(component.find('#settings h2').text()).toBe('Einstellungen')
+    expect(component.find('#settings').text()).toContain('Anzeigesprache')
+    expect(component.find('#settings button[aria-label="Anzeigesprache"]').text()).toContain('Deutsch')
+  })
+
+  it('renders the profile and settings card in English', async () => {
+    await setTestLocale('en')
+    state.profile = profile()
+    vi.stubGlobal('$fetch', vi.fn(() => Promise.resolve(state.profile)))
+
+    const component = await mountSuspended(ProfilePage)
+    const text = component.text()
+
+    expect(component.find('h1').text()).toBe('Profile')
+    expect(text).toContain('Display name')
+    expect(text).toContain('Show wishlist publicly')
+    expect(component.find('#settings h2').text()).toBe('Settings')
+    expect(component.find('#settings').text()).toContain('Interface language')
+    expect(component.find('#settings button[aria-label="Interface language"]').text()).toContain('English')
+  })
+
+  it('saves a new interface language to the profile, sets the cookie and switches the UI', async () => {
+    state.profile = profile()
+    useNuxtData('own-profile').data.value = profile()
+    const fetchMock = vi.fn(() => Promise.resolve(profile({ locale: 'en' })))
+    vi.stubGlobal('$fetch', fetchMock)
+
+    const component = await mountSuspended(ProfilePage)
+    component.findComponent(ULocaleSelect).vm.$emit('update:modelValue', 'en')
+    await flushPromises()
+    await component.vm.$nextTick()
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/profile', { method: 'PATCH', body: { locale: 'en' } })
+    expect(document.cookie).toContain('ui_locale=en')
+    expect(useNuxtApp().$i18n.locale.value).toBe('en')
+    expect(component.find('h1').text()).toBe('Profile')
+    expect(component.find('#settings').text()).toContain('Saved')
+  })
+
+  it('keeps the language and shows a toast when saving it fails', async () => {
+    state.profile = profile()
+    useNuxtData('own-profile').data.value = profile()
+    vi.stubGlobal('$fetch', vi.fn(() => Promise.reject(new Error('offline'))))
+
+    const component = await mountSuspended(ProfilePage)
+    component.findComponent(ULocaleSelect).vm.$emit('update:modelValue', 'en')
+    await flushPromises()
+
+    expect(useNuxtApp().$i18n.locale.value).toBe('de')
+    expect(document.cookie).not.toContain('ui_locale=en')
+    expect(component.find('h1').text()).toBe('Profil')
+    expect(useToast().toasts.value.map(toast => toast.title)).toContain('Sprache konnte nicht gespeichert werden')
   })
 })

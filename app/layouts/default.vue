@@ -1,4 +1,5 @@
 <script setup lang="ts">
+const { t } = useI18n()
 const route = useRoute()
 
 const isMobileNavOpen = ref(false)
@@ -29,7 +30,7 @@ watch(() => route.fullPath, () => {
         icon="i-lucide-menu"
         color="neutral"
         variant="ghost"
-        aria-label="Menü öffnen"
+        :aria-label="t('app.header.openMenu')"
         class="tap-target"
         @click="() => { isMobileNavOpen = true }"
       />
@@ -52,7 +53,7 @@ watch(() => route.fullPath, () => {
     <USlideover
       v-model:open="isMobileNavOpen"
       side="left"
-      title="Menü"
+      :title="t('app.header.menu')"
       class="lg:hidden"
     >
       <template #body>

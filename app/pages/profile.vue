@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { OwnProfile, Visibility } from '~~/shared/sharing'
 
-useHead({ title: 'Profil – yugioh alpha' })
+const { t } = useI18n()
+usePageTitle('profile.title')
 
 const toast = useToast()
 
@@ -53,11 +54,24 @@ async function setWishlistVisibility(makePublic: boolean) {
   catch {
     // The switch is bound to `profile`, which stays untouched on failure,
     // so it keeps showing the saved state — just tell the user why.
-    toast.add({ title: 'Sichtbarkeit konnte nicht gespeichert werden', color: 'error' })
+    toast.add({ title: t('profile.wishlistVisibility.saveFailed'), color: 'error' })
   }
   finally {
     isSavingWishlistVisibility.value = false
   }
+}
+
+// Same "Gespeichert" feedback for the language switch; a failure shows a
+// toast from LayoutLocaleSwitch and keeps the old language.
+const localeSaved = ref(false)
+let localeSavedTimer: ReturnType<typeof setTimeout> | undefined
+
+function onLocaleSaved() {
+  localeSaved.value = true
+  clearTimeout(localeSavedTimer)
+  localeSavedTimer = setTimeout(() => {
+    localeSaved.value = false
+  }, 2000)
 }
 
 const wishlistPublic = computed({
@@ -68,13 +82,13 @@ const wishlistPublic = computed({
 
 <template>
   <div class="max-w-2xl space-y-6">
-    <LayoutPageHeader title="Profil" />
+    <LayoutPageHeader :title="t('profile.title')" />
 
     <UAlert
       v-if="error"
       color="error"
       variant="subtle"
-      title="Profil konnte nicht geladen werden"
+      :title="t('profile.loadFailed')"
       :description="error.message"
     />
 
@@ -97,7 +111,7 @@ const wishlistPublic = computed({
             :to="`/players/${profile.handle}`"
             class="text-sm font-medium text-primary hover:underline"
           >
-            Öffentliches Profil ansehen
+            {{ t('profile.viewPublicProfile') }}
           </NuxtLink>
         </div>
       </section>
@@ -105,10 +119,10 @@ const wishlistPublic = computed({
       <section class="flex items-center justify-between gap-4 rounded-md border border-gray-200 bg-white p-4">
         <div>
           <h2 class="text-base font-semibold text-gray-900">
-            Inventar teilen
+            {{ t('profile.inventoryShare.title') }}
           </h2>
           <p class="mt-1 text-sm text-gray-500">
-            Alle Karten – teile dein gesamtes Inventar mit anderen Spielern.
+            {{ t('profile.inventoryShare.description') }}
           </p>
         </div>
         <div class="flex shrink-0 items-center gap-2">
@@ -118,7 +132,7 @@ const wishlistPublic = computed({
           />
           <UButton
             icon="i-lucide-share-2"
-            label="Teilen"
+            :label="t('profile.inventoryShare.share')"
             color="neutral"
             variant="outline"
             @click="() => { isShareOpen = true }"
@@ -132,30 +146,63 @@ const wishlistPublic = computed({
       >
         <div>
           <h2 class="text-base font-semibold text-gray-900">
-            Wunschliste öffentlich zeigen
+            {{ t('profile.wishlistVisibility.title') }}
           </h2>
           <p class="mt-1 text-sm text-gray-500">
-            Andere Spieler können deine Wunschliste auf deinem Profil sehen.
+            {{ t('profile.wishlistVisibility.description') }}
           </p>
           <p
             v-if="wishlistVisibilitySaved"
             class="mt-1 text-sm text-emerald-600"
           >
-            Gespeichert
+            {{ t('common.saved') }}
           </p>
         </div>
         <USwitch
           v-model="wishlistPublic"
           :disabled="isSavingWishlistVisibility"
-          aria-label="Wunschliste öffentlich zeigen"
+          :aria-label="t('profile.wishlistVisibility.title')"
         />
+      </section>
+
+      <section
+        id="settings"
+        class="rounded-md border border-gray-200 bg-white p-4"
+      >
+        <h2 class="text-base font-semibold text-gray-900">
+          {{ t('profile.settings.title') }}
+        </h2>
+        <div class="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+          <div>
+            <label
+              for="profile-locale"
+              class="text-sm font-medium text-gray-900"
+            >
+              {{ t('app.localeSwitch.label') }}
+            </label>
+            <p class="mt-1 text-sm text-gray-500">
+              {{ t('profile.settings.languageDescription') }}
+            </p>
+            <p
+              v-if="localeSaved"
+              class="mt-1 text-sm text-emerald-600"
+            >
+              {{ t('common.saved') }}
+            </p>
+          </div>
+          <LayoutLocaleSwitch
+            id="profile-locale"
+            class="shrink-0"
+            @saved="onLocaleSaved"
+          />
+        </div>
       </section>
 
       <SharingShareModal
         v-model:open="isShareOpen"
         resource-type="inventory"
         resource-id="me"
-        resource-name="Alle Karten"
+        :resource-name="t('profile.inventoryShare.resourceName')"
         :share-path="`/players/${profile.handle}/inventory`"
         @updated="onShareUpdated"
       />
