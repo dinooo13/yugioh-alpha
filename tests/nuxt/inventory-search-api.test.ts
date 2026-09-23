@@ -9,6 +9,7 @@ import { addOwnedCard, validateInventoryInput } from '../../server/utils/invento
 import { assertCollectionOwnedByUser, createCollection } from '../../server/utils/collections'
 import {
   buildInventorySearchWhere,
+  loadInventoryCardDisplay,
   parseInventorySearchQuery,
   UNASSIGNED_COLLECTION_ID,
 } from '../../server/utils/inventory-search'
@@ -76,11 +77,11 @@ function seedCards(db: TestDb, cards: CardSeed[]) {
 }
 
 // Mirrors the aggregation/breakdown query logic that lives inline in
-// `server/api/inventory/search/index.get.ts`, built on top of the two
-// importable, pure/HTTP-free helpers (`parseInventorySearchQuery` +
-// `buildInventorySearchWhere`) that the endpoint itself uses. Kept in the
-// test file (not extracted into a new server helper) so we exercise the
-// same query shape the endpoint runs without spinning up an HTTP server.
+// `server/api/inventory/search/index.get.ts`, built on top of the
+// importable, HTTP-free helpers (`parseInventorySearchQuery`,
+// `buildInventorySearchWhere`, `loadInventoryCardDisplay`) that the endpoint
+// itself uses, so we exercise the same query shape without spinning up an
+// HTTP server.
 function runInventorySearch(db: TestDb, userId: string, rawQuery: Record<string, unknown>) {
   const filters = parseInventorySearchQuery(rawQuery)
 
@@ -108,8 +109,6 @@ function runInventorySearch(db: TestDb, userId: string, rawQuery: Record<string,
   const pageRows = db
     .select({
       catalogCardId: schema.ownedCard.catalogCardId,
-      name: schema.catalogCard.name,
-      type: schema.catalogCard.type,
       totalQuantity: totalQuantitySql,
     })
     .from(schema.ownedCard)
@@ -157,13 +156,20 @@ function runInventorySearch(db: TestDb, userId: string, rawQuery: Record<string,
     breakdownByCardId.set(row.catalogCardId, list)
   }
 
-  const items = pageRows.map(row => ({
-    catalogCardId: row.catalogCardId,
-    name: row.name,
-    type: row.type,
-    totalQuantity: row.totalQuantity,
-    collectionBreakdown: breakdownByCardId.get(row.catalogCardId) ?? [],
-  }))
+  const displayByCardId = loadInventoryCardDisplay(db, catalogCardIds)
+
+  const items = pageRows.map((row) => {
+    const display = displayByCardId.get(row.catalogCardId)
+    return {
+      catalogCardId: row.catalogCardId,
+      name: display?.name ?? '',
+      type: display?.type ?? '',
+      imageSmall: display?.imageSmall ?? null,
+      imageLarge: display?.imageLarge ?? null,
+      totalQuantity: row.totalQuantity,
+      collectionBreakdown: breakdownByCardId.get(row.catalogCardId) ?? [],
+    }
+  })
 
   return { items, total, page: filters.page, pageSize: filters.pageSize }
 }
@@ -469,6 +475,91 @@ describe('inventory search aggregation (in-memory db)', () => {
       .toThrow(expect.objectContaining({ statusCode: 400 }))
     expect(() => runInventorySearch(db, 'user-a', { collectionId: 'nonexistent' }))
       .toThrow(expect.objectContaining({ statusCode: 400 }))
+  })
+})
+
+describe('loadInventoryCardDisplay', () => {
+  let db: TestDb
+
+  beforeEach(() => {
+    db = createTestDb()
+  })
+
+  it('takes both image sizes from the artwork with the lowest image id', () => {
+    seedCards(db, [{
+      id: 46986414,
+      name: 'Dark Magician',
+      type: 'Normal Monster',
+      attribute: 'DARK',
+      race: 'Spellcaster',
+      level: 7,
+      atk: 2500,
+      def: 2100,
+    }])
+    // Inserted out of order, and the alternate art's small URL sorts first
+    // alphabetically — the old `min(image_url_small)` would have picked it.
+    db.insert(schema.catalogCardImage).values([
+      {
+        id: 2,
+        cardId: 46986414,
+        imageUrl: 'https://img/alt-large.jpg',
+        imageUrlSmall: 'https://img/a-alt-small.jpg',
+      },
+      {
+        id: 1,
+        cardId: 46986414,
+        imageUrl: 'https://img/main-large.jpg',
+        imageUrlSmall: 'https://img/main-small.jpg',
+      },
+    ]).run()
+
+    const display = loadInventoryCardDisplay(db, [46986414])
+
+    expect(display.get(46986414)).toEqual({
+      catalogCardId: 46986414,
+      name: 'Dark Magician',
+      type: 'Normal Monster',
+      attribute: 'DARK',
+      race: 'Spellcaster',
+      level: 7,
+      atk: 2500,
+      def: 2100,
+      imageSmall: 'https://img/main-small.jpg',
+      imageLarge: 'https://img/main-large.jpg',
+    })
+  })
+
+  it('returns null images for a card without artwork', () => {
+    seedCards(db, [{ id: 55144522, name: 'Pot of Greed', type: 'Spell Card' }])
+
+    const display = loadInventoryCardDisplay(db, [55144522])
+
+    expect(display.get(55144522)).toMatchObject({
+      name: 'Pot of Greed',
+      imageSmall: null,
+      imageLarge: null,
+    })
+  })
+
+  it('falls back to the large URL when the small one is missing', () => {
+    seedCards(db, [{ id: 55144522, name: 'Pot of Greed', type: 'Spell Card' }])
+    db.insert(schema.catalogCardImage).values({
+      id: 55144522,
+      cardId: 55144522,
+      imageUrl: 'https://img/pot-large.jpg',
+      imageUrlSmall: null,
+    }).run()
+
+    const display = loadInventoryCardDisplay(db, [55144522])
+
+    expect(display.get(55144522)).toMatchObject({
+      imageSmall: 'https://img/pot-large.jpg',
+      imageLarge: 'https://img/pot-large.jpg',
+    })
+  })
+
+  it('returns an empty map for no ids', () => {
+    expect(loadInventoryCardDisplay(db, []).size).toBe(0)
   })
 })
 
