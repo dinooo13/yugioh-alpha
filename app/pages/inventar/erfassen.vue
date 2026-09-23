@@ -57,7 +57,7 @@ async function requestSuggestions(body: { text?: string, items?: string[] }) {
     return accepted.length
   }
   catch (error) {
-    errorMessage.value = apiErrorMessage(error, 'Die Vorschläge konnten nicht geladen werden.')
+    errorMessage.value = apiErrorMessage(error, 'Die Karten konnten nicht erkannt werden.')
     return 0
   }
   finally {
@@ -163,8 +163,8 @@ function onSaved(result: { created: number, merged: number }) {
         </p>
 
         <UButton
-          icon="i-lucide-wand-sparkles"
-          label="Vorschläge laden"
+          icon="i-lucide-scan-text"
+          label="Karten erkennen"
           :loading="isSuggesting"
           :disabled="tooManyLines"
           @click="submitList"

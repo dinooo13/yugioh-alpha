@@ -11,7 +11,7 @@ test.describe('Schnellerfassung', () => {
 
     // "SDY-006" is a Dark Magician printing in the seeded catalog fixture.
     await page.getByLabel('Kartenliste').fill('2x Dark Magician\nPot of Greed\nSDY-006')
-    await page.getByRole('button', { name: 'Vorschläge laden' }).click()
+    await page.getByRole('button', { name: 'Karten erkennen' }).click()
 
     await expect(page.getByText('3 gesamt')).toBeVisible()
     await expect(page.getByText('3 sicher')).toBeVisible()
