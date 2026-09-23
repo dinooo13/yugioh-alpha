@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
-import TurnierePage from '~/pages/tournaments/index.vue'
+import TournamentsPage from '~/pages/tournaments/index.vue'
 import type { TournamentListItem, TournamentListResponse } from '~~/shared/tournaments'
 
 const state = vi.hoisted(() => ({
@@ -58,7 +58,7 @@ describe('tournaments page', () => {
     state.list = { items: [], total: 0, page: 1, pageSize: 20 }
     state.otherList = { items: [], total: 0, page: 1, pageSize: 1 }
 
-    const component = await mountSuspended(TurnierePage)
+    const component = await mountSuspended(TournamentsPage)
     const text = component.text()
 
     expect(text).toContain('Meine Turniere')
@@ -72,7 +72,7 @@ describe('tournaments page', () => {
     state.list = { items: [item()], total: 1, page: 1, pageSize: 20 }
     state.otherList = { items: [], total: 3, page: 1, pageSize: 1 }
 
-    const component = await mountSuspended(TurnierePage)
+    const component = await mountSuspended(TournamentsPage)
     const text = component.text()
 
     expect(text).toContain('Meine Turniere (1)')
@@ -88,7 +88,7 @@ describe('tournaments page', () => {
     }
     state.otherList = { items: [], total: 0, page: 1, pageSize: 1 }
 
-    const component = await mountSuspended(TurnierePage)
+    const component = await mountSuspended(TournamentsPage)
     const text = component.text()
 
     expect(text).toContain('Läuft')
@@ -100,7 +100,7 @@ describe('tournaments page', () => {
     state.list = { items: [], total: 0, page: 1, pageSize: 20 }
     state.otherList = { items: [], total: 0, page: 1, pageSize: 1 }
 
-    const component = await mountSuspended(TurnierePage)
+    const component = await mountSuspended(TournamentsPage)
 
     expect(component.text()).toContain('Noch keine Turniere')
 
@@ -114,7 +114,7 @@ describe('tournaments page', () => {
     state.list = { items: [], total: 0, page: 1, pageSize: 20 }
     state.otherList = { items: [], total: 1, page: 1, pageSize: 1 }
 
-    const component = await mountSuspended(TurnierePage)
+    const component = await mountSuspended(TournamentsPage)
     const text = component.text()
 
     expect(text).toContain('Noch keine Turniere')
@@ -126,7 +126,7 @@ describe('tournaments page', () => {
     state.list = { items: [], total: 0, page: 1, pageSize: 20 }
     state.otherList = { items: [], total: 0, page: 1, pageSize: 1 }
 
-    const component = await mountSuspended(TurnierePage)
+    const component = await mountSuspended(TournamentsPage)
     await component.findAll('button').find(button => button.text() === 'Abgeschlossen')!.trigger('click')
     await component.vm.$nextTick()
 
@@ -137,7 +137,7 @@ describe('tournaments page', () => {
     state.list = { items: [], total: 0, page: 1, pageSize: 20 }
     state.otherList = { items: [], total: 0, page: 1, pageSize: 1 }
 
-    const component = await mountSuspended(TurnierePage)
+    const component = await mountSuspended(TournamentsPage)
 
     expect(state.lastQueryRef?.value).toEqual({ role: 'organizer', status: 'active', page: 1, pageSize: 20 })
 

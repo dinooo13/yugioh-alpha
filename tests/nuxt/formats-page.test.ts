@@ -2,7 +2,7 @@ import { defineComponent } from 'vue'
 import { describe, expect, it, vi } from 'vitest'
 import { DOMWrapper } from '@vue/test-utils'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
-import FormatePage from '~/pages/formats/index.vue'
+import FormatsPage from '~/pages/formats/index.vue'
 import ConfirmDialog from '~/components/layout/ConfirmDialog.vue'
 
 // `useConfirm()` is backed by a single shared `useState`, resolved by
@@ -10,8 +10,8 @@ import ConfirmDialog from '~/components/layout/ConfirmDialog.vue'
 // in the same Nuxt app instance is what makes the promise returned by
 // `confirm()` actually settle in a test.
 const PageWithConfirmDialog = defineComponent({
-  components: { FormatePage, ConfirmDialog },
-  template: '<div><FormatePage /><ConfirmDialog /></div>',
+  components: { FormatsPage, ConfirmDialog },
+  template: '<div><FormatsPage /><ConfirmDialog /></div>',
 })
 
 // UModal teleports its content to <body>, so the confirm dialog's own
@@ -70,7 +70,7 @@ describe('formats page', () => {
       ],
     }
 
-    const component = await mountSuspended(FormatePage)
+    const component = await mountSuspended(FormatsPage)
     const text = component.text()
 
     expect(text).toContain('Offizielle Formate')
@@ -92,7 +92,7 @@ describe('formats page', () => {
       items: [format(), format({ id: 'own-1', name: 'Eigenes', isBuiltin: false, ruleCount: 1 })],
     }
 
-    const component = await mountSuspended(FormatePage)
+    const component = await mountSuspended(FormatsPage)
 
     expect(component.find('[aria-label="TCG Advanced klonen"]').exists()).toBe(true)
     expect(component.find('[aria-label="TCG Advanced löschen"]').exists()).toBe(false)
@@ -111,7 +111,7 @@ describe('formats page', () => {
     ))
     vi.stubGlobal('$fetch', fetchMock)
 
-    const component = await mountSuspended(FormatePage)
+    const component = await mountSuspended(FormatsPage)
     await component.find('[aria-label="TCG Advanced klonen"]').trigger('click')
 
     expect(fetchMock).toHaveBeenCalledWith('/api/formats/tcg-advanced/clone', { method: 'POST' })
@@ -121,7 +121,7 @@ describe('formats page', () => {
   it('shows an empty state when the user has no own formats', async () => {
     state.formats = { items: [format()] }
 
-    const component = await mountSuspended(FormatePage)
+    const component = await mountSuspended(FormatsPage)
 
     expect(component.text()).toContain('Noch keine eigenen Formate')
   })

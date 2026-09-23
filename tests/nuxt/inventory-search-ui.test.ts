@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DOMWrapper, enableAutoUnmount } from '@vue/test-utils'
 import { nextTick, toValue } from 'vue'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
-import InventarPage from '~/pages/inventory/index.vue'
+import InventoryPage from '~/pages/inventory/index.vue'
 
 // The global auth middleware would bounce `route: '/inventory?…'` to /login
 // without a session — stub it so the page sees its own query.
@@ -139,7 +139,7 @@ describe('inventory search panel (Übersicht)', () => {
       pageSize: 24,
     }
 
-    const component = await mountSuspended(InventarPage, { route: '/inventory' })
+    const component = await mountSuspended(InventoryPage, { route: '/inventory' })
     await openUebersicht(component)
 
     const text = component.text()
@@ -178,7 +178,7 @@ describe('inventory search panel (Übersicht)', () => {
     state.search = { items: [], total: 0, page: 1, pageSize: 24 }
     state.searchPending = true
 
-    const component = await mountSuspended(InventarPage, { route: '/inventory' })
+    const component = await mountSuspended(InventoryPage, { route: '/inventory' })
     await openUebersicht(component)
 
     expect(component.findAll('.aspect-\\[59\\/86\\].rounded-lg')).toHaveLength(12)
@@ -192,7 +192,7 @@ describe('inventory search panel (Übersicht)', () => {
     state.facets = { ...emptyFacets }
     state.search = { items: [], total: 0, page: 1, pageSize: 24 }
 
-    const component = await mountSuspended(InventarPage, { route: '/inventory' })
+    const component = await mountSuspended(InventoryPage, { route: '/inventory' })
     await openUebersicht(component)
 
     expect(component.text()).toContain('Inventar ist leer')
@@ -206,7 +206,7 @@ describe('inventory search panel (Übersicht)', () => {
     state.facets = { ...emptyFacets }
     state.search = { items: [], total: 0, page: 1, pageSize: 24 }
 
-    const component = await mountSuspended(InventarPage, { route: '/inventory?collectionId=box-1' })
+    const component = await mountSuspended(InventoryPage, { route: '/inventory?collectionId=box-1' })
     await openUebersicht(component)
 
     expect(component.text()).toContain('Keine Treffer für diese Filter')
@@ -241,7 +241,7 @@ describe('view and card filter in the URL', () => {
     state.facets = { ...emptyFacets }
     state.search = { items: [blueEyes], total: 1, page: 1, pageSize: 24 }
 
-    const component = await mountSuspended(InventarPage, { route: '/inventory?view=overview' })
+    const component = await mountSuspended(InventoryPage, { route: '/inventory?view=overview' })
 
     expect(component.find('[aria-label="Blue-Eyes White Dragon vergrößern"]').exists()).toBe(true)
     expect(toggleButton(component, 'Übersicht').attributes('aria-pressed')).toBe('true')
@@ -254,7 +254,7 @@ describe('view and card filter in the URL', () => {
     state.search = { items: [blueEyes], total: 1, page: 1, pageSize: 24 }
     state.calls = []
 
-    const component = await mountSuspended(InventarPage, { route: '/inventory?collectionId=box-1' })
+    const component = await mountSuspended(InventoryPage, { route: '/inventory?collectionId=box-1' })
     const route = useRouter().currentRoute
 
     // Typing a search flips to "Übersicht" — the watcher that used to flip
@@ -297,7 +297,7 @@ describe('view and card filter in the URL', () => {
     state.search = { items: [blueEyes], total: 1, page: 1, pageSize: 24 }
     state.calls = []
 
-    const component = await mountSuspended(InventarPage, { route: '/inventory?card=89631139' })
+    const component = await mountSuspended(InventoryPage, { route: '/inventory?card=89631139' })
     const route = useRouter().currentRoute
 
     expect(lastQuery('/api/inventory')).toMatchObject({ catalogCardId: 89631139 })
