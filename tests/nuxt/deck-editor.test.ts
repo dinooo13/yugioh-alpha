@@ -790,7 +790,7 @@ describe('deck editor cover card', () => {
 
   function rowItem(component: Awaited<ReturnType<typeof mountSuspended>>, name: string, section: DeckSection) {
     const sectionLabel = { main: 'Main Deck', extra: 'Extra Deck', side: 'Side Deck' }[section]
-    const item = component.findAll('li').find(li => li.find(`[aria-label="${name} aus dem ${sectionLabel} entfernen"]`).exists())
+    const item = component.findAll('li').find((li: DOMWrapper<Element>) => li.find(`[aria-label="${name} aus dem ${sectionLabel} entfernen"]`).exists())
     expect(item, `${name} (${section})`).toBeTruthy()
     return item!
   }
