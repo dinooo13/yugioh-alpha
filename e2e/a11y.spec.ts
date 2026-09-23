@@ -76,7 +76,7 @@ test.describe('accessibility basics', () => {
     for (const name of [
       'Eine Kopie von Dark Magician aus dem Main Deck entfernen',
       'Eine Kopie von Dark Magician zum Main Deck hinzufügen',
-      'Dark Magician verschieben',
+      'Optionen für Dark Magician',
       'Dark Magician aus dem Main Deck entfernen',
       'Weitere Aktionen',
     ]) {

@@ -5,6 +5,7 @@ import {
   defaultSectionForCard,
   isSectionAllowedForCard,
 } from '~~/shared/deck-sections'
+import type { DeckCover } from '~~/shared/deck-cover'
 import type { DeckSection } from '~~/shared/deck-sections'
 import { CARD_STATUS_LABELS } from '~~/shared/rule-formats'
 import type { DeckValidation } from '~~/shared/rule-formats'
@@ -41,6 +42,9 @@ interface DeckDetail {
   format: { id: string, name: string, isBuiltin: boolean } | null
   validation: DeckValidation | null
   visibility: Visibility
+  /** Effective cover (#49); read null-safely, older fixtures lack it. */
+  cover: DeckCover | null
+  coverIsChosen: boolean
 }
 
 interface RuleFormatListItem {
@@ -567,15 +571,44 @@ function onQuantityInput(row: DeckCardRow, value: string | number) {
   setQuantity(row.catalogCardId, row.section, quantity)
 }
 
-function moveItemsFor(row: DeckCardRow) {
-  return [DECK_SECTIONS
+/** The row showing the deck's effective cover card (#49) — never a Side Deck row. */
+function isCoverRow(row: DeckCardRow): boolean {
+  return row.section !== 'side' && deck.value?.cover?.catalogCardId === row.catalogCardId
+}
+
+// `null` goes back to the automatic (rule) pick.
+async function setCover(coverCardId: number | null) {
+  if (isMutating.value) {
+    return
+  }
+
+  await applyDeck($fetch<DeckDetail>(`/api/decks/${deckId.value}`, {
+    method: 'PATCH',
+    body: { coverCardId },
+  }))
+}
+
+function rowMenuItems(row: DeckCardRow) {
+  const moveItems = DECK_SECTIONS
     .filter(section => section !== row.section)
     .map(section => ({
       label: `Nach ${DECK_SECTION_LABELS[section]}`,
       icon: 'i-lucide-arrow-right-left',
       disabled: !isSectionAllowedForCard(row, section),
       onSelect: () => moveCard(row, section),
-    }))]
+    }))
+
+  // Side Deck cards are never a cover.
+  if (row.section === 'side') {
+    return [moveItems]
+  }
+
+  // A rule-picked cover row still offers "festlegen", to pin it.
+  const coverItem = isCoverRow(row) && deck.value?.coverIsChosen
+    ? { label: 'Titelkarte automatisch wählen', icon: 'i-lucide-image-off', onSelect: () => setCover(null) }
+    : { label: 'Als Titelkarte festlegen', icon: 'i-lucide-image', onSelect: () => setCover(row.catalogCardId) }
+
+  return [moveItems, [coverItem]]
 }
 
 async function onDeckSaved(saved: { id: string }) {
@@ -828,15 +861,27 @@ const deckMenuItems = [
                   <p class="truncate text-xs text-gray-500">
                     {{ cardMetaLine(row) }}
                   </p>
-                  <UBadge
-                    v-if="statusLabelFor(row.catalogCardId)"
-                    class="mt-0.5"
-                    size="sm"
-                    variant="subtle"
-                    :color="statusColorFor(row.catalogCardId)"
-                    :label="statusLabelFor(row.catalogCardId) ?? ''"
-                    :title="cardStatusFor(row.catalogCardId)?.reasons.join(' · ')"
-                  />
+                  <div
+                    v-if="statusLabelFor(row.catalogCardId) || isCoverRow(row)"
+                    class="mt-0.5 flex flex-wrap gap-1"
+                  >
+                    <UBadge
+                      v-if="statusLabelFor(row.catalogCardId)"
+                      size="sm"
+                      variant="subtle"
+                      :color="statusColorFor(row.catalogCardId)"
+                      :label="statusLabelFor(row.catalogCardId) ?? ''"
+                      :title="cardStatusFor(row.catalogCardId)?.reasons.join(' · ')"
+                    />
+                    <UBadge
+                      v-if="isCoverRow(row)"
+                      size="sm"
+                      variant="subtle"
+                      color="primary"
+                      icon="i-lucide-image"
+                      :label="deck.coverIsChosen ? 'Titelkarte' : 'Titelkarte (automatisch)'"
+                    />
+                  </div>
                 </div>
 
                 <span
@@ -882,15 +927,15 @@ const deckMenuItems = [
                     :aria-label="`Eine Kopie von ${row.name} zum ${DECK_SECTION_LABELS[section]} hinzufügen`"
                     @click="setQuantity(row.catalogCardId, section, row.quantity + 1)"
                   />
-                  <UDropdownMenu :items="moveItemsFor(row)">
+                  <UDropdownMenu :items="rowMenuItems(row)">
                     <UButton
-                      icon="i-lucide-move-right"
+                      icon="i-lucide-ellipsis-vertical"
                       color="neutral"
                       variant="ghost"
                       size="xs"
                       class="tap-target"
                       :disabled="isMutating"
-                      :aria-label="`${row.name} verschieben`"
+                      :aria-label="`Optionen für ${row.name}`"
                     />
                   </UDropdownMenu>
                   <UButton
