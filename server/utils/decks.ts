@@ -22,6 +22,7 @@ import {
 } from '../../shared/deck-sections'
 import type { DeckSection, DeckSectionCard } from '../../shared/deck-sections'
 import type { Visibility } from '../../shared/sharing'
+import type { DeckCover } from '../../shared/deck-cover'
 
 type Db = ReturnType<typeof useDb>
 
@@ -33,7 +34,7 @@ export {
   isExtraDeckCard,
   isSectionAllowedForCard,
 }
-export type { DeckSection, DeckSectionCard }
+export type { DeckCover, DeckSection, DeckSectionCard }
 
 export const DECK_NAME_MAX_LENGTH = 80
 export const DECK_DESCRIPTION_MAX_LENGTH = 500
@@ -736,7 +737,9 @@ export function duplicateDeck(db: Db, userId: string, deckId: string): DeckDetai
       catalogCardId: row.catalogCardId,
       section: row.section,
       quantity: row.quantity,
-      createdAt: now,
+      // Keep each row's original "added at" so the copy gets the same
+      // (first-added) cover card as the source deck (#29).
+      createdAt: row.createdAt,
       updatedAt: now,
     }))).run()
   }
@@ -903,6 +906,91 @@ export interface DeckListItem {
   updatedAt: Date
   /** Sharing state (Phase 6). */
   visibility: Visibility
+  /** Cover card for the deck tile (#29); `null` for a deck without Main/Extra cards. */
+  cover: DeckCover | null
+}
+
+/** One Main/Extra Deck row considered for a deck's cover — see {@link pickDeckCover}. */
+export interface DeckCoverCandidate extends DeckCover {
+  section: DeckSection
+  type: string
+  createdAt: Date
+}
+
+function compareFirstAdded(a: DeckCoverCandidate, b: DeckCoverCandidate): number {
+  return a.createdAt.getTime() - b.createdAt.getTime() || a.catalogCardId - b.catalogCardId
+}
+
+/**
+ * Picks a deck's cover card by the rule documented on {@link DeckCover}: the
+ * first-added Main Deck monster, else the first-added Main Deck card, else
+ * the first-added Extra Deck card, else `null`. Side Deck rows are ignored.
+ * `deck_card.created_at` has second precision, so cards added together (a
+ * deck created in one call, a duplicate) tie and fall back to the lower
+ * catalog card id — stable, if arbitrary.
+ */
+export function pickDeckCover(rows: DeckCoverCandidate[]): DeckCover | null {
+  const firstOf = (candidates: DeckCoverCandidate[]) => [...candidates].sort(compareFirstAdded)[0]
+
+  const main = rows.filter(row => row.section === 'main')
+  const picked = firstOf(main.filter(row => cardCategoryRank(row.type) === 0))
+    ?? firstOf(main)
+    ?? firstOf(rows.filter(row => row.section === 'extra'))
+
+  if (!picked) {
+    return null
+  }
+  return {
+    catalogCardId: picked.catalogCardId,
+    name: picked.name,
+    imageSmall: picked.imageSmall,
+    imageLarge: picked.imageLarge,
+  }
+}
+
+/**
+ * Cover cards for a set of decks in a single query (#29). Decks without a
+ * cover are simply absent from the map. Callers must only pass deck ids the
+ * viewer may already see — this does no access check of its own.
+ */
+export function loadDeckCovers(db: Db, deckIds: string[]): Map<string, DeckCover> {
+  const covers = new Map<string, DeckCover>()
+  if (deckIds.length === 0) {
+    return covers
+  }
+
+  const rows = db
+    .select({
+      deckId: deckCard.deckId,
+      catalogCardId: deckCard.catalogCardId,
+      section: deckCard.section,
+      createdAt: deckCard.createdAt,
+      name: catalogCard.name,
+      type: catalogCard.type,
+      imageSmall: sql<string | null>`min(${catalogCardImage.imageUrlSmall})`,
+      imageLarge: sql<string | null>`min(${catalogCardImage.imageUrl})`,
+    })
+    .from(deckCard)
+    .innerJoin(catalogCard, eq(deckCard.catalogCardId, catalogCard.id))
+    .leftJoin(catalogCardImage, eq(catalogCardImage.cardId, catalogCard.id))
+    .where(and(inArray(deckCard.deckId, deckIds), inArray(deckCard.section, ['main', 'extra'])))
+    .groupBy(deckCard.id)
+    .all()
+
+  const rowsByDeck = new Map<string, DeckCoverCandidate[]>()
+  for (const { deckId, ...row } of rows) {
+    const candidates = rowsByDeck.get(deckId) ?? []
+    candidates.push({ ...row, section: row.section as DeckSection })
+    rowsByDeck.set(deckId, candidates)
+  }
+
+  for (const [deckId, candidates] of rowsByDeck) {
+    const cover = pickDeckCover(candidates)
+    if (cover) {
+      covers.set(deckId, cover)
+    }
+  }
+  return covers
 }
 
 // Upper bound on the decks scanned when filtering by legality: legality is
@@ -1024,6 +1112,9 @@ export function listDecks(db: Db, userId: string, options: DeckListOptions = {})
     usedByDeck.set(row.deckId, used)
   }
 
+  // Covers only for the page actually returned, not the whole legality scan.
+  const covers = loadDeckCovers(db, deckRows.map(row => row.id))
+
   const items: DeckListItem[] = deckRows.map((row) => {
     const counts = countsByDeck.get(row.id) ?? { main: 0, extra: 0, side: 0 }
     const used = usedByDeck.get(row.id) ?? new Map<number, number>()
@@ -1053,6 +1144,7 @@ export function listDecks(db: Db, userId: string, options: DeckListOptions = {})
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
       visibility: row.visibility,
+      cover: covers.get(row.id) ?? null,
     }
   })
 

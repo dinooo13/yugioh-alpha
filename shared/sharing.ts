@@ -3,6 +3,7 @@
 // shared/deck-assistant.ts): no Drizzle, no h3, no Vue. See
 // docs/adr/0007-sharing-and-profile-model.md for the design rationale.
 
+import type { DeckCover } from './deck-cover'
 import type { DeckSection } from './deck-sections'
 import type { DeckValidation } from './rule-formats'
 
@@ -66,6 +67,8 @@ export interface SharedDeckSummary {
   /** Null for non-owners: an owner-side setting the grant does not entitle them to see. */
   visibility: Visibility | null
   updatedAt: string
+  /** Cover card for the deck tile (#29); `null` for a deck without Main/Extra cards. */
+  cover: DeckCover | null
 }
 
 export interface SharedCollectionSummary {
