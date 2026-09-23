@@ -237,14 +237,19 @@ Product outcome:
 
 Users can get meaningful deckbuilding help that understands their collection and constraints.
 
-Implemented: a dedicated builder at `/decks/assistent` for generating a new deck from the
-inventory, and a "KI-Vorschläge" panel in the deck editor for improving an existing deck, both
-respecting the selected rule format and separating owned-card suggestions from missing-card
-suggestions. Talks to any OpenAI-compatible Chat Completions endpoint (OpenAI, OpenRouter,
-Ollama, LM Studio, OpenCode Zen, ...). Requires `NUXT_ASSISTANT_API_KEY` (or `OPENAI_API_KEY`),
-or a custom `NUXT_ASSISTANT_BASE_URL` for a keyless local server, to be configured; the
-feature is disabled with a UI notice otherwise. See
-[`docs/adr/0006-ai-deck-assistant.md`](adr/0006-ai-deck-assistant.md) and
+Implemented: deck assistance lives in the chat assistant at `/assistent` (see
+[Phase 8](#phase-8-chat-assistent-mit-werkzeugen)). "Mit KI erstellen" on `/decks` opens a
+conversation with a new-deck draft; "Mit KI bearbeiten" in the deck editor opens a conversation
+linked to that deck, whose current contents, format, and legality the assistant sees on every
+turn. The assistant prefers the user's inventory (`search_inventory` reports each owned card's
+copy limit in a format and leaves out forbidden cards), checks proposals with `validate_deck`,
+and every proposed deck or deck change shows the rule engine's legality verdict and the cards
+the user doesn't own (enough of) — separately from the deck itself — before it is confirmed.
+Talks to any OpenAI-compatible Chat Completions endpoint (OpenAI, OpenRouter, Ollama, LM Studio,
+OpenCode Zen, ...); without a configured provider, the UI shows an "Assistent nicht verfügbar"
+notice. See [`docs/adr/0011-deck-assistance-in-chat.md`](adr/0011-deck-assistance-in-chat.md)
+(which replaced the original one-shot builder at `/decks/assistent` and the deck editor's
+"KI-Vorschläge" panel from [ADR 0006](adr/0006-ai-deck-assistant.md)) and
 [`docs/adr/0009-openai-compatible-assistant-provider.md`](adr/0009-openai-compatible-assistant-provider.md).
 
 ### Phase 6: Sharing and Social Features
@@ -334,6 +339,10 @@ unchanged. Works with any OpenAI-compatible Chat Completions endpoint that
 supports streaming and tool calls, with an optional
 `NUXT_ASSISTANT_VISION_MODEL` override for image-containing turns. See
 [`docs/adr/0010-chat-assistant-with-tools.md`](adr/0010-chat-assistant-with-tools.md).
+Since [ADR 0011](adr/0011-deck-assistance-in-chat.md) the chat is also the only deck
+assistant: the one-shot `/decks/assistent` builder and the deck editor's "KI-Vorschläge"
+panel are gone, replaced by entry points into `/assistent` — a conversation can be linked to
+a deck ("Mit KI bearbeiten"), and deck proposals carry a legality/missing-cards preview.
 The recommended OpenCode Go model is `mimo-v2.6-pro` (MiMo V2.6 Pro), which
 covers text, streamed tool calls, and image turns without a separate vision
 model; see [`.env.example`](../.env.example).

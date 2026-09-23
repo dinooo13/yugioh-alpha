@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted — the model-provider section is superseded by [ADR 0009](0009-openai-compatible-assistant-provider.md)
+Superseded by [ADR 0011](0011-deck-assistance-in-chat.md) (model-provider section earlier superseded by [ADR 0009](0009-openai-compatible-assistant-provider.md))
 
 ## Context
 

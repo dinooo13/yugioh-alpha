@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Accepted — the structured-output `generate()` parts are superseded by [ADR 0011](0011-deck-assistance-in-chat.md)
 
 ## Context
 
