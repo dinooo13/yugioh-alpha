@@ -219,6 +219,83 @@ describe('turnier detail page — organizer, registration', () => {
   })
 })
 
+describe('turnier detail page — mobile cards and legends (#28)', () => {
+  it('explains the "Konto" badge in a legend when a linked participant is listed', async () => {
+    state.tournament = tournamentDetail({
+      participants: [participant(), participant({ id: 'p-2', name: 'Gast Anton', linked: false, isSelf: false })],
+    })
+
+    const component = await mountSuspended(TurnierDetailPage)
+
+    expect(component.text()).toContain('„Konto“: Spieler mit eigenem Benutzerkonto')
+    expect(component.text()).toContain('Gäste ohne Konto verwaltet die Turnierleitung.')
+  })
+
+  it('omits the "Konto" legend when every participant is a guest', async () => {
+    state.tournament = tournamentDetail({
+      selfParticipantId: null,
+      participants: [
+        participant({ id: 'p-1', name: 'Gast Anton', linked: false, isSelf: false }),
+        participant({ id: 'p-2', name: 'Gast Berta', linked: false, isSelf: false }),
+      ],
+    })
+
+    const component = await mountSuspended(TurnierDetailPage)
+
+    expect(component.text()).not.toContain('„Konto“')
+  })
+
+  it('gives the row deck button a 44px touch target', async () => {
+    state.tournament = tournamentDetail({
+      participants: [participant({ deckId: 'deck-1', deckName: 'Turnierdeck' })],
+    })
+
+    const component = await mountSuspended(TurnierDetailPage)
+    const deckButton = component.findAll('button').find(button => button.text() === 'Deck ändern')
+
+    expect(deckButton?.classes()).toContain('tap-target')
+  })
+
+  it('gives the result and swap controls 44px touch targets', async () => {
+    state.tournament = tournamentDetail({
+      status: 'running',
+      participants: [participant(), participant({ id: 'p-2', name: 'Alice', isSelf: false })],
+      rounds: [round()],
+      currentRound: round(),
+      canEditPairings: true,
+    })
+
+    const component = await mountSuspended(TurnierDetailPage)
+    const buttonByText = (label: string) => component.findAll('button').find(button => button.text() === label)
+
+    expect(buttonByText('2:0')?.classes()).toContain('tap-target')
+    expect(buttonByText('Ergebnis speichern')?.classes()).toContain('tap-target')
+    expect(buttonByText('Paarungen tauschen')?.classes()).toContain('tap-target')
+    expect(component.find('[aria-label="Spiele Organizer"]').classes()).toContain('tap-target')
+  })
+
+  it('spells out S-N-U in a visible legend, as an abbreviation title and in the phone card', async () => {
+    state.tournament = tournamentDetail({
+      status: 'finished',
+      finishedAt: '2025-01-05T00:00:00.000Z',
+      standings: [standing()],
+    })
+
+    const component = await mountSuspended(TurnierDetailPage)
+
+    expect(component.text()).toContain('S-N-U = Siege–Niederlagen–Unentschieden')
+    expect(component.text()).toContain('Punkte: Sieg 3, Unentschieden 1')
+    expect(component.find('abbr[title="Siege–Niederlagen–Unentschieden"]').exists()).toBe(true)
+
+    // Phone card: the tie-breakers repeated as a definition list.
+    const cardStats = component.find('tbody dl')
+    expect(cardStats.exists()).toBe(true)
+    expect(cardStats.text()).toContain('S-N-U')
+    expect(cardStats.text()).toContain('1-0-0')
+    expect(cardStats.text()).toContain('66,7 %')
+  })
+})
+
 describe('turnier detail page — organizer, running', () => {
   function runningTournament() {
     return tournamentDetail({
