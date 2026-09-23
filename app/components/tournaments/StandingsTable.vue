@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { formatRate } from '~~/shared/tournaments'
+import { formatRate, POINTS_DRAW, POINTS_WIN } from '~~/shared/tournaments'
 import type { TournamentStandingRow, TournamentStatus } from '~~/shared/tournaments'
 
 const props = defineProps<{
@@ -47,43 +47,96 @@ const winner = computed(() => {
       Noch keine Ergebnisse.
     </p>
 
+    <!-- Same single-<table> card pattern as the participants panel (#28):
+         below `sm` each row is a card with rank, name and points up top and
+         the tie-breakers as a small definition list underneath. -->
     <div
       v-else
       class="mt-4 overflow-x-auto"
     >
-      <table class="w-full text-left text-sm">
-        <thead>
-          <tr class="border-b border-gray-200 text-xs uppercase tracking-wide text-gray-500">
-            <th class="py-2 pr-2">
+      <table
+        role="table"
+        class="block w-full text-left text-sm sm:table"
+      >
+        <thead
+          role="rowgroup"
+          class="hidden sm:table-header-group"
+        >
+          <tr
+            role="row"
+            class="border-b border-gray-200 text-xs uppercase tracking-wide text-gray-500"
+          >
+            <th
+              role="columnheader"
+              class="py-2 pr-2"
+            >
               Platz
             </th>
-            <th class="px-2 py-2">
+            <th
+              role="columnheader"
+              class="px-2 py-2"
+            >
               Spieler
             </th>
-            <th class="px-2 py-2">
+            <th
+              role="columnheader"
+              class="px-2 py-2"
+            >
               Punkte
             </th>
-            <th class="px-2 py-2">
-              S-N-U
+            <th
+              role="columnheader"
+              class="px-2 py-2"
+            >
+              <abbr
+                title="Siege–Niederlagen–Unentschieden"
+                class="cursor-help"
+              >S-N-U</abbr>
             </th>
-            <th class="px-2 py-2">
-              OMW%
+            <th
+              role="columnheader"
+              class="px-2 py-2"
+            >
+              <abbr
+                title="Siegquote der Gegner"
+                class="cursor-help"
+              >OMW%</abbr>
             </th>
-            <th class="px-2 py-2">
-              GW%
+            <th
+              role="columnheader"
+              class="px-2 py-2"
+            >
+              <abbr
+                title="Eigene Spielquote"
+                class="cursor-help"
+              >GW%</abbr>
             </th>
-            <th class="px-2 py-2">
-              OGW%
+            <th
+              role="columnheader"
+              class="px-2 py-2"
+            >
+              <abbr
+                title="Spielquote der Gegner"
+                class="cursor-help"
+              >OGW%</abbr>
             </th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-gray-100">
+        <tbody
+          role="rowgroup"
+          class="block space-y-2 sm:table-row-group sm:space-y-0 sm:divide-y sm:divide-gray-100"
+        >
           <tr
             v-for="row in standings"
             :key="row.participantId"
-            :class="row.rank === 1 ? 'bg-amber-50' : undefined"
+            role="row"
+            class="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-x-2 gap-y-2 rounded-md border p-3 sm:table-row sm:rounded-none sm:border-0 sm:p-0"
+            :class="row.rank === 1 ? 'border-amber-200 bg-amber-50' : 'border-gray-200'"
           >
-            <td class="py-2 pr-2 tabular-nums text-gray-500">
+            <td
+              role="cell"
+              class="tabular-nums text-gray-500 sm:py-2 sm:pr-2"
+            >
               <span class="inline-flex items-center gap-1">
                 <UIcon
                   v-if="row.rank === 1"
@@ -94,7 +147,8 @@ const winner = computed(() => {
               </span>
             </td>
             <td
-              class="px-2 py-2 font-medium"
+              role="cell"
+              class="font-medium sm:px-2 sm:py-2"
               :class="row.rank === 1 ? 'text-amber-900' : 'text-gray-900'"
             >
               {{ row.name }}
@@ -107,28 +161,90 @@ const winner = computed(() => {
                 label="Ausgestiegen"
               />
             </td>
-            <td class="px-2 py-2 tabular-nums">
-              {{ row.points }}
+            <td
+              role="cell"
+              class="text-right font-semibold tabular-nums sm:px-2 sm:py-2 sm:text-left sm:font-normal"
+            >
+              {{ row.points }}<span class="text-xs font-normal text-gray-500 sm:hidden"> Pkt.</span>
             </td>
-            <td class="px-2 py-2 tabular-nums">
+            <td
+              role="cell"
+              class="hidden tabular-nums sm:table-cell sm:px-2 sm:py-2"
+            >
               {{ recordLabel(row) }}
             </td>
-            <td class="px-2 py-2 tabular-nums">
+            <td
+              role="cell"
+              class="hidden tabular-nums sm:table-cell sm:px-2 sm:py-2"
+            >
               {{ formatRate(row.opponentMatchWinRate) }}
             </td>
-            <td class="px-2 py-2 tabular-nums">
+            <td
+              role="cell"
+              class="hidden tabular-nums sm:table-cell sm:px-2 sm:py-2"
+            >
               {{ formatRate(row.gameWinRate) }}
             </td>
-            <td class="px-2 py-2 tabular-nums">
+            <td
+              role="cell"
+              class="hidden tabular-nums sm:table-cell sm:px-2 sm:py-2"
+            >
               {{ formatRate(row.opponentGameWinRate) }}
+            </td>
+            <!-- Phone-only: the tie-breaker columns above are hidden below
+                 `sm`, so the card repeats them as labelled pairs. -->
+            <td
+              role="cell"
+              class="col-span-full sm:hidden"
+            >
+              <dl class="grid grid-cols-4 gap-2 text-xs">
+                <div>
+                  <dt class="text-gray-500">
+                    S-N-U
+                  </dt>
+                  <dd class="tabular-nums text-gray-900">
+                    {{ recordLabel(row) }}
+                  </dd>
+                </div>
+                <div>
+                  <dt class="text-gray-500">
+                    OMW%
+                  </dt>
+                  <dd class="tabular-nums text-gray-900">
+                    {{ formatRate(row.opponentMatchWinRate) }}
+                  </dd>
+                </div>
+                <div>
+                  <dt class="text-gray-500">
+                    GW%
+                  </dt>
+                  <dd class="tabular-nums text-gray-900">
+                    {{ formatRate(row.gameWinRate) }}
+                  </dd>
+                </div>
+                <div>
+                  <dt class="text-gray-500">
+                    OGW%
+                  </dt>
+                  <dd class="tabular-nums text-gray-900">
+                    {{ formatRate(row.opponentGameWinRate) }}
+                  </dd>
+                </div>
+              </dl>
             </td>
           </tr>
         </tbody>
       </table>
     </div>
 
-    <p class="mt-3 text-xs text-gray-400">
-      OMW% = Siegquote der Gegner, GW% = eigene Spielquote, OGW% = Spielquote der Gegner.
+    <!-- A visible legend rather than tooltips only: `title` never shows on
+         touch devices (#28). -->
+    <p class="mt-3 text-xs text-gray-500">
+      Punkte: Sieg {{ POINTS_WIN }}, Unentschieden {{ POINTS_DRAW }}
+      · S-N-U = Siege–Niederlagen–Unentschieden
+      · OMW% = Siegquote der Gegner
+      · GW% = eigene Spielquote
+      · OGW% = Spielquote der Gegner
     </p>
   </section>
 </template>

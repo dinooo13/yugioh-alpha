@@ -337,4 +337,67 @@ test.describe('tournaments', () => {
     // The winner is called out next to the standings (#36).
     await expect(page.getByText(/Sieger: /)).toBeVisible()
   })
+
+  test('renders participants and standings as cards with 44px controls on a phone (#28)', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await registerAndLogin(page)
+
+    // The organizer plays by default, so one guest makes two players.
+    const createResponse = await page.request.post('/api/tournaments', { data: { name: 'Handyturnier' } })
+    expect(createResponse.ok()).toBe(true)
+    const tournament = await createResponse.json() as { id: string }
+    const guestResponse = await page.request.post(`/api/tournaments/${tournament.id}/participants`, { data: { name: 'Gast Anton' } })
+    expect(guestResponse.ok()).toBe(true)
+
+    /** Nothing may scroll sideways: neither the page nor the tables' scroll wrappers. */
+    async function expectNoHorizontalOverflow(step: string) {
+      const overflows = await page.evaluate(() => [
+        document.documentElement,
+        ...document.querySelectorAll<HTMLElement>('.overflow-x-auto'),
+      ].map(element => ({ scrollWidth: element.scrollWidth, clientWidth: element.clientWidth })))
+      for (const { scrollWidth, clientWidth } of overflows) {
+        expect(scrollWidth, `${step}: horizontal overflow`).toBeLessThanOrEqual(clientWidth)
+      }
+    }
+
+    async function expectTouchTarget(locator: Locator, label: string, { width = true } = {}) {
+      const box = await locator.boundingBox()
+      expect(box, label).not.toBeNull()
+      expect(box!.height, `${label} height`).toBeGreaterThanOrEqual(44)
+      if (width) {
+        expect(box!.width, `${label} width`).toBeGreaterThanOrEqual(44)
+      }
+    }
+
+    // --- Registration: participant cards + "Konto" legend ---------------------
+    await page.goto(`/turniere/${tournament.id}`)
+    await page.waitForLoadState('networkidle')
+
+    await expect(participantRow(page, 'Gast Anton')).toBeVisible()
+    // The column headers are dropped on phones — each card labels itself.
+    await expect(page.getByRole('columnheader', { name: 'Deck', exact: true })).toBeHidden()
+    await expect(page.getByText('Gäste ohne Konto verwaltet die Turnierleitung.')).toBeVisible()
+    await expectNoHorizontalOverflow('registration')
+
+    // --- Running: 44px row menu and result buttons ------------------------------
+    const startResponse = await page.request.post(`/api/tournaments/${tournament.id}/start`)
+    expect(startResponse.ok()).toBe(true)
+    await page.reload()
+    await page.waitForLoadState('networkidle')
+
+    await expectTouchTarget(page.getByRole('button', { name: 'Optionen für Gast Anton' }), 'Optionen für Gast Anton')
+    await expectTouchTarget(matchRow(page, 1).getByRole('button', { name: '2:0' }), '2:0', { width: false })
+    await expectNoHorizontalOverflow('running')
+
+    await matchRow(page, 1).getByRole('button', { name: '2:0' }).click()
+    await expect(page.getByRole('button', { name: 'Runde abschließen' })).toBeEnabled()
+    await page.getByRole('button', { name: 'Runde abschließen' }).click()
+
+    // --- Standings card: record inline, abbreviations explained -----------------
+    const standingsSection = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Tabelle' }) })
+    await expect(standingsSection.locator('tbody tr').first()).toContainText('1-0-0')
+    await expect(page.getByRole('columnheader', { name: 'Platz' })).toBeHidden()
+    await expect(standingsSection.getByText('Siege–Niederlagen–Unentschieden')).toBeVisible()
+    await expectNoHorizontalOverflow('standings')
+  })
 })

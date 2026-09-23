@@ -11,6 +11,9 @@ const emit = defineEmits<{
   updated: [detail: TournamentDetail]
 }>()
 
+/** Explains the "Konto" badge — as its tooltip and in the legend under the table (#28). */
+const KONTO_HINT = 'Spieler mit eigenem Benutzerkonto – meldet sein Deck selbst an. Gäste ohne Konto verwaltet die Turnierleitung.'
+
 function errorText(error: unknown, fallback: string) {
   const code = apiErrorCode(error) as TournamentErrorCode | undefined
   return (code && TOURNAMENT_ERROR_MESSAGES[code]) || apiErrorMessage(error, fallback)
@@ -234,13 +237,18 @@ function managesOwnDeck(participant: TournamentParticipantDto): boolean {
     && !canRegisterDeck(participant)
 }
 
+// Whether a row has anything to act on. On phones the actions cell is a
+// full-width strip under the card, so a row with nothing in it hides that
+// cell instead of leaving an empty bordered strip (#28).
+function rowHasActions(participant: TournamentParticipantDto): boolean {
+  return canRegisterDeck(participant)
+    || managesOwnDeck(participant)
+    || menuItemsFor(participant).length > 0
+}
+
 // No row has anything to act on (e.g. a finished tournament, or a
 // participant viewing a running one) — drop the empty "Aktionen" column.
-const hasRowActions = computed(() =>
-  props.tournament.participants.some(participant =>
-    canRegisterDeck(participant)
-    || managesOwnDeck(participant)
-    || menuItemsFor(participant).length > 0))
+const hasRowActions = computed(() => props.tournament.participants.some(rowHasActions))
 
 // The caller's own row, when they play in the tournament — used for the
 // "register before it starts" banner below (#31).
@@ -321,6 +329,7 @@ function capturedAtLabel(participant: TournamentParticipantDto): string | null {
         <UButton
           size="xs"
           label="Deck anmelden"
+          class="tap-target"
           @click="openOwnDeckModal"
         />
       </template>
@@ -398,36 +407,71 @@ function capturedAtLabel(participant: TournamentParticipantDto): string | null {
       {{ rowError }}
     </p>
 
+    <!-- One <table> for both layouts (#28): below `sm` the rows are restyled
+         as stacked cards via CSS instead of rendering a second, duplicated
+         card list. Changing `display` on table elements can drop their
+         implicit semantics (notably in Safari), so the ARIA roles are
+         spelled out explicitly. -->
     <div class="mt-4 overflow-x-auto">
-      <table class="w-full text-left text-sm">
-        <thead>
-          <tr class="border-b border-gray-200 text-xs uppercase tracking-wide text-gray-500">
-            <th class="py-2 pr-2">
+      <table
+        role="table"
+        class="block w-full text-left text-sm sm:table"
+      >
+        <thead
+          role="rowgroup"
+          class="hidden sm:table-header-group"
+        >
+          <tr
+            role="row"
+            class="border-b border-gray-200 text-xs uppercase tracking-wide text-gray-500"
+          >
+            <th
+              role="columnheader"
+              class="py-2 pr-2"
+            >
               #
             </th>
-            <th class="px-2 py-2">
+            <th
+              role="columnheader"
+              class="px-2 py-2"
+            >
               Name
             </th>
-            <th class="px-2 py-2">
+            <th
+              role="columnheader"
+              class="px-2 py-2"
+            >
               Deck
             </th>
             <th
               v-if="hasRowActions"
+              role="columnheader"
               class="px-2 py-2 text-right"
             >
               Aktionen
             </th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-gray-100">
+        <tbody
+          role="rowgroup"
+          class="block space-y-2 sm:table-row-group sm:space-y-0 sm:divide-y sm:divide-gray-100"
+        >
           <tr
             v-for="participant in tournament.participants"
             :key="participant.id"
+            role="row"
+            class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 rounded-md border border-gray-200 p-3 sm:table-row sm:rounded-none sm:border-0 sm:p-0"
           >
-            <td class="py-2 pr-2 tabular-nums text-gray-500">
-              {{ participant.seed }}
+            <td
+              role="cell"
+              class="tabular-nums text-gray-500 sm:py-2 sm:pr-2"
+            >
+              <span class="sm:hidden">#</span>{{ participant.seed }}
             </td>
-            <td class="px-2 py-2 font-medium text-gray-900">
+            <td
+              role="cell"
+              class="font-medium text-gray-900 sm:px-2 sm:py-2"
+            >
               <div class="flex flex-wrap items-center gap-1.5">
                 <span>{{ participant.name }}</span>
                 <UBadge
@@ -437,6 +481,7 @@ function capturedAtLabel(participant: TournamentParticipantDto): string | null {
                   variant="subtle"
                   icon="i-lucide-user-check"
                   label="Konto"
+                  :title="KONTO_HINT"
                 />
                 <UBadge
                   v-if="participant.dropped"
@@ -447,7 +492,10 @@ function capturedAtLabel(participant: TournamentParticipantDto): string | null {
                 />
               </div>
             </td>
-            <td class="px-2 py-2">
+            <td
+              role="cell"
+              class="col-start-2 sm:px-2 sm:py-2"
+            >
               <template v-if="participant.deckName">
                 <div class="text-gray-900">
                   {{ participant.deckName }}
@@ -456,7 +504,7 @@ function capturedAtLabel(participant: TournamentParticipantDto): string | null {
                   <UPopover v-if="deckBadge(participant) && participant.deckIssueCount">
                     <button
                       type="button"
-                      class="flex items-center gap-1 rounded hover:bg-gray-50"
+                      class="tap-target inline-flex items-center gap-1 rounded hover:bg-gray-50"
                       :aria-label="`Regelverstöße von ${participant.name} anzeigen`"
                     >
                       <UBadge
@@ -506,14 +554,17 @@ function capturedAtLabel(participant: TournamentParticipantDto): string | null {
             </td>
             <td
               v-if="hasRowActions"
-              class="px-2 py-2"
+              role="cell"
+              class="col-span-full border-t border-gray-100 pt-2 sm:border-0 sm:px-2 sm:py-2"
+              :class="rowHasActions(participant) ? undefined : 'max-sm:hidden'"
             >
-              <div class="flex items-center justify-end gap-2">
+              <div class="flex items-center justify-start gap-2 sm:justify-end">
                 <UButton
                   v-if="canRegisterDeck(participant)"
                   size="xs"
                   color="neutral"
                   variant="outline"
+                  class="tap-target"
                   :label="participant.deckName ? 'Deck ändern' : 'Deck anmelden'"
                   @click="openDeckModal(participant)"
                 />
@@ -541,6 +592,17 @@ function capturedAtLabel(participant: TournamentParticipantDto): string | null {
         </tbody>
       </table>
     </div>
+
+    <p
+      v-if="tournament.participants.some(participant => participant.linked)"
+      class="mt-3 flex items-start gap-1.5 text-xs text-gray-500"
+    >
+      <UIcon
+        name="i-lucide-user-check"
+        class="mt-px size-3.5 shrink-0"
+      />
+      <span>„Konto“: {{ KONTO_HINT }}</span>
+    </p>
 
     <UModal
       v-model:open="isRenameOpen"

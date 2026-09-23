@@ -107,7 +107,7 @@ function onChipClick(slot: 'a' | 'b') {
       <button
         v-if="swapMode"
         type="button"
-        class="cursor-pointer rounded px-1 text-sm font-medium hover:bg-primary/10"
+        class="tap-target inline-flex cursor-pointer items-center rounded px-1 text-sm font-medium hover:bg-primary/10"
         :class="selectedA ? 'bg-primary/20 text-primary' : 'text-gray-900'"
         @click="onChipClick('a')"
       >
@@ -133,7 +133,7 @@ function onChipClick(slot: 'a' | 'b') {
         <button
           v-if="swapMode"
           type="button"
-          class="cursor-pointer rounded px-1 text-sm font-medium hover:bg-primary/10"
+          class="tap-target inline-flex cursor-pointer items-center rounded px-1 text-sm font-medium hover:bg-primary/10"
           :class="selectedB ? 'bg-primary/20 text-primary' : 'text-gray-900'"
           @click="onChipClick('b')"
         >
@@ -165,62 +165,75 @@ function onChipClick(slot: 'a' | 'b') {
           color="neutral"
           variant="outline"
           label="Ergebnis ändern"
+          class="tap-target"
           @click="() => { isEditing = true }"
         />
       </template>
 
       <!-- Quick buttons first and primary: they are the normal path for
            reporting a result (#33). The manual score fields + save button
-           come after, for the rarer best-of-3-with-games case. -->
+           come after, for the rarer best-of-3-with-games case. Two groups
+           that wrap independently, so the 44px touch targets (#28) stack
+           into two tidy lines on a phone instead of one ragged one. -->
       <template v-else-if="canEdit">
-        <UButton
-          size="xs"
-          label="2:0"
-          :loading="isSubmitting"
-          @click="submitResult(2, 0)"
-        />
-        <UButton
-          size="xs"
-          label="0:2"
-          :loading="isSubmitting"
-          @click="submitResult(0, 2)"
-        />
-        <UButton
-          size="xs"
-          label="Unentschieden"
-          :loading="isSubmitting"
-          @click="submitResult(1, 1)"
-        />
+        <div class="flex w-full flex-wrap gap-2 sm:w-auto">
+          <UButton
+            size="xs"
+            label="2:0"
+            class="tap-target max-sm:flex-auto"
+            :loading="isSubmitting"
+            @click="submitResult(2, 0)"
+          />
+          <UButton
+            size="xs"
+            label="0:2"
+            class="tap-target max-sm:flex-auto"
+            :loading="isSubmitting"
+            @click="submitResult(0, 2)"
+          />
+          <UButton
+            size="xs"
+            label="Unentschieden"
+            class="tap-target max-sm:flex-auto"
+            :loading="isSubmitting"
+            @click="submitResult(1, 1)"
+          />
+        </div>
 
-        <UInput
-          v-model.number="gamesA"
-          type="number"
-          min="0"
-          :max="MAX_GAMES_PER_MATCH"
-          size="xs"
-          class="w-16"
-          :aria-label="`Spiele ${match.participantAName}`"
-        />
-        <span class="text-gray-400">:</span>
-        <UInput
-          v-model.number="gamesB"
-          type="number"
-          min="0"
-          :max="MAX_GAMES_PER_MATCH"
-          size="xs"
-          class="w-16"
-          :aria-label="`Spiele ${match.participantBName}`"
-        />
-        <UButton
-          size="xs"
-          color="neutral"
-          variant="outline"
-          label="Ergebnis speichern"
-          :disabled="isUntouchedZeroZero"
-          :title="isUntouchedZeroZero ? 'Trage zuerst ein Ergebnis ein' : undefined"
-          :loading="isSubmitting"
-          @click="saveForm"
-        />
+        <div class="flex flex-wrap items-center gap-2">
+          <UInput
+            v-model.number="gamesA"
+            type="number"
+            min="0"
+            :max="MAX_GAMES_PER_MATCH"
+            size="xs"
+            class="w-16"
+            :ui="{ base: 'tap-target' }"
+            :aria-label="`Spiele ${match.participantAName}`"
+          />
+          <span class="text-gray-400">:</span>
+          <UInput
+            v-model.number="gamesB"
+            type="number"
+            min="0"
+            :max="MAX_GAMES_PER_MATCH"
+            size="xs"
+            class="w-16"
+            :ui="{ base: 'tap-target' }"
+            :aria-label="`Spiele ${match.participantBName}`"
+          />
+          <UButton
+            size="xs"
+            color="neutral"
+            variant="outline"
+            label="Ergebnis speichern"
+            class="tap-target"
+            :disabled="isUntouchedZeroZero"
+            :title="isUntouchedZeroZero ? 'Trage zuerst ein Ergebnis ein' : undefined"
+            :loading="isSubmitting"
+            @click="saveForm"
+          />
+        </div>
       </template>
     </div>
 

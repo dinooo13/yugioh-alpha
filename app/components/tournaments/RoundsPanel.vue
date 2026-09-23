@@ -169,6 +169,7 @@ async function onSelectSlot(matchId: string, slot: 'a' | 'b') {
         :color="swapMode ? 'error' : 'neutral'"
         :variant="swapMode ? 'solid' : 'outline'"
         :label="swapMode ? 'Tauschen beenden' : 'Paarungen tauschen'"
+        class="tap-target"
         @click="toggleSwapMode"
       />
     </div>
@@ -235,7 +236,7 @@ async function onSelectSlot(matchId: string, slot: 'a' | 'b') {
             color="neutral"
             variant="ghost"
             block
-            class="justify-start"
+            class="justify-start max-lg:min-h-11"
             trailing-icon="i-lucide-chevron-down"
           >
             <span class="flex items-center gap-2">
