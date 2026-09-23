@@ -1,0 +1,32 @@
+{
+  "profile": {
+    "title": "Profile",
+    "loadFailed": "Couldn't load the profile",
+    "viewPublicProfile": "View public profile",
+    "form": {
+      "displayName": "Display name",
+      "handle": "Username",
+      "bio": "About me",
+      "handleHelp": "Lowercase letters, digits and hyphens only, 3–30 characters. Profile URL: {url}",
+      "handleInvalid": "Usernames may only contain lowercase letters, digits and hyphens.",
+      "displayNameRequired": "Please enter a display name.",
+      "saveFailed": "Couldn't save the profile.",
+      "handleChanged": "Links you already shared with the old username no longer work."
+    },
+    "inventoryShare": {
+      "title": "Share inventory",
+      "description": "All cards – share your whole inventory with other players.",
+      "share": "Share",
+      "resourceName": "All cards"
+    },
+    "wishlistVisibility": {
+      "title": "Show wishlist publicly",
+      "description": "Other players can see your wishlist on your profile.",
+      "saveFailed": "Couldn't save the visibility"
+    },
+    "settings": {
+      "title": "Settings",
+      "languageDescription": "The language of menus, buttons and messages."
+    }
+  }
+}
