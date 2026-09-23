@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { DeckCover } from '~~/shared/deck-cover'
 import type { Visibility } from '~~/shared/sharing'
 import { pluralize } from '~~/shared/plural'
 
@@ -16,6 +17,7 @@ interface DeckListItem {
   formatName: string | null
   legal: boolean | null
   visibility: Visibility
+  cover: DeckCover | null
   createdAt: string
   updatedAt: string
 }
@@ -333,85 +335,104 @@ function statusColor(deck: DeckListItem) {
       <li
         v-for="deck in decks"
         :key="deck.id"
-        class="flex flex-col rounded-md border border-gray-200 bg-white p-4"
+        class="flex gap-3 rounded-md border border-gray-200 bg-white p-4"
       >
-        <div class="flex items-start justify-between gap-2">
-          <NuxtLink
-            :to="`/decks/${deck.id}`"
-            class="min-w-0 flex-1"
-          >
-            <h2 class="truncate text-base font-semibold text-gray-900 hover:text-primary">
-              {{ deck.name }}
-            </h2>
-            <p
-              v-if="deck.description"
-              class="mt-0.5 line-clamp-2 text-sm text-gray-500"
+        <!-- Cover card (#29): purely decorative next to the deck name link,
+             so it is kept out of the tab order and the accessibility tree. -->
+        <NuxtLink
+          :to="`/decks/${deck.id}`"
+          tabindex="-1"
+          aria-hidden="true"
+          class="shrink-0 self-start"
+        >
+          <CardThumb
+            size="lg"
+            :src="deck.cover?.imageSmall"
+            :src-large="deck.cover?.imageLarge"
+            :alt="deck.cover?.name ?? deck.name"
+            :no-image-label="deck.cover ? 'Kein Bild' : 'Leer'"
+          />
+        </NuxtLink>
+
+        <div class="flex min-w-0 flex-1 flex-col">
+          <div class="flex items-start justify-between gap-2">
+            <NuxtLink
+              :to="`/decks/${deck.id}`"
+              class="min-w-0 flex-1"
             >
-              {{ deck.description }}
-            </p>
-          </NuxtLink>
+              <h2 class="truncate text-base font-semibold text-gray-900 hover:text-primary">
+                {{ deck.name }}
+              </h2>
+              <p
+                v-if="deck.description"
+                class="mt-0.5 line-clamp-2 text-sm text-gray-500"
+              >
+                {{ deck.description }}
+              </p>
+            </NuxtLink>
 
-          <UDropdownMenu :items="menuItemsFor(deck)">
-            <UButton
-              icon="i-lucide-more-horizontal"
-              color="neutral"
-              variant="ghost"
-              size="xs"
-              :aria-label="`Optionen für ${deck.name}`"
-              class="tap-target"
-            />
-          </UDropdownMenu>
-        </div>
-
-        <dl class="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-600">
-          <div class="flex gap-1">
-            <dt>Main</dt>
-            <dd class="font-semibold tabular-nums text-gray-900">
-              {{ deck.mainCount }}
-            </dd>
+            <UDropdownMenu :items="menuItemsFor(deck)">
+              <UButton
+                icon="i-lucide-more-horizontal"
+                color="neutral"
+                variant="ghost"
+                size="xs"
+                :aria-label="`Optionen für ${deck.name}`"
+                class="tap-target"
+              />
+            </UDropdownMenu>
           </div>
-          <div class="flex gap-1">
-            <dt>Extra</dt>
-            <dd class="font-semibold tabular-nums text-gray-900">
-              {{ deck.extraCount }}
-            </dd>
-          </div>
-          <div class="flex gap-1">
-            <dt>Side</dt>
-            <dd class="font-semibold tabular-nums text-gray-900">
-              {{ deck.sideCount }}
-            </dd>
-          </div>
-        </dl>
 
-        <div class="mt-4 flex flex-wrap items-center gap-2">
-          <!-- Besitz-Status (links) -->
-          <UBadge
-            :color="statusColor(deck)"
-            variant="subtle"
-            :label="statusLabel(deck)"
-          />
-          <SharingVisibilityBadge
-            :visibility="deck.visibility"
-            hide-private
-          />
+          <dl class="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-600">
+            <div class="flex gap-1">
+              <dt>Main</dt>
+              <dd class="font-semibold tabular-nums text-gray-900">
+                {{ deck.mainCount }}
+              </dd>
+            </div>
+            <div class="flex gap-1">
+              <dt>Extra</dt>
+              <dd class="font-semibold tabular-nums text-gray-900">
+                {{ deck.extraCount }}
+              </dd>
+            </div>
+            <div class="flex gap-1">
+              <dt>Side</dt>
+              <dd class="font-semibold tabular-nums text-gray-900">
+                {{ deck.sideCount }}
+              </dd>
+            </div>
+          </dl>
 
-          <!-- Format + Legalität (rechts) -->
-          <div class="ml-auto flex flex-wrap items-center justify-end gap-2">
+          <div class="mt-4 flex flex-wrap items-center gap-2">
+            <!-- Besitz-Status (links) -->
             <UBadge
-              v-if="deck.formatName"
-              color="neutral"
+              :color="statusColor(deck)"
               variant="subtle"
-              icon="i-lucide-scroll-text"
-              :label="deck.formatName"
+              :label="statusLabel(deck)"
             />
-            <UBadge
-              v-if="deck.legal !== null"
-              :color="deck.legal ? 'success' : 'error'"
-              variant="subtle"
-              :label="deck.legal ? 'Legal' : 'Nicht legal'"
+            <SharingVisibilityBadge
+              :visibility="deck.visibility"
+              hide-private
             />
-            <span class="text-xs text-gray-400">{{ pluralize(deck.cardCount, 'Karte', 'Karten') }}</span>
+
+            <!-- Format + Legalität (rechts) -->
+            <div class="ml-auto flex flex-wrap items-center justify-end gap-2">
+              <UBadge
+                v-if="deck.formatName"
+                color="neutral"
+                variant="subtle"
+                icon="i-lucide-scroll-text"
+                :label="deck.formatName"
+              />
+              <UBadge
+                v-if="deck.legal !== null"
+                :color="deck.legal ? 'success' : 'error'"
+                variant="subtle"
+                :label="deck.legal ? 'Legal' : 'Nicht legal'"
+              />
+              <span class="text-xs text-gray-400">{{ pluralize(deck.cardCount, 'Karte', 'Karten') }}</span>
+            </div>
           </div>
         </div>
       </li>

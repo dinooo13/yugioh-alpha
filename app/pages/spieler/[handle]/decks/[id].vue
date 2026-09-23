@@ -37,9 +37,18 @@ useHead({
 
       <LayoutPageHeader
         :title="data.deck.name"
-        :description="`Geteilt von ${data.owner.displayName}`"
         truncate
       >
+        <template #description>
+          <span class="inline-flex items-center gap-1.5">
+            <ProfileAvatar
+              size="2xs"
+              :name="data.owner.displayName"
+              :handle="data.owner.handle"
+            />
+            <span>Geteilt von {{ data.owner.displayName }}</span>
+          </span>
+        </template>
         <p
           v-if="data.deck.description"
           class="mt-1 max-w-prose text-sm text-gray-500"

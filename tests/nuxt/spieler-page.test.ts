@@ -63,6 +63,12 @@ describe('public profile page', () => {
         legal: null,
         visibility: 'public',
         updatedAt: '2025-01-01T00:00:00.000Z',
+        cover: {
+          catalogCardId: 89631139,
+          name: 'Blue-Eyes White Dragon',
+          imageSmall: 'https://images.example/cards_small/89631139.jpg',
+          imageLarge: 'https://images.example/cards/89631139.jpg',
+        },
       }],
       collections: [{ id: 'col-1', name: 'Binder', description: null, cardCount: 10, visibility: 'public' }],
       inventory: { visible: true, cardCount: 120 },
@@ -76,6 +82,10 @@ describe('public profile page', () => {
     expect(text).toContain('Blue-Eyes Deck')
     expect(text).toContain('Binder')
     expect(text).toContain('Inventar ansehen')
+
+    // Initials avatar (#29) and the deck tile's cover card.
+    expect(component.find('[data-slot="fallback"]').text()).toBe('F')
+    expect(component.find('img[src="https://images.example/cards_small/89631139.jpg"]').exists()).toBe(true)
   })
 
   it('hides the inventory link when the inventory is not visible', async () => {
@@ -193,6 +203,8 @@ describe('public deck page', () => {
     expect(text).not.toContain('besitzt')
     expect(text).not.toContain('fehlt')
     expect(text).not.toContain('Bearbeiten')
+    expect(text).toContain('Geteilt von Fabian')
+    expect(component.find('[data-slot="fallback"]').text()).toBe('F')
   })
 
   function baseDeck(overrides: Partial<SharedDeckView> = {}): SharedDeckView {
