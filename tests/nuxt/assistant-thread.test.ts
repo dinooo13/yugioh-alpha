@@ -1,4 +1,4 @@
-import { defineComponent } from 'vue'
+import { defineComponent, watch } from 'vue'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
 import { mountSuspended } from '@nuxt/test-utils/runtime'
@@ -183,6 +183,92 @@ describe('useAssistantThread', () => {
     expect(vm.timeline.some(item => item.type === 'action' && item.action.status === 'pending')).toBe(true)
   })
 
+  it('message_end re-syncs in the background without toggling isLoading and swaps streaming items atomically', async () => {
+    const drivable = createDrivableStream()
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(drivable.stream, { status: 200 }))))
+
+    // The initial mount doesn't call load() (the page does), so every
+    // $fetch here is message_end's re-sync — held open until the test
+    // decides to resolve it.
+    let resolveDetail: ((value: unknown) => void) | undefined
+    const dollarFetchMock = vi.fn((url: string) => {
+      if (url === '/api/assistant/chat/conv-1') {
+        return new Promise((resolve) => {
+          resolveDetail = resolve
+        })
+      }
+      return Promise.reject(new Error(`unexpected $fetch ${url}`))
+    })
+    vi.stubGlobal('$fetch', dollarFetchMock)
+
+    const component = await mountThread()
+    const vm = component.vm
+    // `isLoading` starts out true until the page's first load() — a
+    // background re-sync must never flip it back on after that.
+    vm.isLoading = false
+    const loadingStates: boolean[] = []
+    const stopWatching = watch(() => vm.isLoading, value => loadingStates.push(value))
+
+    const sendPromise = vm.send({ text: 'füge Dark Magician hinzu', images: [] })
+    await flushPromises()
+
+    drivable.push(sseEvent('tool_call', { id: 'call-1', name: 'search_catalog', label: 'Sucht im Katalog: Dark Magician' }))
+    drivable.push(sseEvent('tool_result', { id: 'call-1', ok: true, summary: '1 Ergebnis(se)' }))
+    drivable.push(sseEvent('text_delta', { text: 'Ich schlage vor, die Karte hinzuzufügen.' }))
+    drivable.push(sseEvent('action_proposed', { action: pendingAction() }))
+    drivable.push(sseEvent('message_end', {
+      message: { id: 'm4', role: 'assistant', content: 'Ich schlage vor, die Karte hinzuzufügen.', createdAt: '2025-01-01T00:00:04.000Z' },
+    }))
+    drivable.close()
+    await flushPromises()
+
+    // The re-sync is in flight: the streamed rows are still on screen (no
+    // shrink-then-regrow) and the thread was never hidden behind isLoading.
+    expect(dollarFetchMock).toHaveBeenCalledWith('/api/assistant/chat/conv-1')
+    expect(types(component)).toEqual(['message', 'activity', 'message', 'action'])
+    expect(vm.timeline.at(-1)).toMatchObject({ type: 'action', key: 'streaming-action-action-1' })
+    expect(vm.isLoading).toBe(false)
+
+    resolveDetail!({ conversation: conversation(), messages: persistedMessages(), actions: [pendingAction()] })
+    await sendPromise
+    await flushPromises()
+    stopWatching()
+
+    expect(types(component)).toEqual(['message', 'activity', 'action', 'message'])
+    expect(vm.timeline.some(item => item.key.startsWith('streaming-'))).toBe(false)
+    expect(loadingStates).not.toContain(true)
+    expect(vm.isLoading).toBe(false)
+    expect(vm.loadError).toBe('')
+    expect(vm.isStreaming).toBe(false)
+  })
+
+  it('a failed background re-sync surfaces as sendError and keeps the thread', async () => {
+    const drivable = createDrivableStream()
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(drivable.stream, { status: 200 }))))
+    vi.stubGlobal('$fetch', vi.fn(() => Promise.reject(new Error('network down'))))
+
+    const component = await mountThread()
+    const vm = component.vm
+    vm.isLoading = false
+
+    const sendPromise = vm.send({ text: 'hallo', images: [] })
+    await flushPromises()
+
+    drivable.push(sseEvent('text_delta', { text: 'Hallo!' }))
+    drivable.push(sseEvent('message_end', {
+      message: { id: 'm2', role: 'assistant', content: 'Hallo!', createdAt: '2025-01-01T00:00:02.000Z' },
+    }))
+    drivable.close()
+    await sendPromise
+    await flushPromises()
+
+    expect(vm.sendError).toBe('Die Unterhaltung konnte nicht aktualisiert werden.')
+    expect(vm.loadError).toBe('')
+    expect(vm.isLoading).toBe(false)
+    expect(vm.timeline.length).toBeGreaterThan(0)
+    expect(vm.isStreaming).toBe(false)
+  })
+
   it('cancel() aborts the fetch and reloads once the persisted (partial) turn is available', async () => {
     const drivable = createDrivableStream()
     let capturedSignal: AbortSignal | undefined
@@ -201,6 +287,9 @@ describe('useAssistantThread', () => {
 
     const component = await mountThread()
     const vm = component.vm
+    vm.isLoading = false
+    const loadingStates: boolean[] = []
+    const stopWatching = watch(() => vm.isLoading, value => loadingStates.push(value))
 
     const sendPromise = vm.send({ text: 'hallo', images: [] })
     await flushPromises()
@@ -211,8 +300,13 @@ describe('useAssistantThread', () => {
 
     await sendPromise
     await flushPromises()
+    stopWatching()
 
     expect(dollarFetchMock).toHaveBeenCalledWith('/api/assistant/chat/conv-1')
+    // Re-synced in the background — the thread was never hidden.
+    expect(loadingStates).not.toContain(true)
+    expect(vm.isLoading).toBe(false)
+    expect(types(component)).toEqual(['message', 'activity', 'message'])
     expect(vm.isStreaming).toBe(false)
     expect(vm.isCancelling).toBe(false)
     expect(vm.sendError).toBe('')
