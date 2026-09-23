@@ -10,7 +10,7 @@ vi.mock('~/utils/session', () => ({
   getAuthSession: vi.fn(() => Promise.resolve({ session: {}, user: { email: 'fabian@example.com', name: 'Fabian Meyer' } })),
 }))
 
-// UModal teleports its content to <body> (same note as in katalog-page.test.ts).
+// UModal teleports its content to <body> (same note as in catalog-page.test.ts).
 function body() {
   return new DOMWrapper(document.body)
 }
