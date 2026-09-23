@@ -6,6 +6,11 @@ const props = defineProps<{
   item: InventorySearchResultItem | null
 }>()
 
+defineEmits<{
+  // Jump to this card's individual rows in "Liste" (edit / reassign them).
+  'edit-in-list': [item: InventorySearchResultItem]
+}>()
+
 const open = defineModel<boolean>('open', { default: false })
 
 const imageSrc = computed(() => props.item ? (props.item.imageLarge ?? props.item.imageSmall) : null)
@@ -56,7 +61,14 @@ const isMonster = computed(() => props.item ? props.item.atk !== null || props.i
         </div>
       </div>
 
-      <div class="flex justify-end">
+      <div class="flex flex-wrap justify-end gap-2">
+        <UButton
+          icon="i-lucide-list"
+          label="In Liste bearbeiten"
+          color="neutral"
+          variant="outline"
+          @click="$emit('edit-in-list', item)"
+        />
         <UButton
           :to="`/katalog?card=${item.catalogCardId}`"
           icon="i-lucide-book-open"

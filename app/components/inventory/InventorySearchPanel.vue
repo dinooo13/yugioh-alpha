@@ -8,7 +8,6 @@ export interface InventorySearchFilters {
   language: string[]
   condition: string[]
   edition: string[]
-  collectionId: string
   sort: 'name' | '-name' | 'quantity' | 'newest'
 }
 
@@ -28,15 +27,8 @@ interface SearchFacets {
   editions: string[]
 }
 
-interface CollectionOption {
-  id: string
-  name: string
-  cardCount: number
-}
-
 const props = defineProps<{
   facets: SearchFacets
-  collections: CollectionOption[]
   editionLabels: Record<string, string>
   conditionLabels: Record<string, string>
 }>()
@@ -47,11 +39,9 @@ const filters = defineModel<InventorySearchFilters>('filters', { required: true 
 // to mean "clear selection"), so the "no selection" options use non-empty
 // sentinels — matching AddToInventoryModal's `__no_printing__`/
 // `__no_collection__` convention — and are mapped back to `''` via the
-// computed get/set wrappers below, keeping `filters.setId`/`collectionId`
-// (consumed elsewhere as "unset" via falsy checks) unchanged.
+// computed get/set wrapper below, keeping `filters.setId` (consumed
+// elsewhere as "unset" via falsy checks) unchanged.
 const noSetValue = '__all_sets__'
-const noCollectionValue = '__all_collections__'
-const unassignedCollectionValue = '__none__'
 
 const typeItems = computed(() => props.facets.types.map(value => ({ label: value, value })))
 const attributeItems = computed(() => props.facets.attributes.map(value => ({ label: value, value })))
@@ -65,23 +55,11 @@ const setItems = computed(() => [
 const languageItems = computed(() => props.facets.languages.map(value => ({ label: value.toUpperCase(), value })))
 const conditionItems = computed(() => props.facets.conditions.map(value => ({ label: props.conditionLabels[value] ?? value, value })))
 const editionItems = computed(() => props.facets.editions.map(value => ({ label: props.editionLabels[value] ?? value, value })))
-const collectionItems = computed(() => [
-  { label: 'Alle Sammlungen', value: noCollectionValue },
-  { label: '(keine Sammlung)', value: unassignedCollectionValue },
-  ...props.collections.map(collection => ({ label: `${collection.name} (${collection.cardCount})`, value: collection.id })),
-])
 
 const setSelection = computed({
   get: () => filters.value.setId || noSetValue,
   set: (value: string) => {
     filters.value.setId = value === noSetValue ? '' : value
-  },
-})
-
-const collectionSelection = computed({
-  get: () => filters.value.collectionId || noCollectionValue,
-  set: (value: string) => {
-    filters.value.collectionId = value === noCollectionValue ? '' : value
   },
 })
 
@@ -95,7 +73,8 @@ const sortItems = [
 function resetFilters() {
   // Mutate the shared filters object in place (rather than reassigning
   // `filters.value`) so fields owned by the parent (q, inText, page) that
-  // this panel doesn't render controls for are left untouched.
+  // this panel doesn't render controls for are left untouched. The
+  // collection is the page's scope (URL), not a filter — Reset keeps it.
   filters.value.type = []
   filters.value.attribute = []
   filters.value.race = []
@@ -104,7 +83,6 @@ function resetFilters() {
   filters.value.language = []
   filters.value.condition = []
   filters.value.edition = []
-  filters.value.collectionId = ''
   filters.value.sort = 'name'
 }
 </script>
@@ -181,12 +159,6 @@ function resetFilters() {
           :items="editionItems"
           placeholder="Auflage"
           class="w-36"
-        />
-        <USelect
-          v-model="collectionSelection"
-          :items="collectionItems"
-          placeholder="Sammlung"
-          class="w-48"
         />
         <UButton
           icon="i-lucide-rotate-ccw"

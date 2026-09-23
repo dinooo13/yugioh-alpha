@@ -1,5 +1,6 @@
-import { describe, expect, it, vi } from 'vitest'
-import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { nextTick } from 'vue'
+import { mountSuspended } from '@nuxt/test-utils/runtime'
 import CollectionFormModal from '~/components/collections/CollectionFormModal.vue'
 import DefaultLayout from '~/layouts/default.vue'
 
@@ -10,35 +11,13 @@ vi.mock('~/utils/session', () => ({
   getAuthSession: vi.fn(() => Promise.resolve({ session: {}, user: { email: 'fabian@example.com', name: 'Fabian Meyer' } })),
 }))
 
-const fetchState = vi.hoisted(() => ({
-  collections: {
-    items: [] as Array<{ id: string, name: string, description: string | null, cardCount: number, visibility?: string }>,
-    allCount: 0,
-  },
-  routePath: '/inventar',
-}))
-
-mockNuxtImport('useFetch', () => {
-  return () => ({
-    data: ref(fetchState.collections),
-    pending: ref(false),
-    refresh: vi.fn(),
-  })
-})
-
-mockNuxtImport('useRoute', () => {
-  return () => ({
-    path: fetchState.routePath,
-    query: {},
-  })
+afterEach(() => {
+  vi.unstubAllGlobals()
 })
 
 describe('default layout navigation and user block', () => {
   it('lists "Wunschliste" in the nav and keeps a "Profil" button next to "Abmelden"', async () => {
-    fetchState.collections = { items: [], allCount: 0 }
-    fetchState.routePath = '/inventar'
-
-    const component = await mountSuspended(DefaultLayout)
+    const component = await mountSuspended(DefaultLayout, { route: '/inventar' })
 
     expect(component.text()).toContain('Wunschliste')
 
@@ -46,63 +25,15 @@ describe('default layout navigation and user block', () => {
     expect(buttons.some(button => button.text().includes('Profil'))).toBe(true)
     expect(component.findAll('button').some(button => button.text().includes('Abmelden'))).toBe(true)
   })
-})
 
-describe('default layout collection sidebar', () => {
-  it('renders "Alle Karten" plus the empty state when there are no collections', async () => {
-    fetchState.collections = { items: [], allCount: 0 }
-    fetchState.routePath = '/inventar'
+  it('keeps collections out of the sidebar, even on /inventar (#41)', async () => {
+    const component = await mountSuspended(DefaultLayout, { route: '/inventar' })
 
-    const component = await mountSuspended(DefaultLayout)
-
-    expect(component.text()).toContain('SAMMLUNGEN')
-    expect(component.text()).toContain('Alle Karten')
-    expect(component.text()).toContain('Neue Sammlung')
-  })
-
-  it('renders real collections fetched from the API with their card counts', async () => {
-    fetchState.collections = {
-      items: [
-        { id: 'col-1', name: 'Box 1', description: null, cardCount: 412 },
-        { id: 'col-2', name: 'Binder', description: null, cardCount: 289 },
-      ],
-      allCount: 701,
-    }
-    fetchState.routePath = '/inventar'
-
-    const component = await mountSuspended(DefaultLayout)
-
-    expect(component.text()).toContain('Box 1')
-    expect(component.text()).toContain('412')
-    expect(component.text()).toContain('Binder')
-    expect(component.text()).toContain('701')
-  })
-
-  it('hides the collection sidebar outside the inventory', async () => {
-    fetchState.collections = {
-      items: [{ id: 'col-1', name: 'Box 1', description: null, cardCount: 412 }],
-      allCount: 412,
-    }
-    fetchState.routePath = '/decks'
-
-    const component = await mountSuspended(DefaultLayout)
-
+    // Collection management lives on the inventory page now.
     expect(component.text()).not.toContain('SAMMLUNGEN')
     expect(component.text()).not.toContain('Neue Sammlung')
-    expect(component.text()).not.toContain('Box 1')
-  })
-
-  it('opens the create-collection dialog from the sidebar button', async () => {
-    fetchState.collections = { items: [], allCount: 0 }
-    fetchState.routePath = '/inventar'
-
-    const component = await mountSuspended(DefaultLayout)
-    const createButton = component.findAll('button').find(btn => btn.text().includes('Neue Sammlung'))
-    expect(createButton).toBeTruthy()
-
-    await createButton!.trigger('click')
-
-    expect(component.text()).toContain('Neue Sammlung')
+    expect(component.text()).toContain('Profil')
+    expect(component.text()).toContain('Abmelden')
   })
 })
 
@@ -143,5 +74,27 @@ describe('collection form modal', () => {
     const describedBy = input.getAttribute('aria-describedby')!.split(' ')
     const messages = describedBy.map(id => document.getElementById(id)?.textContent?.trim())
     expect(messages).toContain('Bitte einen Namen angeben.')
+  })
+
+  it('emits the created collection with "saved", so the caller can select it', async () => {
+    document.body.innerHTML = ''
+    const fetchMock = vi.fn(() => Promise.resolve({ id: 'col-new', name: 'Box 1' }))
+    vi.stubGlobal('$fetch', fetchMock)
+    const onSaved = vi.fn()
+
+    await mountSuspended(CollectionFormModal, {
+      props: { open: true, initialValues: null, onSaved },
+    })
+
+    const input = document.querySelector<HTMLInputElement>('input[name="name"]')!
+    input.value = 'Box 1'
+    input.dispatchEvent(new Event('input'))
+    await nextTick()
+    document.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }))
+
+    await vi.waitFor(() => {
+      expect(onSaved).toHaveBeenCalledWith({ id: 'col-new', name: 'Box 1' })
+    })
+    expect(fetchMock).toHaveBeenCalledWith('/api/collections', expect.objectContaining({ method: 'POST' }))
   })
 })

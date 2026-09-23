@@ -3,9 +3,9 @@ const route = useRoute()
 
 const isMobileNavOpen = ref(false)
 
-// Closes the mobile drawer on every navigation (nav item, collection link,
-// "Profil", …) instead of teaching every link inside LayoutSidebarContent to
-// do it individually.
+// Closes the mobile drawer on every navigation (nav item, "Profil", …)
+// instead of teaching every link inside LayoutSidebarContent to do it
+// individually.
 watch(() => route.fullPath, () => {
   isMobileNavOpen.value = false
 })

@@ -14,12 +14,12 @@ export interface CollectionsResponse {
 }
 
 /**
- * The signed-in user's collections (sidebar list + inventory assignment
- * dropdown/facet). A shared `key` means Nuxt dedupes this across every
- * caller on the same page — without it, the layout sidebar and
- * `/inventar` each kept their own separate copy, so creating a collection
- * or assigning a card in one never showed up in the other until a full
- * reload (UX review #4).
+ * The signed-in user's collections (inventory collection menu, per-row
+ * assignment dropdown, add-to-inventory modal) and the total copy count
+ * (`allCount`, also shown on the dashboard). A shared `key` means Nuxt
+ * dedupes this across every caller on the same page, so one `refresh()`
+ * after creating a collection or assigning a card updates every consumer
+ * at once (UX review #4).
  */
 export function useCollections() {
   return useFetch<CollectionsResponse>('/api/collections', {
