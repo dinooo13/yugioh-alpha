@@ -2,10 +2,11 @@ import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm'
 import type { SQL } from 'drizzle-orm'
 import { getQuery } from 'h3'
 import { useDb } from '../../../db'
-import { catalogCard, catalogCardImage, collection, ownedCard } from '../../../db/schema'
+import { catalogCard, collection, ownedCard } from '../../../db/schema'
 import { assertCollectionOwnedByUser } from '../../../utils/collections'
 import {
   buildInventorySearchWhere,
+  loadInventoryCardDisplay,
   parseInventorySearchQuery,
   UNASSIGNED_COLLECTION_ID,
 } from '../../../utils/inventory-search'
@@ -85,25 +86,7 @@ export default defineEventHandler(async (event) => {
     .groupBy(ownedCard.catalogCardId, ownedCard.collectionId)
     .all()
 
-  const displayRows = db
-    .select({
-      catalogCardId: catalogCard.id,
-      name: catalogCard.name,
-      type: catalogCard.type,
-      attribute: catalogCard.attribute,
-      race: catalogCard.race,
-      level: catalogCard.level,
-      atk: catalogCard.atk,
-      def: catalogCard.def,
-      imageSmall: sql<string | null>`min(${catalogCardImage.imageUrlSmall})`,
-    })
-    .from(catalogCard)
-    .leftJoin(catalogCardImage, eq(catalogCardImage.cardId, catalogCard.id))
-    .where(inArray(catalogCard.id, catalogCardIds))
-    .groupBy(catalogCard.id)
-    .all()
-
-  const displayByCardId = new Map(displayRows.map(row => [row.catalogCardId, row]))
+  const displayByCardId = loadInventoryCardDisplay(db, catalogCardIds)
 
   const breakdownByCardId = new Map<
     number,
@@ -127,6 +110,7 @@ export default defineEventHandler(async (event) => {
       atk: display?.atk ?? null,
       def: display?.def ?? null,
       imageSmall: display?.imageSmall ?? null,
+      imageLarge: display?.imageLarge ?? null,
       totalQuantity: row.totalQuantity,
       collectionBreakdown: breakdownByCardId.get(row.catalogCardId) ?? [],
     }

@@ -1,13 +1,16 @@
-import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm'
+import { and, asc, eq, inArray, isNull, or, sql } from 'drizzle-orm'
 import type { SQL } from 'drizzle-orm'
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core'
-import { catalogCard, catalogPrinting, ownedCard } from '../db/schema'
+import type { useDb } from '../db'
+import { catalogCard, catalogCardImage, catalogPrinting, ownedCard } from '../db/schema'
 import { CONDITIONS, EDITIONS, LANGUAGES } from './inventory'
 import type { InventoryCondition, InventoryEdition, InventoryLanguage } from './inventory'
 
 // Special `collectionId` value selecting owned cards that are not assigned
 // to any collection (i.e. `owned_card.collection_id IS NULL`).
 export const UNASSIGNED_COLLECTION_ID = '__none__'
+
+type Db = ReturnType<typeof useDb>
 
 export type InventorySearchSort = 'name' | '-name' | 'quantity' | 'newest'
 
@@ -208,4 +211,77 @@ export function buildInventorySearchWhere(userId: string, filters: InventorySear
   }
 
   return and(...clauses) as SQL
+}
+
+export interface InventoryCardDisplay {
+  catalogCardId: number
+  name: string
+  type: string
+  attribute: string | null
+  race: string | null
+  level: number | null
+  atk: number | null
+  def: number | null
+  imageSmall: string | null
+  imageLarge: string | null
+}
+
+/**
+ * Loads the catalog display fields (name, stats, primary artwork) for a page
+ * of inventory search results. The primary artwork is the card's image with
+ * the lowest `catalog_card_image.id` — the same rule the catalog search uses —
+ * so the small and large URLs always come from the same art variant.
+ */
+export function loadInventoryCardDisplay(db: Db, catalogCardIds: number[]): Map<number, InventoryCardDisplay> {
+  const display = new Map<number, InventoryCardDisplay>()
+  if (catalogCardIds.length === 0) {
+    return display
+  }
+
+  const cards = db
+    .select({
+      catalogCardId: catalogCard.id,
+      name: catalogCard.name,
+      type: catalogCard.type,
+      attribute: catalogCard.attribute,
+      race: catalogCard.race,
+      level: catalogCard.level,
+      atk: catalogCard.atk,
+      def: catalogCard.def,
+    })
+    .from(catalogCard)
+    .where(inArray(catalogCard.id, catalogCardIds))
+    .all()
+
+  const imageRows = db
+    .select({
+      cardId: catalogCardImage.cardId,
+      imageUrl: catalogCardImage.imageUrl,
+      imageUrlSmall: catalogCardImage.imageUrlSmall,
+    })
+    .from(catalogCardImage)
+    .where(inArray(catalogCardImage.cardId, catalogCardIds))
+    .orderBy(asc(catalogCardImage.cardId), asc(catalogCardImage.id))
+    .all()
+
+  const primaryImages = new Map<number, { imageSmall: string, imageLarge: string }>()
+  for (const image of imageRows) {
+    if (!primaryImages.has(image.cardId)) {
+      primaryImages.set(image.cardId, {
+        imageSmall: image.imageUrlSmall ?? image.imageUrl,
+        imageLarge: image.imageUrl,
+      })
+    }
+  }
+
+  for (const card of cards) {
+    const image = primaryImages.get(card.catalogCardId)
+    display.set(card.catalogCardId, {
+      ...card,
+      imageSmall: image?.imageSmall ?? null,
+      imageLarge: image?.imageLarge ?? null,
+    })
+  }
+
+  return display
 }
