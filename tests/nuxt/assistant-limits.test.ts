@@ -12,7 +12,7 @@ import {
 // `runtimeConfig.assistant.limits` (see nuxt.config.ts) is a plain object
 // vitest-environment-nuxt hands back the same reference for every
 // `useRuntimeConfig()` call within a test file — mutating it in place and
-// restoring it afterwards is the same pattern deck-assistant.test.ts uses
+// restoring it afterwards is the same pattern assistant-model.test.ts uses
 // for `useRuntimeConfig().assistant`.
 function withLimitsConfig(overrides: Record<string, unknown>, run: () => void) {
   const config = useRuntimeConfig().assistant as { limits: Record<string, unknown> }

@@ -8,10 +8,7 @@ import {
 import type { DeckSection } from '~~/shared/deck-sections'
 import { CARD_STATUS_LABELS } from '~~/shared/rule-formats'
 import type { DeckValidation } from '~~/shared/rule-formats'
-import type { AssistantChange, AssistantMissingCard, DeckAssistantResult, DeckAssistantStatus } from '~~/shared/deck-assistant'
 import type { Visibility } from '~~/shared/sharing'
-import { apiErrorMessage } from '~/utils/card-entry'
-import type { AssistantRequestPayload } from '~/components/decks/AssistantRequestForm.vue'
 
 interface DeckCardRow {
   catalogCardId: number
@@ -191,12 +188,9 @@ const formatItems = computed(() => [
   })),
 ])
 
-// --- AI deck assistant (improve mode) ---------------------------------------
+// --- Chat assistant entry point ("Mit KI bearbeiten", ADR 0011) -------------
 
-const { data: assistantStatus } = await useFetch<DeckAssistantStatus>('/api/assistant/status', {
-  headers: import.meta.server ? useRequestHeaders(['cookie']) : undefined,
-  default: () => ({ enabled: false, provider: null, model: null, chat: false, vision: false, visionModel: null }),
-})
+const { data: assistantStatus } = await useAssistantStatus()
 
 // --- Sharing (Phase 6) -------------------------------------------------------
 
@@ -210,43 +204,6 @@ const sharePath = computed(() => `/spieler/${ownProfile.value?.handle ?? ''}/dec
 function onShareUpdated(visibility: Visibility) {
   if (deck.value) {
     deck.value = { ...deck.value, visibility }
-  }
-}
-
-const isAssistantOpen = ref(false)
-const assistantResult = ref<DeckAssistantResult | null>(null)
-const isAssistantSubmitting = ref(false)
-const assistantError = ref('')
-const appliedChangeIndices = ref<Set<number>>(new Set())
-const appliedMissingIndices = ref<Set<number>>(new Set())
-
-async function handleAssistantSubmit(payload: AssistantRequestPayload) {
-  if (isAssistantSubmitting.value) {
-    return
-  }
-
-  isAssistantSubmitting.value = true
-  assistantError.value = ''
-
-  try {
-    assistantResult.value = await $fetch<DeckAssistantResult>('/api/assistant/suggest', {
-      method: 'POST',
-      body: {
-        mode: 'improve',
-        deckId: deckId.value,
-        playStyle: payload.playStyle,
-        notes: payload.notes || undefined,
-        includeMissing: payload.includeMissing,
-      },
-    })
-    appliedChangeIndices.value = new Set()
-    appliedMissingIndices.value = new Set()
-  }
-  catch (error) {
-    assistantError.value = apiErrorMessage(error, 'Die Vorschläge konnten nicht erzeugt werden.')
-  }
-  finally {
-    isAssistantSubmitting.value = false
   }
 }
 
@@ -447,44 +404,6 @@ async function setQuantity(catalogCardId: number, section: DeckSection, quantity
   }))
 }
 
-// Applies one AI-suggested change against the deck's *current* rendered
-// state (add/remove is relative, the PUT endpoint sets an absolute
-// quantity) — same pattern as setQuantity above. Indices key the change
-// list because AssistantChange itself carries no id of its own.
-async function applyAssistantChange(change: AssistantChange, index: number) {
-  if (isMutating.value || appliedChangeIndices.value.has(index)) {
-    return
-  }
-
-  const current = quantityInSection(change.catalogCardId, change.section)
-  const next = change.action === 'add' ? current + change.quantity : Math.max(0, current - change.quantity)
-  await setQuantity(change.catalogCardId, change.section, next)
-  appliedChangeIndices.value.add(index)
-}
-
-async function applyAllAssistantChanges() {
-  if (!assistantResult.value) {
-    return
-  }
-  for (const [index, change] of assistantResult.value.changes.entries()) {
-    if (!appliedChangeIndices.value.has(index)) {
-      await applyAssistantChange(change, index)
-    }
-  }
-}
-
-// Decks may contain unowned cards — any resulting shortfall is already
-// shown by the deck's own card rows.
-async function addMissingCardToDeck(missing: AssistantMissingCard, index: number) {
-  if (isMutating.value || appliedMissingIndices.value.has(index)) {
-    return
-  }
-
-  const current = quantityInSection(missing.catalogCardId, missing.section)
-  await setQuantity(missing.catalogCardId, missing.section, current + missing.quantity)
-  appliedMissingIndices.value.add(index)
-}
-
 const formatSelection = computed({
   get: () => deck.value?.format?.id ?? NO_FORMAT,
   set: (value: string) => {
@@ -668,12 +587,12 @@ async function deleteDeck() {
             @click="() => { isShareOpen = true }"
           />
           <UButton
-            v-if="assistantStatus?.enabled"
+            v-if="assistantStatus?.chat"
             icon="i-lucide-sparkles"
             color="neutral"
             variant="outline"
-            label="KI-Vorschläge"
-            @click="() => { isAssistantOpen = true }"
+            label="Mit KI bearbeiten"
+            :to="{ path: '/assistent', query: { deckId } }"
           />
           <UButton
             icon="i-lucide-pencil"
@@ -1057,147 +976,6 @@ async function deleteDeck() {
         :share-path="sharePath"
         @updated="onShareUpdated"
       />
-
-      <USlideover
-        v-model:open="isAssistantOpen"
-        title="KI-Vorschläge für dieses Deck"
-      >
-        <template #body>
-          <div class="space-y-4">
-            <DecksAssistantRequestForm
-              mode="improve"
-              :loading="isAssistantSubmitting"
-              @submit="handleAssistantSubmit"
-            />
-
-            <p
-              v-if="isAssistantSubmitting"
-              class="text-sm text-gray-500"
-            >
-              Der Assistent analysiert dein Deck … das kann bis zu einer Minute dauern.
-            </p>
-            <p
-              v-if="assistantError"
-              class="text-sm text-red-600"
-            >
-              {{ assistantError }}
-            </p>
-
-            <template v-if="assistantResult">
-              <p class="text-sm text-gray-700">
-                {{ assistantResult.summary }}
-              </p>
-
-              <UAlert
-                v-if="assistantResult.warnings.length > 0"
-                color="warning"
-                variant="subtle"
-                icon="i-lucide-triangle-alert"
-                title="Hinweise"
-              >
-                <template #description>
-                  <ul class="list-inside list-disc space-y-0.5">
-                    <li
-                      v-for="(warning, index) in assistantResult.warnings"
-                      :key="index"
-                    >
-                      {{ warning }}
-                    </li>
-                  </ul>
-                </template>
-              </UAlert>
-
-              <DecksAssistantValidationSummary
-                :validation="assistantResult.validation"
-                :format-name="assistantResult.formatName"
-                title="Nach allen Änderungen"
-              />
-
-              <div class="flex items-center justify-between gap-2">
-                <h3 class="text-sm font-semibold text-gray-900">
-                  Vorgeschlagene Änderungen (aus deinem Inventar)
-                </h3>
-                <UButton
-                  v-if="assistantResult.changes.length > 0"
-                  size="xs"
-                  color="neutral"
-                  variant="outline"
-                  label="Alle übernehmen"
-                  :disabled="isMutating"
-                  @click="applyAllAssistantChanges"
-                />
-              </div>
-              <p
-                v-if="assistantResult.changes.length === 0"
-                class="text-sm text-gray-500"
-              >
-                Keine Änderungen vorgeschlagen.
-              </p>
-              <ul
-                v-else
-                class="divide-y divide-gray-100 rounded-md border border-gray-200 bg-white"
-              >
-                <li
-                  v-for="(change, index) in assistantResult.changes"
-                  :key="index"
-                  class="flex items-center justify-between gap-2 px-3 py-2"
-                >
-                  <div class="min-w-0">
-                    <p class="text-sm font-medium text-gray-900">
-                      {{ change.action === 'add' ? '+' : '−' }}{{ change.quantity }}× {{ change.name }} ({{ DECK_SECTION_LABELS[change.section] }})
-                    </p>
-                    <p class="text-xs text-gray-500">
-                      {{ change.reason }}
-                    </p>
-                  </div>
-                  <UButton
-                    size="xs"
-                    :label="appliedChangeIndices.has(index) ? 'Übernommen' : 'Übernehmen'"
-                    :disabled="appliedChangeIndices.has(index) || isMutating"
-                    @click="applyAssistantChange(change, index)"
-                  />
-                </li>
-              </ul>
-
-              <h3 class="text-sm font-semibold text-gray-900">
-                Fehlende Karten
-              </h3>
-              <p
-                v-if="assistantResult.missing.length === 0"
-                class="text-sm text-gray-500"
-              >
-                Keine fehlenden Karten.
-              </p>
-              <ul
-                v-else
-                class="divide-y divide-amber-200 rounded-md border border-amber-200 bg-amber-50"
-              >
-                <li
-                  v-for="(missing, index) in assistantResult.missing"
-                  :key="index"
-                  class="flex items-center justify-between gap-2 px-3 py-2"
-                >
-                  <div class="min-w-0">
-                    <p class="text-sm font-medium text-amber-900">
-                      {{ missing.quantity }}× {{ missing.name }} ({{ DECK_SECTION_LABELS[missing.section] }})
-                    </p>
-                    <p class="text-xs text-amber-800">
-                      Besitz: {{ missing.owned }} · {{ missing.reason }}
-                    </p>
-                  </div>
-                  <UButton
-                    size="xs"
-                    color="warning"
-                    :label="appliedMissingIndices.has(index) ? 'Hinzugefügt' : 'Trotzdem zum Deck hinzufügen'"
-                    :disabled="appliedMissingIndices.has(index) || isMutating"
-                    @click="addMissingCardToDeck(missing, index)"
-                  />
-                </li>
-              </ul>
-            </template>
-          </div>
-        </template>
-      </USlideover>
     </template>
   </div>
 </template>

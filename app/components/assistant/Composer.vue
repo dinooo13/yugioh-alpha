@@ -9,10 +9,13 @@ const props = withDefaults(defineProps<{
   disabled?: boolean
   streaming?: boolean
   cancelling?: boolean
+  /** Pre-fills the message field once, when the composer is created (e.g. a deck entry point's draft) — never sent on its own. */
+  initialText?: string
 }>(), {
   disabled: false,
   streaming: false,
   cancelling: false,
+  initialText: '',
 })
 
 const emit = defineEmits<{
@@ -20,7 +23,7 @@ const emit = defineEmits<{
   cancel: []
 }>()
 
-const text = ref('')
+const text = ref(props.initialText)
 const images = ref<string[]>([])
 const errorMessage = ref('')
 const isProcessingImage = ref(false)

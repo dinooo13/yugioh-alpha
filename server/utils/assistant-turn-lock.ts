@@ -1,7 +1,7 @@
 // Per-user "one chat turn in flight at a time" guard used by
 // `POST /api/assistant/chat/:id/messages` (see docs/adr/0010's "Loop limits"
-// decision — the same in-memory, process-local, module-level lock shape as
-// `POST /api/assistant/suggest`). Extracted out of the endpoint file so its
+// decision — an in-memory, process-local, module-level lock, the shape the
+// former one-shot deck assistant endpoint used too). Extracted out of the endpoint file so its
 // acquire/release semantics can be unit tested directly (repo convention:
 // util-level tests, not a spun-up HTTP server) — see
 // tests/nuxt/assistant-turn-lock.test.ts.

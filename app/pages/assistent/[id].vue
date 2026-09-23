@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { DeckAssistantStatus } from '~~/shared/deck-assistant'
+import { assistantIntentDraft } from '~/utils/assistant-intents'
 
 useHead({ title: 'Assistent – yugioh alpha' })
 
@@ -7,10 +7,13 @@ const route = useRoute()
 const router = useRouter()
 const conversationId = computed(() => route.params.id as string)
 
-const { data: status } = await useFetch<DeckAssistantStatus>('/api/assistant/status', {
-  headers: import.meta.server ? useRequestHeaders(['cookie']) : undefined,
-  default: () => ({ enabled: false, provider: null, model: null, chat: false, vision: false, visionModel: null }),
-})
+const { data: status } = await useAssistantStatus()
+
+// `?intent=` (set by /assistent after a deck entry point created this
+// conversation, see app/utils/assistant-intents.ts) pre-fills the composer
+// with a draft — never sent on its own. Read once here, since onMounted
+// drops it from the URL; cleared when switching conversations.
+const composerDraft = ref(assistantIntentDraft(route.query.intent))
 
 const { data: conversationsData, refresh: refreshConversations } = await useAssistantConversations()
 const conversations = computed(() => conversationsData.value?.items ?? [])
@@ -36,6 +39,7 @@ const isConversationsOpen = ref(false)
 
 watch(conversationId, () => {
   isConversationsOpen.value = false
+  composerDraft.value = ''
   load()
 })
 
@@ -64,6 +68,12 @@ onMounted(async () => {
   // this page's own "Neue Unterhaltung") shows up right away.
   await refreshConversations()
 
+  // A deck entry point's draft is already in the composer (see
+  // `composerDraft`) — drop `?intent=` so a reload doesn't bring it back.
+  if (route.query.intent !== undefined) {
+    await router.replace({ query: {} })
+  }
+
   // Coming from the /assistent empty state's example prompts: send the
   // chosen prompt once, then drop it from the URL so a reload doesn't
   // resend it.
@@ -90,13 +100,7 @@ async function onDeleted(id: string) {
 
 <template>
   <div class="space-y-4">
-    <UAlert
-      v-if="!status?.chat"
-      color="warning"
-      variant="subtle"
-      icon="i-lucide-triangle-alert"
-      title="Der KI-Assistent ist nicht konfiguriert. Setze NUXT_ASSISTANT_API_KEY (oder OPENAI_API_KEY) bzw. NUXT_ASSISTANT_BASE_URL auf dem Server."
-    />
+    <AssistantUnavailableNotice v-if="!status?.chat" />
 
     <div
       v-else
@@ -129,9 +133,27 @@ async function onDeleted(id: string) {
 
       <section class="flex min-w-0 flex-1 flex-col rounded-md border border-gray-200 bg-white">
         <header class="flex items-center justify-between gap-2 border-b border-gray-200 px-4 py-3">
-          <h1 class="min-w-0 truncate text-base font-semibold text-gray-900">
-            {{ conversation?.title ?? 'Assistent' }}
-          </h1>
+          <!-- Below `sm` the deck chip gets its own line, so neither it nor
+               the title is squeezed down to a few characters. -->
+          <div class="flex min-w-0 flex-1 flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-2">
+            <h1 class="min-w-0 max-w-full truncate text-base font-semibold text-gray-900">
+              {{ conversation?.title ?? 'Assistent' }}
+            </h1>
+            <!-- The deck this conversation is about (ADR 0011); its current
+                 state is what the assistant sees on every turn. -->
+            <UButton
+              v-if="conversation?.deck"
+              :to="`/decks/${conversation.deck.id}`"
+              icon="i-lucide-layers"
+              size="xs"
+              color="neutral"
+              variant="soft"
+              class="min-w-0 max-w-full shrink sm:max-w-64"
+              :aria-label="`Deck ${conversation.deck.name} öffnen`"
+            >
+              <span class="truncate">Deck: {{ conversation.deck.name }}</span>
+            </UButton>
+          </div>
           <UButton
             icon="i-lucide-menu"
             label="Unterhaltungen"
@@ -165,6 +187,7 @@ async function onDeleted(id: string) {
           </p>
 
           <AssistantComposer
+            :initial-text="composerDraft"
             :streaming="isStreaming"
             :cancelling="isCancelling"
             @send="sendMessage"

@@ -8,7 +8,8 @@
 import { inArray } from 'drizzle-orm'
 import type { useDb } from '../db'
 import { catalogCard, catalogPrinting } from '../db/schema'
-import { evaluateDeck } from '../../shared/rule-formats'
+import { defaultSectionForCard } from '../../shared/deck-sections'
+import { DEFAULT_MAX_COPIES, evaluateDeck } from '../../shared/rule-formats'
 import type {
   DeckCardEntry,
   DeckValidation,
@@ -113,4 +114,31 @@ export function validateDeckCards(
 ): DeckValidation {
   const cardData = loadCardDataForValidation(db, deckCards.map(entry => entry.catalogCardId))
   return evaluateDeck(ruleSet, deckCards, cardData, options)
+}
+
+/**
+ * The effective per-card copy limit under a rule set — the rule engine's own
+ * `maxCopies` (the minimum of the `copies` rule, any `card_status`, the
+ * banlist, and every applicable `filter` rule), so it can never disagree
+ * with what `evaluateDeck` later reports. `0` means the card is forbidden.
+ * Without a rule set every card gets the standard limit (3). Used by the chat
+ * assistant's `search_inventory` to tell the model how many copies of an
+ * owned card a format allows (docs/adr/0011-deck-assistance-in-chat.md).
+ */
+export function maxCopiesByCard(db: Db, rules: RuleSet | null, cardIds: number[]): Map<number, number> {
+  const uniqueIds = [...new Set(cardIds)]
+  if (!rules) {
+    return new Map(uniqueIds.map(id => [id, DEFAULT_MAX_COPIES]))
+  }
+
+  const cardData = loadCardDataForValidation(db, uniqueIds)
+  const cards = [...cardData.values()]
+  const validation = evaluateDeck(
+    rules,
+    cards.map(card => ({ catalogCardId: card.id, section: defaultSectionForCard(card), quantity: 1 })),
+    cardData,
+    { cardNames: Object.fromEntries(cards.map(card => [card.id, card.name])) },
+  )
+
+  return new Map(uniqueIds.map(id => [id, validation.cards[id]?.maxCopies ?? DEFAULT_MAX_COPIES]))
 }

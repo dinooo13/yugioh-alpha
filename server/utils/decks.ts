@@ -266,7 +266,7 @@ export function validateDeckCardInput(body: unknown): DeckCardInput {
 }
 
 // Upper bound on how many card rows a single `POST /api/decks` request may
-// seed the new deck with (an AI deck-assistant "build" suggestion, say).
+// seed the new deck with (e.g. a chat assistant `create_deck` proposal).
 export const MAX_DECK_CREATE_CARDS = 100
 
 /**
@@ -370,6 +370,9 @@ function requireDeckRow(db: Db, userId: string, deckId: string) {
 
   return row
 }
+
+/** The caller's own deck row, or 404 — also used to link a chat conversation to a deck (server/utils/assistant-chat.ts). */
+export { requireDeckRow as requireOwnDeck }
 
 function requireCatalogCard(db: Db, catalogCardId: number) {
   const card = db
@@ -607,8 +610,8 @@ export function validateDeckWithRules(db: Db, userId: string, deckId: string, ru
 }
 
 /**
- * Creates a deck, optionally seeded with a set of cards (e.g. an AI deck
- * assistant "build" suggestion saved directly) — the deck row and every card
+ * Creates a deck, optionally seeded with a set of cards (e.g. a chat
+ * assistant `create_deck` proposal being applied) — the deck row and every card
  * row are written in one transaction, so a bad card never leaves behind an
  * empty deck.
  */

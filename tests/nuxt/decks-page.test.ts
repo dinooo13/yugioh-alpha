@@ -85,6 +85,16 @@ describe('decks page', () => {
     expect(component.text()).toContain('1 Deck')
   })
 
+  it('links "Mit KI erstellen" into the chat assistant with the new-deck intent', async () => {
+    state.decks = { items: [], total: 0, page: 1, pageSize: 20 }
+
+    const component = await mountSuspended(DecksPage)
+
+    const link = component.findAll('a').find(anchor => anchor.text().includes('Mit KI erstellen'))
+    expect(link).toBeTruthy()
+    expect(link!.attributes('href')).toBe('/assistent?intent=new-deck')
+  })
+
   it('shows per-section counts and a completeness badge per deck', async () => {
     state.decks = {
       items: [

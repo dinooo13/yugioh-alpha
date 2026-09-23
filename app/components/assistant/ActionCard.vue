@@ -34,6 +34,7 @@ const statusColor = computed(() => {
 // Payload fields the write tools actually produce (server/utils/assistant-tools.ts) —
 // only these are ever shown, whichever of them a given action kind carries.
 const FIELD_LABELS: Record<string, string> = {
+  name: 'Karte',
   catalogCardId: 'Karte (ID)',
   quantity: 'Menge',
   section: 'Sektion',
@@ -62,14 +63,78 @@ const rows = computed(() => rowsOf(props.action.payload))
 
 const columns = computed(() => {
   const keys: string[] = []
-  for (const row of rows.value) {
-    for (const key of Object.keys(row)) {
-      if (key in FIELD_LABELS && row[key] !== null && row[key] !== undefined && !keys.includes(key)) {
-        keys.push(key)
-      }
+  for (const key of Object.keys(FIELD_LABELS)) {
+    if (rows.value.some(row => row[key] !== null && row[key] !== undefined)) {
+      keys.push(key)
     }
   }
-  return keys
+  // Deck rows carry the card's name (ADR 0011) — the bare catalog id next to
+  // it is noise. Older actions without names still show the id.
+  return keys.includes('name') ? keys.filter(key => key !== 'catalogCardId') : keys
+})
+
+function columnLabel(column: string): string {
+  // update_deck_cards' quantity is the new absolute amount, not a delta.
+  if (column === 'quantity' && props.action.kind === 'update_deck_cards') {
+    return 'Neue Menge'
+  }
+  return FIELD_LABELS[column] ?? column
+}
+
+// --- Proposal preview (create_deck / update_deck_cards, ADR 0011) ------------
+
+interface DeckPreview {
+  counts: { main: number, extra: number, side: number }
+  validation: { legal: boolean, issues: string[] } | null
+  missing: Array<{ catalogCardId: number, name: string, needed: number, owned: number }>
+}
+
+const PREVIEW_ISSUES_SHOWN = 5
+
+/** `payload.preview`, if the action carries a well-formed one (older actions don't). */
+const preview = computed<DeckPreview | null>(() => {
+  const raw = props.action.payload.preview
+  if (!isPlainObject(raw) || !isPlainObject(raw.counts) || !Array.isArray(raw.missing)) {
+    return null
+  }
+  const counts = raw.counts as Record<string, unknown>
+  const validation = isPlainObject(raw.validation) ? raw.validation : null
+  return {
+    counts: { main: Number(counts.main) || 0, extra: Number(counts.extra) || 0, side: Number(counts.side) || 0 },
+    validation: validation
+      ? {
+          legal: validation.legal === true,
+          issues: Array.isArray(validation.issues) ? validation.issues.filter((issue): issue is string => typeof issue === 'string') : [],
+        }
+      : null,
+    missing: raw.missing.filter(isPlainObject).map(card => ({
+      catalogCardId: Number(card.catalogCardId),
+      name: String(card.name ?? ''),
+      needed: Number(card.needed) || 0,
+      owned: Number(card.owned) || 0,
+    })),
+  }
+})
+
+const legalityBadge = computed(() => {
+  const validation = preview.value?.validation
+  if (!validation) {
+    return { color: 'neutral' as const, label: 'Kein Format' }
+  }
+  if (validation.legal) {
+    return { color: 'success' as const, label: 'Legal' }
+  }
+  const count = validation.issues.length
+  return { color: 'error' as const, label: `Nicht legal – ${count} ${count === 1 ? 'Problem' : 'Probleme'}` }
+})
+
+// An applied create_deck stores the new deck's detail as its result.
+const createdDeckId = computed(() => {
+  if (props.action.kind !== 'create_deck' || props.action.status !== 'applied') {
+    return null
+  }
+  const result = props.action.result
+  return isPlainObject(result) && typeof result.id === 'string' ? result.id : null
 })
 
 function displayValue(column: string, value: unknown): string {
@@ -88,11 +153,11 @@ const metaEntries = computed(() => {
   if (typeof payload.name === 'string') {
     entries.push({ label: 'Name', value: payload.name })
   }
-  if (typeof payload.deckId === 'string') {
-    entries.push({ label: 'Deck', value: payload.deckId })
+  if (typeof payload.deckName === 'string' || typeof payload.deckId === 'string') {
+    entries.push({ label: 'Deck', value: String(payload.deckName ?? payload.deckId) })
   }
-  if (typeof payload.formatId === 'string') {
-    entries.push({ label: 'Format', value: payload.formatId })
+  if (typeof payload.formatName === 'string' || typeof payload.formatId === 'string') {
+    entries.push({ label: 'Format', value: String(payload.formatName ?? payload.formatId) })
   }
   return entries
 })
@@ -158,6 +223,60 @@ async function reject() {
         {{ action.summary }}
       </p>
 
+      <div
+        v-if="preview"
+        class="mt-2 space-y-2 rounded-md bg-gray-50 p-2 text-xs"
+        data-testid="action-preview"
+      >
+        <div class="flex flex-wrap items-center gap-2">
+          <UBadge
+            :color="legalityBadge.color"
+            variant="subtle"
+            size="sm"
+            :label="legalityBadge.label"
+          />
+          <span class="text-gray-600">
+            Main {{ preview.counts.main }} · Extra {{ preview.counts.extra }} · Side {{ preview.counts.side }}
+          </span>
+        </div>
+
+        <ul
+          v-if="preview.validation && preview.validation.issues.length > 0"
+          class="list-inside list-disc space-y-0.5 text-red-700"
+        >
+          <li
+            v-for="(issue, index) in preview.validation.issues.slice(0, PREVIEW_ISSUES_SHOWN)"
+            :key="index"
+          >
+            {{ issue }}
+          </li>
+          <li
+            v-if="preview.validation.issues.length > PREVIEW_ISSUES_SHOWN"
+            class="list-none text-gray-500"
+          >
+            … und {{ preview.validation.issues.length - PREVIEW_ISSUES_SHOWN }} weitere
+          </li>
+        </ul>
+
+        <div v-if="preview.missing.length > 0">
+          <p class="font-medium text-amber-900">
+            Fehlende Karten (nicht oder nicht genug im Inventar)
+          </p>
+          <ul class="mt-0.5 space-y-0.5 text-amber-800">
+            <li
+              v-for="card in preview.missing"
+              :key="card.catalogCardId"
+            >
+              {{ card.name }}: {{ card.needed }} benötigt, {{ card.owned }} im Besitz
+            </li>
+          </ul>
+        </div>
+
+        <p class="text-gray-400">
+          Stand beim Vorschlag
+        </p>
+      </div>
+
       <UButton
         v-if="hasDetails"
         color="neutral"
@@ -201,7 +320,7 @@ async function reject() {
                   :key="column"
                   class="pr-3 pb-1 font-medium"
                 >
-                  {{ FIELD_LABELS[column] }}
+                  {{ columnLabel(column) }}
                 </th>
               </tr>
             </thead>
@@ -256,6 +375,17 @@ async function reject() {
           @click="reject"
         />
       </div>
+
+      <UButton
+        v-if="createdDeckId"
+        :to="`/decks/${createdDeckId}`"
+        size="xs"
+        color="neutral"
+        variant="outline"
+        icon="i-lucide-layers"
+        label="Deck öffnen"
+        class="tap-target mt-3"
+      />
     </div>
   </div>
 </template>

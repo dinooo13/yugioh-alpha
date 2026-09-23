@@ -13,9 +13,13 @@ import {
   listConversations,
   runChatTurn,
   validateAssistantMessageInput,
+  validateCreateConversationInput,
 } from '../../server/utils/assistant-chat'
 import type { AssistantMessageInput, ChatTurnEvent } from '../../server/utils/assistant-chat'
 import { getAssistantLimits } from '../../server/utils/assistant-limits'
+import { applyAction } from '../../server/utils/assistant-tools'
+import { createDeck, deleteDeck, updateDeck, upsertDeckCard } from '../../server/utils/decks'
+import { createRuleFormat, validateRuleFormatInput } from '../../server/utils/rule-formats'
 
 const CARD = {
   darkMagician: 46986414,
@@ -61,7 +65,6 @@ function scriptedChatModel(results: ChatModelResult[]): { model: DeckAssistantMo
   let index = 0
   const model: DeckAssistantModel = {
     id: 'scripted',
-    generate: async () => { throw new Error('generate() not used by the chat engine') },
     async chat(input, handlers) {
       calls.push(input)
       const result = results[Math.min(index, results.length - 1)]!
@@ -280,7 +283,6 @@ describe('runChatTurn', () => {
   it('emits an error event and persists nothing further when the model throws', async () => {
     const model: DeckAssistantModel = {
       id: 'broken',
-      generate: async () => { throw new Error('not used') },
       chat: async () => {
         throw Object.assign(new Error('down'), { statusCode: 502, statusMessage: 'Der KI-Assistent ist derzeit nicht erreichbar.' })
       },
@@ -397,7 +399,6 @@ describe('runChatTurn', () => {
     const conversation = createConversation(db, 'user-a')
     const model: DeckAssistantModel = {
       id: 'broken',
-      generate: async () => { throw new Error('not used') },
       chat: async () => {
         throw Object.assign(new Error('down'), { statusCode: 502, statusMessage: 'Der KI-Assistent ist derzeit nicht erreichbar.' })
       },
@@ -542,5 +543,145 @@ describe('runChatTurn with the fake chat model (end-to-end across two turns)', (
 
     const actionEvent = secondEvents.events.find(event => event.type === 'action_proposed')
     expect(actionEvent).toMatchObject({ action: { kind: 'add_to_inventory', status: 'pending' } })
+  })
+})
+
+describe('validateCreateConversationInput (POST /api/assistant/chat body)', () => {
+  it('accepts an empty body or an optional deckId', () => {
+    expect(validateCreateConversationInput(undefined)).toEqual({})
+    expect(validateCreateConversationInput({})).toEqual({})
+    expect(validateCreateConversationInput({ deckId: null })).toEqual({})
+    expect(validateCreateConversationInput({ deckId: ' deck-1 ' })).toEqual({ deckId: 'deck-1' })
+  })
+
+  it('rejects a non-object body or a non-string/empty deckId', () => {
+    expect(() => validateCreateConversationInput('deck-1')).toThrowError()
+    expect(() => validateCreateConversationInput(['deck-1'])).toThrowError()
+    expect(() => validateCreateConversationInput({ deckId: 42 })).toThrowError()
+    expect(() => validateCreateConversationInput({ deckId: '  ' })).toThrowError()
+  })
+})
+
+describe('deck-linked conversations (ADR 0011)', () => {
+  function seedDeck(userId = 'user-a', name = 'Magier-Deck') {
+    const deck = createDeck(db, userId, { name, description: null })
+    upsertDeckCard(db, userId, deck.id, { catalogCardId: CARD.darkMagician, section: 'main', quantity: 2 })
+    return deck
+  }
+
+  it('links a new conversation to the caller\'s deck and titles it after the deck', () => {
+    const deck = seedDeck()
+    const conversation = createConversation(db, 'user-a', { deckId: deck.id })
+
+    expect(conversation).toMatchObject({ title: 'Deck: Magier-Deck', deck: { id: deck.id, name: 'Magier-Deck' } })
+    expect(getConversationDetail(db, 'user-a', conversation.id).conversation.deck).toEqual({ id: deck.id, name: 'Magier-Deck' })
+    // A plain conversation has no deck.
+    expect(createConversation(db, 'user-a').deck).toBeNull()
+  })
+
+  it('404s for another user\'s (or an unknown) deck', async () => {
+    const foreign = seedDeck('user-b')
+    expect(await statusOf(async () => createConversation(db, 'user-a', { deckId: foreign.id }))).toBe(404)
+    expect(await statusOf(async () => createConversation(db, 'user-a', { deckId: 'does-not-exist' }))).toBe(404)
+  })
+
+  it('reuses an empty linked conversation, and starts a new one once it has messages', async () => {
+    const deck = seedDeck()
+    const first = createConversation(db, 'user-a', { deckId: deck.id })
+    expect(createConversation(db, 'user-a', { deckId: deck.id }).id).toBe(first.id)
+
+    const { model } = scriptedChatModel([textResult('ok')])
+    await runChatTurn(db, 'user-a', first.id, { text: 'Hallo', images: NO_IMAGES }, model, collectEvents().emit)
+
+    const second = createConversation(db, 'user-a', { deckId: deck.id })
+    expect(second.id).not.toBe(first.id)
+    expect(second.deck).toEqual({ id: deck.id, name: 'Magier-Deck' })
+  })
+
+  it('unlinks (deck → null) instead of deleting the conversation when the deck is deleted', async () => {
+    const deck = seedDeck()
+    const conversation = createConversation(db, 'user-a', { deckId: deck.id })
+    const { model } = scriptedChatModel([textResult('ok')])
+    await runChatTurn(db, 'user-a', conversation.id, { text: 'Hallo', images: NO_IMAGES }, model, collectEvents().emit)
+
+    deleteDeck(db, 'user-a', deck.id)
+
+    const detail = getConversationDetail(db, 'user-a', conversation.id)
+    expect(detail.conversation.deck).toBeNull()
+    expect(detail.messages.map(message => message.role)).toEqual(['user', 'assistant'])
+  })
+
+  it('injects the deck\'s current state into the system prompt, and keeps the "Deck: …" title', async () => {
+    const format = createRuleFormat(db, 'user-a', validateRuleFormatInput({
+      name: 'Streng',
+      rules: { rules: [{ kind: 'copies', maxCopies: 1 }] },
+    }))
+    const deck = seedDeck()
+    updateDeck(db, 'user-a', deck.id, { formatId: format.id })
+    const conversation = createConversation(db, 'user-a', { deckId: deck.id })
+
+    const { model, calls } = scriptedChatModel([textResult('ok')])
+    await runChatTurn(db, 'user-a', conversation.id, { text: 'Was ist in meinem Deck?', images: NO_IMAGES }, model, collectEvents().emit)
+
+    const system = calls[0]!.system
+    expect(system).toContain(`Deck-ID: ${deck.id}`)
+    expect(system).toContain('Deckname: Magier-Deck')
+    expect(system).toContain(`Format: Streng (ID ${format.id})`)
+    expect(system).toContain('Anzahl: Main 2 · Extra 0 · Side 0')
+    expect(system).toMatch(/Legalität: nicht legal – Dark Magician: 2 Kopien/)
+    expect(system).toContain(`${CARD.darkMagician}|Dark Magician|main|2|0`)
+    expect(system).toContain(`update_deck_cards mit deckId=${deck.id}`)
+
+    expect(getConversationDetail(db, 'user-a', conversation.id).conversation.title).toBe('Deck: Magier-Deck')
+  })
+
+  it('reflects an applied deck change on the next turn (the block is rebuilt per turn, never persisted)', async () => {
+    const deck = seedDeck()
+    const conversation = createConversation(db, 'user-a', { deckId: deck.id })
+
+    const { model, calls } = scriptedChatModel([
+      toolCallResult('update_deck_cards', {
+        deckId: deck.id,
+        changes: [{ catalogCardId: CARD.potOfGreed, section: 'main', quantity: 1 }],
+      }),
+      textResult('Vorschlag angelegt.'),
+    ])
+    const { events, emit } = collectEvents()
+    await runChatTurn(db, 'user-a', conversation.id, { text: 'Füge Pot of Greed hinzu', images: NO_IMAGES }, model, emit)
+    expect(calls[0]!.system).toContain('Legalität: kein Format')
+    expect(calls[0]!.system).not.toContain('Pot of Greed|main')
+
+    const proposed = events.find(event => event.type === 'action_proposed')
+    expect(proposed?.type).toBe('action_proposed')
+    await applyAction(db, 'user-a', (proposed as Extract<ChatTurnEvent, { type: 'action_proposed' }>).action.id)
+
+    await runChatTurn(db, 'user-a', conversation.id, { text: 'Und jetzt?', images: NO_IMAGES }, model, collectEvents().emit)
+    const nextSystem = calls.at(-1)!.system
+    expect(nextSystem).toContain(`${CARD.potOfGreed}|Pot of Greed|main|1|0`)
+    expect(nextSystem).toContain('Anzahl: Main 3 · Extra 0 · Side 0')
+
+    // Nothing of the block ends up in the persisted messages.
+    const stored = getConversationDetail(db, 'user-a', conversation.id).messages
+    expect(stored.some(message => message.content.includes('Deck-ID:'))).toBe(false)
+  })
+
+  it('adds no deck block to an unlinked conversation', async () => {
+    seedDeck()
+    const conversation = createConversation(db, 'user-a')
+    const { model, calls } = scriptedChatModel([textResult('ok')])
+    await runChatTurn(db, 'user-a', conversation.id, { text: 'Was ist in meinem Deck?', images: NO_IMAGES }, model, collectEvents().emit)
+
+    expect(calls[0]!.system).not.toContain('Deck-ID:')
+    expect(calls[0]!.system).toContain('Deckbau:')
+  })
+
+  it('lets the fake model answer from the deck context end-to-end', async () => {
+    const deck = seedDeck()
+    const conversation = createConversation(db, 'user-a', { deckId: deck.id })
+    const { events, emit } = collectEvents()
+
+    await runChatTurn(db, 'user-a', conversation.id, { text: 'Was ist in meinem Deck?', images: NO_IMAGES }, createFakeModel(), emit)
+
+    expect(events.at(-1)).toMatchObject({ type: 'message_end', message: { content: 'Kontext-Deck: Magier-Deck (2 Karten)' } })
   })
 })
