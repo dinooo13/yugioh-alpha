@@ -306,6 +306,10 @@ export const deck = sqliteTable(
     // Deleting a format un-assigns it instead of deleting decks.
     formatId: text('format_id')
       .references(() => ruleFormat.id, { onDelete: 'set null' }),
+    // Cover card chosen by the user (#49, ADR 0012), or NULL = picked by rule. Only
+    // used while the card is in the deck's Main/Extra Deck; otherwise the rule applies.
+    coverCardId: integer('cover_card_id')
+      .references(() => catalogCard.id, { onDelete: 'set null' }),
     // Sharing state (Phase 6). 'private' is the default for every existing deck.
     visibility: text('visibility').notNull().default('private').$type<Visibility>(),
     // Secret, regenerable link token. NULL while the deck is private.

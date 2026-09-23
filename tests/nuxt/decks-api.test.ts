@@ -827,6 +827,196 @@ describe('deck cover', () => {
 
     expect(coverOf(copy.id)).toEqual(coverOf(deck.id))
   })
+
+  describe('chosen cover card (#49)', () => {
+    /** A deck whose rule pick is Dark Magician (Main monster), with a Main spell, an Extra card and a Side-only card. */
+    function seededDeck(name = 'Deck') {
+      const deck = createDeck(db, 'user-a', { name, description: null })
+      addCard(deck.id, CARD.darkMagician, 'main', '2025-01-01T10:00:00Z')
+      addCard(deck.id, CARD.potOfGreed, 'main', '2025-01-01T11:00:00Z')
+      addCard(deck.id, CARD.stardustDragon, 'extra', '2025-01-01T12:00:00Z')
+      addCard(deck.id, CARD.mirrorForce, 'side', '2025-01-01T13:00:00Z')
+      return deck
+    }
+
+    function storedCoverCardId(deckId: string) {
+      return db.select({ coverCardId: schema.deck.coverCardId })
+        .from(schema.deck)
+        .where(eq(schema.deck.id, deckId))
+        .get()?.coverCardId
+    }
+
+    it('validates coverCardId / cover_card_id in the update input', () => {
+      expect(validateDeckUpdateInput({ coverCardId: 5 })).toEqual({ coverCardId: 5 })
+      expect(validateDeckUpdateInput({ cover_card_id: '7' })).toEqual({ coverCardId: 7 })
+      expect(validateDeckUpdateInput({ coverCardId: null })).toEqual({ coverCardId: null })
+      expect(validateDeckUpdateInput({ cover_card_id: '' })).toEqual({ coverCardId: null })
+      expect(validateDeckUpdateInput({ name: 'Neu', coverCardId: 5 })).toEqual({ name: 'Neu', coverCardId: 5 })
+      expect(validateDeckUpdateInput({})).toEqual({})
+
+      for (const invalid of [0, -1, 1.5, 'abc', {}]) {
+        expect(() => validateDeckUpdateInput({ coverCardId: invalid }), String(invalid))
+          .toThrow('cover_card_id must be a positive integer or null')
+      }
+    })
+
+    it('uses a chosen Main Deck spell over the rule\'s monster, in the list and the detail', () => {
+      const deck = seededDeck()
+      const before = getDeckDetail(db, 'user-a', deck.id)
+      expect(before.cover?.catalogCardId).toBe(CARD.darkMagician)
+      expect(before.coverIsChosen).toBe(false)
+
+      const updated = updateDeck(db, 'user-a', deck.id, { coverCardId: CARD.potOfGreed })
+
+      expect(updated.cover).toEqual({
+        catalogCardId: CARD.potOfGreed,
+        name: 'Pot of Greed',
+        imageSmall: IMAGE.potOfGreedSmall,
+        imageLarge: 'https://images.example/cards/55144522.jpg',
+      })
+      expect(updated.coverIsChosen).toBe(true)
+      expect(coverOf(deck.id)).toMatchObject({ catalogCardId: CARD.potOfGreed })
+      expect(getDeckDetail(db, 'user-a', deck.id)).toMatchObject({
+        cover: { catalogCardId: CARD.potOfGreed },
+        coverIsChosen: true,
+      })
+    })
+
+    it('uses a chosen Extra Deck card over a Main Deck monster', () => {
+      const deck = seededDeck()
+      const updated = updateDeck(db, 'user-a', deck.id, { coverCardId: CARD.stardustDragon })
+
+      expect(updated.cover).toMatchObject({ catalogCardId: CARD.stardustDragon, imageSmall: IMAGE.stardustSmall })
+      expect(updated.coverIsChosen).toBe(true)
+      expect(coverOf(deck.id)).toMatchObject({ catalogCardId: CARD.stardustDragon })
+    })
+
+    it('rejects a card that is not in the deck, or only in its Side Deck, without writing', () => {
+      const deck = seededDeck()
+      const updatedAt = getDeckDetail(db, 'user-a', deck.id).updatedAt
+
+      expect(() => updateDeck(db, 'user-a', deck.id, { coverCardId: CARD.decodeTalker }))
+        .toThrow('cover_card_id must be a Main or Extra Deck card of this deck')
+      expect(() => updateDeck(db, 'user-a', deck.id, { coverCardId: CARD.mirrorForce }))
+        .toThrow('cover_card_id must be a Main or Extra Deck card of this deck')
+      // A rejected cover also blocks the rest of the patch.
+      expect(() => updateDeck(db, 'user-a', deck.id, { name: 'Umbenannt', coverCardId: CARD.mirrorForce }))
+        .toThrow('cover_card_id must be a Main or Extra Deck card of this deck')
+
+      const after = getDeckDetail(db, 'user-a', deck.id)
+      expect(after.name).toBe('Deck')
+      expect(after.updatedAt).toEqual(updatedAt)
+      expect(storedCoverCardId(deck.id)).toBeNull()
+    })
+
+    it('returns 404 for another user\'s deck', () => {
+      const deck = seededDeck()
+
+      expect(() => updateDeck(db, 'user-b', deck.id, { coverCardId: CARD.potOfGreed }))
+        .toThrow('Deck not found')
+      expect(storedCoverCardId(deck.id)).toBeNull()
+    })
+
+    it('goes back to the rule with coverCardId null', () => {
+      const deck = seededDeck()
+      updateDeck(db, 'user-a', deck.id, { coverCardId: CARD.potOfGreed })
+
+      const reset = updateDeck(db, 'user-a', deck.id, { coverCardId: null })
+
+      expect(reset.cover?.catalogCardId).toBe(CARD.darkMagician)
+      expect(reset.coverIsChosen).toBe(false)
+      expect(storedCoverCardId(deck.id)).toBeNull()
+    })
+
+    it('falls back to the rule while the chosen card is removed or in the Side Deck, and returns when it is back', () => {
+      const deck = seededDeck()
+      updateDeck(db, 'user-a', deck.id, { coverCardId: CARD.potOfGreed })
+
+      const removed = removeDeckCard(db, 'user-a', deck.id, CARD.potOfGreed, 'main')
+      expect(removed.cover?.catalogCardId).toBe(CARD.darkMagician)
+      expect(removed.coverIsChosen).toBe(false)
+      expect(coverOf(deck.id)?.catalogCardId).toBe(CARD.darkMagician)
+      // The choice itself is kept …
+      expect(storedCoverCardId(deck.id)).toBe(CARD.potOfGreed)
+
+      // … so re-adding the card brings it back.
+      const readded = upsertDeckCard(db, 'user-a', deck.id, { catalogCardId: CARD.potOfGreed, section: 'main', quantity: 1 })
+      expect(readded.cover?.catalogCardId).toBe(CARD.potOfGreed)
+      expect(readded.coverIsChosen).toBe(true)
+
+      const moved = moveDeckCard(db, 'user-a', deck.id, { catalogCardId: CARD.potOfGreed, from: 'main', to: 'side' })
+      expect(moved.cover?.catalogCardId).toBe(CARD.darkMagician)
+      expect(moved.coverIsChosen).toBe(false)
+      expect(coverOf(deck.id)?.catalogCardId).toBe(CARD.darkMagician)
+    })
+
+    it('moves updatedAt for a cover-only change', () => {
+      const deck = seededDeck()
+      const stale = new Date('2024-01-01T00:00:00Z')
+      db.update(schema.deck).set({ updatedAt: stale }).where(eq(schema.deck.id, deck.id)).run()
+
+      const updated = updateDeck(db, 'user-a', deck.id, { coverCardId: CARD.potOfGreed })
+
+      expect(updated.updatedAt.getTime()).toBeGreaterThan(stale.getTime())
+    })
+
+    it('copies the choice to a duplicate', () => {
+      const deck = seededDeck('Original')
+      updateDeck(db, 'user-a', deck.id, { coverCardId: CARD.stardustDragon })
+
+      const copy = duplicateDeck(db, 'user-a', deck.id)
+
+      expect(copy.cover?.catalogCardId).toBe(CARD.stardustDragon)
+      expect(copy.coverIsChosen).toBe(true)
+      expect(coverOf(copy.id)?.catalogCardId).toBe(CARD.stardustDragon)
+    })
+
+    it('honors each deck\'s own choice when loading several covers', () => {
+      const chosenSpell = seededDeck('A')
+      const chosenExtra = seededDeck('B')
+      const byRule = seededDeck('C')
+      updateDeck(db, 'user-a', chosenSpell.id, { coverCardId: CARD.potOfGreed })
+      updateDeck(db, 'user-a', chosenExtra.id, { coverCardId: CARD.stardustDragon })
+
+      const covers = loadDeckCovers(db, [chosenSpell.id, chosenExtra.id, byRule.id])
+
+      expect(covers.get(chosenSpell.id)?.catalogCardId).toBe(CARD.potOfGreed)
+      expect(covers.get(chosenExtra.id)?.catalogCardId).toBe(CARD.stardustDragon)
+      expect(covers.get(byRule.id)?.catalogCardId).toBe(CARD.darkMagician)
+    })
+
+    it('clears the choice when the catalog card is deleted (ON DELETE SET NULL)', () => {
+      const deck = createDeck(db, 'user-a', { name: 'Deck', description: null })
+      addCard(deck.id, CARD.utopia, 'extra', '2025-01-01T10:00:00Z')
+      addCard(deck.id, CARD.darkMagician, 'main', '2025-01-01T11:00:00Z')
+      updateDeck(db, 'user-a', deck.id, { coverCardId: CARD.utopia })
+      expect(storedCoverCardId(deck.id)).toBe(CARD.utopia)
+
+      // better-sqlite3 enables foreign keys by default; the migration's
+      // hand-written ON DELETE clause must hold there. (deck_card rows of the
+      // card cascade away with it.)
+      expect(db.$client.pragma('foreign_keys', { simple: true })).toBe(1)
+      db.delete(schema.catalogCard).where(eq(schema.catalogCard.id, CARD.utopia)).run()
+
+      expect(storedCoverCardId(deck.id)).toBeNull()
+      expect(getDeckDetail(db, 'user-a', deck.id)).toMatchObject({
+        cover: { catalogCardId: CARD.darkMagician },
+        coverIsChosen: false,
+      })
+    })
+
+    it('reports the rule\'s pick as not chosen, and no cover for an empty deck', () => {
+      const deck = seededDeck()
+      expect(getDeckDetail(db, 'user-a', deck.id)).toMatchObject({
+        cover: { catalogCardId: CARD.darkMagician, imageSmall: IMAGE.darkMagicianSmall },
+        coverIsChosen: false,
+      })
+
+      const empty = createDeck(db, 'user-a', { name: 'Leer', description: null })
+      expect(empty.cover).toBeNull()
+      expect(empty.coverIsChosen).toBe(false)
+    })
+  })
 })
 
 describe('pickDeckCover', () => {
@@ -868,5 +1058,24 @@ describe('pickDeckCover', () => {
 
   it('never picks a Side Deck card', () => {
     expect(pickDeckCover([candidate({ section: 'side' })])).toBeNull()
+  })
+
+  it('prefers the chosen card among the candidates', () => {
+    const monster = candidate({ catalogCardId: 1, type: 'Normal Monster' })
+    const spell = candidate({ catalogCardId: 2, type: 'Spell Card', createdAt: new Date('2025-01-02T10:00:00Z') })
+
+    expect(pickDeckCover([monster, spell], 2)?.catalogCardId).toBe(2)
+    expect(pickDeckCover([monster, spell], null)?.catalogCardId).toBe(1)
+  })
+
+  it('falls back to the rule when the chosen card is not a candidate', () => {
+    const monster = candidate({ catalogCardId: 1, type: 'Normal Monster' })
+    expect(pickDeckCover([monster], 99)?.catalogCardId).toBe(1)
+  })
+
+  it('falls back to the rule when the chosen card is only a Side Deck candidate', () => {
+    const monster = candidate({ catalogCardId: 1, type: 'Normal Monster' })
+    const sideSpell = candidate({ catalogCardId: 2, section: 'side', type: 'Spell Card' })
+    expect(pickDeckCover([monster, sideSpell], 2)?.catalogCardId).toBe(1)
   })
 })
