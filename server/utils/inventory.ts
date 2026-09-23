@@ -9,6 +9,7 @@ import {
   catalogSet,
   ownedCard,
 } from '../db/schema'
+import { UNASSIGNED_COLLECTION_ID } from '../../shared/inventory'
 import { assertCollectionOwnedByUser } from './collections'
 
 type Db = ReturnType<typeof useDb>
@@ -39,7 +40,10 @@ export interface InventoryListOptions {
   q?: string
   page?: number
   pageSize?: number
+  // A collection id owned by the caller, or `UNASSIGNED_COLLECTION_ID`.
   collectionId?: string
+  // Only rows of this catalog card ("In Liste bearbeiten" from the Übersicht).
+  catalogCardId?: number
 }
 
 function badRequest(message: string): never {
@@ -461,6 +465,22 @@ export async function deleteOwnedCard(db: Db, userId: string, id: string) {
   }
 }
 
+/**
+ * Parses `GET /api/inventory`'s query string. `catalogCardId` is ignored
+ * unless it is a positive integer (a stale or hand-edited `?card=` must not
+ * turn into a 400).
+ */
+export function parseInventoryListQuery(query: Record<string, unknown>): InventoryListOptions {
+  const catalogCardId = typeof query.catalogCardId === 'string' ? Number(query.catalogCardId) : Number.NaN
+  return {
+    q: typeof query.q === 'string' ? query.q : undefined,
+    page: typeof query.page === 'string' ? Number(query.page) : undefined,
+    pageSize: typeof query.pageSize === 'string' ? Number(query.pageSize) : undefined,
+    collectionId: typeof query.collectionId === 'string' && query.collectionId ? query.collectionId : undefined,
+    catalogCardId: Number.isInteger(catalogCardId) && catalogCardId > 0 ? catalogCardId : undefined,
+  }
+}
+
 export function listOwnedCards(db: Db, userId: string, options: InventoryListOptions = {}) {
   const page = Math.max(1, options.page ?? 1)
   const pageSize = Math.min(100, Math.max(1, options.pageSize ?? 20))
@@ -469,8 +489,17 @@ export function listOwnedCards(db: Db, userId: string, options: InventoryListOpt
   if (q) {
     clauses.push(like(catalogCard.name, `%${q}%`))
   }
-  if (options.collectionId) {
+  // Row-level filters: unlike the aggregated search (inventory-search.ts),
+  // which keeps every copy of a card that has at least one copy in the
+  // collection, the list shows only the rows actually assigned to it.
+  if (options.collectionId === UNASSIGNED_COLLECTION_ID) {
+    clauses.push(isNull(ownedCard.collectionId))
+  }
+  else if (options.collectionId) {
     clauses.push(eq(ownedCard.collectionId, options.collectionId))
+  }
+  if (options.catalogCardId !== undefined) {
+    clauses.push(eq(ownedCard.catalogCardId, options.catalogCardId))
   }
   const where = and(...clauses)
 

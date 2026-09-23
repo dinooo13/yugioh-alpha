@@ -8,6 +8,7 @@ import {
   addOwnedCard,
   deleteOwnedCard,
   listOwnedCards,
+  parseInventoryListQuery,
   updateOwnedCard,
   validateInventoryInput,
 } from '../../server/utils/inventory'
@@ -100,6 +101,20 @@ describe('inventory validation', () => {
     expect(() => validateInventoryInput({ quantity: 1 })).toThrow()
     expect(() => validateInventoryInput({ catalog_card_id: 46986414, language: 'xx' })).toThrow()
   })
+
+  it('parses the list query, ignoring a catalogCardId that is not a positive integer', () => {
+    expect(parseInventoryListQuery({ q: 'dark', page: '2', pageSize: '10', collectionId: '__none__', catalogCardId: '46986414' })).toEqual({
+      q: 'dark',
+      page: 2,
+      pageSize: 10,
+      collectionId: '__none__',
+      catalogCardId: 46986414,
+    })
+    for (const catalogCardId of ['abc', '0', '-3', '1.5', '']) {
+      expect(parseInventoryListQuery({ catalogCardId }).catalogCardId).toBeUndefined()
+    }
+    expect(parseInventoryListQuery({ collectionId: '' }).collectionId).toBeUndefined()
+  })
 })
 
 describe('inventory persistence helpers', () => {
@@ -159,6 +174,41 @@ describe('inventory persistence helpers', () => {
       imageUrlSmall: 'https://images.example/dm-small.jpg',
       setName: 'Legend of Blue Eyes White Dragon',
       quantity: 2,
+    })
+  })
+
+  describe('list filters', () => {
+    beforeEach(async () => {
+      const now = new Date()
+      db.insert(schema.collection).values({ id: 'col-1', userId: 'user-a', name: 'Box 1', createdAt: now, updatedAt: now }).run()
+      // Dark Magician: one row in Box 1, one without a collection.
+      await addOwnedCard(db, 'user-a', validateInventoryInput({ catalog_card_id: 46986414, collection_id: 'col-1', quantity: 2 }))
+      await addOwnedCard(db, 'user-a', validateInventoryInput({ catalog_card_id: 46986414, language: 'de', quantity: 1 }))
+      // Pot of Greed: in Box 1 only.
+      await addOwnedCard(db, 'user-a', validateInventoryInput({ catalog_card_id: 55144522, collection_id: 'col-1', quantity: 1 }))
+      // Another user's unassigned row never leaks in.
+      await addOwnedCard(db, 'user-b', validateInventoryInput({ catalog_card_id: 55144522, quantity: 1 }))
+    })
+
+    function rows(result: ReturnType<typeof listOwnedCards>) {
+      return result.items.map(item => `${item.cardName}/${item.collectionId ?? '-'}`).sort()
+    }
+
+    it('lists only unassigned rows for "__none__"', () => {
+      const result = listOwnedCards(db, 'user-a', { collectionId: '__none__' })
+      expect(result.total).toBe(1)
+      expect(rows(result)).toEqual(['Dark Magician/-'])
+    })
+
+    it('filters rows by collection (row-level, unlike the aggregated search)', () => {
+      expect(rows(listOwnedCards(db, 'user-a', { collectionId: 'col-1' }))).toEqual(['Dark Magician/col-1', 'Pot of Greed/col-1'])
+    })
+
+    it('filters rows by catalog card, alone and combined with a collection', () => {
+      expect(rows(listOwnedCards(db, 'user-a', { catalogCardId: 46986414 }))).toEqual(['Dark Magician/-', 'Dark Magician/col-1'])
+      expect(rows(listOwnedCards(db, 'user-a', { catalogCardId: 46986414, collectionId: 'col-1' }))).toEqual(['Dark Magician/col-1'])
+      expect(rows(listOwnedCards(db, 'user-a', { catalogCardId: 46986414, collectionId: '__none__' }))).toEqual(['Dark Magician/-'])
+      expect(listOwnedCards(db, 'user-a', { catalogCardId: 55144522, collectionId: '__none__' }).total).toBe(0)
     })
   })
 

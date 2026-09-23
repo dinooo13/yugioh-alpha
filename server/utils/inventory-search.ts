@@ -5,10 +5,9 @@ import type { useDb } from '../db'
 import { catalogCard, catalogCardImage, catalogPrinting, ownedCard } from '../db/schema'
 import { CONDITIONS, EDITIONS, LANGUAGES } from './inventory'
 import type { InventoryCondition, InventoryEdition, InventoryLanguage } from './inventory'
+import { UNASSIGNED_COLLECTION_ID } from '../../shared/inventory'
 
-// Special `collectionId` value selecting owned cards that are not assigned
-// to any collection (i.e. `owned_card.collection_id IS NULL`).
-export const UNASSIGNED_COLLECTION_ID = '__none__'
+export { UNASSIGNED_COLLECTION_ID }
 
 type Db = ReturnType<typeof useDb>
 
