@@ -153,18 +153,11 @@ function onPicked(card: PickedCatalogCard) {
     :data-status="status"
   >
     <div class="flex items-start gap-3">
-      <img
-        v-if="selected?.imageSmall"
-        :src="selected.imageSmall"
-        :alt="selected.name"
-        class="h-14 w-10 shrink-0 rounded object-cover"
-      >
-      <div
-        v-else
-        class="flex h-14 w-10 shrink-0 items-center justify-center rounded bg-gray-100 text-xs text-gray-400"
-      >
-        —
-      </div>
+      <CardThumb
+        :src="selected?.imageSmall"
+        :alt="selected?.name ?? row.query"
+        size="sm"
+      />
 
       <div class="min-w-0 flex-1">
         <div class="flex flex-wrap items-center gap-2">

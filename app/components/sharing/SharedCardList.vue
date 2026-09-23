@@ -95,18 +95,13 @@ function cardMetaLine(card: SharedCardListItem): string {
         :key="card.catalogCardId"
         class="flex items-center gap-3 px-4 py-2"
       >
-        <img
-          v-if="card.imageSmall"
+        <CardThumb
           :src="card.imageSmall"
           :alt="card.name"
-          class="h-14 w-10 shrink-0 rounded object-cover"
-        >
-        <div
-          v-else
-          class="flex h-14 w-10 shrink-0 items-center justify-center rounded bg-gray-100 text-xs text-gray-400"
-        >
-          —
-        </div>
+          size="sm"
+          :src-large="card.imageLarge"
+          enlargeable
+        />
 
         <div class="min-w-0 flex-1">
           <p class="truncate text-sm font-medium text-gray-900">

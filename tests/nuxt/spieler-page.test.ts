@@ -169,6 +169,7 @@ describe('public deck page', () => {
           atk: 3000,
           def: 2500,
           imageSmall: null,
+          imageLarge: null,
           section: 'main',
           quantity: 3,
         }],

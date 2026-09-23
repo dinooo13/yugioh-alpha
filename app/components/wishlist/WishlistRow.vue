@@ -67,18 +67,11 @@ async function remove() {
 <template>
   <li class="flex flex-col gap-2 px-4 py-3">
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
-      <img
-        v-if="item.imageSmall"
+      <CardThumb
         :src="item.imageSmall"
         :alt="item.name"
-        class="h-16 w-11 shrink-0 rounded object-cover"
-      >
-      <div
-        v-else
-        class="flex h-16 w-11 shrink-0 items-center justify-center rounded bg-gray-100 text-xs text-gray-400"
-      >
-        —
-      </div>
+        size="md"
+      />
 
       <div class="min-w-0 flex-1">
         <p class="truncate text-sm font-medium text-gray-900">

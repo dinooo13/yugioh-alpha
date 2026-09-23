@@ -98,6 +98,8 @@ export interface SharedDeckCardRow {
   atk: number | null
   def: number | null
   imageSmall: string | null
+  /** Full-size scan for click-to-enlarge. */
+  imageLarge: string | null
   section: DeckSection
   quantity: number
 }
@@ -126,6 +128,8 @@ export interface SharedCardListItem {
   atk: number | null
   def: number | null
   imageSmall: string | null
+  /** Full-size scan for click-to-enlarge. */
+  imageLarge: string | null
   /** Copies the owner holds in this source. */
   quantity: number
 }
