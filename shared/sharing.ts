@@ -5,6 +5,7 @@
 
 import type { DeckCover } from './deck-cover'
 import type { DeckSection } from './deck-sections'
+import type { AppLocale } from './locale'
 import type { DeckValidation } from './rule-formats'
 
 export const VISIBILITIES = ['private', 'link', 'public'] as const
@@ -48,6 +49,8 @@ export interface OwnProfile {
   bio: string | null
   inventoryVisibility: Visibility
   wishlistVisibility: WishlistVisibility
+  /** Chosen interface language (ADR 0014); null = not chosen. */
+  locale: AppLocale | null
   createdAt: string
   updatedAt: string
 }

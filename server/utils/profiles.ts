@@ -4,6 +4,8 @@ import { createError } from 'h3'
 import type { useDb } from '../db'
 import { user, userProfile } from '../db/schema'
 import { WISHLIST_VISIBILITIES } from '../../shared/sharing'
+import { APP_LOCALES, isAppLocale } from '../../shared/locale'
+import type { AppLocale } from '../../shared/locale'
 import type { OwnProfile, PublicProfileSummary, WishlistVisibility } from '../../shared/sharing'
 
 type Db = ReturnType<typeof useDb>
@@ -27,16 +29,20 @@ export interface ProfileUpdateInput {
   handle?: string
   displayName?: string
   bio?: string | null
+  /** `null` resets to "not chosen" (cookie / Accept-Language decide again). */
+  locale?: AppLocale | null
 }
 
 export type ProfileRow = typeof userProfile.$inferSelect
 
-function badRequest(message: string): never {
-  throw createError({ statusCode: 400, statusMessage: message })
+// `code` is what the UI translates (ADR 0014); the statusMessage stays
+// technical English and is never rendered.
+function badRequest(message: string, code?: string): never {
+  throw createError({ statusCode: 400, statusMessage: message, data: code ? { code } : undefined })
 }
 
-function conflict(message: string): never {
-  throw createError({ statusCode: 409, statusMessage: message })
+function conflict(message: string, code?: string): never {
+  throw createError({ statusCode: 409, statusMessage: message, data: code ? { code } : undefined })
 }
 
 function notFound(message: string): never {
@@ -147,6 +153,9 @@ export function ensureProfile(db: Db, userId: string): ProfileRow {
  * 400 'displayName is required'                            (empty after trim)
  * 400 'displayName must be at most 60 characters'
  * 400 'bio must be at most 500 characters'
+ * 400 'locale must be one of de, en'                       (null resets it)
+ * Each 400 carries `data.code` (handle_invalid, handle_reserved,
+ * display_name_required, display_name_too_long, bio_too_long, invalid_locale).
  * Unknown keys are ignored, mirroring validateDeckUpdateInput.
  */
 export function validateProfileUpdateInput(body: unknown): ProfileUpdateInput {
@@ -158,7 +167,7 @@ export function validateProfileUpdateInput(body: unknown): ProfileUpdateInput {
 
   if (body.handle !== undefined) {
     if (typeof body.handle !== 'string') {
-      badRequest('handle must be 3-30 characters of a-z, 0-9 and -')
+      badRequest('handle must be 3-30 characters of a-z, 0-9 and -', 'handle_invalid')
     }
     // Uppercase is rejected outright (HANDLE_PATTERN only allows a-z), not
     // silently normalized — the URL identity should look exactly like what
@@ -169,24 +178,24 @@ export function validateProfileUpdateInput(body: unknown): ProfileUpdateInput {
       || handle.length > HANDLE_MAX_LENGTH
       || !HANDLE_PATTERN.test(handle)
     ) {
-      badRequest('handle must be 3-30 characters of a-z, 0-9 and -')
+      badRequest('handle must be 3-30 characters of a-z, 0-9 and -', 'handle_invalid')
     }
     if (RESERVED_HANDLES.has(handle)) {
-      badRequest('handle is reserved')
+      badRequest('handle is reserved', 'handle_reserved')
     }
     input.handle = handle
   }
 
   if (body.displayName !== undefined) {
     if (typeof body.displayName !== 'string') {
-      badRequest('displayName is required')
+      badRequest('displayName is required', 'display_name_required')
     }
     const displayName = body.displayName.trim()
     if (displayName === '') {
-      badRequest('displayName is required')
+      badRequest('displayName is required', 'display_name_required')
     }
     if (displayName.length > DISPLAY_NAME_MAX_LENGTH) {
-      badRequest(`displayName must be at most ${DISPLAY_NAME_MAX_LENGTH} characters`)
+      badRequest(`displayName must be at most ${DISPLAY_NAME_MAX_LENGTH} characters`, 'display_name_too_long')
     }
     input.displayName = displayName
   }
@@ -197,27 +206,34 @@ export function validateProfileUpdateInput(body: unknown): ProfileUpdateInput {
     }
     else {
       if (typeof body.bio !== 'string') {
-        badRequest('bio must be at most 500 characters')
+        badRequest('bio must be at most 500 characters', 'bio_too_long')
       }
       const trimmed = body.bio.trim()
       if (trimmed.length > BIO_MAX_LENGTH) {
-        badRequest(`bio must be at most ${BIO_MAX_LENGTH} characters`)
+        badRequest(`bio must be at most ${BIO_MAX_LENGTH} characters`, 'bio_too_long')
       }
       input.bio = trimmed === '' ? null : trimmed
     }
   }
 
+  if (body.locale !== undefined) {
+    if (body.locale !== null && !isAppLocale(body.locale)) {
+      badRequest(`locale must be one of ${APP_LOCALES.join(', ')}`, 'invalid_locale')
+    }
+    input.locale = body.locale
+  }
+
   return input
 }
 
-/** 409 'A player with this handle already exists' on a taken handle (excluding self). */
+/** 409 'A player with this handle already exists' (`handle_taken`) on a taken handle (excluding self). */
 export function updateProfile(db: Db, userId: string, patch: ProfileUpdateInput): ProfileRow {
   const current = ensureProfile(db, userId)
 
   if (patch.handle !== undefined && patch.handle !== current.handle) {
     const existing = getProfileByHandle(db, patch.handle)
     if (existing && existing.userId !== userId) {
-      conflict('A player with this handle already exists')
+      conflict('A player with this handle already exists', 'handle_taken')
     }
   }
 
@@ -228,6 +244,7 @@ export function updateProfile(db: Db, userId: string, patch: ProfileUpdateInput)
       handle: patch.handle ?? current.handle,
       displayName: patch.displayName ?? current.displayName,
       bio: patch.bio !== undefined ? patch.bio : current.bio,
+      locale: patch.locale !== undefined ? patch.locale : current.locale,
       updatedAt: now,
     })
     .where(eq(userProfile.userId, userId))
@@ -305,6 +322,7 @@ export function toOwnProfile(row: ProfileRow): OwnProfile {
     bio: row.bio,
     inventoryVisibility: row.inventoryVisibility,
     wishlistVisibility: row.wishlistVisibility,
+    locale: row.locale ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   }

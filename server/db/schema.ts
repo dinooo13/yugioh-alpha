@@ -2,6 +2,7 @@ import { relations } from 'drizzle-orm'
 import { sqliteTable, text, integer, index, uniqueIndex } from 'drizzle-orm/sqlite-core'
 import type { AssistantActionKind } from '../../shared/assistant-chat'
 import type { RuleSet } from '../../shared/rule-formats'
+import type { AppLocale } from '../../shared/locale'
 import type { ShareResourceType, Visibility, WishlistVisibility } from '../../shared/sharing'
 import type { PairingSystem, TournamentDeckSnapshot, TournamentStatus } from '../../shared/tournaments'
 
@@ -399,6 +400,8 @@ export const userProfile = sqliteTable(
       .notNull()
       .default('private')
       .$type<WishlistVisibility>(),
+    // UI language chosen by the user (ADR 0014); null = not chosen → cookie / Accept-Language decide.
+    locale: text('locale').$type<AppLocale>(),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
     updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
   },
