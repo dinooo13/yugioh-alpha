@@ -1,0 +1,28 @@
+{
+  "dashboard": {
+    "title": "Dashboard",
+    "description": "Willkommen bei yugioh alpha — hier siehst du deinen Bestand, deine Decks und anstehende Turniere auf einen Blick.",
+    "firstRun": {
+      "title": "Los geht's: Erfasse deine ersten Karten",
+      "description": "Dein Inventar ist noch leer. Erfasse ein paar Karten, um danach dein erstes Deck zusammenzustellen und Turniere zu spielen.",
+      "cta": "Karten erfassen"
+    },
+    "cards": {
+      "inventory": {
+        "title": "Inventar",
+        "count": "{count} Karte im Bestand | {count} Karten im Bestand",
+        "cta": "Karten erfassen"
+      },
+      "decks": {
+        "title": "Decks",
+        "count": "{count} angelegtes Deck | {count} angelegte Decks",
+        "cta": "Deck anlegen"
+      },
+      "tournaments": {
+        "title": "Turniere",
+        "count": "{count} Turnier | {count} Turniere",
+        "cta": "Turnier anlegen"
+      }
+    }
+  }
+}

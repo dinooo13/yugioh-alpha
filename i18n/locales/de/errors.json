@@ -1,0 +1,13 @@
+{
+  "errors": {
+    "api": {
+      "handle_invalid": "Nutzernamen dürfen nur Kleinbuchstaben, Ziffern und Bindestriche enthalten (3–30 Zeichen).",
+      "handle_reserved": "Dieser Nutzername ist reserviert. Bitte wähle einen anderen.",
+      "handle_taken": "Es gibt bereits einen Spieler mit diesem Nutzernamen.",
+      "display_name_required": "Bitte einen Anzeigenamen angeben.",
+      "display_name_too_long": "Der Anzeigename darf höchstens 60 Zeichen lang sein.",
+      "bio_too_long": "Der Text „Über mich“ darf höchstens 500 Zeichen lang sein.",
+      "invalid_locale": "Diese Sprache wird nicht unterstützt."
+    }
+  }
+}

@@ -1,9 +1,19 @@
 <script setup lang="ts">
-import { de } from '@nuxt/ui/locale'
+import { de, en } from '@nuxt/ui/locale'
+import { DEFAULT_APP_LOCALE, isAppLocale } from '~~/shared/locale'
+import type { AppLocale } from '~~/shared/locale'
+
+// Nuxt UI's own strings (select placeholders, close buttons, …) and
+// <html lang> follow the interface language (ADR 0014).
+const uiLocales = { de, en } satisfies Record<AppLocale, unknown>
+const { locale } = useI18n()
+const appLocale = computed<AppLocale>(() => isAppLocale(locale.value) ? locale.value : DEFAULT_APP_LOCALE)
+
+useHead({ htmlAttrs: { lang: appLocale } })
 </script>
 
 <template>
-  <UApp :locale="de">
+  <UApp :locale="uiLocales[appLocale]">
     <NuxtRouteAnnouncer />
     <NuxtLayout>
       <NuxtPage />

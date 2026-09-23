@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@nuxt/ui": "^4.9.0",
+    "@nuxtjs/i18n": "~10.4.1",
     "@vite-pwa/nuxt": "^1.1.1",
     "better-auth": "^1.6.23",
     "better-sqlite3": "^12.11.1",
@@ -31,6 +32,8 @@
   },
   "devDependencies": {
     "@iconify-json/lucide": "^1.2.116",
+    "@intlify/eslint-plugin-vue-i18n": "^4.5.1",
+    "@intlify/message-compiler": "~11.4.12",
     "@nuxt/eslint": "^1.16.0",
     "@nuxt/test-utils": "^4.0.3",
     "@playwright/test": "^1.61.1",
@@ -40,6 +43,7 @@
     "drizzle-kit": "^0.31.10",
     "eslint": "^10.6.0",
     "happy-dom": "^20.10.6",
+    "jsonc-eslint-parser": "^3.3.0",
     "playwright-core": "^1.61.1",
     "tailwindcss": "^4.3.1",
     "typescript": "^6.0.3",

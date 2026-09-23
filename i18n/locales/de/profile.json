@@ -1,0 +1,32 @@
+{
+  "profile": {
+    "title": "Profil",
+    "loadFailed": "Profil konnte nicht geladen werden",
+    "viewPublicProfile": "Öffentliches Profil ansehen",
+    "form": {
+      "displayName": "Anzeigename",
+      "handle": "Nutzername",
+      "bio": "Über mich",
+      "handleHelp": "Nur Kleinbuchstaben, Ziffern und Bindestriche, 3–30 Zeichen. Profil-URL: {url}",
+      "handleInvalid": "Nutzernamen dürfen nur Kleinbuchstaben, Ziffern und Bindestriche enthalten.",
+      "displayNameRequired": "Bitte einen Anzeigenamen angeben.",
+      "saveFailed": "Profil konnte nicht gespeichert werden.",
+      "handleChanged": "Bereits geteilte Links mit dem alten Nutzernamen funktionieren nicht mehr."
+    },
+    "inventoryShare": {
+      "title": "Inventar teilen",
+      "description": "Alle Karten – teile dein gesamtes Inventar mit anderen Spielern.",
+      "share": "Teilen",
+      "resourceName": "Alle Karten"
+    },
+    "wishlistVisibility": {
+      "title": "Wunschliste öffentlich zeigen",
+      "description": "Andere Spieler können deine Wunschliste auf deinem Profil sehen.",
+      "saveFailed": "Sichtbarkeit konnte nicht gespeichert werden"
+    },
+    "settings": {
+      "title": "Einstellungen",
+      "languageDescription": "Die Sprache von Menüs, Schaltflächen und Hinweisen."
+    }
+  }
+}

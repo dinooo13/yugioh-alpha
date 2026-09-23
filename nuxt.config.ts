@@ -1,10 +1,11 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
+import { NAMESPACES } from './i18n/namespaces'
 import { pwaOptions } from './pwa.config'
 
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   devtools: { enabled: true },
-  modules: ['@nuxt/eslint', '@nuxt/ui', '@vite-pwa/nuxt'],
+  modules: ['@nuxt/eslint', '@nuxt/ui', '@nuxtjs/i18n', '@vite-pwa/nuxt'],
   css: ['~/assets/css/main.css'],
   typescript: {
     strict: true,
@@ -77,9 +78,26 @@ export default defineNuxtConfig({
   app: {
     head: {
       title: 'yugioh alpha',
-      htmlAttrs: { lang: 'de' },
+      // <html lang> follows the UI language: app/app.vue sets it.
       meta: [{ name: 'theme-color', content: '#6D5DF6' }],
     },
+  },
+  // UI language (docs/adr/0014-ui-internationalisation.md). The module only
+  // loads catalogues and switches vue-i18n; which language a request gets is
+  // decided by server/utils/ui-locale.ts (profile → cookie → Accept-Language
+  // → de) and applied by app/plugins/ui-locale.ts.
+  i18n: {
+    // ADR 0013: language-neutral URLs, no locale prefix, no translated slugs.
+    strategy: 'no_prefix',
+    defaultLocale: 'de',
+    detectBrowserLanguage: false,
+    // Relative to <rootDir>/i18n.
+    langDir: 'locales',
+    vueI18n: './i18n.config.ts',
+    locales: [
+      { code: 'de', language: 'de-DE', name: 'Deutsch', files: NAMESPACES.map(ns => `de/${ns}.json`) },
+      { code: 'en', language: 'en-US', name: 'English', files: NAMESPACES.map(ns => `en/${ns}.json`) },
+    ],
   },
   // See pwa.config.ts: the service worker only precaches build assets and
   // never answers page navigations (per-user SSR HTML).

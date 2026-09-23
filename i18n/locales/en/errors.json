@@ -1,0 +1,13 @@
+{
+  "errors": {
+    "api": {
+      "handle_invalid": "Usernames may only contain lowercase letters, digits and hyphens (3–30 characters).",
+      "handle_reserved": "This username is reserved. Please pick another one.",
+      "handle_taken": "A player with this username already exists.",
+      "display_name_required": "Please enter a display name.",
+      "display_name_too_long": "The display name can be at most 60 characters long.",
+      "bio_too_long": "“About me” can be at most 500 characters long.",
+      "invalid_locale": "This language isn't supported."
+    }
+  }
+}

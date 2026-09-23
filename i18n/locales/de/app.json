@@ -1,0 +1,33 @@
+{
+  "app": {
+    "pageTitle": "{page} – yugioh alpha",
+    "skipLink": "Zum Inhalt springen",
+    "nav": {
+      "dashboard": "Dashboard",
+      "inventory": "Inventar",
+      "catalog": "Katalog",
+      "decks": "Decks",
+      "assistant": "Assistent",
+      "formats": "Formate",
+      "wishlist": "Wunschliste",
+      "tournaments": "Turniere"
+    },
+    "header": {
+      "openMenu": "Menü öffnen",
+      "menu": "Menü"
+    },
+    "sidebar": {
+      "profile": "Profil",
+      "logout": "Abmelden"
+    },
+    "publicHeader": {
+      "myProfile": "Mein Profil",
+      "toApp": "Zur App",
+      "login": "Anmelden"
+    },
+    "localeSwitch": {
+      "label": "Anzeigesprache",
+      "saveFailed": "Sprache konnte nicht gespeichert werden"
+    }
+  }
+}
