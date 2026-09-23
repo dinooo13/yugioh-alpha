@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import type { LocationQueryRaw } from 'vue-router'
 import { pluralize } from '~~/shared/plural'
+import { UNASSIGNED_COLLECTION_ID } from '~~/shared/inventory'
 import type { InventorySearchFilters } from '~/components/inventory/InventorySearchPanel.vue'
 import { apiErrorMessage } from '~/utils/card-entry'
 import type { InventorySearchResultItem } from '~/utils/inventory-search-result'
@@ -32,12 +34,6 @@ interface CatalogCard {
     setName: string
     rarity: string | null
   }>
-}
-
-interface CollectionOption {
-  id: string
-  name: string
-  cardCount: number
 }
 
 interface SearchFilters extends InventorySearchFilters {
@@ -82,6 +78,7 @@ function emptyFacets(): SearchFacets {
 useHead({ title: 'Inventar – yugioh alpha' })
 
 const route = useRoute()
+const router = useRouter()
 const page = ref(1)
 const pageSize = 20
 const isPickerOpen = ref(false)
@@ -90,7 +87,42 @@ const selectedCard = ref<CatalogCard | null>(null)
 const editingItem = ref<InventoryItem | null>(null)
 const errorMessage = ref('')
 
-const mode = ref<'liste' | 'uebersicht'>('liste')
+// The URL is the single source of truth for the page's scope and view, so
+// deep links, reloads and Back/Forward all restore them:
+// - `?collectionId=` — a collection id or `__none__` (cards without one);
+//   absent = all cards. Drives both views, the header and the presets.
+// - `?view=uebersicht` — absent = "Liste".
+// - `?card=` — "Liste" only: the rows of one catalog card ("In Liste
+//   bearbeiten" from the Übersicht preview).
+// Defaults are never written, so the plain page stays at `/inventar`.
+function setQuery(patch: LocationQueryRaw, { push = false } = {}) {
+  const query = { ...route.query, ...patch }
+  return push ? router.push({ query }) : router.replace({ query })
+}
+
+const collectionId = computed({
+  get: () => {
+    const value = route.query.collectionId
+    return typeof value === 'string' ? value : ''
+  },
+  set: (value: string) => {
+    setQuery({ collectionId: value || undefined })
+  },
+})
+
+const mode = computed<'liste' | 'uebersicht'>({
+  get: () => route.query.view === 'uebersicht' ? 'uebersicht' : 'liste',
+  set: (value) => {
+    // The card filter only exists in "Liste"; leaving it drops the filter.
+    setQuery(value === 'uebersicht' ? { view: 'uebersicht', card: undefined } : { view: undefined })
+  },
+})
+
+const cardFilter = computed(() => {
+  const raw = route.query.card
+  const id = typeof raw === 'string' ? Number(raw) : Number.NaN
+  return Number.isInteger(id) && id > 0 ? id : undefined
+})
 
 const filters = ref<SearchFilters>({
   q: '',
@@ -103,7 +135,6 @@ const filters = ref<SearchFilters>({
   language: [],
   condition: [],
   edition: [],
-  collectionId: '',
   sort: 'name',
   page: 1,
 })
@@ -121,44 +152,73 @@ watch(() => filters.value.q, (value) => {
   }, 300)
 })
 
-const collectionId = computed(() => {
-  const value = route.query.collectionId
-  return typeof value === 'string' ? value : undefined
-})
-
-// Sidebar deep-link (?collectionId=) pre-selects the "Sammlung" facet so the
-// sidebar and the aggregated search stay consistent (does not force the
-// "Übersicht" mode — the raw list keeps its existing collection-filtered
-// behavior by default).
-watch(collectionId, (value) => {
-  filters.value.collectionId = value ?? ''
-}, { immediate: true })
+const listQuery = computed(() => ({
+  q: debouncedQ.value || undefined,
+  page: page.value,
+  pageSize,
+  collectionId: collectionId.value || undefined,
+  catalogCardId: cardFilter.value,
+}))
 
 const { data, pending, refresh } = await useFetch<{ items: InventoryItem[], total: number }>('/api/inventory', {
-  query: {
-    q: debouncedQ,
-    page,
-    pageSize,
-    collectionId,
-  },
+  query: listQuery,
   default: () => ({ items: [], total: 0 }),
-  watch: [debouncedQ, page, collectionId],
+  watch: [listQuery],
 })
 
 const items = computed(() => data.value.items)
 const total = computed(() => data.value.total)
 const pageCount = computed(() => Math.max(1, Math.ceil(total.value / pageSize)))
 
-// Shared with the layout sidebar (same `useCollections` key) so a collection
-// created/renamed/deleted in the sidebar — or a card assigned to one from
-// this page — shows up in both places immediately (UX review #4).
-const { data: collectionsResponse, refresh: refreshCollections } = await useCollections()
-const collectionOptions = computed<CollectionOption[]>(() => collectionsResponse.value.items)
-const allCardsCount = computed(() => collectionsResponse.value.allCount)
+// Shared (same `useCollections` key) with the collection menu, the add modal
+// and the dashboard, so one refresh after creating a collection or assigning
+// a card updates all of them (UX review #4).
+const {
+  data: collectionsResponse,
+  refresh: refreshCollections,
+  status: collectionsStatus,
+} = await useCollections()
+const collectionOptions = computed(() => collectionsResponse.value.items)
+const allCardsCount = computed(() => collectionsResponse.value.allCount ?? 0)
+// Both counts sum quantities, so the difference is the copies without one.
+const unassignedCount = computed(() => Math.max(
+  0,
+  allCardsCount.value - collectionOptions.value.reduce((sum, c) => sum + c.cardCount, 0),
+))
 
+const isUnassigned = computed(() => collectionId.value === UNASSIGNED_COLLECTION_ID)
 const activeCollection = computed(() => collectionOptions.value.find(c => c.id === collectionId.value) ?? null)
-const headerTitle = computed(() => activeCollection.value?.name ?? 'Alle Karten')
-const headerCount = computed(() => activeCollection.value ? activeCollection.value.cardCount : allCardsCount.value)
+const headerTitle = computed(() => activeCollection.value?.name ?? (isUnassigned.value ? 'Ohne Sammlung' : 'Alle Karten'))
+const headerCount = computed(() => {
+  if (activeCollection.value) {
+    return activeCollection.value.cardCount
+  }
+  return isUnassigned.value ? unassignedCount.value : allCardsCount.value
+})
+
+// A stale `?collectionId=` (deleted elsewhere, or a foreign id) falls back to
+// all cards once the collection list is known.
+function dropStaleCollection() {
+  const id = collectionId.value
+  if (
+    id
+    && id !== UNASSIGNED_COLLECTION_ID
+    && collectionsStatus?.value === 'success'
+    && !collectionOptions.value.some(c => c.id === id)
+  ) {
+    setQuery({ collectionId: undefined })
+  }
+}
+onMounted(dropStaleCollection)
+watch([collectionId, collectionOptions, () => collectionsStatus?.value], dropStaleCollection)
+
+function onCollectionsChanged() {
+  refreshCollections()
+}
+
+async function onCollectionDeleted() {
+  await Promise.all([refresh(), refreshCollections(), refreshSearch()])
+}
 
 const noAssignmentValue = '__no_collection__'
 const assignItems = computed(() => [
@@ -196,8 +256,8 @@ const conditionLabels: Record<string, string> = {
   poor: 'PO',
 }
 
-// Any filter change resets both views back to page 1.
-watch(debouncedQ, () => {
+// Any filter or scope change resets both views back to page 1.
+watch([debouncedQ, collectionId, cardFilter], () => {
   page.value = 1
   filters.value.page = 1
 })
@@ -212,7 +272,6 @@ watch(
     filters.value.language,
     filters.value.condition,
     filters.value.edition,
-    filters.value.collectionId,
     filters.value.sort,
   ],
   () => {
@@ -221,11 +280,9 @@ watch(
   { deep: true },
 )
 
-// Whether the search/filter panel has anything set (excluding the
-// collection facet, which may just mirror the sidebar deep-link).
-const hasActiveSearchFilters = computed(() => Boolean(
-  filters.value.q
-  || filters.value.type.length
+// Whether any of the panel's facets is set — they only affect "Übersicht".
+const hasActiveFacets = computed(() => Boolean(
+  filters.value.type.length
   || filters.value.attribute.length
   || filters.value.race.length
   || filters.value.level.length
@@ -235,19 +292,33 @@ const hasActiveSearchFilters = computed(() => Boolean(
   || filters.value.edition.length,
 ))
 
-// Same, but including the collection facet — used for the Übersicht empty
+// Search text or facets (not the collection, which is the page's scope).
+const hasActiveSearchFilters = computed(() => Boolean(filters.value.q) || hasActiveFacets.value)
+
+// Same, but including the collection scope — used for the Übersicht empty
 // state ("leer" vs. "keine Treffer").
-const hasAnyFilter = computed(() => hasActiveSearchFilters.value || Boolean(filters.value.collectionId))
+const hasAnyFilter = computed(() => hasActiveSearchFilters.value || Boolean(collectionId.value))
 
 // The moment the user actually starts searching/filtering, default to the
-// aggregated "Übersicht" view (the toggle still lets them switch back).
+// aggregated "Übersicht" view (the toggle still lets them switch back) —
+// except while "Liste" shows one card's rows ("In Liste bearbeiten"), where
+// typing a search replaces the card filter instead (below). Selecting a
+// collection never switches the view.
 watch(hasActiveSearchFilters, (active, wasActive) => {
-  if (active && !wasActive) {
+  if (active && !wasActive && !cardFilter.value && mode.value === 'liste') {
     mode.value = 'uebersicht'
+  }
+})
+watch(debouncedQ, (value) => {
+  if (value && cardFilter.value) {
+    setQuery({ card: undefined })
   }
 })
 
 const searchPageSize = 24
+// Note: in "Übersicht" a collection keeps every card with at least one copy
+// in it, and the totals/breakdown still span all collections — "Liste"
+// filters row by row (see server/utils/inventory-search.ts vs. inventory.ts).
 const searchQuery = computed(() => ({
   q: debouncedQ.value || undefined,
   inText: filters.value.inText ? 1 : undefined,
@@ -259,7 +330,7 @@ const searchQuery = computed(() => ({
   language: filters.value.language.length ? filters.value.language.join(',') : undefined,
   condition: filters.value.condition.length ? filters.value.condition.join(',') : undefined,
   edition: filters.value.edition.length ? filters.value.edition.join(',') : undefined,
-  collectionId: filters.value.collectionId || undefined,
+  collectionId: collectionId.value || undefined,
   sort: filters.value.sort,
   page: filters.value.page,
   pageSize: searchPageSize,
@@ -346,6 +417,39 @@ function openPreview(item: SearchResultItem) {
   isPreviewOpen.value = true
 }
 
+// Name for the "Nur: …" chip, remembered from the preview so it shows before
+// the filtered list has loaded.
+const cardFilterSource = ref<{ id: number, name: string } | null>(null)
+const cardFilterName = computed(() => {
+  if (cardFilterSource.value && cardFilterSource.value.id === cardFilter.value) {
+    return cardFilterSource.value.name
+  }
+  return items.value[0]?.cardName ?? 'Karte'
+})
+
+// "In Liste bearbeiten": show this card's individual rows in "Liste".
+// Filters by catalog id rather than by name, so "Dark Magician" doesn't also
+// match "Dark Magician Girl". The collection scope is dropped because the
+// preview's breakdown spans every collection. A push (not a replace), so
+// Back returns to the Übersicht.
+async function editInList(item: SearchResultItem) {
+  isPreviewOpen.value = false
+  // Clear the search text right away (no debounce) — the list must not be
+  // narrowed by a leftover name search, and a later non-empty search would
+  // drop the card filter again.
+  if (qTimeout) {
+    clearTimeout(qTimeout)
+  }
+  filters.value.q = ''
+  debouncedQ.value = ''
+  cardFilterSource.value = { id: item.catalogCardId, name: item.name }
+  await setQuery({ view: undefined, collectionId: undefined, card: String(item.catalogCardId) }, { push: true })
+}
+
+function clearCardFilter() {
+  setQuery({ card: undefined })
+}
+
 async function onSaved() {
   await Promise.all([refresh(), refreshCollections(), refreshSearch(), refreshFacets()])
 }
@@ -355,11 +459,22 @@ async function onSaved() {
   <div class="space-y-6">
     <LayoutPageHeader
       :title="headerTitle"
-      :description="pluralize(headerCount, 'Karte', 'Karten')"
+      truncate
     >
+      <template #description>
+        <span class="inline-flex flex-wrap items-center gap-2">
+          {{ pluralize(headerCount, 'Karte', 'Karten') }}
+          <SharingVisibilityBadge
+            v-if="activeCollection"
+            :visibility="activeCollection.visibility"
+            hide-private
+          />
+        </span>
+      </template>
+
       <template #actions>
         <UButton
-          :to="{ path: '/inventar/erfassen', query: collectionId ? { collectionId } : undefined }"
+          :to="{ path: '/inventar/erfassen', query: activeCollection ? { collectionId: activeCollection.id } : undefined }"
           icon="i-lucide-zap"
           color="neutral"
           variant="outline"
@@ -373,8 +488,36 @@ async function onSaved() {
       </template>
     </LayoutPageHeader>
 
-    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <div class="flex flex-1 flex-wrap items-center gap-3">
+    <div class="space-y-3">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <CollectionsCollectionActions
+          v-model="collectionId"
+          :collections="collectionOptions"
+          :all-count="allCardsCount"
+          :unassigned-count="unassignedCount"
+          @changed="onCollectionsChanged"
+          @deleted="onCollectionDeleted"
+        />
+
+        <UFieldGroup>
+          <UButton
+            label="Liste"
+            color="neutral"
+            :variant="mode === 'liste' ? 'solid' : 'outline'"
+            :aria-pressed="mode === 'liste'"
+            @click="() => { mode = 'liste' }"
+          />
+          <UButton
+            label="Übersicht"
+            color="neutral"
+            :variant="mode === 'uebersicht' ? 'solid' : 'outline'"
+            :aria-pressed="mode === 'uebersicht'"
+            @click="() => { mode = 'uebersicht' }"
+          />
+        </UFieldGroup>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-3">
         <UInput
           v-model="filters.q"
           icon="i-lucide-search"
@@ -387,21 +530,6 @@ async function onSaved() {
           label="Auch im Kartentext suchen"
         />
       </div>
-
-      <UFieldGroup>
-        <UButton
-          label="Liste"
-          color="neutral"
-          :variant="mode === 'liste' ? 'solid' : 'outline'"
-          @click="() => { mode = 'liste' }"
-        />
-        <UButton
-          label="Übersicht"
-          color="neutral"
-          :variant="mode === 'uebersicht' ? 'solid' : 'outline'"
-          @click="() => { mode = 'uebersicht' }"
-        />
-      </UFieldGroup>
     </div>
 
     <p
@@ -416,15 +544,14 @@ async function onSaved() {
     <InventorySearchPanel
       v-model:filters="filters"
       :facets="facets"
-      :collections="collectionOptions"
       :edition-labels="editionLabels"
       :condition-labels="conditionLabels"
     />
     <p
-      v-if="mode === 'liste' && hasActiveSearchFilters"
+      v-if="mode === 'liste' && hasActiveFacets"
       class="text-xs text-gray-500"
     >
-      Diese Filter wirken sich auf die Trefferzahl in "Übersicht" aus. "Liste" zeigt weiterhin alle Karten, gefiltert nach Suchtext und Sammlung.
+      Diese Filter wirken nur in "Übersicht". "Liste" filtert nach Suchtext und Sammlung.
     </p>
 
     <!-- Übersicht: aggregated, faceted inventory-wide search -->
@@ -525,6 +652,29 @@ async function onSaved() {
       v-else
       class="space-y-4"
     >
+      <div
+        v-if="cardFilter"
+        class="flex items-center gap-1"
+      >
+        <UBadge
+          color="neutral"
+          variant="subtle"
+          size="lg"
+          icon="i-lucide-filter"
+          :label="`Nur: ${cardFilterName}`"
+          class="max-w-full truncate"
+        />
+        <UButton
+          icon="i-lucide-x"
+          color="neutral"
+          variant="ghost"
+          size="xs"
+          class="tap-target"
+          aria-label="Kartenfilter entfernen"
+          @click="clearCardFilter"
+        />
+      </div>
+
       <div class="overflow-hidden rounded-md border border-gray-200 bg-white">
         <ul
           v-if="pending"
@@ -544,6 +694,22 @@ async function onSaved() {
             </div>
           </li>
         </ul>
+
+        <LayoutEmptyState
+          v-else-if="items.length === 0 && (cardFilter || debouncedQ)"
+          icon="i-lucide-search-x"
+          title="Keine Treffer"
+          description="Passe die Suche an oder entferne den Kartenfilter."
+          :bordered="false"
+        />
+
+        <LayoutEmptyState
+          v-else-if="items.length === 0 && isUnassigned"
+          icon="i-lucide-archive"
+          title="Keine Karten ohne Sammlung"
+          description="Jede Karte in deinem Inventar ist einer Sammlung zugeordnet."
+          :bordered="false"
+        />
 
         <LayoutEmptyState
           v-else-if="items.length === 0"
@@ -606,7 +772,7 @@ async function onSaved() {
       v-model:open="isEntryOpen"
       :card="selectedCard"
       :collections="collectionOptions"
-      :preset-collection-id="collectionId ?? null"
+      :preset-collection-id="activeCollection?.id ?? null"
       :initial-values="editingItem && {
         id: editingItem.id,
         catalogCardId: editingItem.catalogCardId,
@@ -624,6 +790,7 @@ async function onSaved() {
     <InventoryCardPreviewModal
       v-model:open="isPreviewOpen"
       :item="previewItem"
+      @edit-in-list="editInList"
     />
   </div>
 </template>

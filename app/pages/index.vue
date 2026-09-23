@@ -6,8 +6,8 @@ useHead({ title: 'Dashboard – yugioh alpha' })
 // Cheap counts for the onboarding cards (UX review #2) — each list endpoint
 // already reports a `total`, so a `pageSize: 1` request is enough; no need
 // for a dedicated stats endpoint. The inventory count comes from the shared
-// collections fetch (already loaded by the sidebar): `allCount` sums copies,
-// whereas `/api/inventory`'s `total` counts distinct rows.
+// collections fetch (`useCollections`): `allCount` sums copies, whereas
+// `/api/inventory`'s `total` counts distinct rows.
 const { data: collections } = await useCollections()
 
 const { data: decksData } = await useFetch<{ total: number }>('/api/decks', {

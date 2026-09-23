@@ -12,8 +12,14 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'update:open': [value: boolean]
-  saved: []
+  // The created/updated collection, so a caller can e.g. select a new one.
+  saved: [collection: SavedCollection]
 }>()
+
+interface SavedCollection {
+  id: string
+  name: string
+}
 
 const form = reactive({
   name: '',
@@ -70,20 +76,17 @@ async function save() {
   }
 
   try {
-    if (props.initialValues?.id) {
-      await $fetch(`/api/collections/${props.initialValues.id}`, {
-        method: 'PATCH',
-        body: payload,
-      })
-    }
-    else {
-      await $fetch('/api/collections', {
-        method: 'POST',
-        body: payload,
-      })
-    }
+    const saved = props.initialValues?.id
+      ? await $fetch<SavedCollection>(`/api/collections/${props.initialValues.id}`, {
+          method: 'PATCH',
+          body: payload,
+        })
+      : await $fetch<SavedCollection>('/api/collections', {
+          method: 'POST',
+          body: payload,
+        })
 
-    emit('saved')
+    emit('saved', saved)
     openProxy.value = false
   }
   catch (error) {

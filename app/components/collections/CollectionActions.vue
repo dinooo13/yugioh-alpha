@@ -1,0 +1,187 @@
+<script setup lang="ts">
+import { UNASSIGNED_COLLECTION_ID } from '~~/shared/inventory'
+import type { CollectionItem } from '~/composables/useCollections'
+import { apiErrorMessage } from '~/utils/card-entry'
+
+/**
+ * The inventory's collection scope: a "Sammlung" select (all cards, cards
+ * without a collection, or one collection), "Neue Sammlung", and for a real
+ * collection a "…" menu with Umbenennen / Teilen / Löschen.
+ *
+ * `v-model` is the selected collection id — `''` for all cards,
+ * `UNASSIGNED_COLLECTION_ID` for cards without a collection. The parent keeps
+ * it in the URL (`?collectionId=`).
+ */
+const props = defineProps<{
+  collections: CollectionItem[]
+  allCount: number
+  unassignedCount: number
+}>()
+
+const emit = defineEmits<{
+  // A collection was created, renamed or its visibility changed.
+  changed: []
+  // The selected collection was deleted (the model is already reset to '').
+  deleted: []
+}>()
+
+const model = defineModel<string>({ required: true })
+
+// reka-ui's <SelectItem> reserves `''` for "no selection", so "Alle
+// Sammlungen" needs a non-empty sentinel that maps back to `''`.
+const allValue = '__all__'
+
+const selectItems = computed(() => [
+  { label: `Alle Sammlungen (${props.allCount})`, value: allValue },
+  { label: `(keine Sammlung) (${props.unassignedCount})`, value: UNASSIGNED_COLLECTION_ID },
+  ...props.collections.map(c => ({ label: `${c.name} (${c.cardCount})`, value: c.id })),
+])
+
+const selection = computed({
+  get: () => model.value || allValue,
+  set: (value: string) => {
+    model.value = value === allValue ? '' : value
+  },
+})
+
+const activeCollection = computed(() => props.collections.find(c => c.id === model.value) ?? null)
+
+const isFormOpen = ref(false)
+const editingCollection = ref<CollectionItem | null>(null)
+
+function openCreate() {
+  editingCollection.value = null
+  isFormOpen.value = true
+}
+
+function openRename(collection: CollectionItem) {
+  editingCollection.value = collection
+  isFormOpen.value = true
+}
+
+function onSaved(saved: { id: string, name: string }) {
+  // Refresh first: the parent drops an unknown `collectionId` once the list
+  // has loaded, so the new one must not look stale in between.
+  emit('changed')
+  if (!editingCollection.value) {
+    model.value = saved.id
+  }
+}
+
+const { confirm } = useConfirm()
+const toast = useToast()
+
+async function onDelete(collection: CollectionItem) {
+  const confirmed = await confirm({
+    title: 'Sammlung löschen',
+    description: `"${collection.name}" löschen? Die Karten bleiben erhalten und werden zu "Alle Karten".`,
+  })
+  if (!confirmed) {
+    return
+  }
+
+  try {
+    await $fetch(`/api/collections/${collection.id}`, { method: 'DELETE' })
+  }
+  catch (error) {
+    toast.add({ title: apiErrorMessage(error, 'Die Sammlung konnte nicht gelöscht werden.'), color: 'error' })
+    return
+  }
+
+  model.value = ''
+  emit('deleted')
+}
+
+// Cheap, lazily creates the profile on first read — only needed to build the
+// "Teilen" share link (`/spieler/:handle/sammlungen/:id`).
+const { data: ownProfile } = await useOwnProfile()
+
+const isShareOpen = ref(false)
+const sharingCollection = ref<CollectionItem | null>(null)
+const sharePath = computed(() => `/spieler/${ownProfile.value?.handle ?? ''}/sammlungen/${sharingCollection.value?.id ?? ''}`)
+
+function openShare(collection: CollectionItem) {
+  sharingCollection.value = collection
+  isShareOpen.value = true
+}
+
+function onShareUpdated() {
+  emit('changed')
+}
+
+const menuItems = computed(() => {
+  const collection = activeCollection.value
+  if (!collection) {
+    return []
+  }
+  return [[
+    {
+      label: 'Umbenennen',
+      icon: 'i-lucide-pencil',
+      onSelect: () => openRename(collection),
+    },
+    {
+      label: 'Teilen',
+      icon: 'i-lucide-share-2',
+      // Without a loaded handle, sharePath would resolve to a broken
+      // `/spieler//sammlungen/:id` link — keep the entry disabled until then.
+      disabled: !ownProfile.value?.handle,
+      onSelect: () => openShare(collection),
+    },
+    {
+      label: 'Löschen',
+      icon: 'i-lucide-trash-2',
+      color: 'error' as const,
+      onSelect: () => onDelete(collection),
+    },
+  ]]
+})
+</script>
+
+<template>
+  <div class="flex flex-wrap items-center gap-2">
+    <USelect
+      v-model="selection"
+      :items="selectItems"
+      aria-label="Sammlung"
+      class="w-56 max-w-full"
+    />
+
+    <UDropdownMenu
+      v-if="activeCollection"
+      :items="menuItems"
+    >
+      <UButton
+        icon="i-lucide-more-horizontal"
+        color="neutral"
+        variant="outline"
+        class="tap-target"
+        :aria-label="`Optionen für ${activeCollection.name}`"
+      />
+    </UDropdownMenu>
+
+    <UButton
+      icon="i-lucide-folder-plus"
+      label="Neue Sammlung"
+      color="neutral"
+      variant="ghost"
+      @click="openCreate"
+    />
+
+    <CollectionsCollectionFormModal
+      v-model:open="isFormOpen"
+      :initial-values="editingCollection"
+      @saved="onSaved"
+    />
+
+    <SharingShareModal
+      v-if="sharingCollection"
+      v-model:open="isShareOpen"
+      resource-type="collection"
+      :resource-id="sharingCollection.id"
+      :resource-name="sharingCollection.name"
+      :share-path="sharePath"
+      @updated="onShareUpdated"
+    />
+  </div>
+</template>
