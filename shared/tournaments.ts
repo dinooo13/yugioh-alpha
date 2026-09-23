@@ -1,5 +1,5 @@
 // Types, German labels, and limits shared by the server (server/utils/tournaments.ts)
-// and the tournament UI (app/pages/turniere/**). Intentionally dependency-free.
+// and the tournament UI (app/pages/tournaments/**). Intentionally dependency-free.
 
 import type { StandingsRow } from './tournament-standings'
 

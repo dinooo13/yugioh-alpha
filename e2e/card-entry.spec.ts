@@ -5,9 +5,9 @@ test.describe('Schnellerfassung', () => {
   test('turns a pasted list into reviewed inventory entries', async ({ page }) => {
     await registerAndLogin(page)
 
-    await page.goto('/inventar')
+    await page.goto('/inventory')
     await page.getByRole('link', { name: 'Schnellerfassung' }).click()
-    await expect(page).toHaveURL('/inventar/erfassen')
+    await expect(page).toHaveURL('/inventory/quick-entry')
 
     // "SDY-006" is a Dark Magician printing in the seeded catalog fixture.
     await page.getByLabel('Kartenliste').fill('2x Dark Magician\nPot of Greed\nSDY-006')
@@ -27,7 +27,7 @@ test.describe('Schnellerfassung', () => {
     await expect(page.getByText('Karten gespeichert').first()).toBeVisible()
     await expect(page.getByText('Noch nichts zu prüfen')).toBeVisible()
 
-    await page.goto('/inventar')
+    await page.goto('/inventory')
     await page.getByRole('button', { name: 'Übersicht' }).click()
 
     // 2 loose copies + 1 from the SDY-006 printing row.
@@ -37,14 +37,14 @@ test.describe('Schnellerfassung', () => {
   })
 
   // Photo/voice input moved to the chat assistant (see e2e/assistant-chat.spec.ts,
-  // added alongside docs in the following stage) — /inventar/erfassen now only
+  // added alongside docs in the following stage) — /inventory/quick-entry now only
   // links there instead of offering its own Foto/Sprache modes.
   test('points to the assistant for photo input', async ({ page }) => {
     await registerAndLogin(page)
-    await page.goto('/inventar/erfassen')
+    await page.goto('/inventory/quick-entry')
 
     await expect(page.getByText('Karten per Foto? Nutze den Assistenten')).toBeVisible()
     await page.getByRole('link', { name: 'Zum Assistenten' }).click()
-    await expect(page).toHaveURL(/\/assistent/)
+    await expect(page).toHaveURL(/\/assistant/)
   })
 })

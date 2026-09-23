@@ -41,7 +41,7 @@ const defaults = reactive<EntryDefaults>({
   collectionId: NO_COLLECTION_VALUE,
 })
 
-// Coming from /inventar?collectionId=… the user is working on that box, so
+// Coming from /inventory?collectionId=… the user is working on that box, so
 // preselect it instead of making them pick it again.
 watch(
   () => props.presetCollectionId,

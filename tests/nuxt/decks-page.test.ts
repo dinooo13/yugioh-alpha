@@ -23,7 +23,7 @@ interface DeckListItem {
   updatedAt: string
 }
 
-// The global auth middleware would bounce `route: '/decks?neu=1'` to /login
+// The global auth middleware would bounce `route: '/decks?new=1'` to /login
 // without a session — stub it so the page sees its own query.
 vi.mock('~/utils/session', () => ({
   getAuthSession: vi.fn(() => Promise.resolve({ session: {}, user: { email: 'fabian@example.com', name: 'Fabian Meyer' } })),
@@ -92,7 +92,7 @@ describe('decks page', () => {
 
     const link = component.findAll('a').find(anchor => anchor.text().includes('Mit KI erstellen'))
     expect(link).toBeTruthy()
-    expect(link!.attributes('href')).toBe('/assistent?intent=new-deck')
+    expect(link!.attributes('href')).toBe('/assistant?intent=new-deck')
   })
 
   it('shows per-section counts and a completeness badge per deck', async () => {
@@ -225,10 +225,10 @@ describe('decks page rule formats', () => {
     ])
   })
 
-  it('opens the create modal straight away for /decks?neu=1', async () => {
+  it('opens the create modal straight away for /decks?new=1', async () => {
     state.decks = { items: [deck()], total: 1, page: 1, pageSize: 20 }
 
-    const component = await mountSuspended(DecksPage, { route: '/decks?neu=1' })
+    const component = await mountSuspended(DecksPage, { route: '/decks?new=1' })
     await nextTick()
 
     const modal = component.findComponent(DecksDeckFormModal)

@@ -70,7 +70,7 @@ const isMonster = computed(() => props.item ? props.item.atk !== null || props.i
           @click="$emit('edit-in-list', item)"
         />
         <UButton
-          :to="`/katalog?card=${item.catalogCardId}`"
+          :to="`/catalog?card=${item.catalogCardId}`"
           icon="i-lucide-book-open"
           label="Im Katalog öffnen"
           color="neutral"

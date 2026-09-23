@@ -32,14 +32,14 @@ const displayNameError = ref('')
 const errorMessage = ref('')
 const successMessage = ref('')
 // Shown once, right after a save that actually changed the handle (UX
-// review #23) — every `/spieler/<altes-handle>/...` link already handed out
+// review #23) — every `/players/<altes-handle>/...` link already handed out
 // breaks the moment this happens, and that consequence was previously
 // undisclosed.
 const handleChangedNotice = ref(false)
 
 // Live preview of the public profile URL as the visitor would see it — the
 // rule text below used to only appear after a failed submit.
-const handlePreview = computed(() => `/spieler/${form.handle.trim().toLowerCase() || '…'}`)
+const handlePreview = computed(() => `/players/${form.handle.trim().toLowerCase() || '…'}`)
 
 async function save() {
   errorMessage.value = ''

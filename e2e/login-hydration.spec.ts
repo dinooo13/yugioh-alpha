@@ -43,7 +43,7 @@ test.describe('first page after login', () => {
     await page.waitForLoadState('networkidle')
     await expectAppShell(page)
 
-    for (const path of ['/', '/inventar', '/decks']) {
+    for (const path of ['/', '/inventory', '/decks']) {
       const navigation = await page.goto(path)
       expect(navigation?.fromServiceWorker()).toBe(false)
       await page.waitForLoadState('networkidle')
@@ -59,12 +59,12 @@ test.describe('first page after login', () => {
     await logout(page)
 
     const warnings = trackHydrationWarnings(page)
-    await page.goto('/inventar')
+    await page.goto('/inventory')
     await expect(page).toHaveURL(/\/login\?redirect=(%2F|\/)inventar/)
 
     await loginViaForm(page, user)
 
-    await expect(page).toHaveURL('/inventar')
+    await expect(page).toHaveURL('/inventory')
     await page.waitForLoadState('networkidle')
     await expectAppShell(page)
     expect(warnings).toEqual([])

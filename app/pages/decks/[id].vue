@@ -207,11 +207,11 @@ const { data: assistantStatus } = await useAssistantStatus()
 // --- Sharing (Phase 6) -------------------------------------------------------
 
 // Cheap, lazily creates the profile on first read — needed only to build the
-// share link (`/spieler/:handle/decks/:id`).
+// share link (`/players/:handle/decks/:id`).
 const { data: ownProfile } = await useOwnProfile()
 
 const isShareOpen = ref(false)
-const sharePath = computed(() => `/spieler/${ownProfile.value?.handle ?? ''}/decks/${deckId.value}`)
+const sharePath = computed(() => `/players/${ownProfile.value?.handle ?? ''}/decks/${deckId.value}`)
 
 function onShareUpdated(visibility: Visibility) {
   if (deck.value) {
@@ -704,7 +704,7 @@ const deckMenuItems = [
               color="neutral"
               variant="outline"
               label="Mit KI bearbeiten"
-              :to="{ path: '/assistent', query: { deckId } }"
+              :to="{ path: '/assistant', query: { deckId } }"
             />
             <UButton
               icon="i-lucide-share-2"
@@ -1043,7 +1043,7 @@ const deckMenuItems = [
                 >
                   Keine Karten gefunden. Aktiviere „Auch Katalogkarten anzeigen“ oder
                   <NuxtLink
-                    to="/inventar"
+                    to="/inventory"
                     class="font-medium text-primary"
                   >
                     erfasse Karten im Inventar

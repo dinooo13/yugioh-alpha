@@ -383,7 +383,7 @@ export const userProfile = sqliteTable(
     userId: text('user_id')
       .primaryKey()
       .references(() => user.id, { onDelete: 'cascade' }),
-    // URL slug, 3–30 chars of [a-z0-9-]; the identity in every /spieler/:handle route.
+    // URL slug, 3–30 chars of [a-z0-9-]; the identity in every /players/:handle route.
     handle: text('handle').notNull().unique(),
     displayName: text('display_name').notNull(),
     bio: text('bio'),

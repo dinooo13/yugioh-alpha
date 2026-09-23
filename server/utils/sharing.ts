@@ -152,7 +152,7 @@ export function resolveAccess(
  * Loads the deck row and applies resolveAccess. Throws 404 'Deck not found'
  * when the deck does not exist OR the viewer may not see it — never 403, so a
  * private deck is indistinguishable from a missing one (ADR 0004 boundary).
- * `expectedOwnerUserId` (from the /spieler/:handle segment) must match
+ * `expectedOwnerUserId` (from the /players/:handle segment) must match
  * deck.userId, otherwise 404 as well.
  */
 export function requireViewableDeck(

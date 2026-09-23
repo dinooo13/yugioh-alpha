@@ -1,7 +1,7 @@
 // Draft texts the chat composer is pre-filled with when the assistant is
 // opened from a deck entry point (docs/adr/0011-deck-assistance-in-chat.md):
-// `/assistent?intent=new-deck` ("Mit KI erstellen" on /decks) and
-// `/assistent?deckId=…`, which continues as `?intent=edit-deck` ("Mit KI
+// `/assistant?intent=new-deck` ("Mit KI erstellen" on /decks) and
+// `/assistant?deckId=…`, which continues as `?intent=edit-deck` ("Mit KI
 // bearbeiten" in the deck editor). Only a draft — never sent automatically.
 
 export const ASSISTANT_INTENT_DRAFTS = {

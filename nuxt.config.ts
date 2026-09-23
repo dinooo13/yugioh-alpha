@@ -23,11 +23,10 @@ export default defineNuxtConfig({
     // The SSR HTML for a shared profile/deck/collection page embeds the same
     // payload as its `/api/**` counterpart (and, for token URLs, the token
     // itself in the URL) — mark it non-cacheable by intermediaries too.
-    '/spieler/**': { headers: { 'cache-control': 'private, no-store' } },
-    // The former one-shot AI deck assistant page — deck building now happens
-    // in the chat (docs/adr/0011-deck-assistance-in-chat.md). Without this,
-    // an old bookmark would match /decks/[id] with id "assistent".
-    '/decks/assistent': { redirect: '/assistent?intent=new-deck' },
+    '/players/**': { headers: { 'cache-control': 'private, no-store' } },
+    // Old German paths (/spieler/**, /inventar, /decks/assistent, …) are not
+    // route rules: server/middleware/legacy-redirects.ts answers them with a
+    // 301 (docs/adr/0013-english-url-scheme.md).
   },
   runtimeConfig: {
     dbFilePath: process.env.DB_FILE_PATH || process.env.DATABASE_URL || './data/app.db',
@@ -36,7 +35,7 @@ export default defineNuxtConfig({
     // E2E catalog fixture after migrations. Never enabled in normal runs —
     // see server/plugins/migrate.ts and server/db/fixtures/catalog-fixture.ts.
     e2eSeedCatalog: '',
-    // Chat assistant (/assistent, incl. deck assistance — ADRs 0010/0011),
+    // Chat assistant (/assistant, incl. deck assistance — ADRs 0010/0011),
     // server-only. See server/utils/deck-assistant-model.ts for how these
     // resolve to a provider. All overridable via NUXT_ASSISTANT_*.
     // Works with any OpenAI-compatible Chat Completions endpoint — OpenAI,

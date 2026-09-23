@@ -6,21 +6,29 @@ import { isPublicPath } from '../../app/utils/public-routes'
 // *out* of it — extracted to a pure helper because a route-middleware unit
 // test is impractical in this repo's vitest setup (see docs/adr/0007).
 describe('isPublicPath', () => {
-  it('treats every /spieler/** path as public', () => {
-    expect(isPublicPath('/spieler/dino')).toBe(true)
-    expect(isPublicPath('/spieler/dino/decks/abc')).toBe(true)
-    expect(isPublicPath('/spieler/dino/sammlungen/abc')).toBe(true)
-    expect(isPublicPath('/spieler/dino/inventar')).toBe(true)
+  it('treats every /players/** path as public', () => {
+    expect(isPublicPath('/players/dino')).toBe(true)
+    expect(isPublicPath('/players/dino/decks/abc')).toBe(true)
+    expect(isPublicPath('/players/dino/collections/abc')).toBe(true)
+    expect(isPublicPath('/players/dino/inventory')).toBe(true)
   })
 
-  it('treats the bare /spieler path (no trailing slash) as public too', () => {
-    expect(isPublicPath('/spieler')).toBe(true)
+  it('treats the bare /players path (no trailing slash) as public too', () => {
+    expect(isPublicPath('/players')).toBe(true)
   })
 
   it('does not treat an unrelated or look-alike path as public', () => {
-    expect(isPublicPath('/profil')).toBe(false)
-    expect(isPublicPath('/wunschliste')).toBe(false)
-    expect(isPublicPath('/spielerx')).toBe(false)
+    expect(isPublicPath('/profile')).toBe(false)
+    expect(isPublicPath('/wishlist')).toBe(false)
+    expect(isPublicPath('/playersx')).toBe(false)
+    expect(isPublicPath('/')).toBe(false)
+  })
+
+  it('does not treat the old German /spieler paths as public', () => {
+    // 00.legacy-routes.global.ts rewrites them to /players/** before
+    // auth.global.ts runs (docs/adr/0013-english-url-scheme.md).
+    expect(isPublicPath('/spieler')).toBe(false)
+    expect(isPublicPath('/spieler/x')).toBe(false)
     expect(isPublicPath('/')).toBe(false)
   })
 })

@@ -3,14 +3,14 @@
 // without a middleware harness.
 
 /** Exact paths that render with or without a session. */
-const PUBLIC_EXACT_PATHS = new Set(['/spieler'])
+const PUBLIC_EXACT_PATHS = new Set(['/players'])
 /** Path prefixes (trailing slash required) that render with or without a session. */
-const PUBLIC_PREFIXES = ['/spieler/']
+const PUBLIC_PREFIXES = ['/players/']
 
 /**
- * True for `/spieler` and everything under `/spieler/**` — a shared
+ * True for `/players` and everything under `/players/**` — a shared
  * profile/deck/collection page must be reachable by an anonymous visitor
- * and must not bounce a logged-in one. `/spieler` with no trailing slash
+ * and must not bounce a logged-in one. `/players` with no trailing slash
  * (e.g. a trimmed URL) is included so it falls through to the page's own
  * 404, not a login redirect.
  */

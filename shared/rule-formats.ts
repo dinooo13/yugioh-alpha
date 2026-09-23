@@ -1,6 +1,6 @@
 // Pure rule-format model and deck validation engine, shared by the server
 // (server/utils/rule-formats.ts, server/utils/deck-validation.ts) and the UI
-// (app/pages/formate/**, app/pages/decks/[id].vue) so both agree on what a
+// (app/pages/formats/**, app/pages/decks/[id].vue) so both agree on what a
 // rule means. Intentionally dependency-free: no Drizzle, no h3, no Vue — the
 // only import is the equally pure deck-section vocabulary.
 //

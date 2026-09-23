@@ -17,7 +17,7 @@ afterEach(() => {
 
 describe('default layout navigation and user block', () => {
   it('lists "Wunschliste" in the nav and keeps a "Profil" button next to "Abmelden"', async () => {
-    const component = await mountSuspended(DefaultLayout, { route: '/inventar' })
+    const component = await mountSuspended(DefaultLayout, { route: '/inventory' })
 
     expect(component.text()).toContain('Wunschliste')
 
@@ -26,8 +26,8 @@ describe('default layout navigation and user block', () => {
     expect(component.findAll('button').some(button => button.text().includes('Abmelden'))).toBe(true)
   })
 
-  it('keeps collections out of the sidebar, even on /inventar (#41)', async () => {
-    const component = await mountSuspended(DefaultLayout, { route: '/inventar' })
+  it('keeps collections out of the sidebar, even on /inventory (#41)', async () => {
+    const component = await mountSuspended(DefaultLayout, { route: '/inventory' })
 
     // Collection management lives on the inventory page now.
     expect(component.text()).not.toContain('SAMMLUNGEN')

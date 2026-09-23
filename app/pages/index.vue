@@ -47,8 +47,8 @@ const cards = computed<OnboardingCard[]>(() => [
     count: inventoryCount.value,
     description: pluralize(inventoryCount.value, 'Karte im Bestand', 'Karten im Bestand'),
     cta: 'Karten erfassen',
-    to: '/inventar/erfassen',
-    listTo: '/inventar',
+    to: '/inventory/quick-entry',
+    listTo: '/inventory',
   },
   {
     icon: 'i-lucide-layers',
@@ -56,7 +56,7 @@ const cards = computed<OnboardingCard[]>(() => [
     count: deckCount.value,
     description: pluralize(deckCount.value, 'angelegtes Deck', 'angelegte Decks'),
     cta: 'Deck anlegen',
-    to: '/decks?neu=1',
+    to: '/decks?new=1',
     listTo: '/decks',
   },
   {
@@ -65,8 +65,8 @@ const cards = computed<OnboardingCard[]>(() => [
     count: tournamentCount.value,
     description: pluralize(tournamentCount.value, 'Turnier', 'Turniere'),
     cta: 'Turnier anlegen',
-    to: '/turniere/neu',
-    listTo: '/turniere',
+    to: '/tournaments/new',
+    listTo: '/tournaments',
   },
 ])
 </script>
@@ -90,7 +90,7 @@ const cards = computed<OnboardingCard[]>(() => [
         <UButton
           icon="i-lucide-zap"
           label="Karten erfassen"
-          to="/inventar/erfassen"
+          to="/inventory/quick-entry"
         />
       </template>
     </UAlert>

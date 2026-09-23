@@ -3,6 +3,11 @@ import { getAuthSession } from '~/utils/session'
 
 const PUBLIC_PAGES = new Set(['/login', '/register'])
 
+// 00.legacy-routes.global.ts MUST run before this middleware (global
+// middleware runs in file-name order): isPublicPath only knows the English
+// /players/** paths, so an old /spieler/** share link has to be rewritten
+// first or an anonymous visitor would be sent to /login.
+
 export default defineNuxtRouteMiddleware(async (to) => {
   // While hydrating a server-rendered page, the server already made the auth
   // decision for this document. A second check on the client could disagree

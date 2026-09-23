@@ -102,7 +102,7 @@ const editingDeck = ref<DeckListItem | null>(null)
 
 const isShareOpen = ref(false)
 const sharingDeck = ref<DeckListItem | null>(null)
-const sharePath = computed(() => `/spieler/${ownProfile.value?.handle ?? ''}/decks/${sharingDeck.value?.id ?? ''}`)
+const sharePath = computed(() => `/players/${ownProfile.value?.handle ?? ''}/decks/${sharingDeck.value?.id ?? ''}`)
 
 function openShare(deck: DeckListItem) {
   sharingDeck.value = deck
@@ -125,10 +125,10 @@ function openCreate() {
   isFormOpen.value = true
 }
 
-// `/decks?neu=1` (dashboard "Deck anlegen") opens the create modal right
+// `/decks?new=1` (dashboard "Deck anlegen") opens the create modal right
 // away; the query is dropped so a reload or back-navigation doesn't reopen it.
 onMounted(() => {
-  if (route.query.neu === '1') {
+  if (route.query.new === '1') {
     openCreate()
     navigateTo({ query: {} }, { replace: true })
   }
@@ -205,7 +205,7 @@ function menuItemsFor(deck: DeckListItem) {
       label: 'Teilen',
       icon: 'i-lucide-share-2',
       // Without a loaded handle, sharePath would resolve to a broken
-      // `/spieler//decks/:id` link — keep the entry disabled until then.
+      // `/players//decks/:id` link — keep the entry disabled until then.
       disabled: !ownProfile.value?.handle,
       onSelect: () => openShare(deck),
     },
@@ -253,7 +253,7 @@ function statusColor(deck: DeckListItem) {
           color="neutral"
           variant="outline"
           label="Mit KI erstellen"
-          to="/assistent?intent=new-deck"
+          to="/assistant?intent=new-deck"
         />
         <UButton
           icon="i-lucide-plus"

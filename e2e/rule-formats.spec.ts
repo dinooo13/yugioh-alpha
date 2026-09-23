@@ -22,12 +22,12 @@ test.describe('rule formats', () => {
     }
 
     // --- Create a custom format --------------------------------------------
-    await page.goto('/formate')
+    await page.goto('/formats')
     await expect(page.getByRole('heading', { name: 'Offizielle Formate' })).toBeVisible()
     await expect(page.getByText('Noch keine eigenen Formate')).toBeVisible()
 
     await page.getByRole('link', { name: 'Neues Format' }).first().click()
-    await expect(page).toHaveURL('/formate/neu')
+    await expect(page).toHaveURL('/formats/new')
 
     await page.getByLabel('Formatname').fill('Nur alte Karten')
 
@@ -51,7 +51,7 @@ test.describe('rule formats', () => {
     await expect(page.getByText('Verboten: Pot of Greed')).toBeVisible()
 
     await page.getByRole('button', { name: 'Format erstellen' }).click()
-    await expect(page).toHaveURL('/formate')
+    await expect(page).toHaveURL('/formats')
     await expect(page.getByRole('heading', { name: 'Nur alte Karten' })).toBeVisible()
 
     // --- Build a deck ------------------------------------------------------
@@ -115,7 +115,7 @@ test.describe('rule formats', () => {
     await expect(deckCard.getByText('Nicht legal')).toBeVisible()
 
     // --- Delete the custom format ------------------------------------------
-    await page.goto('/formate')
+    await page.goto('/formats')
     await expect(page.getByRole('heading', { name: 'Offizielle Formate' })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Meine Formate' })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'TCG Advanced' })).toBeVisible()
@@ -133,7 +133,7 @@ test.describe('rule formats', () => {
   test('keeps built-in formats read-only but clonable', async ({ page }) => {
     await registerAndLogin(page)
 
-    await page.goto('/formate/goat')
+    await page.goto('/formats/goat')
     await expect(page.getByRole('heading', { name: 'GOAT Format' })).toBeVisible()
     await expect(page.getByText('Offizielle Banliste (GOAT)')).toBeVisible()
     await expect(page.getByText('Nur Karten bis Juni 2005')).toBeVisible()
@@ -141,14 +141,14 @@ test.describe('rule formats', () => {
     await expect(page.getByRole('button', { name: 'Speichern' })).toHaveCount(0)
 
     await page.getByRole('button', { name: 'Klonen' }).click()
-    await expect(page).toHaveURL(/\/formate\/[0-9a-f-]{36}$/)
+    await expect(page).toHaveURL(/\/formats\/[0-9a-f-]{36}$/)
     await expect(page.getByLabel('Formatname')).toHaveValue('GOAT Format (Kopie)')
 
     // The clone is editable and lands in "Meine Formate".
     await page.getByLabel('Formatname').fill('Mein GOAT')
     await page.getByRole('button', { name: 'Speichern' }).click()
 
-    await expect(page).toHaveURL('/formate')
+    await expect(page).toHaveURL('/formats')
     await expect(page.getByRole('heading', { name: 'Mein GOAT' })).toBeVisible()
   })
 })

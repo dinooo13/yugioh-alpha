@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Editor for a rule format: name, description, and a list of typed rules.
-// Shared by /formate/neu (create), /formate/:id (edit), and the read-only
+// Shared by /formats/new (create), /formats/:id (edit), and the read-only
 // view of a built-in format. Every rule renders a live German summary from
 // the same `describeRule` the rest of the app uses, so the editor and the
 // deck validation can never describe a rule differently.

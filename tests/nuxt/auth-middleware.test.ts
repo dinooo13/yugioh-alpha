@@ -72,10 +72,10 @@ describe('auth route middleware', () => {
       nuxtApp.isHydrating = true
       nuxtApp.payload.serverRendered = false
 
-      await runMiddleware('/inventar')
+      await runMiddleware('/inventory')
 
       expect(getAuthSession).toHaveBeenCalledTimes(1)
-      expect(navigateToMock).toHaveBeenCalledWith({ path: '/login', query: { redirect: '/inventar' } })
+      expect(navigateToMock).toHaveBeenCalledWith({ path: '/login', query: { redirect: '/inventory' } })
     }
     finally {
       nuxtApp.isHydrating = wasHydrating
