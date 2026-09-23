@@ -24,6 +24,12 @@ test.describe('responsive layout at 390px', () => {
 
     const tournamentResponse = await page.request.post('/api/tournaments', { data: { name: 'Mobile-Test-Turnier' } })
     expect(tournamentResponse.ok()).toBe(true)
+
+    // An owned card so /inventar renders real list rows, not just the empty state.
+    const inventoryResponse = await page.request.post('/api/inventory', {
+      data: { catalog_card_id: DARK_MAGICIAN, quantity: 1 },
+    })
+    expect(inventoryResponse.ok()).toBe(true)
     const tournament = await tournamentResponse.json() as { id: string }
 
     const routes = ['/inventar', `/decks/${deck.id}`, `/turniere/${tournament.id}`, '/katalog']
@@ -41,6 +47,61 @@ test.describe('responsive layout at 390px', () => {
       }))
       expect(scrollWidth, `${route} should not scroll horizontally at 390px`).toBeLessThanOrEqual(clientWidth)
     }
+  })
+
+  // UX feedback: the "Liste" table collapsed its name column to 0px at 390px
+  // and both views cropped the card art. Measures CSS boxes only — images are
+  // hotlinked, so their natural size isn't reliable in CI.
+  test('inventar Liste und Übersicht sind bei 390px nutzbar', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await registerAndLogin(page)
+
+    const inventoryResponse = await page.request.post('/api/inventory', {
+      data: { catalog_card_id: DARK_MAGICIAN, quantity: 3 },
+    })
+    expect(inventoryResponse.ok()).toBe(true)
+
+    await page.goto('/inventar')
+    await page.waitForLoadState('networkidle')
+
+    // Liste (default view)
+    const name = page.getByText('Dark Magician', { exact: true }).first()
+    await expect(name).toBeVisible()
+    const nameBox = await name.boundingBox()
+    expect(nameBox!.width).toBeGreaterThanOrEqual(100)
+
+    await expect(page.getByRole('combobox', { name: 'Sammlung für Dark Magician' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Karte bearbeiten' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Karte entfernen' })).toBeVisible()
+
+    const thumbnailBox = await page.getByRole('img', { name: 'Dark Magician' }).first().boundingBox()
+    expect(thumbnailBox).not.toBeNull()
+    expect(thumbnailBox!.width / thumbnailBox!.height).toBeGreaterThan(0.686 - 0.03)
+    expect(thumbnailBox!.width / thumbnailBox!.height).toBeLessThan(0.686 + 0.03)
+
+    const listOverflow = await page.locator('ul:has([aria-label="Sammlung für Dark Magician"])').evaluate(el => ({
+      scrollWidth: el.scrollWidth,
+      clientWidth: el.clientWidth,
+    }))
+    expect(listOverflow.scrollWidth).toBeLessThanOrEqual(listOverflow.clientWidth)
+
+    const documentOverflow = await page.evaluate(() => ({
+      scrollWidth: document.documentElement.scrollWidth,
+      clientWidth: document.documentElement.clientWidth,
+    }))
+    expect(documentOverflow.scrollWidth).toBeLessThanOrEqual(documentOverflow.clientWidth)
+
+    // Übersicht
+    await page.getByRole('button', { name: 'Übersicht' }).click()
+    const tile = page.getByRole('button', { name: 'Dark Magician vergrößern' })
+    await expect(tile).toBeVisible()
+    const tileBox = await tile.boundingBox()
+    expect(tileBox!.width).toBeGreaterThanOrEqual(150)
+    await expect(page.getByText('×3 ges.')).toBeVisible()
+
+    await tile.click()
+    const preview = page.getByRole('dialog')
+    await expect(preview.getByRole('link', { name: 'Im Katalog öffnen' })).toBeVisible()
   })
 
   test('hamburger opens a drawer with navigation and the user block', async ({ page }) => {

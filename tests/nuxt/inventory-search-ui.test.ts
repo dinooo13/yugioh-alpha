@@ -1,6 +1,17 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { DOMWrapper } from '@vue/test-utils'
+import { nextTick } from 'vue'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
 import InventarPage from '~/pages/inventar/index.vue'
+
+// UModal teleports its content to <body> (same note as in katalog-page.test.ts).
+function body() {
+  return new DOMWrapper(document.body)
+}
+
+afterEach(() => {
+  document.body.innerHTML = ''
+})
 
 interface SearchCollectionBreakdown {
   collectionId: string | null
@@ -18,6 +29,7 @@ interface SearchResultItem {
   atk: number | null
   def: number | null
   imageSmall: string | null
+  imageLarge: string | null
   totalQuantity: number
   collectionBreakdown?: SearchCollectionBreakdown[]
 }
@@ -47,12 +59,13 @@ const state = vi.hoisted(() => ({
     editions: [] as string[],
   },
   routeQuery: {} as Record<string, string>,
+  searchPending: false,
 }))
 
 mockNuxtImport('useFetch', () => {
   return (url: string) => {
     if (url === '/api/inventory/search') {
-      return { data: ref(state.search), pending: ref(false), error: ref(null), refresh: vi.fn() }
+      return { data: ref(state.search), pending: ref(state.searchPending), error: ref(null), refresh: vi.fn() }
     }
     if (url === '/api/inventory/search/facets') {
       return { data: ref(state.facets), pending: ref(false), refresh: vi.fn() }
@@ -95,7 +108,8 @@ describe('inventory search panel (Übersicht)', () => {
           level: 8,
           atk: 3000,
           def: 2500,
-          imageSmall: null,
+          imageSmall: 'https://images.example/bewd-small.jpg',
+          imageLarge: 'https://images.example/bewd.jpg',
           totalQuantity: 5,
           collectionBreakdown: [
             { collectionId: 'box-1', collectionName: 'Box 1', quantity: 3 },
@@ -125,6 +139,36 @@ describe('inventory search panel (Übersicht)', () => {
     expect(text).toContain('×5 ges.')
     expect(text).toContain('Box 1 ×3')
     expect(text).toContain('(keine Sammlung) ×2')
+
+    // Tiles show the full-size scan, with the small one offered via srcset.
+    const image = component.find('img[alt="Blue-Eyes White Dragon"]')
+    expect(image.attributes('src')).toBe('https://images.example/bewd.jpg')
+    expect(image.attributes('srcset')).toContain('https://images.example/bewd-small.jpg')
+    expect(image.classes()).toContain('object-contain')
+
+    // Clicking the artwork opens the preview modal with a catalog link.
+    await component.find('[aria-label="Blue-Eyes White Dragon vergrößern"]').trigger('click')
+    await nextTick()
+    await vi.waitFor(() => {
+      expect(body().find('a[href="/katalog?card=89631139"]').exists()).toBe(true)
+    })
+    expect(body().text()).toContain('Im Katalog öffnen')
+  })
+
+  it('renders tile skeletons while the search is loading', async () => {
+    state.inventory = { items: [], total: 0 }
+    state.routeQuery = {}
+    state.facets = { ...emptyFacets }
+    state.search = { items: [], total: 0, page: 1, pageSize: 24 }
+    state.searchPending = true
+
+    const component = await mountSuspended(InventarPage)
+    await openUebersicht(component)
+
+    expect(component.findAll('.aspect-\\[59\\/86\\].rounded-lg')).toHaveLength(12)
+    expect(component.text()).not.toContain('Inventar ist leer')
+
+    state.searchPending = false
   })
 
   it('shows "Inventar ist leer" when there is no active filter and no results', async () => {

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { InventorySearchFilters } from '~/components/inventory/InventorySearchPanel.vue'
 import { apiErrorMessage } from '~/utils/card-entry'
+import type { InventorySearchResultItem } from '~/utils/inventory-search-result'
 
 interface InventoryItem {
   id: string
@@ -44,25 +45,7 @@ interface SearchFilters extends InventorySearchFilters {
   page: number
 }
 
-interface SearchCollectionBreakdown {
-  collectionId: string | null
-  collectionName: string | null
-  quantity: number
-}
-
-interface SearchResultItem {
-  catalogCardId: number
-  name: string
-  type: string
-  attribute: string | null
-  race: string | null
-  level: number | null
-  atk: number | null
-  def: number | null
-  imageSmall: string | null
-  totalQuantity: number
-  collectionBreakdown?: SearchCollectionBreakdown[]
-}
+type SearchResultItem = InventorySearchResultItem
 
 interface SearchResponse {
   items: SearchResultItem[]
@@ -353,6 +336,15 @@ async function removeItem(item: InventoryItem) {
   }
 }
 
+// "Übersicht": clicking a tile's artwork opens the full-size card.
+const previewItem = ref<SearchResultItem | null>(null)
+const isPreviewOpen = ref(false)
+
+function openPreview(item: SearchResultItem) {
+  previewItem.value = item
+  isPreviewOpen.value = true
+}
+
 async function onSaved() {
   await Promise.all([refresh(), refreshCollections(), refreshSearch(), refreshFacets()])
 }
@@ -449,20 +441,23 @@ async function onSaved() {
         {{ searchTotal }} Karte<span v-if="searchTotal !== 1">n</span>
       </p>
 
-      <div class="overflow-hidden rounded-md border border-gray-200 bg-white">
-        <div
-          v-if="searchPending"
-          class="space-y-3 p-4"
-        >
-          <USkeleton
-            v-for="n in 4"
-            :key="n"
-            class="h-14 w-full"
-          />
-        </div>
+      <div
+        v-if="searchPending"
+        class="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 xl:grid-cols-4"
+      >
+        <USkeleton
+          v-for="n in 12"
+          :key="n"
+          class="aspect-[59/86] rounded-lg"
+        />
+      </div>
 
+      <div
+        v-else-if="searchError || searchItems.length === 0"
+        class="overflow-hidden rounded-md border border-gray-200 bg-white"
+      >
         <UAlert
-          v-else-if="searchError"
+          v-if="searchError"
           color="error"
           variant="subtle"
           title="Die Suche konnte nicht geladen werden"
@@ -481,7 +476,7 @@ async function onSaved() {
         </UAlert>
 
         <div
-          v-else-if="searchItems.length === 0 && !hasAnyFilter"
+          v-else-if="!hasAnyFilter"
           class="flex flex-col items-center px-6 py-12 text-center"
         >
           <div class="flex size-12 items-center justify-center rounded-full bg-gray-100 text-gray-500">
@@ -505,7 +500,7 @@ async function onSaved() {
         </div>
 
         <div
-          v-else-if="searchItems.length === 0"
+          v-else
           class="flex flex-col items-center px-6 py-12 text-center"
         >
           <div class="flex size-12 items-center justify-center rounded-full bg-gray-100 text-gray-500">
@@ -521,17 +516,18 @@ async function onSaved() {
             Passe die Suche oder die Filter an, um mehr Karten zu finden.
           </p>
         </div>
+      </div>
 
-        <div
-          v-else
-          class="divide-y divide-gray-100"
-        >
-          <InventoryResultRow
-            v-for="result in searchItems"
-            :key="result.catalogCardId"
-            :item="result"
-          />
-        </div>
+      <div
+        v-else
+        class="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 xl:grid-cols-4"
+      >
+        <InventoryCardTile
+          v-for="result in searchItems"
+          :key="result.catalogCardId"
+          :item="result"
+          @preview="openPreview(result)"
+        />
       </div>
 
       <div
@@ -553,12 +549,24 @@ async function onSaved() {
       class="space-y-4"
     >
       <div class="overflow-hidden rounded-md border border-gray-200 bg-white">
-        <div
+        <ul
           v-if="pending"
-          class="p-6 text-sm text-gray-500"
+          class="divide-y divide-gray-100"
+          aria-busy="true"
+          aria-label="Inventar wird geladen"
         >
-          Inventar wird geladen...
-        </div>
+          <li
+            v-for="n in 5"
+            :key="n"
+            class="flex items-center gap-3 px-4 py-3"
+          >
+            <USkeleton class="aspect-[59/86] w-16 shrink-0 rounded sm:w-12" />
+            <div class="flex-1 space-y-2">
+              <USkeleton class="h-4 w-1/2" />
+              <USkeleton class="h-3 w-1/3" />
+            </div>
+          </li>
+        </ul>
 
         <div
           v-else-if="items.length === 0"
@@ -584,111 +592,23 @@ async function onSaved() {
           />
         </div>
 
-        <div
+        <ul
           v-else
-          class="overflow-x-auto"
+          class="divide-y divide-gray-100"
         >
-          <table
-            class="w-full table-fixed divide-y divide-gray-200"
-          >
-            <thead class="bg-gray-50">
-              <tr class="text-left text-xs font-semibold uppercase text-gray-500">
-                <th class="w-16 px-4 py-3">
-                  Bild
-                </th>
-                <th class="px-4 py-3">
-                  Karte
-                </th>
-                <th class="w-20 px-4 py-3">
-                  Sprache
-                </th>
-                <th class="w-28 px-4 py-3">
-                  Auflage
-                </th>
-                <th class="w-24 px-4 py-3">
-                  Zustand
-                </th>
-                <th class="w-20 px-4 py-3 text-right">
-                  Anzahl
-                </th>
-                <th class="w-40 px-4 py-3">
-                  Sammlung
-                </th>
-                <th class="w-24 px-4 py-3 text-right">
-                  Aktionen
-                </th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-100">
-              <tr
-                v-for="item in items"
-                :key="item.id"
-                class="text-sm"
-              >
-                <td class="px-4 py-3">
-                  <img
-                    v-if="item.imageUrlSmall"
-                    :src="item.imageUrlSmall"
-                    :alt="item.cardName"
-                    class="h-14 w-10 rounded object-cover"
-                  >
-                  <div
-                    v-else
-                    class="flex h-14 w-10 items-center justify-center rounded bg-gray-100 text-xs text-gray-400"
-                  >
-                    —
-                  </div>
-                </td>
-                <td class="min-w-0 px-4 py-3">
-                  <div class="truncate font-medium text-gray-900">
-                    {{ item.cardName }}
-                  </div>
-                  <div class="truncate text-xs text-gray-500">
-                    {{ item.cardType }}<span v-if="item.setName"> · {{ item.setName }}</span>
-                  </div>
-                </td>
-                <td class="px-4 py-3 uppercase text-gray-700">
-                  {{ item.language }}
-                </td>
-                <td class="px-4 py-3 text-gray-700">
-                  {{ editionLabels[item.edition] ?? item.edition }}
-                </td>
-                <td class="px-4 py-3 text-gray-700">
-                  {{ conditionLabels[item.condition] ?? item.condition }}
-                </td>
-                <td class="px-4 py-3 text-right font-semibold tabular-nums text-gray-900">
-                  ×{{ item.quantity }}
-                </td>
-                <td class="px-4 py-3">
-                  <USelect
-                    :model-value="item.collectionId ?? noAssignmentValue"
-                    :items="assignItems"
-                    :aria-label="`Sammlung für ${item.cardName}`"
-                    @update:model-value="(value: string) => assignToCollection(item, value)"
-                  />
-                </td>
-                <td class="px-4 py-3">
-                  <div class="flex justify-end gap-1">
-                    <UButton
-                      icon="i-lucide-pencil"
-                      color="neutral"
-                      variant="ghost"
-                      aria-label="Karte bearbeiten"
-                      @click="openEdit(item)"
-                    />
-                    <UButton
-                      icon="i-lucide-trash-2"
-                      color="error"
-                      variant="ghost"
-                      aria-label="Karte entfernen"
-                      @click="removeItem(item)"
-                    />
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+          <InventoryListRow
+            v-for="item in items"
+            :key="item.id"
+            :item="item"
+            :assign-items="assignItems"
+            :no-assignment-value="noAssignmentValue"
+            :edition-labels="editionLabels"
+            :condition-labels="conditionLabels"
+            @assign="(value: string) => assignToCollection(item, value)"
+            @edit="openEdit(item)"
+            @remove="removeItem(item)"
+          />
+        </ul>
       </div>
 
       <div
@@ -730,6 +650,11 @@ async function onSaved() {
         note: editingItem.note,
       }"
       @saved="onSaved"
+    />
+
+    <InventoryCardPreviewModal
+      v-model:open="isPreviewOpen"
+      :item="previewItem"
     />
   </div>
 </template>
