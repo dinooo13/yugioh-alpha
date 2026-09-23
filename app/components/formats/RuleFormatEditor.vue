@@ -583,26 +583,26 @@ async function save() {
                 v-model="rule.match"
                 :items="matchItems"
                 :disabled="readonly"
-                class="w-72"
+                class="w-full sm:w-72"
                 aria-label="Filterrichtung"
               />
               <USelect
                 v-model="rule.maxCopies"
                 :items="maxCopiesItems"
                 :disabled="readonly"
-                class="w-48"
+                class="w-full sm:w-48"
                 aria-label="Erlaubte Kopien"
               />
               <UInput
                 v-model="rule.label"
-                class="w-64"
+                class="w-full sm:w-64"
                 :disabled="readonly"
                 placeholder="Bezeichnung (optional)"
                 aria-label="Regelbezeichnung"
               />
             </div>
 
-            <div class="grid gap-3 sm:grid-cols-2">
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <USelectMenu
                 v-model="rule.filter.types"
                 multiple
@@ -610,6 +610,7 @@ async function save() {
                 :disabled="readonly"
                 placeholder="Kartentypen"
                 aria-label="Kartentypen"
+                class="w-full min-w-0"
               />
               <USelectMenu
                 v-model="rule.filter.attributes"
@@ -618,6 +619,7 @@ async function save() {
                 :disabled="readonly"
                 placeholder="Attribute"
                 aria-label="Attribute"
+                class="w-full min-w-0"
               />
               <USelectMenu
                 v-model="rule.filter.races"
@@ -626,6 +628,7 @@ async function save() {
                 :disabled="readonly"
                 placeholder="Arten"
                 aria-label="Arten"
+                class="w-full min-w-0"
               />
               <USelectMenu
                 v-model="rule.filter.setIds"
@@ -635,6 +638,7 @@ async function save() {
                 :disabled="readonly"
                 placeholder="Sets"
                 aria-label="Sets"
+                class="w-full min-w-0"
               />
             </div>
 
