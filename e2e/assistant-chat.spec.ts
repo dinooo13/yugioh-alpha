@@ -109,6 +109,78 @@ test.describe('Chat assistant', () => {
     await expect(firstConversationItem).toHaveCount(0)
   })
 
+  // Regression: the end of every assistant turn used to hide the whole
+  // thread behind a loading state while re-syncing, so it was torn down and
+  // remounted at scrollTop 0 — whenever an action card showed up, the user
+  // was thrown back to the top of the conversation.
+  for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 800 }]) {
+    test(`action card appears without scrolling the page or resetting the thread (${viewport.width}x${viewport.height})`, async ({ page }) => {
+      await page.setViewportSize(viewport)
+      await registerAndLogin(page)
+
+      const createResponse = await page.request.post('/api/assistant/chat')
+      expect(createResponse.ok()).toBe(true)
+      const { id } = await createResponse.json() as { id: string }
+      await page.goto(`/assistent/${id}`)
+
+      const nachricht = page.getByLabel('Nachricht', { exact: true })
+      const senden = page.getByRole('button', { name: 'Senden', exact: true })
+      const thread = page.getByTestId('assistant-thread')
+
+      async function sendAndWait(text: string, answer: string) {
+        await nachricht.fill(text)
+        await senden.click()
+        await expect(page.getByText(answer).last()).toBeVisible()
+        await expect(nachricht).toBeEnabled()
+      }
+
+      // Enough plain back-and-forth (the fake provider just echoes these)
+      // that the thread has to scroll.
+      for (let index = 1; index <= 6; index++) {
+        const filler = `Erzähl mir bitte etwas Längeres über das Kartenspiel, damit der Verlauf ordentlich wächst. Nachricht ${index}`
+        await sendAndWait(filler, `Testantwort: ${filler}`)
+      }
+      await sendAndWait('suche Dark Magician', 'Ich habe 1 Karte gefunden: Dark Magician')
+
+      expect(await thread.evaluate(el => el.scrollHeight > el.clientHeight)).toBe(true)
+
+      // Survives only if the thread element is never unmounted/remounted.
+      await thread.evaluate((el) => {
+        el.dataset.marker = '1'
+      })
+
+      await nachricht.fill('füge 2 hinzu')
+      await senden.click()
+      await expect(page.getByText('Wartet auf Bestätigung')).toBeVisible()
+      await expect(nachricht).toBeEnabled()
+
+      async function expectPageDoesNotScroll() {
+        const page_ = await page.evaluate(() => ({
+          scrollHeight: document.documentElement.scrollHeight,
+          innerHeight: window.innerHeight,
+          scrollY: window.scrollY,
+          scrollWidth: document.documentElement.scrollWidth,
+          clientWidth: document.documentElement.clientWidth,
+        }))
+        expect(page_.scrollHeight).toBeLessThanOrEqual(page_.innerHeight)
+        expect(page_.scrollY).toBe(0)
+        expect(page_.scrollWidth).toBeLessThanOrEqual(page_.clientWidth)
+      }
+
+      await expectPageDoesNotScroll()
+      await expect(thread).toHaveAttribute('data-marker', '1')
+      expect(await thread.evaluate(el => el.scrollHeight - el.scrollTop - el.clientHeight)).toBeLessThanOrEqual(2)
+
+      const uebernehmen = page.getByRole('button', { name: 'Übernehmen', exact: true })
+      await expect(uebernehmen).toBeInViewport()
+      await uebernehmen.click()
+      await expect(page.getByText('Übernommen')).toBeVisible()
+
+      await expectPageDoesNotScroll()
+      await expect(thread).toHaveAttribute('data-marker', '1')
+    })
+  }
+
   test('/inventar/erfassen points to the assistant instead of offering its own Foto/Sprache modes', async ({ page }) => {
     await registerAndLogin(page)
     await page.goto('/inventar/erfassen')
