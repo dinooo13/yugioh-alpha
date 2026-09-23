@@ -39,7 +39,12 @@ watch(conversationId, () => {
   load()
 })
 
+const thread = ref<{ stickToBottom: () => void } | null>(null)
+
 async function sendMessage(payload: { text: string, images: string[] }) {
+  // Sending always brings the thread back to its end (and keeps following
+  // the reply), even if the user had scrolled up to reread something.
+  thread.value?.stickToBottom()
   await send(payload)
   // The conversation's title (derived from its first message) and its
   // position in the list (most-recently-updated first) can both change
@@ -147,6 +152,7 @@ async function onDeleted(id: string) {
 
         <template v-else-if="!isLoading">
           <AssistantMessageThread
+            ref="thread"
             :timeline="timeline"
             @action-updated="updateAction"
           />
