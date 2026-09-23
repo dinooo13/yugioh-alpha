@@ -30,7 +30,7 @@ See [`.env.example`](./.env.example) for all available variables:
 - `NUXT_DB_FILE_PATH` - path to the SQLite database file (default: `./data/app.db`; the directory is created automatically)
 - `NUXT_ASSISTANT_API_KEY` - API key for the chat assistant (optional; falls back to `OPENAI_API_KEY`). Without a key or a custom base URL the feature is disabled and the UI shows a notice instead.
 - `NUXT_ASSISTANT_PROVIDER` / `NUXT_ASSISTANT_BASE_URL` / `NUXT_ASSISTANT_MODEL` / `NUXT_ASSISTANT_REASONING_EFFORT` - override the assistant's provider (`openai` / `fake`), the OpenAI-compatible endpoint's base URL, the model id, and an optional `reasoning_effort` some gateways (e.g. OpenCode Go) require; see [`.env.example`](./.env.example)
-- `NUXT_ASSISTANT_VISION_MODEL` - optional override model for chat turns that include an image (the chat assistant at `/assistent`, see below); leave empty to use `NUXT_ASSISTANT_MODEL` for those turns too
+- `NUXT_ASSISTANT_VISION_MODEL` - optional override model for chat turns that include an image (the chat assistant at `/assistant`, see below); leave empty to use `NUXT_ASSISTANT_MODEL` for those turns too
 
 ## Development
 
@@ -87,7 +87,7 @@ name contains a known id from Omega's copied `db.sqlite`.
 
 ## Schnellerfassung
 
-`/inventar/erfassen` adds many cards at once from a pasted or typed list, and
+`/inventory/quick-entry` adds many cards at once from a pasted or typed list, and
 nothing is written before it has been confirmed:
 
 - **Liste** – one card per line. Quantities (`3x Dark Magician`,
@@ -103,7 +103,7 @@ match. Language, condition, edition, and collection come from a
 `POST /api/inventory/bulk` in batches of 50, each batch in one transaction.
 
 Recognizing a card from a photo now lives in the chat assistant
-(`/assistent`, see below) instead of its own modes here
+(`/assistant`, see below) instead of its own modes here
 — see [`docs/adr/0010-chat-assistant-with-tools.md`](./docs/adr/0010-chat-assistant-with-tools.md)
 (supersedes [`docs/adr/0003`](./docs/adr/0003-client-side-ocr-and-speech-entry.md)).
 
@@ -139,7 +139,7 @@ card in a forbidden section) are rejected.
 ## Formate
 
 Rule formats decide which cards and how many copies a deck may play. They live
-under `/formate` and are split into two groups:
+under `/formats` and are split into two groups:
 
 - **Offizielle Formate** — built-in, globally available, and read-only:
   `TCG Advanced`, `OCG`, `GOAT Format`, and `Ohne Banliste`. They are upserted
@@ -147,7 +147,7 @@ under `/formate` and are split into two groups:
   so improved rules ship with a deploy instead of a data migration. Anybody can
   clone a built-in ("Klonen") to get an editable copy.
 - **Meine Formate** — the user's own formats, created in the editor at
-  `/formate/neu` and editable, duplicable, and deletable. Deleting a format
+  `/formats/new` and editable, duplicable, and deletable. Deleting a format
   keeps every deck that used it and only resets that deck's format to "none".
 
 A format is a list of typed rules (max 50) stored as JSON and evaluated in code
@@ -198,12 +198,12 @@ and legality. The format editor can check any of the user's decks against the
 
 Deck building with AI help happens in the [Assistent](#assistent) chat —
 "Mit KI erstellen" on `/decks` and "Mit KI bearbeiten" in the deck editor
-both open `/assistent`. See
+both open `/assistant`. See
 [`docs/adr/0011-deck-assistance-in-chat.md`](./docs/adr/0011-deck-assistance-in-chat.md).
 
 ## Assistent
 
-`/assistent` is a persisted, multi-turn chat with tools over the user's own
+`/assistant` is a persisted, multi-turn chat with tools over the user's own
 catalog, inventory, and decks — it replaced the Foto and Sprache modes of
 [Schnellerfassung](#schnellerfassung) and is also the app's deck assistant.
 Every conversation is saved and listed in a sidebar (titled from its first
@@ -262,11 +262,11 @@ and [`docs/adr/0009-openai-compatible-assistant-provider.md`](./docs/adr/0009-op
 
 ## Teilen & Profile
 
-Every user has a public profile at `/spieler/<Nutzername>`, editable under `/profil` (display
+Every user has a public profile at `/players/<Nutzername>`, editable under `/profile` (display
 name, username/handle, bio). Decks, single collections, and the whole inventory ("Alle Karten")
 can each be shared independently by setting a visibility — `Privat`, `Nur über Link`, or
 `Öffentlich` — plus, orthogonally, granting access to specific players by username through the
-same "Teilen" modal. A link-shared or public resource is reachable at its `/spieler/<Nutzername>/...`
+same "Teilen" modal. A link-shared or public resource is reachable at its `/players/<Nutzername>/...`
 URL (with `?token=` for link sharing); an unknown, private, or revoked resource always renders the
 same "Nicht gefunden oder nicht freigegeben." card, so nothing about its existence leaks through
 the UI.
@@ -279,7 +279,7 @@ paginated, without notes, condition, or language. See
 
 ## Wunschliste
 
-`/wunschliste` is a personal "cards I'm looking for" list, added from the catalog with a
+`/wishlist` is a personal "cards I'm looking for" list, added from the catalog with a
 "Zur Wunschliste" toggle on each card. Each entry has a quantity and an optional note (e.g. "1st
 Edition bitte"). A profile setting ("Wunschliste öffentlich zeigen") publishes the list — with its
 notes, but never the owned-copy counts that are private inventory information — on the public
@@ -289,7 +289,7 @@ this phase; see
 
 ## Turniere
 
-Tournaments live under `/turniere`. A tournament has one organizer, who creates
+Tournaments live under `/tournaments`. A tournament has one organizer, who creates
 it, picks a rule format (or none) and a pairing system (`Schweizer System` or
 `Jeder gegen jeden`), and adds participants either as linked app users (by
 exact e-mail match) or as free-text guests. Registering a deck for a
@@ -331,7 +331,7 @@ pnpm test:e2e
 The Playwright `webServer` boots with `NUXT_E2E_SEED_CATALOG=1`, which makes `server/plugins/migrate.ts`
 upsert a small, deterministic set of ~14 real cards (`server/db/fixtures/catalog-fixture.ts`) after
 migrations — this never happens outside of E2E runs. Specs can register a user (see
-`e2e/helpers/auth.ts`) and search/filter the catalog (e.g. `/katalog`) against known cards instead of
+`e2e/helpers/auth.ts`) and search/filter the catalog (e.g. `/catalog`) against known cards instead of
 depending on a full `catalog:sync` import. Set `E2E_PORT` to run the E2E server on a port other than the
 default `3300` (useful when running `pnpm test:e2e` alongside `pnpm dev`).
 

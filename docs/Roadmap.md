@@ -217,7 +217,7 @@ Product outcome:
 Users can build decks for specific rule environments and immediately see whether a deck is legal.
 
 Implemented: built-in formats (TCG Advanced, OCG, GOAT, Ohne Banliste) plus custom formats under
-`/formate`, with live validation in the deckbuilder. See
+`/formats`, with live validation in the deckbuilder. See
 [`docs/adr/0005-rule-format-model.md`](adr/0005-rule-format-model.md).
 
 ### Phase 5: AI Deck Assistance
@@ -237,7 +237,7 @@ Product outcome:
 
 Users can get meaningful deckbuilding help that understands their collection and constraints.
 
-Implemented: deck assistance lives in the chat assistant at `/assistent` (see
+Implemented: deck assistance lives in the chat assistant at `/assistant` (see
 [Phase 8](#phase-8-chat-assistent-mit-werkzeugen)). "Mit KI erstellen" on `/decks` opens a
 conversation with a new-deck draft; "Mit KI bearbeiten" in the deck editor opens a conversation
 linked to that deck, whose current contents, format, and legality the assistant sees on every
@@ -269,10 +269,10 @@ Product outcome:
 
 Users can compare collections and decks with other players when they choose to share them.
 
-Implemented: public profiles at `/spieler/<handle>` with an editable profile under `/profil`,
+Implemented: public profiles at `/players/<handle>` with an editable profile under `/profile`,
 plus per-resource sharing (privat, nur über Link, öffentlich, oder für einzelne Spieler
 freigegeben) for decks, single collections, and the whole inventory — shared views are read-only
-and never disclose the owner's availability data. Includes a wishlist under `/wunschliste` that
+and never disclose the owner's availability data. Includes a wishlist under `/wishlist` that
 can be published on the profile. Trading is explicitly out of scope. See
 [`docs/adr/0007-sharing-and-profile-model.md`](adr/0007-sharing-and-profile-model.md).
 
@@ -295,7 +295,7 @@ Product outcome:
 
 Groups can run and track Yu-Gi-Oh tournaments using decks and formats already modeled in the app.
 
-Implemented: tournaments under `/turniere` with Swiss or round-robin pairings, participants
+Implemented: tournaments under `/tournaments` with Swiss or round-robin pairings, participants
 added as app users (by e-mail) or as guests, deck registration that snapshots the decklist and
 its legality in the selected rule format, round-by-round pairings with match result entry,
 live standings with OMW%/GW%/OGW% tiebreakers, and a history of finished tournaments. See
@@ -327,14 +327,14 @@ Blue-Eyes cards do I own", "build me a GOAT deck from what I have", "what's
 on this photo" — and have it propose changes they explicitly confirm, instead
 of switching between a deck-only builder and a text/photo/voice entry form.
 
-Implemented: a new page at `/assistent` with a persisted conversation per
+Implemented: a new page at `/assistant` with a persisted conversation per
 thread, a tool layer (`search_catalog`, `get_card`, `search_inventory`,
 `list_collections`, `list_decks`, `get_deck`, `list_formats`,
 `validate_deck`, plus the write tools `add_to_inventory`, `create_deck`,
 `update_deck_cards`, and `set_deck_format`) that only ever produces a
 pending action for a write,
 shown as an action card the user applies or rejects. Image attachments live
-in the chat composer, replacing the Foto mode `/inventar/erfassen` used to
+in the chat composer, replacing the Foto mode `/inventory/quick-entry` used to
 have (its Sprache mode was replaced by Web Speech dictation in the composer,
 since removed because it didn't work reliably); the Liste mode there is
 unchanged. Works with any OpenAI-compatible Chat Completions endpoint that
@@ -343,11 +343,33 @@ supports streaming and tool calls, with an optional
 [`docs/adr/0010-chat-assistant-with-tools.md`](adr/0010-chat-assistant-with-tools.md).
 Since [ADR 0011](adr/0011-deck-assistance-in-chat.md) the chat is also the only deck
 assistant: the one-shot `/decks/assistent` builder and the deck editor's "KI-Vorschläge"
-panel are gone, replaced by entry points into `/assistent` — a conversation can be linked to
+panel are gone, replaced by entry points into `/assistant` — a conversation can be linked to
 a deck ("Mit KI bearbeiten"), and deck proposals carry a legality/missing-cards preview.
 The recommended OpenCode Go model is `mimo-v2.6-pro` (MiMo V2.6 Pro), which
 covers text, streamed tool calls, and image turns without a separate vision
 model; see [`.env.example`](../.env.example).
+
+### Phase 9: German and English (#34)
+
+Goal: Make the app usable in English as well as German, including card names.
+
+Scope, as three stacked parts:
+
+- F1: English, language-neutral route slugs, with permanent redirects from
+  every old German URL (bookmarks and handed-out share links keep working)
+- F2: an i18n layer, a UI language switch, and extraction of the UI strings
+- F3: a card display language and bilingual card search
+
+Product outcome:
+
+Users pick the language of the interface and of card names, and a shared link
+works the same for every reader regardless of their language.
+
+Status: F1 is implemented — every page moved to an English path (`/inventory`,
+`/catalog`, `/players/<handle>`, …) and old German URLs answer with a single
+`301` to their new one. See
+[`docs/adr/0013-english-url-scheme.md`](adr/0013-english-url-scheme.md).
+F2 and F3 are open.
 
 ## Recommended Build Order
 
@@ -361,6 +383,7 @@ model; see [`.env.example`](../.env.example).
 8. Sharing and social features
 9. Tournament mode
 10. Chat assistant with tools
+11. German and English
 
 ## Key Product Principle
 
