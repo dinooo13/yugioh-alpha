@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
-import { USelect } from '#components'
+import { DecksDeckFormModal, USelect } from '#components'
 import DecksPage from '~/pages/decks/index.vue'
 import { optionLabels, selectWithOption } from './fixtures/select-wrapper'
 
@@ -20,6 +20,12 @@ interface DeckListItem {
   createdAt: string
   updatedAt: string
 }
+
+// The global auth middleware would bounce `route: '/decks?neu=1'` to /login
+// without a session — stub it so the page sees its own query.
+vi.mock('~/utils/session', () => ({
+  getAuthSession: vi.fn(() => Promise.resolve({ session: {}, user: { email: 'fabian@example.com', name: 'Fabian Meyer' } })),
+}))
 
 const state = vi.hoisted(() => ({
   decks: { items: [] as DeckListItem[], total: 0, page: 1, pageSize: 20 },
@@ -176,5 +182,25 @@ describe('decks page rule formats', () => {
       'Ohne Format',
       'TCG Advanced',
     ])
+  })
+
+  it('opens the create modal straight away for /decks?neu=1', async () => {
+    state.decks = { items: [deck()], total: 1, page: 1, pageSize: 20 }
+
+    const component = await mountSuspended(DecksPage, { route: '/decks?neu=1' })
+    await nextTick()
+
+    const modal = component.findComponent(DecksDeckFormModal)
+    expect(modal.props('open')).toBe(true)
+    expect(modal.props('initialValues')).toBeNull()
+  })
+
+  it('keeps the create modal closed without the query flag', async () => {
+    state.decks = { items: [deck()], total: 1, page: 1, pageSize: 20 }
+
+    const component = await mountSuspended(DecksPage, { route: '/decks' })
+    await nextTick()
+
+    expect(component.findComponent(DecksDeckFormModal).props('open')).toBe(false)
   })
 })

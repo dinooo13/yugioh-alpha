@@ -5,13 +5,10 @@ useHead({ title: 'Dashboard – yugioh alpha' })
 
 // Cheap counts for the onboarding cards (UX review #2) — each list endpoint
 // already reports a `total`, so a `pageSize: 1` request is enough; no need
-// for a dedicated stats endpoint.
-const { data: inventoryData } = await useFetch<{ total: number }>('/api/inventory', {
-  key: 'dashboard-inventory-count',
-  query: { page: 1, pageSize: 1 },
-  headers: import.meta.server ? useRequestHeaders(['cookie']) : undefined,
-  default: () => ({ total: 0 }),
-})
+// for a dedicated stats endpoint. The inventory count comes from the shared
+// collections fetch (already loaded by the sidebar): `allCount` sums copies,
+// whereas `/api/inventory`'s `total` counts distinct rows.
+const { data: collections } = await useCollections()
 
 const { data: decksData } = await useFetch<{ total: number }>('/api/decks', {
   key: 'dashboard-decks-count',
@@ -27,7 +24,7 @@ const { data: tournamentsData } = await useFetch<{ total: number }>('/api/tourna
   default: () => ({ total: 0 }),
 })
 
-const inventoryCount = computed(() => inventoryData.value?.total ?? 0)
+const inventoryCount = computed(() => collections.value?.allCount ?? 0)
 const deckCount = computed(() => decksData.value?.total ?? 0)
 const tournamentCount = computed(() => tournamentsData.value?.total ?? 0)
 
@@ -40,6 +37,7 @@ interface OnboardingCard {
   description: string
   cta: string
   to: string
+  listTo: string
 }
 
 const cards = computed<OnboardingCard[]>(() => [
@@ -50,6 +48,7 @@ const cards = computed<OnboardingCard[]>(() => [
     description: pluralize(inventoryCount.value, 'Karte im Bestand', 'Karten im Bestand'),
     cta: 'Karten erfassen',
     to: '/inventar/erfassen',
+    listTo: '/inventar',
   },
   {
     icon: 'i-lucide-layers',
@@ -57,7 +56,8 @@ const cards = computed<OnboardingCard[]>(() => [
     count: deckCount.value,
     description: pluralize(deckCount.value, 'angelegtes Deck', 'angelegte Decks'),
     cta: 'Deck anlegen',
-    to: '/decks',
+    to: '/decks?neu=1',
+    listTo: '/decks',
   },
   {
     icon: 'i-lucide-trophy',
@@ -66,6 +66,7 @@ const cards = computed<OnboardingCard[]>(() => [
     description: pluralize(tournamentCount.value, 'Turnier', 'Turniere'),
     cta: 'Turnier anlegen',
     to: '/turniere/neu',
+    listTo: '/turniere',
   },
 ])
 </script>
@@ -112,7 +113,12 @@ const cards = computed<OnboardingCard[]>(() => [
             />
           </div>
           <h2 class="text-base font-semibold text-gray-900">
-            {{ card.title }}
+            <NuxtLink
+              :to="card.listTo"
+              class="hover:text-primary hover:underline"
+            >
+              {{ card.title }}
+            </NuxtLink>
           </h2>
         </div>
 

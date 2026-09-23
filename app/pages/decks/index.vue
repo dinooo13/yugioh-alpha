@@ -31,6 +31,9 @@ const PAGE_SIZE = 20
 
 useHead({ title: 'Decks – yugioh alpha' })
 
+const route = useRoute()
+const toast = useToast()
+
 const searchInput = ref('')
 const debouncedSearch = ref('')
 const sort = ref<'updated' | 'name' | '-name' | 'newest'>('updated')
@@ -120,6 +123,15 @@ function openCreate() {
   isFormOpen.value = true
 }
 
+// `/decks?neu=1` (dashboard "Deck anlegen") opens the create modal right
+// away; the query is dropped so a reload or back-navigation doesn't reopen it.
+onMounted(() => {
+  if (route.query.neu === '1') {
+    openCreate()
+    navigateTo({ query: {} }, { replace: true })
+  }
+})
+
 function openRename(deck: DeckListItem) {
   editingDeck.value = deck
   isFormOpen.value = true
@@ -138,10 +150,12 @@ async function duplicateDeck(deck: DeckListItem) {
   errorMessage.value = ''
   try {
     await $fetch(`/api/decks/${deck.id}/duplicate`, { method: 'POST' })
+    toast.add({ title: 'Deck dupliziert', color: 'success' })
     await refresh()
   }
   catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'Das Deck konnte nicht dupliziert werden.'
+    toast.add({ title: 'Das Deck konnte nicht dupliziert werden.', color: 'error' })
   }
 }
 
@@ -159,10 +173,12 @@ async function deleteDeck(deck: DeckListItem) {
 
   try {
     await $fetch(`/api/decks/${deck.id}`, { method: 'DELETE' })
+    toast.add({ title: 'Deck gelöscht', color: 'success' })
     await refresh()
   }
   catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'Das Deck konnte nicht gelöscht werden.'
+    toast.add({ title: 'Das Deck konnte nicht gelöscht werden.', color: 'error' })
   }
 }
 
@@ -263,13 +279,13 @@ function statusColor(deck: DeckListItem) {
         v-model="sort"
         :items="sortItems"
         aria-label="Sortierung"
-        class="w-52"
+        class="w-full sm:w-52"
       />
       <USelect
         v-model="formatFilter"
         :items="formatFilterItems"
         aria-label="Format"
-        class="w-52"
+        class="w-full sm:w-52"
       />
     </div>
 
