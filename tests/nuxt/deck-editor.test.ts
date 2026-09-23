@@ -425,6 +425,79 @@ describe('deck editor mutations', () => {
   })
 })
 
+describe('deck editor add panel layout', () => {
+  const searchInput = '[aria-label="Karten für das Deck suchen"]'
+  const toggle = '[aria-controls="deck-add-panel-body"]'
+
+  it('renders the deck sections before the add panel', async () => {
+    state.source = { items: [], total: 0 }
+    state.deck = deckDetail({ main: [row({ name: 'Dark Magician', section: 'main' })] })
+
+    const component = await mountSuspended(DeckEditorPage)
+    const text = component.text()
+
+    expect(text.indexOf('Noch keine Karten im Side Deck.')).toBeGreaterThan(-1)
+    expect(text.indexOf('Noch keine Karten im Side Deck.')).toBeLessThan(text.indexOf('Aus Inventar hinzufügen'))
+  })
+
+  it('collapses the add panel on small screens once the deck has cards', async () => {
+    state.source = { items: [], total: 0 }
+    state.deck = deckDetail({ main: [row({ name: 'Dark Magician', section: 'main' })] })
+
+    const component = await mountSuspended(DeckEditorPage)
+    const body = () => component.find('#deck-add-panel-body')
+
+    // Hidden below `lg`, always shown from `lg` up — and still in the DOM.
+    expect(body().classes()).toContain('hidden')
+    expect(body().classes()).toContain('lg:flex')
+    expect(component.find(toggle).attributes('aria-expanded')).toBe('false')
+    expect(component.find(toggle).text()).toContain('Anzeigen')
+    expect(component.find(searchInput).exists()).toBe(true)
+
+    await component.find(toggle).trigger('click')
+
+    expect(body().classes()).not.toContain('hidden')
+    expect(component.find(toggle).attributes('aria-expanded')).toBe('true')
+    expect(component.find(toggle).text()).toContain('Ausblenden')
+    expect(component.find(searchInput).exists()).toBe(true)
+  })
+
+  it('starts expanded for an empty deck', async () => {
+    state.source = { items: [], total: 0 }
+    state.deck = deckDetail({})
+
+    const component = await mountSuspended(DeckEditorPage)
+
+    expect(component.find('#deck-add-panel-body').classes()).not.toContain('hidden')
+    expect(component.find(toggle).attributes('aria-expanded')).toBe('true')
+  })
+
+  it('opens and scrolls to the add panel from the header shortcut', async () => {
+    state.source = { items: [], total: 0 }
+    state.deck = deckDetail({ main: [row({ name: 'Dark Magician', section: 'main' })] })
+
+    const originalScrollIntoView = Element.prototype.scrollIntoView
+    const scrollIntoView = vi.fn()
+    Element.prototype.scrollIntoView = scrollIntoView
+
+    try {
+      const component = await mountSuspended(DeckEditorPage)
+      expect(component.find('#deck-add-panel-body').classes()).toContain('hidden')
+
+      const shortcut = component.findAll('button').find(button => button.text() === 'Karten hinzufügen')
+      expect(shortcut).toBeTruthy()
+      await shortcut!.trigger('click')
+      await flushPromises()
+
+      expect(component.find('#deck-add-panel-body').classes()).not.toContain('hidden')
+      expect(scrollIntoView).toHaveBeenCalledTimes(1)
+    }
+    finally {
+      Element.prototype.scrollIntoView = originalScrollIntoView
+    }
+  })
+})
+
 describe('deck editor rule validation', () => {
   function validation(overrides: Partial<DeckValidation> = {}): DeckValidation {
     return {

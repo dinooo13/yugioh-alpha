@@ -100,3 +100,48 @@ test.describe('deckbuilder', () => {
     await expect(page.getByText('Noch keine Decks')).toBeVisible()
   })
 })
+
+test.describe('deckbuilder on a phone', () => {
+  test.use({ viewport: { width: 390, height: 844 } })
+
+  test('keeps the add panel below the deck and collapsible', async ({ page }) => {
+    await registerAndLogin(page)
+
+    const response = await page.request.post('/api/inventory', {
+      data: { catalog_card_id: DARK_MAGICIAN, quantity: 2 },
+    })
+    expect(response.ok()).toBe(true)
+
+    await page.goto('/decks')
+    await page.getByRole('button', { name: 'Neues Deck' }).first().click()
+    await page.getByLabel('Deckname').fill('Handy Deck')
+    await page.getByRole('button', { name: 'Erstellen' }).click()
+    await expect(page).toHaveURL(/\/decks\/[0-9a-f-]{36}$/)
+
+    // An empty deck opens with the add panel expanded.
+    const search = page.getByLabel('Karten für das Deck suchen')
+    const mainCount = page.getByLabel('Anzahl im Main Deck')
+    const addDarkMagician = page.getByRole('button', { name: 'Dark Magician zum Main Deck hinzufügen', exact: true })
+    await expect(search).toBeVisible()
+
+    await search.fill('Dark Magician')
+    await addDarkMagician.click()
+    await expect(mainCount).toHaveText('1/40–60')
+
+    // Once the deck has cards, the panel starts collapsed on a phone.
+    await page.reload()
+    await expect(mainCount).toHaveText('1/40–60')
+    await expect(search).toBeHidden()
+
+    // The header shortcut opens it again.
+    await page.getByRole('button', { name: 'Karten hinzufügen', exact: true }).click()
+    await expect(search).toBeVisible()
+
+    await search.fill('Dark Magician')
+    await addDarkMagician.click()
+    await expect(mainCount).toHaveText('2/40–60')
+
+    await page.getByRole('button', { name: 'Ausblenden', exact: true }).click()
+    await expect(search).toBeHidden()
+  })
+})
