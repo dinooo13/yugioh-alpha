@@ -8,7 +8,7 @@ import type { SQL } from 'drizzle-orm'
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core'
 import type { useDb } from '../db'
 import { catalogCard, catalogCardImage, collection, deck, deckCard, ownedCard, ruleFormat } from '../db/schema'
-import { buildWarnings, cardCategoryRank, DECK_LIMITS } from './decks'
+import { buildWarnings, cardCategoryRank, DECK_LIMITS, loadDeckCovers } from './decks'
 import { loadCardDataForValidation } from './deck-validation'
 import { ruleFormatsById } from './rule-formats'
 import { grantedResourceIds } from './sharing'
@@ -339,6 +339,9 @@ export function listVisibleDecks(db: Db, ownerUserId: string, viewerUserId: stri
     countsByDeck.set(row.deckId, counts)
   }
 
+  // Only the listed (already visible) decks — no cover leaks a hidden deck.
+  const covers = loadDeckCovers(db, deckIds)
+
   return visibleRows.map((row) => {
     const counts = countsByDeck.get(row.id) ?? { main: 0, extra: 0, side: 0 }
     const format = row.formatId ? formats.get(row.formatId) : undefined
@@ -356,6 +359,7 @@ export function listVisibleDecks(db: Db, ownerUserId: string, viewerUserId: stri
       legal,
       visibility: isOwner ? row.visibility : null,
       updatedAt: row.updatedAt.toISOString(),
+      cover: covers.get(row.id) ?? null,
     }
   })
 }

@@ -397,6 +397,30 @@ describe('listVisibleDecks', () => {
     expect(listVisibleDecks(db, 'user-a', 'user-b')[0]?.visibility).toBeNull()
     expect(listVisibleDecks(db, 'user-a', 'user-a')[0]?.visibility).toBe('private')
   })
+
+  it('carries each listed deck\'s cover card (#29)', () => {
+    db.insert(schema.catalogCardImage).values({
+      id: CARD.darkMagician,
+      cardId: CARD.darkMagician,
+      imageUrl: 'https://images.example/cards/46986414.jpg',
+      imageUrlSmall: 'https://images.example/cards_small/46986414.jpg',
+    }).run()
+    const deckId = createDeck(db, 'user-a', { name: 'Public', description: null }).id
+    upsertDeckCard(db, 'user-a', deckId, { catalogCardId: CARD.darkMagician, section: 'main', quantity: 3 })
+    setShareState(db, 'user-a', 'deck', deckId, { visibility: 'public' })
+    const emptyId = createDeck(db, 'user-a', { name: 'Leer', description: null }).id
+    setShareState(db, 'user-a', 'deck', emptyId, { visibility: 'public' })
+
+    const decks = listVisibleDecks(db, 'user-a', null)
+
+    expect(decks.find(item => item.id === deckId)?.cover).toEqual({
+      catalogCardId: CARD.darkMagician,
+      name: 'Dark Magician',
+      imageSmall: 'https://images.example/cards_small/46986414.jpg',
+      imageLarge: 'https://images.example/cards/46986414.jpg',
+    })
+    expect(decks.find(item => item.id === emptyId)?.cover).toBeNull()
+  })
 })
 
 describe('buildSharedDeckView', () => {

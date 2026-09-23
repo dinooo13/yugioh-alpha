@@ -1,6 +1,6 @@
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
 import { drizzle } from 'drizzle-orm/better-sqlite3'
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import Database from 'better-sqlite3'
 import { beforeEach, describe, expect, it } from 'vitest'
 import * as schema from '../../server/db/schema'
@@ -14,9 +14,11 @@ import {
   getDeckDetail,
   isExtraDeckCard,
   listDecks,
+  loadDeckCovers,
   MAX_DECK_CARD_QUANTITY,
   moveDeckCard,
   parseDeckListQuery,
+  pickDeckCover,
   removeDeckCard,
   updateDeck,
   upsertDeckCard,
@@ -26,6 +28,7 @@ import {
   validateDeckInput,
   validateDeckUpdateInput,
 } from '../../server/utils/decks'
+import type { DeckCoverCandidate } from '../../server/utils/decks'
 import { createCollection } from '../../server/utils/collections'
 import { addOwnedCard, validateInventoryInput } from '../../server/utils/inventory'
 import { setShareState } from '../../server/utils/sharing'
@@ -712,5 +715,158 @@ describe('deck list', () => {
 
     expect(listDecks(db, 'user-a', { sort: 'updated' }).items.map(item => item.name))
       .toEqual(['Zuerst', 'Danach'])
+  })
+})
+
+describe('deck cover', () => {
+  let db: TestDb
+
+  const IMAGE = {
+    darkMagicianSmall: 'https://images.example/cards_small/46986414.jpg',
+    darkMagicianLarge: 'https://images.example/cards/46986414.jpg',
+    potOfGreedSmall: 'https://images.example/cards_small/55144522.jpg',
+    stardustSmall: 'https://images.example/cards_small/44508094.jpg',
+  }
+
+  beforeEach(() => {
+    db = createTestDb()
+    seedUsersAndCatalog(db)
+    db.insert(schema.catalogCardImage).values([
+      { id: 46986414, cardId: CARD.darkMagician, imageUrl: IMAGE.darkMagicianLarge, imageUrlSmall: IMAGE.darkMagicianSmall },
+      // A second artwork: the cover must still resolve to a single image.
+      { id: 46986415, cardId: CARD.darkMagician, imageUrl: 'https://images.example/cards/46986415.jpg', imageUrlSmall: 'https://images.example/cards_small/46986415.jpg' },
+      { id: 55144522, cardId: CARD.potOfGreed, imageUrl: 'https://images.example/cards/55144522.jpg', imageUrlSmall: IMAGE.potOfGreedSmall },
+      { id: 44508094, cardId: CARD.stardustDragon, imageUrl: 'https://images.example/cards/44508094.jpg', imageUrlSmall: IMAGE.stardustSmall },
+    ]).run()
+  })
+
+  /** `deck_card.created_at` has second precision — pin it so "first added" is deterministic. */
+  function addCard(deckId: string, catalogCardId: number, section: 'main' | 'extra' | 'side', addedAt: string) {
+    upsertDeckCard(db, 'user-a', deckId, { catalogCardId, section, quantity: 1 })
+    db.update(schema.deckCard)
+      .set({ createdAt: new Date(addedAt) })
+      .where(and(
+        eq(schema.deckCard.deckId, deckId),
+        eq(schema.deckCard.catalogCardId, catalogCardId),
+        eq(schema.deckCard.section, section),
+      ))
+      .run()
+  }
+
+  function coverOf(deckId: string) {
+    return listDecks(db, 'user-a').items.find(item => item.id === deckId)?.cover
+  }
+
+  it('prefers the first-added Main Deck monster over an earlier spell', () => {
+    const deck = createDeck(db, 'user-a', { name: 'Deck', description: null })
+    addCard(deck.id, CARD.potOfGreed, 'main', '2025-01-01T10:00:00Z')
+    addCard(deck.id, CARD.darkMagician, 'main', '2025-01-01T11:00:00Z')
+
+    expect(coverOf(deck.id)).toEqual({
+      catalogCardId: CARD.darkMagician,
+      name: 'Dark Magician',
+      imageSmall: IMAGE.darkMagicianSmall,
+      imageLarge: IMAGE.darkMagicianLarge,
+    })
+  })
+
+  it('falls back to the first-added Main Deck card when there is no monster', () => {
+    const deck = createDeck(db, 'user-a', { name: 'Deck', description: null })
+    addCard(deck.id, CARD.mirrorForce, 'main', '2025-01-01T11:00:00Z')
+    addCard(deck.id, CARD.potOfGreed, 'main', '2025-01-01T10:00:00Z')
+
+    expect(coverOf(deck.id)).toMatchObject({ catalogCardId: CARD.potOfGreed, imageSmall: IMAGE.potOfGreedSmall })
+  })
+
+  it('falls back to the first-added Extra Deck card for an Extra-only deck', () => {
+    const deck = createDeck(db, 'user-a', { name: 'Deck', description: null })
+    addCard(deck.id, CARD.decodeTalker, 'extra', '2025-01-01T11:00:00Z')
+    addCard(deck.id, CARD.stardustDragon, 'extra', '2025-01-01T10:00:00Z')
+
+    expect(coverOf(deck.id)).toMatchObject({ catalogCardId: CARD.stardustDragon, imageSmall: IMAGE.stardustSmall })
+  })
+
+  it('ignores the Side Deck and returns null for a deck without Main/Extra cards', () => {
+    const empty = createDeck(db, 'user-a', { name: 'Leer', description: null })
+    const sideOnly = createDeck(db, 'user-a', { name: 'Nur Side', description: null })
+    addCard(sideOnly.id, CARD.darkMagician, 'side', '2025-01-01T09:00:00Z')
+    const sideMonsterMainSpell = createDeck(db, 'user-a', { name: 'Side + Main', description: null })
+    addCard(sideMonsterMainSpell.id, CARD.darkMagician, 'side', '2025-01-01T09:00:00Z')
+    addCard(sideMonsterMainSpell.id, CARD.potOfGreed, 'main', '2025-01-01T10:00:00Z')
+
+    expect(coverOf(empty.id)).toBeNull()
+    expect(coverOf(sideOnly.id)).toBeNull()
+    expect(coverOf(sideMonsterMainSpell.id)).toMatchObject({ catalogCardId: CARD.potOfGreed })
+  })
+
+  it('returns a null image for a cover card without a scan', () => {
+    const deck = createDeck(db, 'user-a', { name: 'Deck', description: null })
+    addCard(deck.id, CARD.decodeTalker, 'extra', '2025-01-01T10:00:00Z')
+
+    expect(coverOf(deck.id)).toEqual({ catalogCardId: CARD.decodeTalker, name: 'Decode Talker', imageSmall: null, imageLarge: null })
+  })
+
+  it('loads covers for several decks at once and skips decks without one', () => {
+    const withCover = createDeck(db, 'user-a', { name: 'A', description: null })
+    addCard(withCover.id, CARD.darkMagician, 'main', '2025-01-01T10:00:00Z')
+    const without = createDeck(db, 'user-a', { name: 'B', description: null })
+
+    const covers = loadDeckCovers(db, [withCover.id, without.id])
+    expect(covers.get(withCover.id)?.catalogCardId).toBe(CARD.darkMagician)
+    expect(covers.has(without.id)).toBe(false)
+    expect(loadDeckCovers(db, []).size).toBe(0)
+  })
+
+  it('keeps the cover on a duplicated deck', () => {
+    const deck = createDeck(db, 'user-a', { name: 'Original', description: null })
+    addCard(deck.id, CARD.darkMagician, 'main', '2025-01-01T11:00:00Z')
+    addCard(deck.id, CARD.potOfGreed, 'main', '2025-01-01T10:00:00Z')
+    addCard(deck.id, CARD.mirrorForce, 'main', '2025-01-01T09:00:00Z')
+
+    const copy = duplicateDeck(db, 'user-a', deck.id)
+
+    expect(coverOf(copy.id)).toEqual(coverOf(deck.id))
+  })
+})
+
+describe('pickDeckCover', () => {
+  function candidate(overrides: Partial<DeckCoverCandidate>): DeckCoverCandidate {
+    return {
+      catalogCardId: 1,
+      name: 'Karte',
+      imageSmall: null,
+      imageLarge: null,
+      section: 'main',
+      type: 'Effect Monster',
+      createdAt: new Date('2025-01-01T10:00:00Z'),
+      ...overrides,
+    }
+  }
+
+  it('returns null without candidates', () => {
+    expect(pickDeckCover([])).toBeNull()
+  })
+
+  it('breaks a "first added" tie by the lower catalog card id', () => {
+    const cover = pickDeckCover([
+      candidate({ catalogCardId: 30, name: 'C' }),
+      candidate({ catalogCardId: 10, name: 'A' }),
+      candidate({ catalogCardId: 20, name: 'B' }),
+    ])
+    expect(cover).toEqual({ catalogCardId: 10, name: 'A', imageSmall: null, imageLarge: null })
+  })
+
+  it('ranks Main monsters over Main spells/traps over Extra cards, regardless of order', () => {
+    const extra = candidate({ catalogCardId: 1, section: 'extra', type: 'Synchro Monster', createdAt: new Date('2025-01-01T08:00:00Z') })
+    const trap = candidate({ catalogCardId: 2, type: 'Trap Card', createdAt: new Date('2025-01-01T09:00:00Z') })
+    const monster = candidate({ catalogCardId: 3, type: 'Normal Monster', createdAt: new Date('2025-01-01T12:00:00Z') })
+
+    expect(pickDeckCover([extra, trap, monster])?.catalogCardId).toBe(3)
+    expect(pickDeckCover([extra, trap])?.catalogCardId).toBe(2)
+    expect(pickDeckCover([extra])?.catalogCardId).toBe(1)
+  })
+
+  it('never picks a Side Deck card', () => {
+    expect(pickDeckCover([candidate({ section: 'side' })])).toBeNull()
   })
 })
