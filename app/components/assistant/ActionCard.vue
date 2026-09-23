@@ -189,37 +189,39 @@ async function reject() {
           </div>
         </dl>
 
-        <table
+        <div
           v-if="rows.length > 0"
-          class="w-full text-left text-xs"
+          class="overflow-x-auto"
         >
-          <thead>
-            <tr class="text-gray-400">
-              <th
-                v-for="column in columns"
-                :key="column"
-                class="pr-3 pb-1 font-medium"
+          <table class="w-full text-left text-xs">
+            <thead>
+              <tr class="text-gray-400">
+                <th
+                  v-for="column in columns"
+                  :key="column"
+                  class="pr-3 pb-1 font-medium"
+                >
+                  {{ FIELD_LABELS[column] }}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="(row, rowIndex) in rows"
+                :key="rowIndex"
+                class="border-t border-gray-100"
               >
-                {{ FIELD_LABELS[column] }}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="(row, rowIndex) in rows"
-              :key="rowIndex"
-              class="border-t border-gray-100"
-            >
-              <td
-                v-for="column in columns"
-                :key="column"
-                class="py-1 pr-3"
-              >
-                {{ displayValue(column, row[column]) }}
-              </td>
-            </tr>
-          </tbody>
-        </table>
+                <td
+                  v-for="column in columns"
+                  :key="column"
+                  class="py-1 pr-3"
+                >
+                  {{ displayValue(column, row[column]) }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <p

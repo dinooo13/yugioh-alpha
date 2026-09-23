@@ -19,7 +19,7 @@ interface ConversationDetailResponse {
  * SSE events arrived — text deltas coalesce into the trailing text item,
  * a `tool_call` opens a new activity item, and an `action_proposed` is
  * appended immediately so its card shows up without waiting for the turn to
- * finish. Replaced wholesale by `load()` once `message_end` arrives, so the
+ * finish. Replaced wholesale by `refresh()` once `message_end` arrives, so the
  * live rendering never has to be reconciled with the persisted one — it's
  * simply swapped out for it.
  */
@@ -108,20 +108,57 @@ export function useAssistantThread(conversationId: Ref<string>) {
   let abortController: AbortController | null = null
   let streamingTextCounter = 0
 
+  function fetchDetail(id: string) {
+    return $fetch<ConversationDetailResponse>(`/api/assistant/chat/${id}`)
+  }
+
+  function applyDetail(detail: ConversationDetailResponse) {
+    conversation.value = detail.conversation
+    messages.value = detail.messages
+    actions.value = detail.actions
+  }
+
+  /**
+   * Full (re)load for the initial mount and conversation switches — flips
+   * `isLoading`, which the page uses to hide the thread and composer until
+   * the conversation is there. Never call this mid-conversation: hiding the
+   * thread unmounts it, and the remounted one starts scrolled to the top.
+   */
   async function load() {
     isLoading.value = true
     loadError.value = ''
     try {
-      const detail = await $fetch<ConversationDetailResponse>(`/api/assistant/chat/${conversationId.value}`)
-      conversation.value = detail.conversation
-      messages.value = detail.messages
-      actions.value = detail.actions
+      applyDetail(await fetchDetail(conversationId.value))
     }
     catch (error) {
       loadError.value = apiErrorMessage(error, 'Die Unterhaltung konnte nicht geladen werden.')
     }
     finally {
       isLoading.value = false
+    }
+  }
+
+  /**
+   * Background re-sync after a turn: swaps the live streaming rows for the
+   * persisted ones in a single synchronous step once the response is in,
+   * so the thread stays mounted and never shrinks and regrows in between.
+   * Leaves `isLoading`/`loadError` alone — a failure only surfaces as a
+   * `sendError` and keeps whatever the thread already shows.
+   */
+  async function refresh() {
+    const id = conversationId.value
+    try {
+      const detail = await fetchDetail(id)
+      if (id !== conversationId.value) {
+        // Switched conversations while this was in flight — `load()` for
+        // the new one owns the thread now.
+        return
+      }
+      applyDetail(detail)
+      streamingItems.value = []
+    }
+    catch (error) {
+      sendError.value = apiErrorMessage(error, 'Die Unterhaltung konnte nicht aktualisiert werden.')
     }
   }
 
@@ -288,9 +325,10 @@ export function useAssistantThread(conversationId: Ref<string>) {
             // message ourselves: the persisted timeline also has the
             // intermediate assistant/tool rows (pre-tool-call text, tool
             // chips) and any actions attached to them, none of which the
-            // live stream carries a full copy of.
-            streamingItems.value = []
-            await load()
+            // live stream carries a full copy of. `refresh()` swaps the
+            // streamed rows for the persisted ones atomically and without
+            // unmounting the thread (see its JSDoc).
+            await refresh()
           }
         }
         else if (event.event === 'error') {
@@ -313,17 +351,20 @@ export function useAssistantThread(conversationId: Ref<string>) {
       }
     }
     finally {
-      streamingItems.value = []
       abortController = null
     }
 
     // Reloading before clearing `isStreaming`/`isCancelling` keeps the
     // composer in its "wird abgebrochen…" state for the whole round trip,
     // instead of flashing back to normal for the moment between the abort
-    // landing and the persisted (partial) turn showing up.
+    // landing and the persisted (partial) turn showing up. The streamed
+    // rows stay visible until then, so the thread doesn't shrink and
+    // regrow; whatever is left (error paths, a failed refresh, a stream
+    // that ended without `message_end`) is cleared afterwards.
     if (shouldReloadAfterCancel) {
-      await load()
+      await refresh()
     }
+    streamingItems.value = []
     isStreaming.value = false
     isCancelling.value = false
   }
@@ -342,6 +383,7 @@ export function useAssistantThread(conversationId: Ref<string>) {
     isCancelling,
     sendError,
     load,
+    refresh,
     send,
     cancel,
     updateAction,
