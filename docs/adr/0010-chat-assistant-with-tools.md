@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Accepted — the statement that `/decks/assistent` and the deck editor's "KI-Vorschläge" stay unchanged is superseded by [ADR 0011](0011-deck-assistance-in-chat.md)
 
 ## Context
 

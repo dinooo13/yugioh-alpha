@@ -28,7 +28,7 @@ See [`.env.example`](./.env.example) for all available variables:
 - `NUXT_BETTER_AUTH_SECRET` - secret for Better Auth (required in production, for example `openssl rand -base64 32`)
 - `NUXT_PUBLIC_BETTER_AUTH_URL` - publicly reachable base URL of the app
 - `NUXT_DB_FILE_PATH` - path to the SQLite database file (default: `./data/app.db`; the directory is created automatically)
-- `NUXT_ASSISTANT_API_KEY` - API key for the AI deck assistant (optional; falls back to `OPENAI_API_KEY`). Without a key or a custom base URL the feature is disabled and the UI shows a notice instead.
+- `NUXT_ASSISTANT_API_KEY` - API key for the chat assistant (optional; falls back to `OPENAI_API_KEY`). Without a key or a custom base URL the feature is disabled and the UI shows a notice instead.
 - `NUXT_ASSISTANT_PROVIDER` / `NUXT_ASSISTANT_BASE_URL` / `NUXT_ASSISTANT_MODEL` / `NUXT_ASSISTANT_REASONING_EFFORT` - override the assistant's provider (`openai` / `fake`), the OpenAI-compatible endpoint's base URL, the model id, and an optional `reasoning_effort` some gateways (e.g. OpenCode Go) require; see [`.env.example`](./.env.example)
 - `NUXT_ASSISTANT_VISION_MODEL` - optional override model for chat turns that include an image (the chat assistant at `/assistent`, see below); leave empty to use `NUXT_ASSISTANT_MODEL` for those turns too
 
@@ -194,46 +194,36 @@ deck list shows the format name plus a legality badge and can filter by format
 and legality. The format editor can check any of the user's decks against the
 *unsaved* rules before saving them.
 
-## KI-Deck-Assistent
+## KI-Deckbau
 
-The AI deck assistant lives at `/decks/assistent` (build a new deck from the
-inventory) and as a "KI-Vorschläge" panel in the deck editor (improve an
-existing deck). Both respect the currently selected rule format and split
-their output into owned suggestions and a separate list of missing cards, so
-a suggestion never silently assumes cards the user doesn't have.
-
-It works with any OpenAI-compatible endpoint, e.g. OpenAI, OpenRouter,
-Ollama, LM Studio, or OpenCode Zen — see
-[`.env.example`](./.env.example) for `NUXT_ASSISTANT_BASE_URL`.
-
-The server never trusts the model with a free-form deck list: it first
-builds a candidate pool of owned cards the selected format actually allows
-(capped at 400 cards, with a warning if a collection is larger), the model
-may only pick card ids from that pool (or name a missing card by its exact
-English name, resolved against the catalog), and every returned field is
-re-validated — unknown ids dropped, sections corrected, quantities clamped
-to what's owned and legal — before the existing rule engine
-(`evaluateDeck`, see [Formate](#formate)) runs on the result. Nothing about
-a suggestion is persisted; a build result is saved through `POST /api/decks`
-(which can seed a new deck's cards atomically) and improve changes go
-through the same `PUT /api/decks/:id/cards` endpoint a manual edit would
-use.
-
-The feature requires `NUXT_ASSISTANT_API_KEY` (or `OPENAI_API_KEY`), or a
-custom `NUXT_ASSISTANT_BASE_URL` pointed at a keyless local server, to be
-configured; without either, `/api/assistant/status` reports the feature as
-disabled and the UI shows a notice instead of the assistant panels. See
-[`docs/adr/0006-ai-deck-assistant.md`](./docs/adr/0006-ai-deck-assistant.md)
-and [`docs/adr/0009-openai-compatible-assistant-provider.md`](./docs/adr/0009-openai-compatible-assistant-provider.md).
+Deck building with AI help happens in the [Assistent](#assistent) chat —
+"Mit KI erstellen" on `/decks` and "Mit KI bearbeiten" in the deck editor
+both open `/assistent`. See
+[`docs/adr/0011-deck-assistance-in-chat.md`](./docs/adr/0011-deck-assistance-in-chat.md).
 
 ## Assistent
 
 `/assistent` is a persisted, multi-turn chat with tools over the user's own
 catalog, inventory, and decks — it replaced the Foto and Sprache modes of
-[Schnellerfassung](#schnellerfassung) and stands next to (not instead of) the
-one-shot [KI-Deck-Assistent](#ki-deck-assistent) above. Every conversation is
-saved and listed in a sidebar (titled from its first message), with a
-"Neue Unterhaltung" button and per-conversation deletion.
+[Schnellerfassung](#schnellerfassung) and is also the app's deck assistant.
+Every conversation is saved and listed in a sidebar (titled from its first
+message), with a "Neue Unterhaltung" button and per-conversation deletion.
+
+Deck entry points: "Mit KI erstellen" on `/decks` opens a new conversation
+with a deck-building draft in the message field (never sent automatically);
+"Mit KI bearbeiten" in the deck editor opens a conversation **linked to that
+deck** — titled "Deck: <Name>", with a chip in the thread header linking back
+to the deck. On every turn of a linked conversation the assistant sees the
+deck's *current* cards, format, and legality (rebuilt per turn, never stored
+in the history), so "dieses Deck" just works and an applied change shows up
+on the next turn. Deleting the deck only unlinks the conversation. For deck
+building the assistant prefers the user's inventory — `search_inventory`
+reports each owned card's type/stats, whether it's an Extra Deck card, and
+its copy limit in a format (format-forbidden cards are left out) — and checks
+proposals with `validate_deck` first. A proposed deck or deck change shows,
+before `Übernehmen`, the rule engine's legality verdict (see
+[Formate](#formate)), the Main/Extra/Side counts, and a separate list of
+cards the user doesn't own (enough of).
 
 The assistant can look things up (search the catalog, read a card's full
 text and printings, search the inventory, list collections/decks/formats,
@@ -245,23 +235,29 @@ message can include up to 6 photos (resized client-side before upload) that
 the model identifies against the catalog. Voice dictation is currently not
 offered (it was removed again because it didn't work reliably).
 
-Like the deck assistant, this works with any OpenAI-compatible Chat
-Completions endpoint that supports streaming and tool calls. An optional
+This works with any OpenAI-compatible Chat Completions endpoint that
+supports streaming and tool calls — e.g. OpenAI, OpenRouter, Ollama,
+LM Studio, or OpenCode Zen; see [`.env.example`](./.env.example) for
+`NUXT_ASSISTANT_BASE_URL` / `NUXT_ASSISTANT_API_KEY` (or `OPENAI_API_KEY`).
+Without a configured provider, `/api/assistant/status` reports the assistant
+as disabled and the UI shows an "Assistent nicht verfügbar" notice. An optional
 `NUXT_ASSISTANT_VISION_MODEL` lets a deployment use a different model
 specifically for turns that include an image; see [`.env.example`](./.env.example).
 Providers that require OpenCode Go's session header get it automatically —
-every request (chat and the deck assistant alike) sends
+every request sends
 `x-opencode-session` and a `User-Agent` identifying this app, no
 configuration needed. On OpenCode Go, the recommended model is
 `mimo-v2.6-pro` (MiMo V2.6 Pro): it was verified with streamed (and parallel)
-tool calls, `image_url` data-URL photos (no separate vision model needed),
-and the deck assistant's `json_schema` output. `NUXT_ASSISTANT_REASONING_EFFORT`
+tool calls and `image_url` data-URL photos (no separate vision model needed).
+`NUXT_ASSISTANT_REASONING_EFFORT`
 is optional for it; `glm-5.3-flash` remains a faster, cheaper alternative.
 The chat's operational limits (tool-calling rounds per turn,
 tool result size, history window, model call timeout) are configurable via
 `NUXT_ASSISTANT_LIMITS_*`; see [`.env.example`](./.env.example) and
 `server/utils/assistant-limits.ts`. See
-[`docs/adr/0010-chat-assistant-with-tools.md`](./docs/adr/0010-chat-assistant-with-tools.md).
+[`docs/adr/0010-chat-assistant-with-tools.md`](./docs/adr/0010-chat-assistant-with-tools.md),
+[`docs/adr/0011-deck-assistance-in-chat.md`](./docs/adr/0011-deck-assistance-in-chat.md),
+and [`docs/adr/0009-openai-compatible-assistant-provider.md`](./docs/adr/0009-openai-compatible-assistant-provider.md).
 
 ## Teilen & Profile
 

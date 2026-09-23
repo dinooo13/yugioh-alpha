@@ -13,8 +13,9 @@ mark the old as superseded.
 | [0003](0003-client-side-ocr-and-speech-entry.md) | Client-side OCR and speech entry, server-side matching | Accepted |
 | [0004](0004-deck-data-model.md) | Deck data model | Accepted |
 | [0005](0005-rule-format-model.md) | Rule format model | Accepted |
-| [0006](0006-ai-deck-assistant.md) | AI deck assistant | Accepted |
+| [0006](0006-ai-deck-assistant.md) | AI deck assistant | Superseded by [0011](0011-deck-assistance-in-chat.md) |
 | [0007](0007-sharing-and-profile-model.md) | Sharing and profile model | Accepted |
 | [0008](0008-tournament-model.md) | Tournament model | Accepted |
-| [0009](0009-openai-compatible-assistant-provider.md) | OpenAI-compatible assistant provider | Accepted |
-| [0010](0010-chat-assistant-with-tools.md) | Chat assistant with tools | Accepted |
+| [0009](0009-openai-compatible-assistant-provider.md) | OpenAI-compatible assistant provider | Accepted (structured-output parts superseded by [0011](0011-deck-assistance-in-chat.md)) |
+| [0010](0010-chat-assistant-with-tools.md) | Chat assistant with tools | Accepted (partly superseded by [0011](0011-deck-assistance-in-chat.md)) |
+| [0011](0011-deck-assistance-in-chat.md) | Deck assistance in the chat assistant | Accepted |
