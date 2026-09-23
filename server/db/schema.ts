@@ -645,13 +645,20 @@ export const assistantConversation = sqliteTable(
     userId: text('user_id')
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
-    // Seeded from the first user message (truncated), shown in the conversation list.
+    // Seeded from the first user message (truncated), shown in the conversation
+    // list — or "Deck: <name>" for a deck-linked conversation.
     title: text('title').notNull(),
+    // Optional deck this conversation is about (ADR 0011): its current state is
+    // injected into the system prompt on every turn. Deleting the deck only
+    // unlinks the conversation, it never deletes the chat history.
+    deckId: text('deck_id')
+      .references(() => deck.id, { onDelete: 'set null' }),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
     updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
   },
   table => [
     index('idx_assistant_conversation_user_updated').on(table.userId, table.updatedAt),
+    index('idx_assistant_conversation_deck').on(table.deckId),
   ],
 )
 
@@ -710,6 +717,7 @@ export const assistantAction = sqliteTable(
 
 export const assistantConversationRelations = relations(assistantConversation, ({ one, many }) => ({
   user: one(user, { fields: [assistantConversation.userId], references: [user.id] }),
+  deck: one(deck, { fields: [assistantConversation.deckId], references: [deck.id] }),
   messages: many(assistantMessage),
   actions: many(assistantAction),
 }))

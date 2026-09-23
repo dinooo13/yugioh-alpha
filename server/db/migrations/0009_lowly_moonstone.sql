@@ -1,0 +1,2 @@
+ALTER TABLE `assistant_conversation` ADD `deck_id` text REFERENCES deck(id) ON UPDATE no action ON DELETE set null;--> statement-breakpoint
+CREATE INDEX `idx_assistant_conversation_deck` ON `assistant_conversation` (`deck_id`);

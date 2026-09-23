@@ -253,7 +253,7 @@ function statusColor(deck: DeckListItem) {
           color="neutral"
           variant="outline"
           label="Mit KI erstellen"
-          to="/decks/assistent"
+          to="/assistent?intent=new-deck"
         />
         <UButton
           icon="i-lucide-plus"

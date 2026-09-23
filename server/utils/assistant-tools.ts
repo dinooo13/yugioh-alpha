@@ -40,9 +40,10 @@ import {
   validateDeckWithRules,
 } from './decks'
 import type { DeckCardInput, DeckCardRow, DeckDetail, DeckSection } from './decks'
-import { isSectionAllowedForCard } from '../../shared/deck-sections'
+import { isExtraDeckCard, isSectionAllowedForCard } from '../../shared/deck-sections'
 import { listRuleFormats, requireAccessibleFormat, requireAssignableFormat } from './rule-formats'
-import { loadCardDataForValidation, loadCardNames, missingCatalogCardIds } from './deck-validation'
+import { loadCardDataForValidation, loadCardNames, maxCopiesByCard, missingCatalogCardIds } from './deck-validation'
+import { previewDeckProposal } from './deck-proposal'
 import type { AssistantActionKind } from '../../shared/assistant-chat'
 
 type Db = ReturnType<typeof useDb>
@@ -130,6 +131,18 @@ function requirePositiveInt(args: Record<string, unknown>, field: string): numbe
   const numberValue = typeof value === 'number' ? value : Number(value)
   if (!Number.isSafeInteger(numberValue) || numberValue < 1) {
     badRequest(`${field} must be a positive integer`)
+  }
+  return numberValue
+}
+
+function optionalOffset(args: Record<string, unknown>): number {
+  const value = args.offset
+  if (value === undefined || value === null || value === '') {
+    return 0
+  }
+  const numberValue = typeof value === 'number' ? value : Number(value)
+  if (!Number.isSafeInteger(numberValue) || numberValue < 0) {
+    badRequest('offset must be a non-negative integer')
   }
   return numberValue
 }
@@ -246,13 +259,26 @@ async function toolGetCard(db: Db, args: unknown) {
   }
 }
 
+/**
+ * The caller's owned cards, aggregated per catalog card, with the card facts
+ * a deck-building model needs to pick from them (type, attribute, race,
+ * level, ATK/DEF, archetype, Extra Deck or not — no card text; `get_card`
+ * has that) and, per card, the copy limit `maxCopies` under `formatId` (3
+ * without a format). A card the format forbids is left out entirely, so the
+ * model never proposes it from the inventory — ported from the one-shot deck
+ * assistant's candidate pool (ADR 0006 → ADR 0011). `offset` pages through a
+ * result larger than the item cap.
+ */
 function toolSearchInventory(db: Db, userId: string, args: unknown) {
   const record = requireArgs(args)
   const query = optionalString(record, 'query')
   const collectionId = optionalString(record, 'collectionId')
+  const formatId = optionalString(record, 'formatId')
+  const offset = optionalOffset(record)
   if (collectionId) {
     requireCollectionOwnedByUser(db, userId, collectionId)
   }
+  const format = formatId ? requireAccessibleFormat(db, userId, formatId) : null
 
   const clauses = [eq(ownedCard.userId, userId)]
   if (query) {
@@ -266,6 +292,14 @@ function toolSearchInventory(db: Db, userId: string, args: unknown) {
     .select({
       catalogCardId: ownedCard.catalogCardId,
       name: catalogCard.name,
+      type: catalogCard.type,
+      frameType: catalogCard.frameType,
+      attribute: catalogCard.attribute,
+      race: catalogCard.race,
+      level: catalogCard.level,
+      atk: catalogCard.atk,
+      def: catalogCard.def,
+      archetype: catalogCard.archetype,
       quantity: ownedCard.quantity,
       collectionId: ownedCard.collectionId,
       collectionName: collection.name,
@@ -274,12 +308,15 @@ function toolSearchInventory(db: Db, userId: string, args: unknown) {
     .innerJoin(catalogCard, eq(ownedCard.catalogCardId, catalogCard.id))
     .leftJoin(collection, eq(ownedCard.collectionId, collection.id))
     .where(and(...clauses))
+    // Ordered so the row-scan bound below (and `offset` paging on top of it)
+    // cuts deterministically rather than by insertion order.
+    .orderBy(asc(catalogCard.name), asc(ownedCard.id))
     .limit(getAssistantLimits().toolResultItems * SEARCH_INVENTORY_ROW_SCAN_MULTIPLIER)
     .all()
 
+  type Row = typeof rows[number]
   interface Aggregate {
-    catalogCardId: number
-    name: string
+    card: Row
     quantity: number
     collections: Map<string, { id: string, name: string, quantity: number }>
   }
@@ -287,8 +324,7 @@ function toolSearchInventory(db: Db, userId: string, args: unknown) {
   const byCard = new Map<number, Aggregate>()
   for (const row of rows) {
     const entry = byCard.get(row.catalogCardId) ?? {
-      catalogCardId: row.catalogCardId,
-      name: row.name,
+      card: row,
       quantity: 0,
       collections: new Map(),
     }
@@ -302,16 +338,36 @@ function toolSearchInventory(db: Db, userId: string, args: unknown) {
     byCard.set(row.catalogCardId, entry)
   }
 
-  const items = [...byCard.values()]
-    .sort((a, b) => a.name.localeCompare(b.name))
-    .map(entry => ({
-      catalogCardId: entry.catalogCardId,
-      name: entry.name,
-      quantity: entry.quantity,
-      collections: [...entry.collections.values()],
-    }))
+  const maxCopies = maxCopiesByCard(db, format?.rules ?? null, [...byCard.keys()])
 
-  return capResult(items)
+  const items = [...byCard.values()]
+    .sort((a, b) => a.card.name.localeCompare(b.card.name))
+    .map(({ card, quantity, collections }) => ({
+      catalogCardId: card.catalogCardId,
+      name: card.name,
+      type: card.type,
+      attribute: card.attribute,
+      race: card.race,
+      level: card.level,
+      atk: card.atk,
+      def: card.def,
+      archetype: card.archetype,
+      isExtra: isExtraDeckCard(card),
+      quantity,
+      maxCopies: maxCopies.get(card.catalogCardId) ?? 0,
+      collections: [...collections.values()],
+    }))
+    .filter(item => item.maxCopies > 0)
+
+  const { toolResultItems } = getAssistantLimits()
+  const page = items.slice(offset, offset + toolResultItems)
+  return {
+    items: page,
+    truncated: offset + page.length < items.length,
+    total: items.length,
+    offset,
+    ...(format ? { formatName: format.name } : {}),
+  }
 }
 
 function toolListCollections(db: Db, userId: string) {
@@ -365,10 +421,64 @@ function toolListFormats(db: Db, userId: string) {
   return capResult(items.map(item => ({ id: item.id, name: item.name, isBuiltin: item.isBuiltin })))
 }
 
+/** Validates the model's `cards` array (a complete planned deck): same per-row rules as `POST /api/decks`, plus known catalog ids and legal sections. */
+function parseProposalCards(db: Db, rawCards: unknown): DeckCardInput[] {
+  const cards: DeckCardInput[] = validateDeckCreateCardsInput({ cards: rawCards ?? [] }) ?? []
+  assertKnownCardsInSections(db, cards)
+  return cards
+}
+
+/** Validates the model's `changes` array (absolute quantities, 0 removes): same per-row rules as `PUT /api/decks/:id/cards`. */
+function parseProposalChanges(db: Db, rawChanges: unknown): DeckCardInput[] {
+  if (!Array.isArray(rawChanges) || rawChanges.length === 0) {
+    badRequest('changes must be a non-empty array')
+  }
+  // Matches (and never exceeds) the bulk inventory endpoint's own cap
+  // (`INVENTORY_BULK_MAX_ITEMS`, server/utils/inventory.ts) — a deck-cards
+  // write is no less bounded than an inventory one.
+  if (rawChanges.length > INVENTORY_BULK_MAX_ITEMS) {
+    badRequest(`changes must contain at most ${INVENTORY_BULK_MAX_ITEMS} entries`)
+  }
+  const changes: DeckCardInput[] = rawChanges.map(raw => validateDeckCardInput(raw))
+  assertKnownCardsInSections(db, changes)
+  return changes
+}
+
+function assertKnownCardsInSections(db: Db, cards: DeckCardInput[]) {
+  const missingIds = missingCatalogCardIds(db, cards.map(card => card.catalogCardId))
+  if (missingIds.length > 0) {
+    badRequest(`Unbekannte Karten-IDs: ${missingIds.join(', ')}`)
+  }
+  assertCardsFitSections(db, cards)
+}
+
+/**
+ * Three shapes. `deckId` alone (optionally with `formatId`) checks a saved
+ * deck exactly as before (the rule engine's `DeckValidation`). `cards`
+ * checks a planned new deck and `deckId` + `changes` a deck with proposed
+ * changes applied — both return the same preview a write tool attaches to
+ * its pending action (counts, legality, missing cards), so the model can fix
+ * problems *before* proposing anything.
+ */
 function toolValidateDeck(db: Db, userId: string, args: unknown) {
   const record = requireArgs(args)
-  const deckId = requireNonEmptyString(record, 'deckId')
+  const deckId = optionalString(record, 'deckId')
   const formatId = optionalString(record, 'formatId')
+  const hasCards = record.cards !== undefined && record.cards !== null
+  const hasChanges = record.changes !== undefined && record.changes !== null
+
+  if (hasCards) {
+    if (deckId) {
+      badRequest('cards beschreibt ein neues Deck; für ein bestehendes Deck deckId mit changes verwenden.')
+    }
+    return previewDeckProposal(db, userId, { cards: parseProposalCards(db, record.cards), formatId })
+  }
+  if (!deckId) {
+    badRequest('Gib deckId (optional mit changes) oder cards für ein geplantes neues Deck an.')
+  }
+  if (hasChanges) {
+    return previewDeckProposal(db, userId, { deckId, changes: parseProposalChanges(db, record.changes), formatId })
+  }
 
   if (formatId) {
     const format = requireAccessibleFormat(db, userId, formatId)
@@ -390,11 +500,18 @@ function pendingOutcome(
   kind: AssistantActionKind,
   payload: Record<string, unknown>,
   summary: string,
+  extraResult: Record<string, unknown> = {},
 ): ToolOutcome {
   return {
     action: { kind, payload, summary },
-    result: { status: 'pending_confirmation', message: PENDING_MESSAGE, summary },
+    result: { status: 'pending_confirmation', message: PENDING_MESSAGE, summary, ...extraResult },
   }
+}
+
+/** The proposal's rows plus each card's name — for the action card's table only (see `executeActionPayload`). */
+function withCardNames(db: Db, cards: DeckCardInput[]) {
+  const names = loadCardNames(db, cards.map(card => card.catalogCardId))
+  return cards.map(card => ({ ...card, name: names[card.catalogCardId] ?? `#${card.catalogCardId}` }))
 }
 
 async function toolAddToInventory(db: Db, userId: string, args: unknown): Promise<ToolOutcome> {
@@ -430,17 +547,24 @@ async function toolCreateDeck(db: Db, userId: string, args: unknown): Promise<To
     requireAssignableFormat(db, userId, formatId)
   }
 
-  const cards: DeckCardInput[] = validateDeckCreateCardsInput({ cards: record.cards ?? [] }) ?? []
-  const missingIds = missingCatalogCardIds(db, cards.map(card => card.catalogCardId))
-  if (missingIds.length > 0) {
-    badRequest(`Unbekannte Karten-IDs: ${missingIds.join(', ')}`)
-  }
-  assertCardsFitSections(db, cards)
+  const cards = parseProposalCards(db, record.cards)
+  const preview = previewDeckProposal(db, userId, { cards, formatId })
 
   const totalQuantity = cards.reduce((sum, card) => sum + card.quantity, 0)
   const summary = `Neues Deck "${name}" mit ${totalQuantity} Karte(n) anlegen`
 
-  return pendingOutcome('create_deck', { name, description: null, formatId: formatId ?? null, cards }, summary)
+  // `formatName`, the rows' `name` and `preview` are display-only extras for
+  // the action card (a snapshot from proposal time) — `executeActionPayload`
+  // reads only the keys it needs and re-validates those, so the extras never
+  // influence what gets written.
+  return pendingOutcome('create_deck', {
+    name,
+    description: null,
+    formatId: formatId ?? null,
+    formatName: preview.formatName,
+    cards: withCardNames(db, cards),
+    preview,
+  }, summary, { preview })
 }
 
 async function toolUpdateDeckCards(db: Db, userId: string, args: unknown): Promise<ToolOutcome> {
@@ -448,27 +572,18 @@ async function toolUpdateDeckCards(db: Db, userId: string, args: unknown): Promi
   const deckId = requireNonEmptyString(record, 'deckId')
   const detail = getDeckDetail(db, userId, deckId)
 
-  const rawChanges = record.changes
-  if (!Array.isArray(rawChanges) || rawChanges.length === 0) {
-    badRequest('changes must be a non-empty array')
-  }
-  // Matches (and never exceeds) the bulk inventory endpoint's own cap
-  // (`INVENTORY_BULK_MAX_ITEMS`, server/utils/inventory.ts) — a deck-cards
-  // write is no less bounded than an inventory one.
-  if (rawChanges.length > INVENTORY_BULK_MAX_ITEMS) {
-    badRequest(`changes must contain at most ${INVENTORY_BULK_MAX_ITEMS} entries`)
-  }
-
-  const changes: DeckCardInput[] = rawChanges.map(raw => validateDeckCardInput(raw))
-  const missingIds = missingCatalogCardIds(db, changes.map(change => change.catalogCardId))
-  if (missingIds.length > 0) {
-    badRequest(`Unbekannte Karten-IDs: ${missingIds.join(', ')}`)
-  }
-  assertCardsFitSections(db, changes)
+  const changes = parseProposalChanges(db, record.changes)
+  const preview = previewDeckProposal(db, userId, { deckId, changes })
 
   const summary = `${changes.length} Kartenänderung(en) an Deck "${detail.name}"`
 
-  return pendingOutcome('update_deck_cards', { deckId, changes }, summary)
+  // `deckName`, the rows' `name` and `preview` are display-only (see create_deck above).
+  return pendingOutcome('update_deck_cards', {
+    deckId,
+    deckName: detail.name,
+    changes: withCardNames(db, changes),
+    preview,
+  }, summary, { preview })
 }
 
 // --- Registry --------------------------------------------------------------------
@@ -506,7 +621,7 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
   },
   {
     name: 'search_inventory',
-    description: 'Durchsucht das Inventar (die besessenen Karten) des Nutzers, optional gefiltert nach Name oder Sammlung.',
+    description: 'Durchsucht das Inventar (die besessenen Karten) des Nutzers, optional gefiltert nach Name oder Sammlung. Liefert je Karte Menge, Kartendaten (Typ, Attribut, Typ/Rasse, Stufe, ATK/DEF, Archetyp, isExtra = Extra-Deck-Karte; keinen Kartentext – dafür get_card) und maxCopies: die erlaubte Kopienzahl im Format (ohne formatId 3). Mit formatId fehlen im Format verbotene Karten. Bei truncated=true mit offset weiterblättern.',
     kind: 'read',
     parameters: {
       type: 'object',
@@ -514,6 +629,8 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
       properties: {
         query: { type: 'string', description: 'Kartenname oder Teil davon' },
         collectionId: { type: 'string', description: 'Nur diese Sammlung berücksichtigen' },
+        formatId: { type: 'string', description: 'Regelformat, dessen Kopienbegrenzung (maxCopies) gelten soll; verbotene Karten werden weggelassen' },
+        offset: { type: 'integer', description: 'Anzahl zu überspringender Treffer (zum Weiterblättern)' },
       },
     },
     run: async (ctx, args) => ({ result: toolSearchInventory(ctx.db, ctx.userId, args) }),
@@ -557,15 +674,42 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
   },
   {
     name: 'validate_deck',
-    description: 'Prüft ein Deck des Nutzers gegen ein Regelformat (das zugewiesene, oder ein angegebenes) und liefert Legalität und Probleme.',
+    description: 'Prüft ein Deck gegen ein Regelformat (das zugewiesene oder formatId) und liefert Legalität und Probleme. Mit cards (geplantes neues Deck) oder deckId + changes (geplante Änderungen) wird der Vorschlag geprüft, ohne etwas zu speichern: Ergebnis sind Anzahl je Sektion, Legalität und missing (Karten, von denen der Nutzer nicht genug besitzt). Vor create_deck/update_deck_cards aufrufen.',
     kind: 'read',
     parameters: {
       type: 'object',
       additionalProperties: false,
-      required: ['deckId'],
       properties: {
-        deckId: { type: 'string' },
-        formatId: { type: 'string', description: 'Weglassen, um das dem Deck zugewiesene Format zu verwenden' },
+        deckId: { type: 'string', description: 'Bestehendes Deck; weglassen, wenn cards ein neues Deck beschreibt' },
+        formatId: { type: 'string', description: 'Weglassen, um das dem Deck zugewiesene Format zu verwenden (ein neues Deck ohne formatId wird nicht auf Legalität geprüft)' },
+        cards: {
+          type: 'array',
+          description: 'Vollständige Kartenliste eines geplanten neuen Decks (ohne deckId)',
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['catalogCardId', 'section', 'quantity'],
+            properties: {
+              catalogCardId: { type: 'integer' },
+              section: { type: 'string', enum: ['main', 'extra', 'side'] },
+              quantity: { type: 'integer' },
+            },
+          },
+        },
+        changes: {
+          type: 'array',
+          description: 'Geplante Änderungen an deckId, wie bei update_deck_cards',
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['catalogCardId', 'section', 'quantity'],
+            properties: {
+              catalogCardId: { type: 'integer' },
+              section: { type: 'string', enum: ['main', 'extra', 'side'] },
+              quantity: { type: 'integer', description: 'Neue absolute Menge; 0 entfernt die Karte' },
+            },
+          },
+        },
       },
     },
     run: async (ctx, args) => ({ result: toolValidateDeck(ctx.db, ctx.userId, args) }),
@@ -601,7 +745,7 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
   },
   {
     name: 'create_deck',
-    description: 'Schlägt vor, ein neues Deck aus Katalogkarten anzulegen. Mutiert nichts direkt — legt einen Vorschlag an, den der Nutzer bestätigen muss.',
+    description: 'Schlägt vor, ein neues Deck aus Katalogkarten anzulegen. Mutiert nichts direkt — legt einen Vorschlag an, den der Nutzer bestätigen muss. Das Ergebnis enthält eine Vorschau (Anzahl, Legalität, fehlende Karten).',
     kind: 'write',
     parameters: {
       type: 'object',
@@ -629,7 +773,7 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
   },
   {
     name: 'update_deck_cards',
-    description: 'Schlägt Änderungen an den Karten eines bestehenden Decks des Nutzers vor (quantity 0 entfernt die Karte). Mutiert nichts direkt — legt einen Vorschlag an, den der Nutzer bestätigen muss.',
+    description: 'Schlägt Änderungen an den Karten eines bestehenden Decks des Nutzers vor. quantity ist die neue absolute Menge der Karte in dieser Sektion (keine Differenz); 0 entfernt die Karte. Mutiert nichts direkt — legt einen Vorschlag an, den der Nutzer bestätigen muss. Das Ergebnis enthält eine Vorschau (Anzahl, Legalität, fehlende Karten).',
     kind: 'write',
     parameters: {
       type: 'object',
@@ -721,6 +865,12 @@ function errorMessage(error: unknown): string {
  * allows. Reuses the same validators as the tool layer and the deck/
  * inventory APIs themselves, so this is defense-in-depth, not the only line
  * of defense.
+ *
+ * Only the keys a write needs are read (`name`/`description`/`formatId`/
+ * `cards` for create_deck, `deckId`/`changes` for update_deck_cards, and
+ * per row only `catalogCardId`/`section`/`quantity`); the display-only
+ * extras the tools store next to them (`preview`, `formatName`, `deckName`,
+ * each row's `name`) are ignored here, so they can never alter a write.
  *
  * Must run synchronously inside the caller's transaction (`applyAction`) —
  * every write util invoked here (`addOwnedCardsBulkSync`, `createDeck`,

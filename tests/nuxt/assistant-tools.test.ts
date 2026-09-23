@@ -232,6 +232,86 @@ describe('search_inventory', () => {
     const foreign = await createCollection(db, 'user-b', { name: 'Foreign', description: null })
     expect(await statusOf(() => tool('search_inventory').run({ db, userId: 'user-a' }, { collectionId: foreign.id }))).toBe(404)
   })
+
+  it('includes the deck-building card facts (no card text) and the default copy limit', async () => {
+    await own(db, 'user-a', CARD.darkMagician, 2)
+    await own(db, 'user-a', CARD.stardustDragon, 1)
+
+    const outcome = await tool('search_inventory').run({ db, userId: 'user-a' }, {})
+    const { items } = outcome.result as { items: Array<Record<string, unknown>> }
+    const byName = Object.fromEntries(items.map(item => [item.name, item]))
+
+    expect(byName['Dark Magician']).toMatchObject({
+      type: 'Normal Monster',
+      attribute: 'DARK',
+      race: 'Spellcaster',
+      level: 7,
+      atk: 2500,
+      def: 2100,
+      isExtra: false,
+      quantity: 2,
+      maxCopies: 3,
+    })
+    expect(byName['Stardust Dragon']).toMatchObject({ isExtra: true, maxCopies: 3 })
+    expect(byName['Dark Magician']).not.toHaveProperty('desc')
+  })
+
+  it('with formatId: reports each card\'s maxCopies and leaves out forbidden cards', async () => {
+    const format = createRuleFormat(db, 'user-a', validateRuleFormatInput({
+      name: 'Verbot',
+      rules: {
+        rules: [
+          { kind: 'card_status', status: 'forbidden', cardIds: [CARD.potOfGreed] },
+          { kind: 'filter', match: 'matching', filter: { types: ['Trap Card'] }, maxCopies: 1, label: 'Fallen limitiert' },
+        ],
+      },
+    }))
+    await own(db, 'user-a', CARD.darkMagician, 3)
+    await own(db, 'user-a', CARD.potOfGreed, 2)
+    await own(db, 'user-a', CARD.mirrorForce, 3)
+
+    const outcome = await tool('search_inventory').run({ db, userId: 'user-a' }, { formatId: format.id })
+    const result = outcome.result as { items: Array<{ name: string, maxCopies: number }>, total: number, formatName: string }
+
+    expect(result.formatName).toBe('Verbot')
+    expect(result.items.map(item => [item.name, item.maxCopies])).toEqual([
+      ['Dark Magician', 3],
+      ['Mirror Force', 1],
+    ])
+    expect(result.total).toBe(2)
+  })
+
+  it('404s for a formatId that is not the caller\'s or built in', async () => {
+    const foreign = createRuleFormat(db, 'user-b', validateRuleFormatInput({ name: 'Fremd', rules: { rules: [] } }))
+    expect(await statusOf(() => tool('search_inventory').run({ db, userId: 'user-a' }, { formatId: foreign.id }))).toBe(404)
+  })
+
+  it('pages with offset past the item cap', async () => {
+    const now = new Date()
+    const { toolResultItems } = getAssistantLimits()
+    const fillerIds = Array.from({ length: toolResultItems + 5 }, (_, i) => 90_000_000 + i)
+    db.insert(schema.catalogCard).values(fillerIds.map((id, i) => ({
+      id,
+      name: `Filler Card ${String(i).padStart(3, '0')}`,
+      type: 'Normal Monster',
+      desc: 'x',
+      syncedAt: now,
+    }))).run()
+    for (const id of fillerIds) {
+      await own(db, 'user-a', id, 1)
+    }
+
+    const first = (await tool('search_inventory').run({ db, userId: 'user-a' }, {})).result as { items: Array<{ name: string }>, truncated: boolean, total: number, offset: number }
+    expect(first).toMatchObject({ truncated: true, total: toolResultItems + 5, offset: 0 })
+    expect(first.items).toHaveLength(toolResultItems)
+
+    const second = (await tool('search_inventory').run({ db, userId: 'user-a' }, { offset: toolResultItems })).result as { items: Array<{ name: string }>, truncated: boolean }
+    expect(second.truncated).toBe(false)
+    expect(second.items).toHaveLength(5)
+    expect(second.items[0]!.name).toBe(`Filler Card ${String(toolResultItems).padStart(3, '0')}`)
+
+    expect(await statusOf(() => tool('search_inventory').run({ db, userId: 'user-a' }, { offset: -1 }))).toBe(400)
+  })
 })
 
 describe('list_collections', () => {
@@ -339,6 +419,70 @@ describe('validate_deck', () => {
     const deck = createDeck(db, 'user-a', { name: 'My Deck', description: null })
     expect(await statusOf(() => tool('validate_deck').run({ db, userId: 'user-a' }, { deckId: deck.id }))).toBe(400)
   })
+
+  it('checks a planned new deck (cards + formatId): counts, legality, and missing cards, without writing', async () => {
+    const format = createRuleFormat(db, 'user-a', validateRuleFormatInput({
+      name: 'Format',
+      rules: { rules: [{ kind: 'copies', maxCopies: 2 }] },
+    }))
+    await own(db, 'user-a', CARD.darkMagician, 1)
+
+    const outcome = await tool('validate_deck').run({ db, userId: 'user-a' }, {
+      formatId: format.id,
+      cards: [
+        { catalogCardId: CARD.darkMagician, section: 'main', quantity: 3 },
+        { catalogCardId: CARD.stardustDragon, section: 'extra', quantity: 1 },
+      ],
+    })
+
+    expect(outcome.result).toMatchObject({
+      formatId: format.id,
+      formatName: 'Format',
+      counts: { main: 3, extra: 1, side: 0, total: 4 },
+      validation: { legal: false, issues: [expect.stringContaining('Dark Magician')] },
+      missing: [
+        { catalogCardId: CARD.darkMagician, name: 'Dark Magician', needed: 3, owned: 1 },
+        { catalogCardId: CARD.stardustDragon, name: 'Stardust Dragon', needed: 1, owned: 0 },
+      ],
+    })
+    expect(listDecks(db, 'user-a', {}).items).toEqual([])
+  })
+
+  it('checks planned changes to an existing deck (deckId + changes) without applying them', async () => {
+    const deck = createDeck(db, 'user-a', { name: 'My Deck', description: null })
+    upsertDeckCard(db, 'user-a', deck.id, { catalogCardId: CARD.darkMagician, section: 'main', quantity: 1 })
+
+    const outcome = await tool('validate_deck').run({ db, userId: 'user-a' }, {
+      deckId: deck.id,
+      changes: [{ catalogCardId: CARD.potOfGreed, section: 'main', quantity: 2 }],
+    })
+
+    expect(outcome.result).toMatchObject({
+      formatId: null,
+      validation: null,
+      counts: { main: 3, extra: 0, side: 0, total: 3 },
+      missing: [
+        { catalogCardId: CARD.darkMagician, needed: 1, owned: 0 },
+        { catalogCardId: CARD.potOfGreed, needed: 2, owned: 0 },
+      ],
+    })
+    expect(getDeckDetail(db, 'user-a', deck.id).counts.main).toBe(1)
+  })
+
+  it('400s without deckId and cards, for cards together with deckId, and for a card in the wrong section', async () => {
+    const deck = createDeck(db, 'user-a', { name: 'My Deck', description: null })
+    expect(await statusOf(() => tool('validate_deck').run({ db, userId: 'user-a' }, {}))).toBe(400)
+    expect(await statusOf(() => tool('validate_deck').run({ db, userId: 'user-a' }, {
+      changes: [{ catalogCardId: CARD.darkMagician, section: 'main', quantity: 1 }],
+    }))).toBe(400)
+    expect(await statusOf(() => tool('validate_deck').run({ db, userId: 'user-a' }, {
+      deckId: deck.id,
+      cards: [{ catalogCardId: CARD.darkMagician, section: 'main', quantity: 1 }],
+    }))).toBe(400)
+    expect(await statusOf(() => tool('validate_deck').run({ db, userId: 'user-a' }, {
+      cards: [{ catalogCardId: CARD.stardustDragon, section: 'main', quantity: 1 }],
+    }))).toBe(400)
+  })
 })
 
 describe('add_to_inventory (write tool)', () => {
@@ -374,6 +518,34 @@ describe('create_deck (write tool)', () => {
     expect(withAction.action.summary).toContain('Neues Deck')
   })
 
+  it('attaches card names, the format name and a preview (legality + missing cards) to payload and result', async () => {
+    const format = createRuleFormat(db, 'user-a', validateRuleFormatInput({
+      name: 'Streng',
+      rules: { rules: [{ kind: 'copies', maxCopies: 1 }] },
+    }))
+    await own(db, 'user-a', CARD.darkMagician, 1)
+
+    const outcome = await tool('create_deck').run({ db, userId: 'user-a' }, {
+      name: 'Neues Deck',
+      formatId: format.id,
+      cards: [{ catalogCardId: CARD.darkMagician, section: 'main', quantity: 2 }],
+    }) as Extract<ToolOutcome, { action: unknown }>
+
+    const expectedPreview = {
+      formatId: format.id,
+      formatName: 'Streng',
+      counts: { main: 2, extra: 0, side: 0, total: 2 },
+      validation: { legal: false, issues: [expect.stringContaining('Dark Magician')] },
+      missing: [{ catalogCardId: CARD.darkMagician, name: 'Dark Magician', needed: 2, owned: 1 }],
+    }
+    expect(outcome.action.payload).toMatchObject({
+      formatName: 'Streng',
+      cards: [{ catalogCardId: CARD.darkMagician, section: 'main', quantity: 2, name: 'Dark Magician' }],
+      preview: expectedPreview,
+    })
+    expect(outcome.result).toMatchObject({ status: 'pending_confirmation', preview: expectedPreview })
+  })
+
   it('400s for a card placed in the wrong section', async () => {
     expect(await statusOf(() => tool('create_deck').run({ db, userId: 'user-a' }, {
       name: 'Neues Deck',
@@ -400,6 +572,31 @@ describe('update_deck_cards (write tool)', () => {
     const withAction = outcome as Extract<ToolOutcome, { action: unknown }>
     expect(withAction.action.kind).toBe('update_deck_cards')
     expect(withAction.action.summary).toContain('Mein Deck')
+  })
+
+  it('attaches the deck name, card names and a preview of the resulting deck to payload and result', async () => {
+    const deck = createDeck(db, 'user-a', { name: 'Mein Deck', description: null })
+    upsertDeckCard(db, 'user-a', deck.id, { catalogCardId: CARD.potOfGreed, section: 'main', quantity: 1 })
+    await own(db, 'user-a', CARD.potOfGreed, 1)
+
+    const outcome = await tool('update_deck_cards').run({ db, userId: 'user-a' }, {
+      deckId: deck.id,
+      changes: [{ catalogCardId: CARD.darkMagician, section: 'main', quantity: 2 }],
+    }) as Extract<ToolOutcome, { action: unknown }>
+
+    const expectedPreview = {
+      formatId: null,
+      validation: null,
+      counts: { main: 3, extra: 0, side: 0, total: 3 },
+      missing: [{ catalogCardId: CARD.darkMagician, name: 'Dark Magician', needed: 2, owned: 0 }],
+    }
+    expect(outcome.action.payload).toMatchObject({
+      deckId: deck.id,
+      deckName: 'Mein Deck',
+      changes: [{ catalogCardId: CARD.darkMagician, section: 'main', quantity: 2, name: 'Dark Magician' }],
+      preview: expectedPreview,
+    })
+    expect(outcome.result).toMatchObject({ preview: expectedPreview })
   })
 
   it('404s for a deck owned by another user', async () => {
@@ -456,6 +653,32 @@ describe('applyAction', () => {
 
     expect(updated.status).toBe('applied')
     expect(ownedQuantitiesByCard(db, 'user-a', [CARD.darkMagician]).get(CARD.darkMagician)).toBe(2)
+  })
+
+  it('applies the enriched create_deck / update_deck_cards payloads (names, preview) exactly as proposed', async () => {
+    const created = await tool('create_deck').run({ db, userId: 'user-a' }, {
+      name: 'KI-Deck',
+      cards: [{ catalogCardId: CARD.darkMagician, section: 'main', quantity: 2 }],
+    }) as Extract<ToolOutcome, { action: unknown }>
+    const createRow = insertPendingAction('user-a', created.action.kind, created.action.payload, created.action.summary)
+    const createResult = await applyAction(db, 'user-a', createRow.id)
+    expect(createResult.status).toBe('applied')
+    const deckId = (createResult.result as { id: string }).id
+    expect(getDeckDetail(db, 'user-a', deckId).sections.main).toEqual([
+      expect.objectContaining({ catalogCardId: CARD.darkMagician, quantity: 2 }),
+    ])
+
+    const updated = await tool('update_deck_cards').run({ db, userId: 'user-a' }, {
+      deckId,
+      changes: [
+        { catalogCardId: CARD.darkMagician, section: 'main', quantity: 0 },
+        { catalogCardId: CARD.potOfGreed, section: 'main', quantity: 1 },
+      ],
+    }) as Extract<ToolOutcome, { action: unknown }>
+    const updateRow = insertPendingAction('user-a', updated.action.kind, updated.action.payload, updated.action.summary)
+    expect((await applyAction(db, 'user-a', updateRow.id)).status).toBe('applied')
+    expect(getDeckDetail(db, 'user-a', deckId).sections.main.map(row => [row.catalogCardId, row.quantity]))
+      .toEqual([[CARD.potOfGreed, 1]])
   })
 
   it('409s when applying an already-resolved action', async () => {

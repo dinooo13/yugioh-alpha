@@ -1,6 +1,6 @@
 // Wire contract for Phase 6 (sharing and social features), shared by the
 // server and the UI. Dependency-free (same discipline as
-// shared/deck-assistant.ts): no Drizzle, no h3, no Vue. See
+// shared/assistant-chat.ts): no Drizzle, no h3, no Vue. See
 // docs/adr/0007-sharing-and-profile-model.md for the design rationale.
 
 import type { DeckCover } from './deck-cover'

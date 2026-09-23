@@ -2,7 +2,23 @@
 // the server (server/utils/assistant-*.ts, server/api/assistant/chat/**) and
 // the UI. Intentionally dependency-free beyond other pure shared modules, so
 // the UI can import types without pulling in server code. See
-// docs/adr/0010-chat-assistant-with-tools.md.
+// docs/adr/0010-chat-assistant-with-tools.md and
+// docs/adr/0011-deck-assistance-in-chat.md.
+
+/** `GET /api/assistant/status` — whether (and how) the assistant is configured on this server. */
+export interface AssistantStatus {
+  enabled: boolean
+  provider: 'openai' | 'fake' | null
+  model: string | null
+  /** For provider 'openai': the endpoint's host (never a key). */
+  baseUrl?: string | null
+  /** Whether the chat assistant (`/assistent`) is usable — same as `enabled`. */
+  chat: boolean
+  /** Whether chat turns may include images — true whenever the assistant is enabled. */
+  vision: boolean
+  /** The model used for image-containing chat turns when a vision model is configured; null = falls back to `model`. */
+  visionModel: string | null
+}
 
 export type AssistantMessageRole = 'user' | 'assistant' | 'tool'
 
@@ -49,9 +65,16 @@ export interface AssistantConversationListItem {
   updatedAt: string
 }
 
+/** The deck a conversation is linked to (ADR 0011); null once the deck is deleted. */
+export interface AssistantConversationDeckRef {
+  id: string
+  name: string
+}
+
 export interface AssistantConversationSummary {
   id: string
   title: string
+  deck: AssistantConversationDeckRef | null
   createdAt: string
   updatedAt: string
 }
@@ -60,6 +83,22 @@ export interface AssistantConversationDetail {
   conversation: AssistantConversationSummary
   messages: AssistantMessageView[]
   actions: AssistantActionView[]
+}
+
+/**
+ * What a proposed deck (a `create_deck` / `update_deck_cards` action, or a
+ * `validate_deck` call with `cards`/`changes`) would look like: counts,
+ * legality from the rule engine, and the cards the user doesn't own enough
+ * copies of. Computed when the proposal is made and stored in the action's
+ * `payload.preview` — a snapshot, not re-evaluated on read.
+ */
+export interface AssistantDeckPreview {
+  formatId: string | null
+  formatName: string | null
+  counts: { main: number, extra: number, side: number, total: number }
+  /** null when no format is in play (no legality statement). */
+  validation: { legal: boolean, issues: string[] } | null
+  missing: Array<{ catalogCardId: number, name: string, needed: number, owned: number }>
 }
 
 // --- Limits, shared by client-side validation and the server ------------------

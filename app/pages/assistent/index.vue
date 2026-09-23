@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import type { DeckAssistantStatus } from '~~/shared/deck-assistant'
+import type { AssistantConversationSummary } from '~~/shared/assistant-chat'
 import { apiErrorMessage } from '~/utils/card-entry'
+import { isAssistantIntent } from '~/utils/assistant-intents'
 
 useHead({ title: 'Assistent – yugioh alpha' })
 
@@ -13,26 +14,50 @@ const EXAMPLE_PROMPTS = [
   'Foto einer Karte hinzufügen',
 ]
 
-const { data: status } = await useFetch<DeckAssistantStatus>('/api/assistant/status', {
-  headers: import.meta.server ? useRequestHeaders(['cookie']) : undefined,
-  default: () => ({ enabled: false, provider: null, model: null, chat: false, vision: false, visionModel: null }),
-})
+const route = useRoute()
+const router = useRouter()
+
+const { data: status } = await useAssistantStatus()
 
 const { data: conversations } = await useAssistantConversations()
 
+// Deck entry points (docs/adr/0011-deck-assistance-in-chat.md) link here
+// with `?deckId=` ("Mit KI bearbeiten") or `?intent=new-deck` ("Mit KI
+// erstellen"): start a conversation for that on mount instead of showing
+// the empty state or jumping to the newest thread. Plain links, so the
+// side effect (creating the conversation) only ever happens client-side.
+const startDeckId = typeof route.query.deckId === 'string' && route.query.deckId !== '' ? route.query.deckId : null
+const startIntent = startDeckId ? 'edit-deck' : isAssistantIntent(route.query.intent) ? route.query.intent : null
+const isStarting = ref(Boolean(status.value?.chat && startIntent))
+
 // A returning user almost always wants to pick up where they left off, not
 // stare at the empty state again — jump straight to the newest thread.
-if (status.value?.chat && (conversations.value?.items.length ?? 0) > 0) {
+if (!isStarting.value && status.value?.chat && (conversations.value?.items.length ?? 0) > 0) {
   await navigateTo(`/assistent/${conversations.value!.items[0]!.id}`)
 }
 
 const isCreating = ref(false)
 const errorMessage = ref('')
 
-async function createConversation(): Promise<{ id: string }> {
+async function createConversation(body?: { deckId: string }): Promise<AssistantConversationSummary> {
   errorMessage.value = ''
-  return $fetch<{ id: string }>('/api/assistant/chat', { method: 'POST' })
+  return $fetch<AssistantConversationSummary>('/api/assistant/chat', { method: 'POST', ...(body ? { body } : {}) })
 }
+
+onMounted(async () => {
+  if (!isStarting.value || !startIntent) {
+    return
+  }
+  try {
+    const conversation = await createConversation(startDeckId ? { deckId: startDeckId } : undefined)
+    await navigateTo(`/assistent/${conversation.id}?intent=${startIntent}`, { replace: true })
+  }
+  catch (error) {
+    errorMessage.value = apiErrorMessage(error, 'Die Unterhaltung konnte nicht erstellt werden.')
+    isStarting.value = false
+    await router.replace({ query: {} })
+  }
+})
 
 async function startWithPrompt(prompt: string) {
   if (isCreating.value) {
@@ -84,13 +109,15 @@ async function startEmpty() {
       </p>
     </div>
 
-    <UAlert
-      v-if="!status?.chat"
-      color="warning"
-      variant="subtle"
-      icon="i-lucide-triangle-alert"
-      title="Der KI-Assistent ist nicht konfiguriert. Setze NUXT_ASSISTANT_API_KEY (oder OPENAI_API_KEY) bzw. NUXT_ASSISTANT_BASE_URL auf dem Server."
-    />
+    <AssistantUnavailableNotice v-if="!status?.chat" />
+
+    <p
+      v-else-if="isStarting"
+      class="text-sm text-gray-500"
+      role="status"
+    >
+      Unterhaltung wird vorbereitet …
+    </p>
 
     <template v-else>
       <p
