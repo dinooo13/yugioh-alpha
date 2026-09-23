@@ -73,14 +73,10 @@ const cards = computed<OnboardingCard[]>(() => [
 
 <template>
   <div class="space-y-6">
-    <div>
-      <h1 class="text-2xl font-semibold text-gray-900">
-        Dashboard
-      </h1>
-      <p class="mt-2 max-w-prose text-gray-500">
-        Willkommen bei yugioh alpha — hier siehst du deinen Bestand, deine Decks und anstehende Turniere auf einen Blick.
-      </p>
-    </div>
+    <LayoutPageHeader
+      title="Dashboard"
+      description="Willkommen bei yugioh alpha — hier siehst du deinen Bestand, deine Decks und anstehende Turniere auf einen Blick."
+    />
 
     <UAlert
       v-if="isFirstRun"

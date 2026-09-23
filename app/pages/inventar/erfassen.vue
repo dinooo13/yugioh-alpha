@@ -102,23 +102,15 @@ function onSaved(result: { created: number, merged: number }) {
 
 <template>
   <div class="space-y-6">
-    <div>
-      <NuxtLink
+    <div class="space-y-2">
+      <LayoutBackLink
         :to="{ path: '/inventar', query: presetCollectionId ? { collectionId: presetCollectionId } : {} }"
-        class="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900"
-      >
-        <UIcon
-          name="i-lucide-arrow-left"
-          class="size-4"
-        />
-        Zurück zum Inventar
-      </NuxtLink>
-      <h1 class="mt-2 text-2xl font-semibold text-gray-900">
-        Schnellerfassung
-      </h1>
-      <p class="mt-1 text-sm text-gray-500">
-        Karten als Liste tippen — und vor dem Speichern prüfen.
-      </p>
+        label="Zurück zum Inventar"
+      />
+      <LayoutPageHeader
+        title="Schnellerfassung"
+        description="Karten als Liste tippen — und vor dem Speichern prüfen."
+      />
     </div>
 
     <UAlert

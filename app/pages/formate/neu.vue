@@ -11,20 +11,15 @@ async function onSaved(format: { id: string, name: string }) {
 
 <template>
   <div class="space-y-6">
-    <div>
-      <NuxtLink
+    <div class="space-y-2">
+      <LayoutBackLink
         to="/formate"
-        class="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900"
-      >
-        <UIcon
-          name="i-lucide-arrow-left"
-          class="size-4"
-        />
-        Zurück zu den Formaten
-      </NuxtLink>
-      <h1 class="mt-2 text-2xl font-semibold text-gray-900">
-        Neues Format
-      </h1>
+        label="Zurück zu den Formaten"
+      />
+      <LayoutPageHeader
+        title="Neues Format"
+        description="Lege Deckgrößen, Kopienlimits und eigene Regeln fest."
+      />
     </div>
 
     <FormatsRuleFormatEditor @saved="onSaved" />

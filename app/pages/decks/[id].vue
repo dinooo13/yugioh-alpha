@@ -604,16 +604,10 @@ async function deleteDeck() {
 <template>
   <div class="space-y-6">
     <div>
-      <NuxtLink
+      <LayoutBackLink
         to="/decks"
-        class="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900"
-      >
-        <UIcon
-          name="i-lucide-arrow-left"
-          class="size-4"
-        />
-        Zurück zu den Decks
-      </NuxtLink>
+        label="Zurück zu den Decks"
+      />
     </div>
 
     <UAlert

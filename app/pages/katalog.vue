@@ -268,15 +268,11 @@ async function onAddedToInventory() {
 
 <template>
   <div class="space-y-6">
-    <header class="space-y-4">
-      <div>
-        <h1 class="text-2xl font-semibold text-gray-900">
-          Katalog
-        </h1>
-        <p class="mt-2 max-w-2xl text-sm text-gray-500">
-          Durchsuche den globalen Kartenkatalog nach Name, Typ, Attribut, Monsterart, Level und Set.
-        </p>
-      </div>
+    <div class="space-y-4">
+      <LayoutPageHeader
+        title="Katalog"
+        description="Durchsuche den globalen Kartenkatalog nach Name, Typ, Attribut, Monsterart, Level und Set."
+      />
 
       <section class="space-y-3 border-y border-gray-200 py-4">
         <div class="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_repeat(3,minmax(10rem,12rem))]">
@@ -377,7 +373,7 @@ async function onAddedToInventory() {
           />
         </div>
       </section>
-    </header>
+    </div>
 
     <div class="flex flex-wrap items-center justify-between gap-3">
       <p class="text-sm font-medium text-gray-700">
@@ -432,19 +428,14 @@ async function onAddedToInventory() {
       />
     </div>
 
-    <section
+    <LayoutEmptyState
       v-else-if="cards.total === 0"
-      class="border-y border-dashed border-gray-300 py-12 text-center"
-    >
-      <h2 class="text-base font-semibold text-gray-900">
-        {{ filtersActive ? 'Keine Karten gefunden' : 'Noch kein Katalog importiert' }}
-      </h2>
-      <p class="mx-auto mt-2 max-w-xl text-sm text-gray-500">
-        {{ filtersActive
-          ? 'Passe Suche oder Filter an, um mehr Treffer zu sehen.'
-          : 'Starte zuerst den Katalog-Sync, damit Karten hier durchsucht und gefiltert werden können.' }}
-      </p>
-    </section>
+      :icon="filtersActive ? 'i-lucide-search-x' : 'i-lucide-book-open'"
+      :title="filtersActive ? 'Keine Karten gefunden' : 'Noch kein Katalog importiert'"
+      :description="filtersActive
+        ? 'Passe Suche oder Filter an, um mehr Treffer zu sehen.'
+        : 'Starte zuerst den Katalog-Sync, damit Karten hier durchsucht und gefiltert werden können.'"
+    />
 
     <section
       v-else

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { pluralize } from '~~/shared/plural'
 import type { SharedCardListResponse } from '~~/shared/sharing'
 
 definePageMeta({ layout: 'public' })
@@ -57,26 +58,16 @@ function onPage(value: number) {
 
     <template v-else-if="data">
       <div>
-        <NuxtLink
+        <LayoutBackLink
           :to="`/spieler/${route.params.handle}`"
-          class="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900"
-        >
-          <UIcon
-            name="i-lucide-arrow-left"
-            class="size-4"
-          />
-          Zurück zum Profil
-        </NuxtLink>
+          label="Zurück zum Profil"
+        />
       </div>
 
-      <div>
-        <h1 class="text-2xl font-semibold text-gray-900">
-          {{ pageTitle }}
-        </h1>
-        <p class="mt-1 text-sm text-gray-500">
-          {{ data.total }} Karte<span v-if="data.total !== 1">n</span>
-        </p>
-      </div>
+      <LayoutPageHeader
+        :title="pageTitle"
+        :description="pluralize(data.total, 'Karte', 'Karten')"
+      />
 
       <SharingSharedCardList
         :items="data.items"

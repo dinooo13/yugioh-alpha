@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { pluralize } from '~~/shared/plural'
 import type { SharedDeckView } from '~~/shared/sharing'
 
 definePageMeta({ layout: 'public' })
@@ -28,44 +29,38 @@ useHead({
 
     <template v-else-if="data">
       <div>
-        <NuxtLink
+        <LayoutBackLink
           :to="`/spieler/${route.params.handle}`"
-          class="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900"
-        >
-          <UIcon
-            name="i-lucide-arrow-left"
-            class="size-4"
-          />
-          Zurück zum Profil
-        </NuxtLink>
-      </div>
-
-      <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div class="min-w-0">
-          <h1 class="truncate text-2xl font-semibold text-gray-900">
-            {{ data.deck.name }}
-          </h1>
-          <p class="mt-1 text-sm text-gray-500">
-            Geteilt von {{ data.owner.displayName }}
-          </p>
-          <p
-            v-if="data.deck.description"
-            class="mt-1 max-w-prose text-sm text-gray-500"
-          >
-            {{ data.deck.description }}
-          </p>
-          <p class="mt-1 text-sm text-gray-500">
-            {{ data.counts.total }} Karte<span v-if="data.counts.total !== 1">n</span> insgesamt · Nur ansehen
-          </p>
-        </div>
-
-        <UButton
-          v-if="data.isOwner"
-          icon="i-lucide-pencil"
-          label="Bearbeiten"
-          :to="`/decks/${route.params.id}`"
+          label="Zurück zum Profil"
         />
       </div>
+
+      <LayoutPageHeader
+        :title="data.deck.name"
+        :description="`Geteilt von ${data.owner.displayName}`"
+        truncate
+      >
+        <p
+          v-if="data.deck.description"
+          class="mt-1 max-w-prose text-sm text-gray-500"
+        >
+          {{ data.deck.description }}
+        </p>
+        <p class="mt-1 text-sm text-gray-500">
+          {{ pluralize(data.counts.total, 'Karte', 'Karten') }} insgesamt · Nur ansehen
+        </p>
+
+        <template
+          v-if="data.isOwner"
+          #actions
+        >
+          <UButton
+            icon="i-lucide-pencil"
+            label="Bearbeiten"
+            :to="`/decks/${route.params.id}`"
+          />
+        </template>
+      </LayoutPageHeader>
 
       <section
         v-if="data.format"

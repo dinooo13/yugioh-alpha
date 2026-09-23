@@ -48,16 +48,10 @@ async function cloneFormat() {
 <template>
   <div class="space-y-6">
     <div>
-      <NuxtLink
+      <LayoutBackLink
         to="/formate"
-        class="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900"
-      >
-        <UIcon
-          name="i-lucide-arrow-left"
-          class="size-4"
-        />
-        Zurück zu den Formaten
-      </NuxtLink>
+        label="Zurück zu den Formaten"
+      />
     </div>
 
     <UAlert
@@ -69,27 +63,26 @@ async function cloneFormat() {
     />
 
     <template v-else-if="format">
-      <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div class="min-w-0">
-          <h1 class="truncate text-2xl font-semibold text-gray-900">
-            {{ format.name }}
-          </h1>
-          <p class="mt-1 text-sm text-gray-500">
-            {{ format.isBuiltin
-              ? 'Offizielles Format – schreibgeschützt. Klone es, um eigene Regeln zu ergänzen.'
-              : 'Eigenes Format' }}
-          </p>
-        </div>
-
-        <UButton
+      <LayoutPageHeader
+        :title="format.name"
+        :description="format.isBuiltin
+          ? 'Offizielles Format – schreibgeschützt. Klone es, um eigene Regeln zu ergänzen.'
+          : 'Eigenes Format'"
+        truncate
+      >
+        <template
           v-if="format.isBuiltin"
-          icon="i-lucide-copy"
-          color="neutral"
-          variant="outline"
-          label="Klonen"
-          @click="cloneFormat"
-        />
-      </div>
+          #actions
+        >
+          <UButton
+            icon="i-lucide-copy"
+            color="neutral"
+            variant="outline"
+            label="Klonen"
+            @click="cloneFormat"
+          />
+        </template>
+      </LayoutPageHeader>
 
       <p
         v-if="errorMessage"

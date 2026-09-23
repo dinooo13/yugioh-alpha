@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { pluralize } from '~~/shared/plural'
 import type { InventorySearchFilters } from '~/components/inventory/InventorySearchPanel.vue'
 import { apiErrorMessage } from '~/utils/card-entry'
 import type { InventorySearchResultItem } from '~/utils/inventory-search-result'
@@ -352,17 +353,11 @@ async function onSaved() {
 
 <template>
   <div class="space-y-6">
-    <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-      <div>
-        <h1 class="text-2xl font-semibold text-gray-900">
-          {{ headerTitle }}
-        </h1>
-        <p class="mt-1 text-sm text-gray-500">
-          {{ headerCount }} Karte<span v-if="headerCount !== 1">n</span>
-        </p>
-      </div>
-
-      <div class="flex flex-wrap items-center gap-2">
+    <LayoutPageHeader
+      :title="headerTitle"
+      :description="pluralize(headerCount, 'Karte', 'Karten')"
+    >
+      <template #actions>
         <UButton
           :to="{ path: '/inventar/erfassen', query: collectionId ? { collectionId } : undefined }"
           icon="i-lucide-zap"
@@ -375,8 +370,8 @@ async function onSaved() {
           label="Karte hinzufügen"
           @click="() => { isPickerOpen = true }"
         />
-      </div>
-    </div>
+      </template>
+    </LayoutPageHeader>
 
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <div class="flex flex-1 flex-wrap items-center gap-3">
@@ -438,7 +433,7 @@ async function onSaved() {
       class="space-y-4"
     >
       <p class="text-sm text-gray-500">
-        {{ searchTotal }} Karte<span v-if="searchTotal !== 1">n</span>
+        {{ pluralize(searchTotal, 'Karte', 'Karten') }}
       </p>
 
       <div
@@ -475,47 +470,29 @@ async function onSaved() {
           </template>
         </UAlert>
 
-        <div
+        <LayoutEmptyState
           v-else-if="!hasAnyFilter"
-          class="flex flex-col items-center px-6 py-12 text-center"
+          icon="i-lucide-archive"
+          title="Inventar ist leer"
+          description="Suche eine Karte im Katalog und füge deine ersten Exemplare hinzu."
+          :bordered="false"
         >
-          <div class="flex size-12 items-center justify-center rounded-full bg-gray-100 text-gray-500">
-            <UIcon
-              name="i-lucide-archive"
-              class="size-6"
+          <template #actions>
+            <UButton
+              icon="i-lucide-plus"
+              label="Karte hinzufügen"
+              @click="() => { isPickerOpen = true }"
             />
-          </div>
-          <h2 class="mt-4 text-base font-semibold text-gray-900">
-            Inventar ist leer
-          </h2>
-          <p class="mt-1 max-w-sm text-sm text-gray-500">
-            Suche eine Karte im Katalog und füge deine ersten Exemplare hinzu.
-          </p>
-          <UButton
-            icon="i-lucide-plus"
-            label="Karte hinzufügen"
-            class="mt-4"
-            @click="() => { isPickerOpen = true }"
-          />
-        </div>
+          </template>
+        </LayoutEmptyState>
 
-        <div
+        <LayoutEmptyState
           v-else
-          class="flex flex-col items-center px-6 py-12 text-center"
-        >
-          <div class="flex size-12 items-center justify-center rounded-full bg-gray-100 text-gray-500">
-            <UIcon
-              name="i-lucide-search-x"
-              class="size-6"
-            />
-          </div>
-          <h2 class="mt-4 text-base font-semibold text-gray-900">
-            Keine Treffer für diese Filter
-          </h2>
-          <p class="mt-1 max-w-sm text-sm text-gray-500">
-            Passe die Suche oder die Filter an, um mehr Karten zu finden.
-          </p>
-        </div>
+          icon="i-lucide-search-x"
+          title="Keine Treffer für diese Filter"
+          description="Passe die Suche oder die Filter an, um mehr Karten zu finden."
+          :bordered="false"
+        />
       </div>
 
       <div
@@ -568,29 +545,21 @@ async function onSaved() {
           </li>
         </ul>
 
-        <div
+        <LayoutEmptyState
           v-else-if="items.length === 0"
-          class="flex flex-col items-center px-6 py-12 text-center"
+          icon="i-lucide-archive"
+          :title="collectionId ? 'Noch keine Karten in dieser Sammlung' : 'Keine Karten im Inventar'"
+          description="Suche eine Karte im Katalog und füge deine ersten Exemplare hinzu."
+          :bordered="false"
         >
-          <div class="flex size-12 items-center justify-center rounded-full bg-gray-100 text-gray-500">
-            <UIcon
-              name="i-lucide-archive"
-              class="size-6"
+          <template #actions>
+            <UButton
+              icon="i-lucide-plus"
+              label="Karte hinzufügen"
+              @click="() => { isPickerOpen = true }"
             />
-          </div>
-          <h2 class="mt-4 text-base font-semibold text-gray-900">
-            {{ collectionId ? 'Noch keine Karten in dieser Sammlung' : 'Keine Karten im Inventar' }}
-          </h2>
-          <p class="mt-1 max-w-sm text-sm text-gray-500">
-            Suche eine Karte im Katalog und füge deine ersten Exemplare hinzu.
-          </p>
-          <UButton
-            icon="i-lucide-plus"
-            label="Karte hinzufügen"
-            class="mt-4"
-            @click="() => { isPickerOpen = true }"
-          />
-        </div>
+          </template>
+        </LayoutEmptyState>
 
         <ul
           v-else

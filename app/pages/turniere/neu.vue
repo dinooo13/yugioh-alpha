@@ -87,20 +87,15 @@ async function submit() {
 
 <template>
   <div class="max-w-2xl space-y-6">
-    <div>
-      <NuxtLink
+    <div class="space-y-2">
+      <LayoutBackLink
         to="/turniere"
-        class="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900"
-      >
-        <UIcon
-          name="i-lucide-arrow-left"
-          class="size-4"
-        />
-        Zurück zu den Turnieren
-      </NuxtLink>
-      <h1 class="mt-2 text-2xl font-semibold text-gray-900">
-        Neues Turnier
-      </h1>
+        label="Zurück zu den Turnieren"
+      />
+      <LayoutPageHeader
+        title="Neues Turnier"
+        description="Spieler lädst du nach dem Anlegen per E-Mail oder als Gast ein."
+      />
     </div>
 
     <form

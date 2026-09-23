@@ -202,16 +202,10 @@ const actionHint = computed(() => {
 <template>
   <div class="space-y-6">
     <div>
-      <NuxtLink
+      <LayoutBackLink
         to="/turniere"
-        class="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900"
-      >
-        <UIcon
-          name="i-lucide-arrow-left"
-          class="size-4"
-        />
-        Zurück zu den Turnieren
-      </NuxtLink>
+        label="Zurück zu den Turnieren"
+      />
     </div>
 
     <UAlert
@@ -231,105 +225,99 @@ const actionHint = computed(() => {
     </div>
 
     <template v-else-if="tournament">
-      <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div class="min-w-0">
-          <h1 class="truncate text-2xl font-semibold text-gray-900">
-            {{ tournament.name }}
-          </h1>
-          <p
-            v-if="tournament.description"
-            class="mt-1 max-w-prose text-sm text-gray-500"
-          >
-            {{ tournament.description }}
-          </p>
-
-          <div class="mt-2 flex flex-wrap items-center gap-2">
-            <UBadge
-              :color="STATUS_COLORS[tournament.status]"
-              variant="subtle"
-              :label="TOURNAMENT_STATUS_LABELS[tournament.status]"
-            />
-            <UBadge
-              v-if="tournament.format"
-              color="neutral"
-              variant="subtle"
-              icon="i-lucide-scroll-text"
-              :label="tournament.format.name"
-            />
-            <span
-              v-else
-              class="text-sm text-gray-500"
-            >Ohne Format</span>
-          </div>
-
-          <dl class="mt-2 space-y-0.5 text-sm text-gray-500">
-            <div>Paarungssystem: {{ PAIRING_SYSTEM_LABELS[tournament.pairingSystem] }}</div>
-            <div v-if="tournament.rounds.length === 0">
-              Noch nicht gestartet
-            </div>
-            <div v-else>
-              Runde {{ tournament.rounds.length }} von {{ tournament.plannedRounds ?? '–' }}
-            </div>
-            <div>Turnierleitung: {{ tournament.organizerName }}</div>
-          </dl>
+      <LayoutPageHeader
+        :title="tournament.name"
+        :description="tournament.description ?? undefined"
+        truncate
+      >
+        <div class="mt-2 flex flex-wrap items-center gap-2">
+          <UBadge
+            :color="STATUS_COLORS[tournament.status]"
+            variant="subtle"
+            :label="TOURNAMENT_STATUS_LABELS[tournament.status]"
+          />
+          <UBadge
+            v-if="tournament.format"
+            color="neutral"
+            variant="subtle"
+            icon="i-lucide-scroll-text"
+            :label="tournament.format.name"
+          />
+          <span
+            v-else
+            class="text-sm text-gray-500"
+          >Ohne Format</span>
         </div>
 
-        <div
+        <dl class="mt-2 space-y-0.5 text-sm text-gray-500">
+          <div>Paarungssystem: {{ PAIRING_SYSTEM_LABELS[tournament.pairingSystem] }}</div>
+          <div v-if="tournament.rounds.length === 0">
+            Noch nicht gestartet
+          </div>
+          <div v-else>
+            Runde {{ tournament.rounds.length }} von {{ tournament.plannedRounds ?? '–' }}
+          </div>
+          <div>Turnierleitung: {{ tournament.organizerName }}</div>
+        </dl>
+
+        <template
           v-if="tournament.role === 'organizer'"
-          class="flex shrink-0 flex-col gap-1.5 sm:items-end"
+          #actions
         >
-          <div class="flex flex-wrap items-center gap-2 sm:justify-end">
-            <template v-if="tournament.status === 'registration'">
+          <div class="flex flex-col gap-1.5 sm:items-end">
+            <div class="flex flex-wrap items-center gap-2 sm:justify-end">
+              <template v-if="tournament.status === 'registration'">
+                <UButton
+                  label="Turnier starten"
+                  color="primary"
+                  :disabled="!tournament.canStart || busy"
+                  :title="startTitle"
+                  @click="startTournament"
+                />
+              </template>
+              <template v-else-if="tournament.status === 'running'">
+                <UButton
+                  label="Runde abschließen"
+                  :color="primaryRunningAction === 'complete' ? 'primary' : 'neutral'"
+                  :variant="primaryRunningAction === 'complete' ? 'solid' : 'outline'"
+                  :disabled="!tournament.canCompleteRound || busy"
+                  :title="completeRoundTitle"
+                  @click="completeRound"
+                />
+                <UButton
+                  label="Nächste Runde"
+                  :color="primaryRunningAction === 'next' ? 'primary' : 'neutral'"
+                  :variant="primaryRunningAction === 'next' ? 'solid' : 'outline'"
+                  :disabled="!tournament.canCreateRound || busy"
+                  :title="createRoundTitle"
+                  @click="createNextRound"
+                />
+                <UButton
+                  label="Turnier abschließen"
+                  :color="primaryRunningAction === 'finish' ? 'primary' : 'neutral'"
+                  :variant="primaryRunningAction === 'finish' ? 'solid' : 'outline'"
+                  :disabled="!tournament.canFinish || busy"
+                  :title="finishTitle"
+                  @click="onFinishClick"
+                />
+              </template>
               <UButton
-                label="Turnier starten"
-                color="primary"
-                :disabled="!tournament.canStart || busy"
-                :title="startTitle"
-                @click="startTournament"
+                color="error"
+                variant="outline"
+                label="Turnier löschen"
+                :disabled="busy"
+                @click="deleteTournament"
               />
-            </template>
-            <template v-else-if="tournament.status === 'running'">
-              <UButton
-                label="Runde abschließen"
-                :color="primaryRunningAction === 'complete' ? 'primary' : 'neutral'"
-                :variant="primaryRunningAction === 'complete' ? 'solid' : 'outline'"
-                :disabled="!tournament.canCompleteRound || busy"
-                :title="completeRoundTitle"
-                @click="completeRound"
-              />
-              <UButton
-                label="Nächste Runde"
-                :color="primaryRunningAction === 'next' ? 'primary' : 'neutral'"
-                :variant="primaryRunningAction === 'next' ? 'solid' : 'outline'"
-                :disabled="!tournament.canCreateRound || busy"
-                :title="createRoundTitle"
-                @click="createNextRound"
-              />
-              <UButton
-                label="Turnier abschließen"
-                :color="primaryRunningAction === 'finish' ? 'primary' : 'neutral'"
-                :variant="primaryRunningAction === 'finish' ? 'solid' : 'outline'"
-                :disabled="!tournament.canFinish || busy"
-                :title="finishTitle"
-                @click="onFinishClick"
-              />
-            </template>
-            <UButton
-              color="error"
-              variant="outline"
-              label="Turnier löschen"
-              :disabled="busy"
-              @click="deleteTournament"
-            />
+            </div>
+            <p
+              v-if="actionHint"
+              class="text-xs text-gray-500"
+            >
+              {{ actionHint }}
+            </p>
           </div>
-          <p
-            v-if="actionHint"
-            class="text-xs text-gray-500"
-          >
-            {{ actionHint }}
-          </p>
-        </div>
-      </div>
+        </template>
+      </LayoutPageHeader>
 
       <UAlert
         v-if="tournament.status === 'finished'"
