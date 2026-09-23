@@ -50,18 +50,26 @@ const isEmpty = computed(() => {
     <SharingNotFoundNotice v-if="error" />
 
     <template v-else-if="data">
-      <LayoutPageHeader
-        :title="data.profile.displayName"
-        :description="`@${data.profile.handle}`"
-        class="rounded-md border border-gray-200 bg-white p-6"
-      >
-        <p
-          v-if="data.profile.bio"
-          class="mt-3 max-w-prose text-sm text-gray-700"
+      <div class="flex items-start gap-4 rounded-md border border-gray-200 bg-white p-6">
+        <ProfileAvatar
+          size="3xl"
+          :name="data.profile.displayName"
+          :handle="data.profile.handle"
+          class="shrink-0"
+        />
+        <LayoutPageHeader
+          :title="data.profile.displayName"
+          :description="`@${data.profile.handle}`"
+          class="min-w-0 flex-1"
         >
-          {{ data.profile.bio }}
-        </p>
-      </LayoutPageHeader>
+          <p
+            v-if="data.profile.bio"
+            class="mt-3 max-w-prose text-sm text-gray-700"
+          >
+            {{ data.profile.bio }}
+          </p>
+        </LayoutPageHeader>
+      </div>
 
       <!-- The owner sees their own profile through the visitor's lens —
            say so, so private items (badged below) aren't mistaken for shared. -->
@@ -118,24 +126,41 @@ const isEmpty = computed(() => {
             <li
               v-for="deck in data.decks"
               :key="deck.id"
-              class="rounded-md border border-gray-200 bg-white p-4"
+              class="flex gap-3 rounded-md border border-gray-200 bg-white p-4"
             >
+              <!-- Decorative cover (#29) next to the deck name link. -->
               <NuxtLink
                 :to="`/spieler/${handle}/decks/${deck.id}`"
-                class="min-w-0"
+                tabindex="-1"
+                aria-hidden="true"
+                class="shrink-0 self-start"
               >
-                <h3 class="truncate text-base font-semibold text-gray-900 hover:text-primary">
-                  {{ deck.name }}
-                </h3>
+                <CardThumb
+                  size="md"
+                  :src="deck.cover?.imageSmall"
+                  :src-large="deck.cover?.imageLarge"
+                  :alt="deck.cover?.name ?? deck.name"
+                  :no-image-label="deck.cover ? 'Kein Bild' : 'Leer'"
+                />
               </NuxtLink>
-              <p class="mt-1 text-xs text-gray-500">
-                {{ pluralize(deck.cardCount, 'Karte', 'Karten') }}
-              </p>
-              <SharingVisibilityBadge
-                v-if="data.viewer.isOwner"
-                class="mt-2"
-                :visibility="deck.visibility"
-              />
+              <div class="min-w-0 flex-1">
+                <NuxtLink
+                  :to="`/spieler/${handle}/decks/${deck.id}`"
+                  class="block min-w-0"
+                >
+                  <h3 class="truncate text-base font-semibold text-gray-900 hover:text-primary">
+                    {{ deck.name }}
+                  </h3>
+                </NuxtLink>
+                <p class="mt-1 text-xs text-gray-500">
+                  {{ pluralize(deck.cardCount, 'Karte', 'Karten') }}
+                </p>
+                <SharingVisibilityBadge
+                  v-if="data.viewer.isOwner"
+                  class="mt-2"
+                  :visibility="deck.visibility"
+                />
+              </div>
             </li>
           </ul>
         </section>

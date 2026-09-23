@@ -3,6 +3,7 @@ import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
 import { DecksDeckFormModal, USelect } from '#components'
 import DecksPage from '~/pages/decks/index.vue'
 import { optionLabels, selectWithOption } from './fixtures/select-wrapper'
+import type { DeckCover } from '~~/shared/deck-cover'
 
 interface DeckListItem {
   id: string
@@ -17,6 +18,7 @@ interface DeckListItem {
   formatId: string | null
   formatName: string | null
   legal: boolean | null
+  cover: DeckCover | null
   createdAt: string
   updatedAt: string
 }
@@ -59,6 +61,12 @@ function deck(overrides: Partial<DeckListItem> = {}): DeckListItem {
     formatId: null,
     formatName: null,
     legal: null,
+    cover: {
+      catalogCardId: 46986414,
+      name: 'Dark Magician',
+      imageSmall: 'https://images.example/cards_small/46986414.jpg',
+      imageLarge: 'https://images.example/cards/46986414.jpg',
+    },
     createdAt: '2025-01-01T00:00:00.000Z',
     updatedAt: '2025-01-02T00:00:00.000Z',
     ...overrides,
@@ -131,6 +139,29 @@ describe('decks page', () => {
     // Each deck links into its editor.
     const links = component.findAll('a').map(link => link.attributes('href'))
     expect(links).toContain('/decks/deck-2')
+  })
+
+  it('shows the cover card on each deck tile, and an "Leer" placeholder for a deck without one (#29)', async () => {
+    state.decks = {
+      items: [
+        deck(),
+        deck({ id: 'deck-2', name: 'Leeres Deck', mainCount: 0, extraCount: 0, cardCount: 0, cover: null }),
+      ],
+      total: 2,
+      page: 1,
+      pageSize: 20,
+    }
+
+    const component = await mountSuspended(DecksPage)
+
+    const cover = component.find('img[src="https://images.example/cards_small/46986414.jpg"]')
+    expect(cover.exists()).toBe(true)
+    expect(cover.attributes('alt')).toBe('Dark Magician')
+    // The cover link is decorative (the deck name is the real link).
+    expect(cover.element.closest('a')?.getAttribute('aria-hidden')).toBe('true')
+    expect(cover.element.closest('a')?.getAttribute('tabindex')).toBe('-1')
+
+    expect(component.find('[role="img"][aria-label="Leeres Deck: Leer"]').exists()).toBe(true)
   })
 
   it('shows the empty state when the user has no decks', async () => {
