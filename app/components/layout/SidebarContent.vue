@@ -30,11 +30,19 @@ onMounted(async () => {
   }
 })
 
-// Shown in the user block avatar/label — falls back to the e-mail address
-// only if a session was somehow created without a name (UX review #17: the
-// name entered at registration used to never appear anywhere in the app).
-const displayName = computed(() => session.value?.user.name || session.value?.user.email || '')
-const avatarInitials = computed(() => displayName.value.slice(0, 2).toUpperCase())
+// The default layout only renders behind the auth middleware, so the
+// profile request always has a session. Shared key: a rename on /profil
+// shows here right away (#50).
+const { data: ownProfile } = await useOwnProfile()
+
+// Shown in the user block avatar/label: the profile's display name, else the
+// account name, else the e-mail address (UX review #17: the name entered at
+// registration used to never appear anywhere in the app).
+const displayName = computed(() =>
+  ownProfile.value?.displayName || session.value?.user.name || session.value?.user.email || '')
+// Same seed as the public profile (the handle), so the avatar has the same
+// colour here and on /spieler/<handle>.
+const avatarSeed = computed(() => ownProfile.value?.handle ?? session.value?.user.email ?? '')
 
 async function onLogout() {
   await authClient.signOut()
@@ -60,9 +68,12 @@ async function onLogout() {
       class="border-t border-gray-200 p-3"
     >
       <div class="flex items-center gap-2.5 px-1 py-1">
-        <div class="flex size-8 shrink-0 items-center justify-center rounded-full bg-gray-200 text-xs font-semibold text-gray-600">
-          {{ avatarInitials }}
-        </div>
+        <ProfileAvatar
+          :name="displayName"
+          :handle="avatarSeed"
+          size="md"
+          class="shrink-0"
+        />
         <span class="truncate text-sm text-gray-700">{{ displayName }}</span>
       </div>
       <UButton
