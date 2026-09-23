@@ -11,7 +11,7 @@ const DARK_MAGICIAN = 46986414
  * button instead of the sidebar, and the mobile nav drawer actually works.
  */
 test.describe('responsive layout at 390px', () => {
-  test('no horizontal scrolling on inventar, deck editor, tournament detail, or katalog', async ({ page }) => {
+  test('no horizontal scrolling on inventar, decks, deck editor, tournament detail, katalog, own profile, or a custom format', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 })
     await registerAndLogin(page)
 
@@ -32,14 +32,54 @@ test.describe('responsive layout at 390px', () => {
     expect(inventoryResponse.ok()).toBe(true)
     const tournament = await tournamentResponse.json() as { id: string }
 
-    const routes = ['/inventar', `/decks/${deck.id}`, `/turniere/${tournament.id}`, '/katalog']
+    // A filter rule with several (long) card types selected: the multi-select
+    // used to grow to its content width (~2360px) and push the page sideways.
+    const formatResponse = await page.request.post('/api/formats', {
+      data: {
+        name: 'Mobile-Test-Format',
+        rules: {
+          rules: [{
+            kind: 'filter',
+            match: 'not_matching',
+            maxCopies: 0,
+            filter: {
+              types: [
+                'Pendulum Effect Fusion Monster',
+                'XYZ Pendulum Effect Monster',
+                'Synchro Pendulum Effect Monster',
+                'Pendulum Tuner Effect Monster',
+                'Pendulum Normal Monster',
+                'Link Monster',
+              ],
+            },
+          }],
+        },
+      },
+    })
+    expect(formatResponse.ok()).toBe(true)
+    const format = await formatResponse.json() as { id: string }
 
-    for (const route of routes) {
+    const profile = await (await page.request.get('/api/profile')).json() as { handle: string }
+
+    // `/spieler/**` uses the slim public layout — no sidebar, so no hamburger.
+    const routes: Array<{ path: string, appShell: boolean }> = [
+      { path: '/inventar', appShell: true },
+      { path: '/decks', appShell: true },
+      { path: `/decks/${deck.id}`, appShell: true },
+      { path: `/turniere/${tournament.id}`, appShell: true },
+      { path: '/katalog', appShell: true },
+      { path: `/formate/${format.id}`, appShell: true },
+      { path: `/spieler/${profile.handle}`, appShell: false },
+    ]
+
+    for (const { path: route, appShell } of routes) {
       await page.goto(route)
       await page.waitForLoadState('networkidle')
 
-      // The desktop sidebar is `hidden` below `lg`; the hamburger takes its place.
-      await expect(page.getByRole('button', { name: 'Menü öffnen' })).toBeVisible()
+      if (appShell) {
+        // The desktop sidebar is `hidden` below `lg`; the hamburger takes its place.
+        await expect(page.getByRole('button', { name: 'Menü öffnen' })).toBeVisible()
+      }
 
       const { scrollWidth, clientWidth } = await page.evaluate(() => ({
         scrollWidth: document.documentElement.scrollWidth,
