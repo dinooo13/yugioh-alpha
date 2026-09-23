@@ -68,7 +68,7 @@ test.describe('AI deck assistant', () => {
     const deckUrl = new URL(page.url()).pathname
     // The deck's own remove-button aria-label proves the card landed in the
     // Main Deck section specifically, without a bare text lookup that would
-    // also match the "Aus Inventar hinzufügen" panel next to it. `exact` is
+    // also match the "Aus Inventar hinzufügen" panel beside/below it. `exact` is
     // required here: without it, this substring-matches the *other* row
     // control "Eine Kopie von Dark Magician aus dem Main Deck entfernen" too.
     await expect(page.getByLabel('Dark Magician aus dem Main Deck entfernen', { exact: true })).toBeVisible()
