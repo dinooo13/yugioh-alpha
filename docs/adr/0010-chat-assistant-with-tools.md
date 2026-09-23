@@ -119,7 +119,8 @@ at a different model than plain-text turns, for a provider where the
 configured default model isn't (or isn't as good a) vision model; when
 unset, the configured `model` is used for every turn. This was verified
 against `glm-5.3-flash` on OpenCode Go, which accepts `image_url` data URLs
-directly and answers with the card name. `GET /api/assistant/status` reports
+directly and answers with the card name (and later, when the recommended
+model changed, against `mimo-v2.6-pro`, which does the same). `GET /api/assistant/status` reports
 `vision: true` whenever chat is enabled (the model in use is treated as
 vision-capable) and, when `visionModel` is configured, echoes it back so the
 UI/ops can see which model actually handles image turns.
