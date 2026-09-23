@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
-import WunschlistePage from '~/pages/wishlist.vue'
+import WishlistPage from '~/pages/wishlist.vue'
 import AddToWishlistButton from '~/components/wishlist/AddToWishlistButton.vue'
 import type { OwnProfile, WishlistItemView, WishlistResponse } from '~~/shared/sharing'
 
@@ -13,6 +13,7 @@ const state = vi.hoisted(() => ({
     bio: null,
     inventoryVisibility: 'private',
     wishlistVisibility: 'private',
+    locale: null,
     createdAt: '2025-01-01T00:00:00.000Z',
     updatedAt: '2025-01-01T00:00:00.000Z',
   } as OwnProfile,
@@ -55,7 +56,7 @@ describe('wishlist page', () => {
   it('shows the empty state when there are no items', async () => {
     state.wishlist = { items: [], total: 0, page: 1, pageSize: 24 }
 
-    const component = await mountSuspended(WunschlistePage)
+    const component = await mountSuspended(WishlistPage)
 
     expect(component.text()).toContain('Noch keine Karten auf der Wunschliste.')
   })
@@ -63,7 +64,7 @@ describe('wishlist page', () => {
   it('lists wishlist items', async () => {
     state.wishlist = { items: [item()], total: 1, page: 1, pageSize: 24 }
 
-    const component = await mountSuspended(WunschlistePage)
+    const component = await mountSuspended(WishlistPage)
 
     expect(component.text()).toContain('Kuriboh')
   })
@@ -73,7 +74,7 @@ describe('wishlist page', () => {
     const fetchMock = vi.fn(() => Promise.resolve(undefined))
     vi.stubGlobal('$fetch', fetchMock)
 
-    const component = await mountSuspended(WunschlistePage)
+    const component = await mountSuspended(WishlistPage)
     const removeButton = component.findAll('button').find(btn => btn.text().includes('Entfernen'))
     expect(removeButton).toBeTruthy()
 
@@ -86,7 +87,7 @@ describe('wishlist page', () => {
     state.wishlist = { items: [], total: 0, page: 1, pageSize: 24 }
     state.profile = { ...state.profile, wishlistVisibility: 'public' }
 
-    const component = await mountSuspended(WunschlistePage)
+    const component = await mountSuspended(WishlistPage)
 
     expect(component.text()).toContain('Öffentlich')
     expect(component.text()).toContain('Sichtbarkeit ändern')
@@ -98,7 +99,7 @@ describe('wishlist page', () => {
     state.wishlist = { items: [], total: 0, page: 1, pageSize: 24 }
     state.profile = { ...state.profile, wishlistVisibility: 'private' }
 
-    const component = await mountSuspended(WunschlistePage)
+    const component = await mountSuspended(WishlistPage)
 
     expect(component.text()).toContain('Privat')
   })
@@ -106,7 +107,7 @@ describe('wishlist page', () => {
   it('disables the minus button once a row reaches quantity 1', async () => {
     state.wishlist = { items: [item({ quantity: 1 })], total: 1, page: 1, pageSize: 24 }
 
-    const component = await mountSuspended(WunschlistePage)
+    const component = await mountSuspended(WishlistPage)
     const minusButton = component.find('button[aria-label="Ein Exemplar von Kuriboh entfernen"]')
 
     expect(minusButton.exists()).toBe(true)
@@ -116,7 +117,7 @@ describe('wishlist page', () => {
   it('keeps the minus button enabled above quantity 1', async () => {
     state.wishlist = { items: [item({ quantity: 2 })], total: 1, page: 1, pageSize: 24 }
 
-    const component = await mountSuspended(WunschlistePage)
+    const component = await mountSuspended(WishlistPage)
     const minusButton = component.find('button[aria-label="Ein Exemplar von Kuriboh entfernen"]')
 
     expect(minusButton.attributes('disabled')).toBeUndefined()

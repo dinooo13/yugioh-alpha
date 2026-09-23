@@ -8,6 +8,7 @@ import {
   getProfileByUserId,
   searchUsers,
   slugifyHandle,
+  toOwnProfile,
   updateProfile,
   validateProfileUpdateInput,
 } from '../../server/utils/profiles'
@@ -101,6 +102,33 @@ describe('validateProfileUpdateInput', () => {
     expect(() => validateProfileUpdateInput({ bio: 'a'.repeat(501) })).toThrow(expect.objectContaining({ statusCode: 400 }))
     expect(validateProfileUpdateInput({ bio: null })).toEqual({ bio: null })
   })
+
+  it('tags each rejection with a data.code the UI translates', () => {
+    const cases: [unknown, string][] = [
+      [{ handle: 'ABC' }, 'handle_invalid'],
+      [{ handle: 42 }, 'handle_invalid'],
+      [{ handle: 'admin' }, 'handle_reserved'],
+      [{ displayName: '   ' }, 'display_name_required'],
+      [{ displayName: 'a'.repeat(61) }, 'display_name_too_long'],
+      [{ bio: 'a'.repeat(501) }, 'bio_too_long'],
+      [{ locale: 'fr' }, 'invalid_locale'],
+    ]
+    for (const [body, code] of cases) {
+      expect(() => validateProfileUpdateInput(body), code)
+        .toThrow(expect.objectContaining({ statusCode: 400, data: { code } }))
+    }
+  })
+
+  it('accepts a supported locale and null (reset), rejects anything else', () => {
+    expect(validateProfileUpdateInput({ locale: 'en' })).toEqual({ locale: 'en' })
+    expect(validateProfileUpdateInput({ locale: 'de' })).toEqual({ locale: 'de' })
+    expect(validateProfileUpdateInput({ locale: null })).toEqual({ locale: null })
+    expect(validateProfileUpdateInput({})).toEqual({})
+    for (const locale of ['fr', 'EN', 'en-US', '', 1, true, {}]) {
+      expect(() => validateProfileUpdateInput({ locale }))
+        .toThrow(expect.objectContaining({ statusCode: 400, statusMessage: 'locale must be one of de, en' }))
+    }
+  })
 })
 
 describe('updateProfile', () => {
@@ -116,7 +144,25 @@ describe('updateProfile', () => {
     const b = ensureProfile(db, 'user-b')
 
     expect(() => updateProfile(db, 'user-a', { handle: b.handle }))
-      .toThrow(expect.objectContaining({ statusCode: 409 }))
+      .toThrow(expect.objectContaining({ statusCode: 409, data: { code: 'handle_taken' } }))
+  })
+
+  it('stores the locale, keeps it on unrelated patches, and resets it with null', () => {
+    const created = ensureProfile(db, 'user-a')
+    expect(created.locale).toBeNull()
+    expect(toOwnProfile(created).locale).toBeNull()
+
+    const english = updateProfile(db, 'user-a', { locale: 'en' })
+    expect(english.locale).toBe('en')
+    expect(getProfileByUserId(db, 'user-a')?.locale).toBe('en')
+    expect(toOwnProfile(english).locale).toBe('en')
+
+    const renamed = updateProfile(db, 'user-a', { displayName: 'Neuer Name' })
+    expect(renamed.locale).toBe('en')
+
+    const reset = updateProfile(db, 'user-a', { locale: null })
+    expect(reset.locale).toBeNull()
+    expect(toOwnProfile(reset).locale).toBeNull()
   })
 
   it('succeeds when the handle is the caller own', () => {
