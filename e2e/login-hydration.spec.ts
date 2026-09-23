@@ -60,7 +60,7 @@ test.describe('first page after login', () => {
 
     const warnings = trackHydrationWarnings(page)
     await page.goto('/inventory')
-    await expect(page).toHaveURL(/\/login\?redirect=(%2F|\/)inventar/)
+    await expect(page).toHaveURL(/\/login\?redirect=(%2F|\/)inventory/)
 
     await loginViaForm(page, user)
 

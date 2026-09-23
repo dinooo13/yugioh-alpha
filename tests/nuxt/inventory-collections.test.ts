@@ -19,7 +19,7 @@ vi.mock('~/utils/session', () => ({
 }))
 
 // `useConfirm()` only settles with `ConfirmDialog` mounted alongside (it
-// normally lives in the default layout — see formate-page.test.ts).
+// normally lives in the default layout — see formats-page.test.ts).
 const PageWithConfirmDialog = defineComponent({
   components: { InventarPage, ConfirmDialog },
   template: '<div><InventarPage /><ConfirmDialog /></div>',
