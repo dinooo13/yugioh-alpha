@@ -112,7 +112,6 @@ const sourceSearch = ref('')
 const debouncedSourceSearch = ref('')
 const sourceType = ref('')
 const sourceAttribute = ref('')
-const sourcePage = ref(1)
 const includeCatalog = ref(false)
 
 let debounceTimer: ReturnType<typeof setTimeout> | undefined
@@ -120,30 +119,39 @@ watch(sourceSearch, (value) => {
   clearTimeout(debounceTimer)
   debounceTimer = setTimeout(() => {
     debouncedSourceSearch.value = value.trim()
-    sourcePage.value = 1
   }, 300)
 })
 
-watch([sourceType, sourceAttribute, includeCatalog], () => {
-  sourcePage.value = 1
-})
-
+// Always page 1: `useFetch` owns the first page (SSR), "Mehr laden" appends
+// the following pages client-side (`loadMoreSourceCards`).
 const sourceQuery = computed(() => ({
   q: debouncedSourceSearch.value || undefined,
   type: sourceType.value || undefined,
   attribute: sourceAttribute.value || undefined,
   sort: 'name',
-  page: sourcePage.value,
+  page: 1,
   pageSize: SOURCE_PAGE_SIZE,
 }))
+
+type SourceItem = InventorySearchItem | CatalogSearchItem
+
+interface SourcePage {
+  items: SourceItem[]
+  total: number
+}
+
+function sourceEndpoint(catalog: boolean) {
+  return catalog ? '/api/catalog/cards' : '/api/inventory/search'
+}
+
+function sourceItemId(item: SourceItem): number {
+  return (item as Partial<InventorySearchItem>).catalogCardId ?? (item as Partial<CatalogSearchItem>).id ?? 0
+}
 
 // One endpoint at a time: the owned-cards search by default, the full catalog
 // when the user wants to plan with cards they do not own yet (those come back
 // with `owned: 0`, so the deck shows a shortfall).
-const { data: sourceData, pending: sourcePending } = await useFetch<{
-  items: Array<InventorySearchItem | CatalogSearchItem>
-  total: number
-}>(() => (includeCatalog.value ? '/api/catalog/cards' : '/api/inventory/search'), {
+const { data: sourceData, pending: sourcePending } = await useFetch<SourcePage>(() => sourceEndpoint(includeCatalog.value), {
   query: sourceQuery,
   headers: import.meta.server ? useRequestHeaders(['cookie']) : undefined,
   default: () => ({ items: [], total: 0 }),
@@ -274,10 +282,43 @@ const attributeSelection = computed({
   },
 })
 
-const sourceCards = computed<SourceCard[]>(() => (sourceData.value?.items ?? []).map((item) => {
+// --- "Mehr laden" (pages 2+ of the add panel) -------------------------------
+
+// Further pages are appended one at a time via `$fetch`; in catalog mode each
+// page also fetches its own owned totals (the endpoint caps ids at 100).
+const extraSourceItems = ref<SourceItem[]>([])
+const extraOwned = ref<Record<string, number>>({})
+const loadedSourcePages = ref(1)
+const isLoadingMore = ref(false)
+const loadMoreError = ref('')
+// A page that came back short or empty ends the list even if `total` (from
+// page 1) promised more — the data changed underneath.
+const sourceExhausted = ref(false)
+// Bumped on every filter/source change, so a "Mehr laden" answer for the
+// previous query is dropped instead of being appended to the new list.
+let sourceGeneration = 0
+
+function resetSourcePaging() {
+  sourceGeneration += 1
+  extraSourceItems.value = []
+  extraOwned.value = {}
+  loadedSourcePages.value = 1
+  isLoadingMore.value = false
+  loadMoreError.value = ''
+  sourceExhausted.value = false
+}
+
+watch([includeCatalog, sourceQuery], resetSourcePaging)
+
+const sourceItems = computed<SourceItem[]>(() => [
+  ...(sourceData.value?.items ?? []),
+  ...extraSourceItems.value,
+])
+
+const sourceCards = computed<SourceCard[]>(() => sourceItems.value.map((item) => {
   const inventoryItem = item as Partial<InventorySearchItem>
   const catalogItem = item as Partial<CatalogSearchItem>
-  const catalogCardId = inventoryItem.catalogCardId ?? catalogItem.id ?? 0
+  const catalogCardId = sourceItemId(item)
   return {
     catalogCardId,
     name: item.name,
@@ -287,11 +328,62 @@ const sourceCards = computed<SourceCard[]>(() => (sourceData.value?.items ?? [])
     race: item.race ?? null,
     level: item.level ?? null,
     imageSmall: item.imageSmall ?? null,
-    owned: inventoryItem.totalQuantity ?? ownedQuantities.value?.[String(catalogCardId)] ?? 0,
+    owned: inventoryItem.totalQuantity
+      ?? ownedQuantities.value?.[String(catalogCardId)]
+      ?? extraOwned.value[String(catalogCardId)]
+      ?? 0,
   }
 }))
 
 const sourceTotal = computed(() => sourceData.value?.total ?? 0)
+const hasMoreSource = computed(() => !sourceExhausted.value && sourceCards.value.length < sourceTotal.value)
+
+async function loadMoreSourceCards() {
+  if (isLoadingMore.value || !hasMoreSource.value) {
+    return
+  }
+
+  const generation = sourceGeneration
+  const catalog = includeCatalog.value
+  isLoadingMore.value = true
+  loadMoreError.value = ''
+
+  try {
+    const page = await $fetch<SourcePage>(sourceEndpoint(catalog), {
+      query: { ...sourceQuery.value, page: loadedSourcePages.value + 1 },
+    })
+
+    let owned: Record<string, number> = {}
+    const ids = catalog ? page.items.map(sourceItemId).filter(Boolean) : []
+    if (ids.length > 0) {
+      owned = await $fetch<Record<string, number>>('/api/inventory/owned-quantities', {
+        query: { ids: ids.join(',') },
+      })
+    }
+
+    if (generation !== sourceGeneration) {
+      return
+    }
+
+    const known = new Set(sourceItems.value.map(sourceItemId))
+    extraSourceItems.value = [...extraSourceItems.value, ...page.items.filter(item => !known.has(sourceItemId(item)))]
+    extraOwned.value = { ...extraOwned.value, ...owned }
+    loadedSourcePages.value += 1
+    if (page.items.length < SOURCE_PAGE_SIZE) {
+      sourceExhausted.value = true
+    }
+  }
+  catch {
+    if (generation === sourceGeneration) {
+      loadMoreError.value = 'Weitere Karten konnten nicht geladen werden.'
+    }
+  }
+  finally {
+    if (generation === sourceGeneration) {
+      isLoadingMore.value = false
+    }
+  }
+}
 
 // The add panel sits below the deck on small screens and can be collapsed
 // there (CSS keeps it open from `lg` up). Seeded from the SSR payload, so
@@ -518,6 +610,13 @@ async function deleteDeck() {
 
   await navigateTo('/decks')
 }
+
+// Secondary actions live in the "…" menu at every width (#25), so the header
+// toolbar stays one short row and the title keeps its full width (#40).
+const deckMenuItems = [
+  [{ label: 'Umbenennen', icon: 'i-lucide-pencil', onSelect: () => { isFormOpen.value = true } }],
+  [{ label: 'Löschen', icon: 'i-lucide-trash-2', color: 'error' as const, onSelect: deleteDeck }],
+]
 </script>
 
 <template>
@@ -546,70 +645,65 @@ async function deleteDeck() {
     </div>
 
     <template v-else-if="deck">
-      <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div class="min-w-0">
-          <h1 class="truncate text-2xl font-semibold text-gray-900">
-            {{ deck.name }}
-          </h1>
-          <p
-            v-if="deck.description"
-            class="mt-1 max-w-prose text-sm text-gray-500"
-          >
-            {{ deck.description }}
-          </p>
-          <p class="mt-1 text-sm text-gray-500">
-            {{ counts.total }} Karte<span v-if="counts.total !== 1">n</span> insgesamt
-          </p>
-        </div>
+      <!-- The toolbar sits in the default slot, i.e. always *below* the title:
+           the `#actions` slot would put it beside the title from `sm` up and
+           squeeze a long deck name down to "Cyb…" at 1024px (#40). -->
+      <LayoutPageHeader
+        :title="deck.name"
+        :description="deck.description ?? undefined"
+      >
+        <p class="mt-1 text-sm text-gray-500">
+          {{ counts.total }} Karte<span v-if="counts.total !== 1">n</span> insgesamt
+        </p>
 
-        <div class="flex shrink-0 flex-wrap items-center gap-2">
-          <!-- Mobile shortcut: the add panel lives below the deck sections. -->
-          <UButton
-            icon="i-lucide-plus"
-            label="Karten hinzufügen"
-            class="lg:hidden"
-            @click="openAddPanel"
-          />
-          <SharingVisibilityBadge :visibility="deck.visibility" />
-          <USelect
-            v-model="formatSelection"
-            :items="formatItems"
-            :disabled="isMutating"
-            class="w-56"
-            aria-label="Format"
-          />
-          <UButton
-            icon="i-lucide-share-2"
-            color="neutral"
-            variant="outline"
-            label="Teilen"
-            :disabled="!ownProfile?.handle"
-            @click="() => { isShareOpen = true }"
-          />
-          <UButton
-            v-if="assistantStatus?.chat"
-            icon="i-lucide-sparkles"
-            color="neutral"
-            variant="outline"
-            label="Mit KI bearbeiten"
-            :to="{ path: '/assistent', query: { deckId } }"
-          />
-          <UButton
-            icon="i-lucide-pencil"
-            color="neutral"
-            variant="outline"
-            label="Umbenennen"
-            @click="() => { isFormOpen = true }"
-          />
-          <UButton
-            icon="i-lucide-trash-2"
-            color="error"
-            variant="ghost"
-            label="Löschen"
-            @click="deleteDeck"
-          />
+        <div class="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+          <div class="flex flex-wrap items-center gap-2">
+            <!-- Mobile shortcut: the add panel lives below the deck sections. -->
+            <UButton
+              icon="i-lucide-plus"
+              label="Karten hinzufügen"
+              class="lg:hidden"
+              @click="openAddPanel"
+            />
+            <UButton
+              v-if="assistantStatus?.chat"
+              icon="i-lucide-sparkles"
+              color="neutral"
+              variant="outline"
+              label="Mit KI bearbeiten"
+              :to="{ path: '/assistent', query: { deckId } }"
+            />
+            <UButton
+              icon="i-lucide-share-2"
+              color="neutral"
+              variant="outline"
+              label="Teilen"
+              :disabled="!ownProfile?.handle"
+              @click="() => { isShareOpen = true }"
+            />
+            <UDropdownMenu :items="deckMenuItems">
+              <UButton
+                icon="i-lucide-ellipsis"
+                color="neutral"
+                variant="ghost"
+                aria-label="Weitere Aktionen"
+                class="tap-target"
+              />
+            </UDropdownMenu>
+          </div>
+
+          <div class="flex items-center gap-2 sm:ml-auto">
+            <SharingVisibilityBadge :visibility="deck.visibility" />
+            <USelect
+              v-model="formatSelection"
+              :items="formatItems"
+              :disabled="isMutating"
+              class="min-w-0 flex-1 sm:w-56 sm:flex-none"
+              aria-label="Format"
+            />
+          </div>
         </div>
-      </div>
+      </LayoutPageHeader>
 
       <section class="rounded-md border border-gray-200 bg-white p-4">
         <div class="flex flex-wrap items-center justify-between gap-2">
@@ -677,7 +771,9 @@ async function deleteDeck() {
 
       <div class="flex flex-col gap-6 lg:flex-row">
 
-        <div class="min-w-0 flex-1 space-y-6">
+        <!-- A container, so the rows switch layout by the column's own width:
+             beside the add panel at 1024px it is only ~360px wide. -->
+        <div class="@container min-w-0 flex-1 space-y-6">
           <section
             v-for="section in DECK_SECTIONS"
             :key="section"
@@ -707,20 +803,26 @@ async function deleteDeck() {
               v-else
               class="divide-y divide-gray-100"
             >
+              <!-- One line from a 32rem-wide column (`@lg`); narrower, the
+                   controls drop to a second line under the name (#40). -->
               <li
                 v-for="row in sections[section]"
                 :key="`${section}-${row.catalogCardId}`"
-                class="flex items-center gap-3 px-4 py-2"
+                class="grid grid-cols-[2.5rem_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 px-4 py-2 @lg:grid-cols-[2.5rem_minmax(0,1fr)_auto_auto]"
                 :class="issueCardIds.has(row.catalogCardId) ? 'bg-red-50' : undefined"
               >
                 <CardThumb
                   :src="row.imageSmall"
                   :alt="row.name"
                   size="sm"
+                  class="row-span-2 self-start @lg:row-span-1 @lg:self-center"
                 />
 
-                <div class="min-w-0 flex-1">
-                  <p class="truncate text-sm font-medium text-gray-900">
+                <div class="min-w-0">
+                  <p
+                    class="line-clamp-2 text-sm font-medium break-words text-gray-900"
+                    :title="row.name"
+                  >
                     {{ row.name }}
                   </p>
                   <p class="truncate text-xs text-gray-500">
@@ -738,30 +840,34 @@ async function deleteDeck() {
                 </div>
 
                 <span
-                  class="shrink-0 text-xs tabular-nums"
+                  class="self-start text-xs tabular-nums @lg:self-center"
                   :class="row.shortfall > 0 ? 'font-semibold text-red-600' : 'text-gray-500'"
                   :title="row.shortfall > 0 ? `Du besitzt nur ${row.owned}` : undefined"
                 >
                   {{ row.usedInDeck }}/{{ row.owned }}
                 </span>
 
-                <div class="flex shrink-0 items-center gap-1">
+                <div class="col-span-2 flex items-center justify-end gap-1 @lg:col-span-1">
                   <UButton
                     icon="i-lucide-minus"
                     color="neutral"
                     variant="outline"
                     size="xs"
+                    class="tap-target"
                     :disabled="isMutating"
                     :aria-label="`Eine Kopie von ${row.name} aus dem ${DECK_SECTION_LABELS[section]} entfernen`"
                     @click="setQuantity(row.catalogCardId, section, row.quantity - 1)"
                   />
+                  <!-- Spin buttons hidden: − and + already step, and the
+                       arrows ate the narrow field's digits. -->
                   <UInput
                     :key="`${section}-${row.catalogCardId}-${inputEpoch}`"
                     :model-value="row.quantity"
                     type="number"
                     min="0"
                     size="xs"
-                    class="w-16"
+                    class="w-12"
+                    :ui="{ base: 'text-center tabular-nums max-lg:min-h-11 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none' }"
                     :disabled="isMutating"
                     :aria-label="`Anzahl von ${row.name} im ${DECK_SECTION_LABELS[section]}`"
                     @change="(event: Event) => onQuantityInput(row, (event.target as HTMLInputElement).value)"
@@ -771,6 +877,7 @@ async function deleteDeck() {
                     color="neutral"
                     variant="outline"
                     size="xs"
+                    class="tap-target"
                     :disabled="isMutating"
                     :aria-label="`Eine Kopie von ${row.name} zum ${DECK_SECTION_LABELS[section]} hinzufügen`"
                     @click="setQuantity(row.catalogCardId, section, row.quantity + 1)"
@@ -781,6 +888,7 @@ async function deleteDeck() {
                       color="neutral"
                       variant="ghost"
                       size="xs"
+                      class="tap-target"
                       :disabled="isMutating"
                       :aria-label="`${row.name} verschieben`"
                     />
@@ -790,6 +898,7 @@ async function deleteDeck() {
                     color="error"
                     variant="ghost"
                     size="xs"
+                    class="tap-target"
                     :disabled="isMutating"
                     :aria-label="`${row.name} aus dem ${DECK_SECTION_LABELS[section]} entfernen`"
                     @click="removeCard(row)"
@@ -817,7 +926,7 @@ async function deleteDeck() {
                 Aus Inventar hinzufügen
               </h2>
               <UButton
-                class="lg:hidden"
+                class="tap-target lg:hidden"
                 color="neutral"
                 variant="ghost"
                 size="sm"
@@ -863,7 +972,12 @@ async function deleteDeck() {
               </div>
 
               <p class="mt-3 shrink-0 text-xs text-gray-500">
-                {{ sourceTotal }} Karte<span v-if="sourceTotal !== 1">n</span>
+                <template v-if="hasMoreSource">
+                  {{ sourceCards.length }} von {{ sourceTotal }} Karten
+                </template>
+                <template v-else>
+                  {{ sourceTotal }} Karte<span v-if="sourceTotal !== 1">n</span>
+                </template>
               </p>
 
               <div class="-mx-4 mt-3 min-h-0 flex-1 px-4 lg:overflow-y-auto">
@@ -933,6 +1047,7 @@ async function deleteDeck() {
                           v-for="section in DECK_SECTIONS"
                           :key="section"
                           size="xs"
+                          class="tap-target"
                           :color="section === defaultSectionForCard(card) ? 'primary' : 'neutral'"
                           :variant="section === defaultSectionForCard(card) ? 'solid' : 'outline'"
                           :disabled="!isSectionAllowedForCard(card, section) || isMutating"
@@ -956,6 +1071,23 @@ async function deleteDeck() {
                     </div>
                   </li>
                 </ul>
+
+                <UButton
+                  v-if="hasMoreSource && !sourcePending"
+                  block
+                  color="neutral"
+                  variant="outline"
+                  label="Mehr laden"
+                  :loading="isLoadingMore"
+                  class="mt-3 tap-target"
+                  @click="loadMoreSourceCards"
+                />
+                <p
+                  v-if="loadMoreError && !sourcePending"
+                  class="mt-2 text-xs text-red-600"
+                >
+                  {{ loadMoreError }}
+                </p>
               </div>
             </div>
           </div>

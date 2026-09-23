@@ -15,6 +15,9 @@ describe('LayoutPageHeader', () => {
 
     expect(component.findAll('h1')).toHaveLength(1)
     expect(component.find('h1').text()).toBe('Decks')
+    // Without `truncate` a long single-word title wraps instead of overflowing.
+    expect(component.find('h1').classes()).toContain('break-words')
+    expect(component.find('h1').classes()).not.toContain('truncate')
     expect(component.find('h2').exists()).toBe(false)
     expect(component.find('p').text()).toBe('3 Decks')
     expect(component.find('button').text()).toBe('Neues Deck')
