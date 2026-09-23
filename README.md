@@ -228,7 +228,8 @@ cards the user doesn't own (enough of).
 The assistant can look things up (search the catalog, read a card's full
 text and printings, search the inventory, list collections/decks/formats,
 read and validate a deck) and, for anything that would change data — adding
-cards to the inventory, creating a deck, changing a deck's cards — it only
+cards to the inventory, creating a deck, changing a deck's cards or its
+format — it only
 ever proposes a **pending action**, shown as a card with `Übernehmen` /
 `Verwerfen` buttons; nothing is written until the user confirms it. A
 message can include up to 6 photos (resized client-side before upload) that

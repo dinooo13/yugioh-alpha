@@ -613,6 +613,109 @@ describe('update_deck_cards (write tool)', () => {
   })
 })
 
+describe('set_deck_format (write tool)', () => {
+  function strictFormat(userId = 'user-a', name = 'Streng') {
+    return createRuleFormat(db, userId, validateRuleFormatInput({
+      name,
+      rules: { rules: [{ kind: 'copies', maxCopies: 1 }] },
+    }))
+  }
+
+  async function propose(args: Record<string, unknown>, userId = 'user-a') {
+    return await tool('set_deck_format').run({ db, userId }, args) as Extract<ToolOutcome, { action: unknown }>
+  }
+
+  it('produces a pending action with a preview in the new format and leaves the deck untouched', async () => {
+    const format = strictFormat()
+    const deck = createDeck(db, 'user-a', { name: 'Magier', description: null })
+    upsertDeckCard(db, 'user-a', deck.id, { catalogCardId: CARD.darkMagician, section: 'main', quantity: 2 })
+
+    const outcome = await propose({ deckId: deck.id, formatId: format.id })
+
+    expect(outcome.action.kind).toBe('set_deck_format')
+    expect(outcome.action.payload).toMatchObject({
+      deckId: deck.id,
+      deckName: 'Magier',
+      formatId: format.id,
+      formatName: 'Streng',
+      previousFormatId: null,
+      previousFormatName: null,
+    })
+    const preview = outcome.action.payload.preview as { formatId: string, validation: { legal: boolean, issues: string[] } }
+    expect(preview.formatId).toBe(format.id)
+    expect(preview.validation.legal).toBe(false)
+    expect(preview.validation.issues.some(issue => issue.includes('Dark Magician'))).toBe(true)
+    expect(outcome.result).toMatchObject({ status: 'pending_confirmation', preview })
+    expect(outcome.action.summary).toContain('kein Format → Streng')
+
+    expect(getDeckDetail(db, 'user-a', deck.id).format).toBeNull()
+  })
+
+  it('with formatId null proposes removing the format and previews without one', async () => {
+    const format = strictFormat()
+    const deck = createDeck(db, 'user-a', { name: 'Magier', description: null })
+    upsertDeckCard(db, 'user-a', deck.id, { catalogCardId: CARD.darkMagician, section: 'main', quantity: 2 })
+    updateDeck(db, 'user-a', deck.id, { formatId: format.id })
+
+    const outcome = await propose({ deckId: deck.id, formatId: null })
+
+    expect(outcome.action.payload).toMatchObject({
+      formatId: null,
+      formatName: null,
+      previousFormatId: format.id,
+      previousFormatName: 'Streng',
+      preview: { formatId: null, formatName: null, validation: null, counts: { main: 2 } },
+    })
+    expect(outcome.action.summary.endsWith('→ kein Format')).toBe(true)
+    expect(getDeckDetail(db, 'user-a', deck.id).format?.id).toBe(format.id)
+  })
+
+  it('treats an empty formatId the same as null (what the tool schema asks the model to send)', async () => {
+    const format = strictFormat()
+    const deck = createDeck(db, 'user-a', { name: 'Magier', description: null })
+    updateDeck(db, 'user-a', deck.id, { formatId: format.id })
+
+    const outcome = await propose({ deckId: deck.id, formatId: '  ' })
+    expect(outcome.action.payload).toMatchObject({ formatId: null, formatName: null, preview: { formatId: null, validation: null } })
+  })
+
+  it('accepts a built-in format', async () => {
+    seedBuiltinFormats(db)
+    const builtin = db.select().from(schema.ruleFormat).where(eq(schema.ruleFormat.isBuiltin, true)).get()!
+    const deck = createDeck(db, 'user-a', { name: 'Magier', description: null })
+
+    const outcome = await propose({ deckId: deck.id, formatId: builtin.id })
+    expect(outcome.action.payload).toMatchObject({ formatId: builtin.id, formatName: builtin.name })
+  })
+
+  it('404s for a deck owned by another user', async () => {
+    const format = strictFormat()
+    const foreignDeck = createDeck(db, 'user-b', { name: 'Foreign', description: null })
+    expect(await statusOf(() => propose({ deckId: foreignDeck.id, formatId: format.id }))).toBe(404)
+  })
+
+  it('400s for another user\'s custom format and for an unknown format id', async () => {
+    const foreignFormat = strictFormat('user-b', 'Fremd')
+    const deck = createDeck(db, 'user-a', { name: 'Magier', description: null })
+    expect(await statusOf(() => propose({ deckId: deck.id, formatId: foreignFormat.id }))).toBe(400)
+    expect(await statusOf(() => propose({ deckId: deck.id, formatId: 'does-not-exist' }))).toBe(400)
+  })
+
+  it('400s for a missing or non-string formatId and for an unchanged format', async () => {
+    const format = strictFormat()
+    const deck = createDeck(db, 'user-a', { name: 'Magier', description: null })
+
+    expect(await statusOf(() => propose({ deckId: deck.id }))).toBe(400)
+    expect(await statusOf(() => propose({ deckId: deck.id, formatId: 5 }))).toBe(400)
+    // Already without a format.
+    expect(await statusOf(() => propose({ deckId: deck.id, formatId: null }))).toBe(400)
+
+    updateDeck(db, 'user-a', deck.id, { formatId: format.id })
+    // Already this format.
+    expect(await statusOf(() => propose({ deckId: deck.id, formatId: format.id }))).toBe(400)
+  })
+})
+
 describe('applyAction', () => {
   let pendingActionCounter = 0
 
@@ -679,6 +782,53 @@ describe('applyAction', () => {
     expect((await applyAction(db, 'user-a', updateRow.id)).status).toBe('applied')
     expect(getDeckDetail(db, 'user-a', deckId).sections.main.map(row => [row.catalogCardId, row.quantity]))
       .toEqual([[CARD.potOfGreed, 1]])
+  })
+
+  it('applies set_deck_format (assign, then remove) and links the deck in the result', async () => {
+    const format = createRuleFormat(db, 'user-a', validateRuleFormatInput({ name: 'Format', rules: { rules: [] } }))
+    const deck = createDeck(db, 'user-a', { name: 'Magier', description: null })
+
+    const assign = await tool('set_deck_format').run({ db, userId: 'user-a' }, { deckId: deck.id, formatId: format.id }) as Extract<ToolOutcome, { action: unknown }>
+    const assignRow = insertPendingAction('user-a', assign.action.kind, assign.action.payload, assign.action.summary)
+    const assigned = await applyAction(db, 'user-a', assignRow.id)
+    expect(assigned.status).toBe('applied')
+    expect((assigned.result as { id: string }).id).toBe(deck.id)
+    expect(getDeckDetail(db, 'user-a', deck.id).format?.id).toBe(format.id)
+
+    const remove = await tool('set_deck_format').run({ db, userId: 'user-a' }, { deckId: deck.id, formatId: null }) as Extract<ToolOutcome, { action: unknown }>
+    const removeRow = insertPendingAction('user-a', remove.action.kind, remove.action.payload, remove.action.summary)
+    expect((await applyAction(db, 'user-a', removeRow.id)).status).toBe('applied')
+    expect(getDeckDetail(db, 'user-a', deck.id).format).toBeNull()
+  })
+
+  it('marks a set_deck_format action failed when the format was deleted after the proposal', async () => {
+    const format = createRuleFormat(db, 'user-a', validateRuleFormatInput({ name: 'Format', rules: { rules: [] } }))
+    const deck = createDeck(db, 'user-a', { name: 'Magier', description: null })
+    const outcome = await tool('set_deck_format').run({ db, userId: 'user-a' }, { deckId: deck.id, formatId: format.id }) as Extract<ToolOutcome, { action: unknown }>
+    const row = insertPendingAction('user-a', outcome.action.kind, outcome.action.payload, outcome.action.summary)
+
+    deleteRuleFormat(db, 'user-a', format.id)
+
+    const updated = await applyAction(db, 'user-a', row.id)
+    expect(updated.status).toBe('failed')
+    expect(getDeckDetail(db, 'user-a', deck.id).format).toBeNull()
+  })
+
+  it('re-validates a tampered set_deck_format payload at apply time and leaves the deck unchanged', async () => {
+    const foreignFormat = createRuleFormat(db, 'user-b', validateRuleFormatInput({ name: 'Fremd', rules: { rules: [] } }))
+    const deck = createDeck(db, 'user-a', { name: 'Magier', description: null })
+
+    const foreignRow = insertPendingAction('user-a', 'set_deck_format', { deckId: deck.id, formatId: foreignFormat.id })
+    expect((await applyAction(db, 'user-a', foreignRow.id)).status).toBe('failed')
+
+    const numberRow = insertPendingAction('user-a', 'set_deck_format', { deckId: deck.id, formatId: 42 })
+    expect((await applyAction(db, 'user-a', numberRow.id)).status).toBe('failed')
+
+    const foreignDeck = createDeck(db, 'user-b', { name: 'Foreign', description: null })
+    const foreignDeckRow = insertPendingAction('user-a', 'set_deck_format', { deckId: foreignDeck.id, formatId: null })
+    expect((await applyAction(db, 'user-a', foreignDeckRow.id)).status).toBe('failed')
+
+    expect(getDeckDetail(db, 'user-a', deck.id).format).toBeNull()
   })
 
   it('409s when applying an already-resolved action', async () => {

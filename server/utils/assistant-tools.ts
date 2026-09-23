@@ -1,12 +1,12 @@
 // The tool layer for the chat assistant (Phase 8, see
 // docs/adr/0010-chat-assistant-with-tools.md): every fact the model can pull
-// about the user's catalog/inventory/decks, plus the three write tools that
+// about the user's catalog/inventory/decks, plus the four write tools that
 // never mutate directly — they validate their arguments (same
 // hand-rolled `validate*Input` style as the rest of the server) and return a
 // **pending action** description instead. The chat engine
 // (server/utils/assistant-chat.ts) persists that as an `assistantAction` row
 // and only `applyAction` below actually calls the existing, already-tested
-// write utils (`addOwnedCardsBulkSync`, `createDeck`, `upsertDeckCard`),
+// write utils (`addOwnedCardsBulkSync`, `createDeck`, `updateDeck`, `upsertDeckCard`),
 // re-validating the stored payload and running every write of one action
 // inside a single transaction.
 //
@@ -586,6 +586,54 @@ async function toolUpdateDeckCards(db: Db, userId: string, args: unknown): Promi
   }, summary, { preview })
 }
 
+/** `formatId` for set_deck_format: required key; `''` (or `null`) = remove the format. */
+function parseTargetFormatId(record: Record<string, unknown>): string | null {
+  if (!('formatId' in record) || record.formatId === undefined) {
+    badRequest('formatId is required (leerer String entfernt das Format)')
+  }
+  const value = record.formatId
+  if (value === null) {
+    return null
+  }
+  if (typeof value !== 'string') {
+    badRequest('formatId must be a string or null')
+  }
+  const trimmed = value.trim()
+  return trimmed === '' ? null : trimmed
+}
+
+async function toolSetDeckFormat(db: Db, userId: string, args: unknown): Promise<ToolOutcome> {
+  const record = requireArgs(args)
+  const deckId = requireNonEmptyString(record, 'deckId')
+  const detail = getDeckDetail(db, userId, deckId)
+
+  const formatId = parseTargetFormatId(record)
+  // Same check `updateDeck` runs again at apply time.
+  const format = formatId ? requireAssignableFormat(db, userId, formatId) : null
+
+  if ((detail.format?.id ?? null) === formatId) {
+    badRequest(formatId ? 'Das Deck hat bereits dieses Format.' : 'Das Deck hat bereits kein Format.')
+  }
+
+  const preview = previewDeckProposal(db, userId, { deckId, formatId })
+
+  const from = detail.format?.name ?? 'kein Format'
+  const to = format?.name ?? 'kein Format'
+  const summary = `Format von Deck "${detail.name}" ändern: ${from} → ${to}`
+
+  // Only `deckId`/`formatId` are ever written; `deckName`, `formatName`,
+  // `previousFormat*` and `preview` are display-only (see create_deck above).
+  return pendingOutcome('set_deck_format', {
+    deckId,
+    deckName: detail.name,
+    formatId,
+    formatName: format?.name ?? null,
+    previousFormatId: detail.format?.id ?? null,
+    previousFormatName: detail.format?.name ?? null,
+    preview,
+  }, summary, { preview })
+}
+
 // --- Registry --------------------------------------------------------------------
 
 export const ASSISTANT_TOOLS: AssistantTool[] = [
@@ -798,6 +846,24 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
     },
     run: async (ctx, args) => toolUpdateDeckCards(ctx.db, ctx.userId, args),
   },
+  {
+    name: 'set_deck_format',
+    description: 'Schlägt vor, einem bestehenden Deck des Nutzers ein anderes Regelformat zuzuweisen (formatId aus list_formats) oder mit leerer formatId ("") das Format zu entfernen. Ändert keine Karten. Mutiert nichts direkt — legt einen Vorschlag an, den der Nutzer bestätigen muss. Das Ergebnis enthält eine Vorschau im neuen Format (Anzahl, Legalität, fehlende Karten).',
+    kind: 'write',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['deckId', 'formatId'],
+      properties: {
+        deckId: { type: 'string' },
+        // A plain string, not `['string', 'null']`: the configured
+        // OpenAI-compatible provider garbled calls against the union type
+        // (empty arguments). The server still accepts null too.
+        formatId: { type: 'string', description: 'Neue Format-ID aus list_formats; leerer String ("") entfernt das Format' },
+      },
+    },
+    run: async (ctx, args) => toolSetDeckFormat(ctx.db, ctx.userId, args),
+  },
 ]
 
 /** Patches `search_catalog`'s `limit` param description with the live configured cap — the rest of `ASSISTANT_TOOLS` needs no per-call values. */
@@ -867,10 +933,12 @@ function errorMessage(error: unknown): string {
  * of defense.
  *
  * Only the keys a write needs are read (`name`/`description`/`formatId`/
- * `cards` for create_deck, `deckId`/`changes` for update_deck_cards, and
- * per row only `catalogCardId`/`section`/`quantity`); the display-only
- * extras the tools store next to them (`preview`, `formatName`, `deckName`,
- * each row's `name`) are ignored here, so they can never alter a write.
+ * `cards` for create_deck, `deckId`/`changes` for update_deck_cards,
+ * `deckId`/`formatId` for set_deck_format, and per row only
+ * `catalogCardId`/`section`/`quantity`); the display-only extras the tools
+ * store next to them (`preview`, `formatName`, `deckName`,
+ * `previousFormatId`/`previousFormatName`, each row's `name`) are ignored
+ * here, so they can never alter a write.
  *
  * Must run synchronously inside the caller's transaction (`applyAction`) —
  * every write util invoked here (`addOwnedCardsBulkSync`, `createDeck`,
@@ -924,6 +992,18 @@ function executeActionPayload(db: Db, userId: string, action: AssistantActionRow
         detail = upsertDeckCard(db, userId, payload.deckId, change)
       }
       return detail
+    }
+    case 'set_deck_format': {
+      const payload = action.payload as { deckId?: unknown, formatId?: unknown }
+      if (typeof payload.deckId !== 'string' || payload.deckId === '') {
+        badRequest('deckId is required')
+      }
+      if (payload.formatId !== null && typeof payload.formatId !== 'string') {
+        badRequest('formatId must be a string or null')
+      }
+      // `updateDeck` re-checks deck ownership and (for a string) that the
+      // format is still assignable, inside the caller's transaction.
+      return updateDeck(db, userId, payload.deckId, { formatId: payload.formatId })
     }
     default:
       throw createError({ statusCode: 500, statusMessage: `Unbekannte Vorschlagsart: ${action.kind}` })

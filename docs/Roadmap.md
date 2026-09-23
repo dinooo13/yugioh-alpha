@@ -313,7 +313,8 @@ Scope:
 - a tool layer over the catalog, inventory, decks, and formats (search,
   read, and validate — no direct writes)
 - write requests (add cards to the inventory, create a deck, change a
-  deck's cards) proposed as pending actions the user must confirm
+  deck's cards or its format) proposed as pending actions the user must
+  confirm
 - image input (a card photo) identified by the model and confirmed against
   the catalog
 - ~~voice dictation into the chat composer~~ (removed, see below)
@@ -329,8 +330,9 @@ of switching between a deck-only builder and a text/photo/voice entry form.
 Implemented: a new page at `/assistent` with a persisted conversation per
 thread, a tool layer (`search_catalog`, `get_card`, `search_inventory`,
 `list_collections`, `list_decks`, `get_deck`, `list_formats`,
-`validate_deck`, plus the write tools `add_to_inventory`, `create_deck`, and
-`update_deck_cards`) that only ever produces a pending action for a write,
+`validate_deck`, plus the write tools `add_to_inventory`, `create_deck`,
+`update_deck_cards`, and `set_deck_format`) that only ever produces a
+pending action for a write,
 shown as an action card the user applies or rejects. Image attachments live
 in the chat composer, replacing the Foto mode `/inventar/erfassen` used to
 have (its Sprache mode was replaced by Web Speech dictation in the composer,

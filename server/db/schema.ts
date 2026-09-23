@@ -1,5 +1,6 @@
 import { relations } from 'drizzle-orm'
 import { sqliteTable, text, integer, index, uniqueIndex } from 'drizzle-orm/sqlite-core'
+import type { AssistantActionKind } from '../../shared/assistant-chat'
 import type { RuleSet } from '../../shared/rule-formats'
 import type { ShareResourceType, Visibility, WishlistVisibility } from '../../shared/sharing'
 import type { PairingSystem, TournamentDeckSnapshot, TournamentStatus } from '../../shared/tournaments'
@@ -700,7 +701,7 @@ export const assistantAction = sqliteTable(
     userId: text('user_id')
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
-    kind: text('kind').notNull().$type<'add_to_inventory' | 'create_deck' | 'update_deck_cards'>(),
+    kind: text('kind').notNull().$type<AssistantActionKind>(),
     // Validated tool arguments — exactly what `applyAction` executes.
     payload: text('payload', { mode: 'json' }).notNull().$type<Record<string, unknown>>(),
     // German one-liner shown on the action card.

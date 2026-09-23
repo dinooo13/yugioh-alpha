@@ -1,7 +1,13 @@
 // Previews a deck the chat assistant is *proposing* — a new deck
 // (`create_deck`), a set of changes to an existing one (`update_deck_cards`),
-// or either of those checked up front via `validate_deck` — without writing
-// anything (docs/adr/0011-deck-assistance-in-chat.md).
+// an existing deck under another format (`set_deck_format`), or any of those
+// checked up front via `validate_deck` — without writing anything
+// (docs/adr/0011-deck-assistance-in-chat.md).
+//
+// `formatId` is tri-state: omitted means "the deck's own format" (none for a
+// new deck), a string checks against that format, and `null` explicitly
+// checks against no format — even if the deck has one (what a
+// `set_deck_format` proposal that removes the format previews).
 //
 // The preview carries exactly what the old one-shot deck assistant used to
 // guarantee before its "Übernehmen" (ADR 0006): legality is the rule
@@ -29,7 +35,11 @@ export interface DeckProposalInput {
   cards?: DeckCardInput[]
   /** Absolute per-(card, section) quantities applied on top of `deckId`'s cards; 0 removes the row. */
   changes?: DeckCardInput[]
-  /** Checks against this format instead of the deck's own (or no format at all for a new deck). */
+  /**
+   * Checks against this format instead of the deck's own. Omitted (`undefined`)
+   * = the deck's own format (none for a new deck); `null` (or `''`) = no
+   * format at all, even if the deck has one.
+   */
   formatId?: string | null
 }
 
@@ -70,8 +80,8 @@ export function previewDeckProposal(db: Db, userId: string, input: DeckProposalI
     }
   }
 
-  if (input.formatId) {
-    formatId = input.formatId
+  if (input.formatId !== undefined) {
+    formatId = input.formatId || null
   }
 
   const entries = [...quantities.values()].filter(entry => entry.quantity > 0)

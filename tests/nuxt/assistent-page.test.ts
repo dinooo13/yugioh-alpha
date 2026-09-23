@@ -128,6 +128,29 @@ describe('assistant chat page', () => {
     expect(chip.exists()).toBe(true)
     expect(chip.text()).toBe('Deck: Magier')
     expect(chip.attributes('aria-label')).toBe('Deck Magier öffnen')
+
+    // The default title just repeats the chip — it stays for screen readers
+    // only, so "Deck: Magier" isn't shown twice (#48).
+    const heading = component.find('h1')
+    expect(heading.text()).toBe('Deck: Magier')
+    expect(heading.classes()).toContain('sr-only')
+  })
+
+  it('keeps the title visible next to the chip once it differs from the deck\'s name', async () => {
+    vi.stubGlobal('$fetch', vi.fn((url: string) => {
+      if (url === '/api/assistant/chat/conv-1') {
+        return Promise.resolve({ conversation: conversation({ title: 'Deck: Alt', deck: { id: 'deck-1', name: 'Neu' } }), messages: [], actions: [] })
+      }
+      return Promise.resolve(null)
+    }))
+
+    const component = await mountSuspended(AssistantConversationPage)
+    await flushPromises()
+
+    const heading = component.find('h1')
+    expect(heading.text()).toBe('Deck: Alt')
+    expect(heading.classes()).not.toContain('sr-only')
+    expect(component.find('a[href="/decks/deck-1"]').text()).toBe('Deck: Neu')
   })
 
   it('shows no deck chip for an unlinked conversation', async () => {

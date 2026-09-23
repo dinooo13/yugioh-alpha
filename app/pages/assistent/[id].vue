@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { deckConversationTitle } from '~~/shared/assistant-chat'
 import { assistantIntentDraft } from '~/utils/assistant-intents'
 
 useHead({ title: 'Assistent – yugioh alpha' })
@@ -31,6 +32,15 @@ const {
   cancel,
   updateAction,
 } = useAssistantThread(conversationId)
+
+// A deck conversation's title starts out as "Deck: <name>" — exactly the
+// deck chip's text. While it still is, the chip alone is the visible title
+// and the <h1> stays for screen readers only (#48). Once the title differs
+// (the deck was renamed, or the title was replaced), both are shown.
+const isDefaultDeckTitle = computed(() => {
+  const current = conversation.value
+  return Boolean(current?.deck) && current!.title === deckConversationTitle(current!.deck!.name)
+})
 
 // Below `lg` there's no room for the conversation list aside — it lives in
 // this slideover instead, opened from the "Unterhaltungen" button in the
@@ -134,9 +144,11 @@ async function onDeleted(id: string) {
       <section class="flex min-w-0 flex-1 flex-col rounded-md border border-gray-200 bg-white">
         <header class="flex items-center justify-between gap-2 border-b border-gray-200 px-4 py-3">
           <!-- Below `sm` the deck chip gets its own line, so neither it nor
-               the title is squeezed down to a few characters. -->
+               the title is squeezed down to a few characters. While the title
+               is still the default "Deck: <name>", the <h1> is sr-only and
+               the chip is the visible title, so it isn't shown twice (#48). -->
           <div class="flex min-w-0 flex-1 flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-2">
-            <h1 class="min-w-0 max-w-full truncate text-base font-semibold text-gray-900">
+            <h1 :class="isDefaultDeckTitle ? 'sr-only' : 'min-w-0 max-w-full truncate text-base font-semibold text-gray-900'">
               {{ conversation?.title ?? 'Assistent' }}
             </h1>
             <!-- The deck this conversation is about (ADR 0011); its current

@@ -28,7 +28,9 @@ import {
   ASSISTANT_MESSAGE_IMAGES_MAX,
   ASSISTANT_MESSAGE_TEXT_MAX,
   ASSISTANT_MESSAGE_TOTAL_BYTES_MAX,
+  ASSISTANT_CONVERSATION_TITLE_MAX,
   ASSISTANT_TOOL_LABELS,
+  deckConversationTitle,
 } from '../../shared/assistant-chat'
 import type {
   AssistantActionView,
@@ -44,7 +46,7 @@ type MessageRow = typeof assistantMessage.$inferSelect
 type ActionRow = typeof assistantAction.$inferSelect
 
 const DEFAULT_CONVERSATION_TITLE = 'Neue Unterhaltung'
-const CONVERSATION_TITLE_MAX_LENGTH = 80
+const CONVERSATION_TITLE_MAX_LENGTH = ASSISTANT_CONVERSATION_TITLE_MAX
 const CONVERSATION_LIST_MAX = 50
 
 // The model sees at most `limits.historyMessages` prior messages, oldest
@@ -94,6 +96,7 @@ Deckbau:
 - Halte die Kopienbegrenzung ein (maxCopies aus search_inventory; ohne Format höchstens 3).
 - Prüfe jeden Vorschlag vor create_deck/update_deck_cards mit validate_deck (cards für ein neues Deck, deckId + changes für Änderungen) und behebe gemeldete Probleme.
 - Bei update_deck_cards ist quantity die neue absolute Menge (0 entfernt die Karte), keine Differenz.
+- Soll ein bestehendes Deck ein anderes Format bekommen (z. B. „mach das Deck legal für TCG“), schlage set_deck_format für genau dieses Deck vor (formatId aus list_formats, leerer String entfernt das Format) — lege dafür keine Kopie mit create_deck an. Prüfe vorher mit validate_deck (deckId + formatId, ggf. mit changes), was im neuen Format nicht legal ist, und schlage nötige Kartenänderungen zusätzlich mit update_deck_cards vor.
 - Begründe die wichtigsten Karten bzw. Änderungen kurz.`
 
 /** Card lines in the deck context block, beyond which it is cut with "… gekürzt" (a 60+15+15 deck needs at most 90). */
@@ -274,7 +277,7 @@ export function createConversation(db: Db, userId: string, input: CreateConversa
       .values({
         id: randomUUID(),
         userId,
-        title: truncate(`Deck: ${deckRow.name}`, CONVERSATION_TITLE_MAX_LENGTH),
+        title: deckConversationTitle(deckRow.name),
         deckId: deckRow.id,
         createdAt: now,
         updatedAt: now,
@@ -638,7 +641,7 @@ export function buildDeckContextBlock(db: Db, userId: string, deckId: string): s
     'Karten (catalogCardId|name|section|quantity|owned):',
     ...(shownLines.length > 0 ? shownLines : ['(leer)']),
     ...(cardLines.length > shownLines.length ? ['… gekürzt'] : []),
-    `Ändere das Deck nur über update_deck_cards mit deckId=${detail.id}; quantity ist die neue absolute Menge.`,
+    `Ändere die Karten dieses Decks nur über update_deck_cards mit deckId=${detail.id} (quantity ist die neue absolute Menge), sein Format nur über set_deck_format mit dieser deckId.`,
   ].join('\n')
 }
 

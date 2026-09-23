@@ -135,6 +135,19 @@ describe('previewDeckProposal', () => {
     expect(preview.missing).toEqual([{ catalogCardId: CARD.potOfGreed, name: 'Pot of Greed', needed: 1, owned: 0 }])
   })
 
+  it('with formatId null previews an existing deck without any format, even though it has one', () => {
+    const format = createRuleFormat(db, 'user-a', validateRuleFormatInput({ name: 'Verbot', rules: FORBID_AND_CAP_RULES }))
+    const deck = createDeck(db, 'user-a', { name: 'Mein Deck', description: null })
+    upsertDeckCard(db, 'user-a', deck.id, { catalogCardId: CARD.potOfGreed, section: 'main', quantity: 1 })
+    updateDeck(db, 'user-a', deck.id, { formatId: format.id })
+
+    const preview = previewDeckProposal(db, 'user-a', { deckId: deck.id, formatId: null })
+    expect(preview.formatId).toBeNull()
+    expect(preview.formatName).toBeNull()
+    expect(preview.validation).toBeNull()
+    expect(preview.counts.total).toBe(1)
+  })
+
   it('404s for another user\'s deck', async () => {
     const foreign = createDeck(db, 'user-b', { name: 'Fremd', description: null })
     let statusCode: number | undefined
