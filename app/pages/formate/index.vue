@@ -137,6 +137,7 @@ function ruleCountLabel(format: RuleFormatListItem) {
                 variant="outline"
                 label="Ansehen"
                 :to="`/formate/${format.id}`"
+                class="tap-target"
               />
               <UButton
                 size="xs"
@@ -145,6 +146,7 @@ function ruleCountLabel(format: RuleFormatListItem) {
                 icon="i-lucide-copy"
                 label="Klonen"
                 :aria-label="`${format.name} klonen`"
+                class="tap-target"
                 @click="cloneFormat(format)"
               />
             </div>
@@ -207,6 +209,7 @@ function ruleCountLabel(format: RuleFormatListItem) {
                 icon="i-lucide-pencil"
                 label="Bearbeiten"
                 :to="`/formate/${format.id}`"
+                class="tap-target"
               />
               <UButton
                 size="xs"
@@ -215,6 +218,7 @@ function ruleCountLabel(format: RuleFormatListItem) {
                 icon="i-lucide-copy"
                 label="Duplizieren"
                 :aria-label="`${format.name} duplizieren`"
+                class="tap-target"
                 @click="cloneFormat(format)"
               />
               <UButton
@@ -224,6 +228,7 @@ function ruleCountLabel(format: RuleFormatListItem) {
                 icon="i-lucide-trash-2"
                 label="Löschen"
                 :aria-label="`${format.name} löschen`"
+                class="tap-target"
                 @click="deleteFormat(format)"
               />
             </div>

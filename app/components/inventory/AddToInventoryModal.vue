@@ -243,8 +243,11 @@ async function save() {
           />
         </UFormField>
 
+        <!-- Form-level: the card is picked before this modal opens, so there is
+             no card field a "Bitte zuerst eine Karte auswählen." could describe. -->
         <p
           v-if="errorMessage"
+          role="alert"
           class="text-sm text-red-600"
         >
           {{ errorMessage }}

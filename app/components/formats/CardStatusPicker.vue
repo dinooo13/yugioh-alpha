@@ -90,6 +90,7 @@ function removeCard(id: number) {
           size="xs"
           :disabled="disabled"
           :aria-label="`${nameFor(id)} entfernen`"
+          class="tap-target"
           @click="removeCard(id)"
         />
       </span>

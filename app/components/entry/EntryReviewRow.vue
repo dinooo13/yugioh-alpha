@@ -208,6 +208,7 @@ function onPicked(card: PickedCatalogCard) {
           color="neutral"
           variant="ghost"
           :aria-label="`Werte für ${row.raw} anpassen`"
+          class="tap-target"
           @click="() => { showOverrides = !showOverrides }"
         />
         <UButton
@@ -215,6 +216,7 @@ function onPicked(card: PickedCatalogCard) {
           color="neutral"
           variant="ghost"
           :aria-label="`${row.raw} entfernen`"
+          class="tap-target"
           @click="emit('remove')"
         />
       </div>

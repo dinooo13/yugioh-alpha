@@ -236,6 +236,7 @@ function onKeydown(event: KeyboardEvent) {
         aria-label="Foto aufnehmen"
         :loading="isProcessingImage"
         :disabled="disabled || streaming || images.length >= ASSISTANT_MESSAGE_IMAGES_MAX"
+        class="tap-target"
         @click="cameraInput?.click()"
       />
 
@@ -255,6 +256,7 @@ function onKeydown(event: KeyboardEvent) {
         :aria-label="isTouchDevice ? 'Aus Galerie hinzufügen' : 'Foto hinzufügen'"
         :loading="isProcessingImage"
         :disabled="disabled || streaming || images.length >= ASSISTANT_MESSAGE_IMAGES_MAX"
+        class="tap-target"
         @click="galleryInput?.click()"
       />
 

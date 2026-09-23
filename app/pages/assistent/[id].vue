@@ -138,7 +138,7 @@ async function onDeleted(id: string) {
             color="neutral"
             variant="outline"
             size="xs"
-            class="shrink-0 lg:hidden"
+            class="tap-target shrink-0 lg:hidden"
             @click="() => { isConversationsOpen = true }"
           />
         </header>

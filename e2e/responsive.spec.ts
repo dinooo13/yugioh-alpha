@@ -11,7 +11,7 @@ const DARK_MAGICIAN = 46986414
  * button instead of the sidebar, and the mobile nav drawer actually works.
  */
 test.describe('responsive layout at 390px', () => {
-  test('no horizontal scrolling on inventar, decks, deck editor, tournament detail, katalog, own profile, or a custom format', async ({ page }) => {
+  test('no horizontal scrolling on the main app pages and the shared player views', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 })
     await registerAndLogin(page)
 
@@ -69,7 +69,13 @@ test.describe('responsive layout at 390px', () => {
       { path: `/turniere/${tournament.id}`, appShell: true },
       { path: '/katalog', appShell: true },
       { path: `/formate/${format.id}`, appShell: true },
+      { path: '/wunschliste', appShell: true },
+      { path: '/turniere', appShell: true },
+      { path: '/turniere/neu', appShell: true },
+      { path: '/formate', appShell: true },
+      { path: '/inventar/erfassen', appShell: true },
       { path: `/spieler/${profile.handle}`, appShell: false },
+      { path: `/spieler/${profile.handle}/inventar`, appShell: false },
     ]
 
     for (const { path: route, appShell } of routes) {

@@ -48,6 +48,7 @@ async function toggle() {
       size="xs"
       :loading="isSaving"
       :label="inWishlist ? 'Auf der Wunschliste' : 'Zur Wunschliste'"
+      class="tap-target"
       @click="toggle"
     />
     <p

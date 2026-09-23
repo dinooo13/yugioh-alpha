@@ -532,6 +532,7 @@ function capturedAtLabel(participant: TournamentParticipantDto): string | null {
                     size="xs"
                     :aria-label="`Optionen für ${participant.name}`"
                     :loading="busyParticipantId === participant.id"
+                    class="tap-target"
                   />
                 </UDropdownMenu>
               </div>

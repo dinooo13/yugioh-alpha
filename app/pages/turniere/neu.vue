@@ -43,7 +43,16 @@ const form = reactive({
 })
 
 const isSubmitting = ref(false)
+// The name check belongs to its UFormField (aria-describedby/aria-invalid);
+// errorMessage is for the server's answer.
+const nameError = ref('')
 const errorMessage = ref('')
+
+watch(() => form.name, (name) => {
+  if (name.trim()) {
+    nameError.value = ''
+  }
+})
 
 function errorText(error: unknown, fallback: string) {
   const code = apiErrorCode(error) as TournamentErrorCode | undefined
@@ -55,7 +64,7 @@ async function submit() {
     return
   }
   if (!form.name.trim()) {
-    errorMessage.value = 'Bitte einen Namen angeben.'
+    nameError.value = 'Bitte einen Namen angeben.'
     return
   }
 
@@ -102,7 +111,10 @@ async function submit() {
       class="space-y-4 rounded-md border border-gray-200 bg-white p-4"
       @submit.prevent="submit"
     >
-      <UFormField label="Turniername">
+      <UFormField
+        label="Turniername"
+        :error="nameError"
+      >
         <UInput
           v-model="form.name"
           placeholder="z. B. Freitagsturnier"
@@ -165,6 +177,7 @@ async function submit() {
 
       <p
         v-if="errorMessage"
+        role="alert"
         class="text-sm text-red-600"
       >
         {{ errorMessage }}

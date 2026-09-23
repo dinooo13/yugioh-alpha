@@ -205,7 +205,7 @@ async function onLogout() {
               color="neutral"
               variant="ghost"
               size="xs"
-              class="shrink-0 focus-visible:opacity-100 lg:opacity-0 lg:group-hover:opacity-100 lg:data-[state=open]:opacity-100"
+              class="tap-target shrink-0 focus-visible:opacity-100 lg:opacity-0 lg:group-hover:opacity-100 lg:data-[state=open]:opacity-100"
               :aria-label="`Optionen für ${collection.name}`"
             />
           </UDropdownMenu>

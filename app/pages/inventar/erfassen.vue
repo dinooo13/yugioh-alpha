@@ -127,6 +127,7 @@ function onSaved(result: { created: number, merged: number }) {
           color="neutral"
           variant="outline"
           label="Zum Assistenten"
+          class="tap-target"
         />
       </template>
     </UAlert>

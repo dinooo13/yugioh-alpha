@@ -294,6 +294,7 @@ async function removeGrant(userId: string) {
                   color="error"
                   variant="ghost"
                   label="Entfernen"
+                  class="tap-target"
                   @click="removeGrant(grant.userId)"
                 />
               </li>

@@ -66,6 +66,7 @@ const subtitle = computed(() => cardSubtitle(props.item))
             variant="soft"
             trailing-icon="i-lucide-chevron-down"
             label="Aufschlüsselung"
+            class="tap-target"
           />
           <template #content>
             <div class="min-w-48 space-y-1 p-3">

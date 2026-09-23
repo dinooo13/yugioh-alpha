@@ -489,6 +489,7 @@ async function onAddedToInventory() {
               color="primary"
               size="xs"
               label="Zum Inventar"
+              class="tap-target"
               @click.stop="openAddToInventory(card)"
               @keydown.stop
             />
@@ -514,6 +515,7 @@ async function onAddedToInventory() {
         variant="outline"
         :disabled="page <= 1"
         aria-label="Vorherige Seite"
+        class="tap-target"
         @click="previousPage"
       />
       <span class="min-w-28 text-center text-sm text-gray-600">
@@ -525,6 +527,7 @@ async function onAddedToInventory() {
         variant="outline"
         :disabled="page >= totalPages"
         aria-label="Nächste Seite"
+        class="tap-target"
         @click="nextPage"
       />
     </div>
@@ -544,6 +547,7 @@ async function onAddedToInventory() {
               color="neutral"
               variant="ghost"
               aria-label="Schließen"
+              class="tap-target"
               @click="closeCard"
             />
           </div>

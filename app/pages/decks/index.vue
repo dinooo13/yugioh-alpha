@@ -358,6 +358,7 @@ function statusColor(deck: DeckListItem) {
               variant="ghost"
               size="xs"
               :aria-label="`Optionen für ${deck.name}`"
+              class="tap-target"
             />
           </UDropdownMenu>
         </div>

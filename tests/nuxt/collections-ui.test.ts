@@ -128,4 +128,20 @@ describe('collection form modal', () => {
     expect(document.body.textContent).toContain('Sammlung umbenennen')
     expect(document.querySelector('input[name="name"]')).toBeTruthy()
   })
+
+  it('ties the empty-name error to the name field', async () => {
+    document.body.innerHTML = ''
+    await mountSuspended(CollectionFormModal, {
+      props: { open: true, initialValues: null },
+    })
+
+    document.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }))
+    await nextTick()
+
+    const input = document.querySelector<HTMLInputElement>('input[name="name"]')!
+    expect(input.getAttribute('aria-invalid')).toBe('true')
+    const describedBy = input.getAttribute('aria-describedby')!.split(' ')
+    const messages = describedBy.map(id => document.getElementById(id)?.textContent?.trim())
+    expect(messages).toContain('Bitte einen Namen angeben.')
+  })
 })
