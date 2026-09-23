@@ -253,7 +253,12 @@ specifically for turns that include an image; see [`.env.example`](./.env.exampl
 Providers that require OpenCode Go's session header get it automatically —
 every request (chat and the deck assistant alike) sends
 `x-opencode-session` and a `User-Agent` identifying this app, no
-configuration needed. Its operational limits (tool-calling rounds per turn,
+configuration needed. On OpenCode Go, the recommended model is
+`mimo-v2.6-pro` (MiMo V2.6 Pro): it was verified with streamed (and parallel)
+tool calls, `image_url` data-URL photos (no separate vision model needed),
+and the deck assistant's `json_schema` output. `NUXT_ASSISTANT_REASONING_EFFORT`
+is optional for it; `glm-5.3-flash` remains a faster, cheaper alternative.
+The chat's operational limits (tool-calling rounds per turn,
 tool result size, history window, model call timeout) are configurable via
 `NUXT_ASSISTANT_LIMITS_*`; see [`.env.example`](./.env.example) and
 `server/utils/assistant-limits.ts`. See

@@ -330,6 +330,9 @@ unchanged. Works with any OpenAI-compatible Chat Completions endpoint that
 supports streaming and tool calls, with an optional
 `NUXT_ASSISTANT_VISION_MODEL` override for image-containing turns. See
 [`docs/adr/0010-chat-assistant-with-tools.md`](adr/0010-chat-assistant-with-tools.md).
+The recommended OpenCode Go model is `mimo-v2.6-pro` (MiMo V2.6 Pro), which
+covers text, streamed tool calls, and image turns without a separate vision
+model; see [`.env.example`](../.env.example).
 
 ## Recommended Build Order
 
