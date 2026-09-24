@@ -9,7 +9,7 @@ mark the old as superseded.
 | # | Title | Status |
 |---|-------|--------|
 | [0001](0001-card-catalog-data-model.md) | Card catalog data model and YGOPRODeck import | Accepted |
-| [0002](0002-owned-card-inventory-data-model.md) | Owned-card inventory data model | Accepted |
+| [0002](0002-owned-card-inventory-data-model.md) | Owned-card inventory data model | Accepted (collector parts superseded by [0017](0017-inventory-without-collector-details.md)) |
 | [0003](0003-client-side-ocr-and-speech-entry.md) | Client-side OCR and speech entry, server-side matching | Accepted |
 | [0004](0004-deck-data-model.md) | Deck data model | Accepted |
 | [0005](0005-rule-format-model.md) | Rule format model | Accepted |
@@ -22,5 +22,6 @@ mark the old as superseded.
 | [0012](0012-deck-cover-card.md) | Deck cover card chosen by the user | Accepted |
 | [0013](0013-english-url-scheme.md) | English URL scheme and permanent redirects from German paths | Accepted |
 | [0014](0014-ui-internationalisation.md) | UI internationalisation (German and English) | Accepted |
-| [0015](0015-german-card-data.md) | German card data and card display language | Accepted (implemented: F3a–F3c) |
+| [0015](0015-german-card-data.md) | German card data and card display language | Accepted (implemented: F3a–F3c); UI credit superseded by [0017](0017-inventory-without-collector-details.md) |
 | [0016](0016-visual-design-system.md) | Visual design system and theming (Duel Arena) | Accepted |
+| [0017](0017-inventory-without-collector-details.md) | Inventory without collector details | Accepted |

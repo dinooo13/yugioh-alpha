@@ -4,6 +4,10 @@
 
 Accepted
 
+Partly superseded by [0017](0017-inventory-without-collector-details.md): the
+owned-card grain no longer includes printing, language, condition or edition;
+those columns stay but are unused.
+
 ## Context
 
 Phase 1 of the [Roadmap](../Roadmap.md) requires users to record the cards
