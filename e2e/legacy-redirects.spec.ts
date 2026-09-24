@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { logout, registerAndLogin } from './helpers/auth'
+import { CARD } from './helpers/cards'
 
 // German → English URL scheme (docs/adr/0013-english-url-scheme.md): every
 // old URL answers with one permanent, uncached redirect to its new one.
@@ -86,7 +87,7 @@ test.describe('legacy German URLs', () => {
     await page.goto(`/spieler/${profile.handle}/decks/${deck.id}?token=${deckShare.shareToken}`)
     await expect(page).toHaveURL(`/players/${profile.handle}/decks/${deck.id}?token=${deckShare.shareToken}`)
     await expect(page.getByRole('heading', { name: 'Altes Link-Deck' })).toBeVisible()
-    await expect(page.getByText('Dark Magician')).toBeVisible()
+    await expect(page.getByText(CARD.darkMagician)).toBeVisible()
 
     await page.goto(`/spieler/${profile.handle}/sammlungen/${collection.id}?token=${collectionShare.shareToken}`)
     await expect(page).toHaveURL(`/players/${profile.handle}/collections/${collection.id}?token=${collectionShare.shareToken}`)

@@ -9,6 +9,7 @@ defineProps<{
 }>()
 
 const { t } = useI18n()
+const { cardName } = useCardText()
 
 function sectionName(section: DeckSection): string {
   return t(`decks.section.${section}`)
@@ -58,7 +59,7 @@ function cardMetaLine(card: SharedDeckCardRow): string {
         >
           <CardThumb
             :src="row.imageSmall"
-            :alt="row.name"
+            :alt="cardName(row)"
             size="sm"
             :src-large="row.imageLarge"
             enlargeable
@@ -66,7 +67,7 @@ function cardMetaLine(card: SharedDeckCardRow): string {
 
           <div class="min-w-0 flex-1">
             <p class="truncate text-sm font-medium text-gray-900">
-              {{ row.name }}
+              {{ cardName(row) }}
             </p>
             <p class="truncate text-xs text-gray-500">
               {{ cardMetaLine(row) }}

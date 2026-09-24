@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { registerAndLogin } from './helpers/auth'
+import { CARD } from './helpers/cards'
 
 // Passcode from the seeded E2E catalog fixture (server/db/fixtures/catalog-fixture.ts).
 const DARK_MAGICIAN = 46986414
@@ -111,21 +112,21 @@ test.describe('responsive layout at 390px', () => {
     await page.waitForLoadState('networkidle')
 
     // Liste (default view)
-    const name = page.getByText('Dark Magician', { exact: true }).first()
+    const name = page.getByText(CARD.darkMagician, { exact: true }).first()
     await expect(name).toBeVisible()
     const nameBox = await name.boundingBox()
     expect(nameBox!.width).toBeGreaterThanOrEqual(100)
 
-    await expect(page.getByRole('combobox', { name: 'Sammlung für Dark Magician' })).toBeVisible()
+    await expect(page.getByRole('combobox', { name: `Sammlung für ${CARD.darkMagician}` })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Karte bearbeiten' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Karte entfernen' })).toBeVisible()
 
-    const thumbnailBox = await page.getByRole('img', { name: 'Dark Magician' }).first().boundingBox()
+    const thumbnailBox = await page.getByRole('img', { name: CARD.darkMagician }).first().boundingBox()
     expect(thumbnailBox).not.toBeNull()
     expect(thumbnailBox!.width / thumbnailBox!.height).toBeGreaterThan(0.686 - 0.03)
     expect(thumbnailBox!.width / thumbnailBox!.height).toBeLessThan(0.686 + 0.03)
 
-    const listOverflow = await page.locator('ul:has([aria-label="Sammlung für Dark Magician"])').evaluate(el => ({
+    const listOverflow = await page.locator(`ul:has([aria-label="Sammlung für ${CARD.darkMagician}"])`).evaluate(el => ({
       scrollWidth: el.scrollWidth,
       clientWidth: el.clientWidth,
     }))
@@ -139,7 +140,7 @@ test.describe('responsive layout at 390px', () => {
 
     // Übersicht
     await page.getByRole('button', { name: 'Übersicht' }).click()
-    const tile = page.getByRole('button', { name: 'Dark Magician vergrößern' })
+    const tile = page.getByRole('button', { name: `${CARD.darkMagician} vergrößern` })
     await expect(tile).toBeVisible()
     const tileBox = await tile.boundingBox()
     expect(tileBox!.width).toBeGreaterThanOrEqual(150)

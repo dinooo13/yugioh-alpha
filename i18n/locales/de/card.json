@@ -7,6 +7,9 @@
     "levelShort": "Lv {level}",
     "stars": "Stufe {level}",
     "atkDef": "ATK {atk} / DEF {def}",
+    "englishName": "Englisch: {name}",
+    "germanTextMissing": "Für diese Karte gibt es keinen deutschen Kartentext.",
+    "translationSource": "Deutsche Kartentexte: {source}",
     "totalQuantity": "×{count} ges.",
     "field": {
       "quantity": "Anzahl",

@@ -1,7 +1,8 @@
 import { readBody, setResponseStatus } from 'h3'
 import { useDb } from '../../db'
-import { createDeck, validateDeckCreateCardsInput, validateDeckInput } from '../../utils/decks'
+import { createDeck, inCardLocale, validateDeckCreateCardsInput, validateDeckInput } from '../../utils/decks'
 import { requireUser } from '../../utils/session'
+import { resolveCardLocale } from '../../utils/ui-locale'
 
 export default defineEventHandler(async (event) => {
   const user = await requireUser(event)
@@ -11,5 +12,5 @@ export default defineEventHandler(async (event) => {
   const detail = createDeck(useDb(), user.id, input, cards)
 
   setResponseStatus(event, 201)
-  return detail
+  return inCardLocale(detail, await resolveCardLocale(event))
 })

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { OwnProfile, Visibility } from '~~/shared/sharing'
+import { isAppLocale } from '~~/shared/locale'
 
 const { t } = useI18n()
 usePageTitle('profile.title')
@@ -72,6 +73,47 @@ function onLocaleSaved() {
   localeSavedTimer = setTimeout(() => {
     localeSaved.value = false
   }, 2000)
+}
+
+// Card language (ADR 0015): follow the interface language (`null`), or a
+// fixed one. Saves to the profile first; a failure keeps the old choice.
+const CARD_LOCALE_FOLLOW = 'follow'
+const { locale: uiLocale } = useUiLocale()
+const { choice: cardLocaleChoice, change: changeCardLocale } = useCardLocale()
+const cardLocaleItems = computed(() => [
+  {
+    label: t('profile.settings.cardLanguageOption.follow', {
+      language: t(`profile.settings.cardLanguageOption.${uiLocale.value}`),
+    }),
+    value: CARD_LOCALE_FOLLOW,
+  },
+  { label: t('profile.settings.cardLanguageOption.de'), value: 'de' },
+  { label: t('profile.settings.cardLanguageOption.en'), value: 'en' },
+])
+const isSavingCardLocale = ref(false)
+const cardLocaleSaved = ref(false)
+let cardLocaleSavedTimer: ReturnType<typeof setTimeout> | undefined
+
+async function onCardLocaleChange(value: string) {
+  const next = isAppLocale(value) ? value : null
+  if (next === cardLocaleChoice.value || isSavingCardLocale.value) {
+    return
+  }
+  isSavingCardLocale.value = true
+  try {
+    await changeCardLocale(next)
+    cardLocaleSaved.value = true
+    clearTimeout(cardLocaleSavedTimer)
+    cardLocaleSavedTimer = setTimeout(() => {
+      cardLocaleSaved.value = false
+    }, 2000)
+  }
+  catch {
+    toast.add({ title: t('profile.settings.cardLanguageSaveFailed'), color: 'error' })
+  }
+  finally {
+    isSavingCardLocale.value = false
+  }
 }
 
 const wishlistPublic = computed({
@@ -194,6 +236,34 @@ const wishlistPublic = computed({
             id="profile-locale"
             class="shrink-0"
             @saved="onLocaleSaved"
+          />
+        </div>
+        <div class="mt-4 flex flex-col gap-3 border-t border-gray-100 pt-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+          <div>
+            <label
+              for="profile-card-locale"
+              class="text-sm font-medium text-gray-900"
+            >
+              {{ t('profile.settings.cardLanguage') }}
+            </label>
+            <p class="mt-1 text-sm text-gray-500">
+              {{ t('profile.settings.cardLanguageDescription') }}
+            </p>
+            <p
+              v-if="cardLocaleSaved"
+              class="mt-1 text-sm text-emerald-600"
+            >
+              {{ t('common.saved') }}
+            </p>
+          </div>
+          <USelect
+            id="profile-card-locale"
+            :model-value="cardLocaleChoice ?? CARD_LOCALE_FOLLOW"
+            :items="cardLocaleItems"
+            :disabled="isSavingCardLocale"
+            :aria-label="t('profile.settings.cardLanguage')"
+            class="w-full shrink-0 sm:w-64"
+            @update:model-value="onCardLocaleChange"
           />
         </div>
       </section>

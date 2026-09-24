@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { registerAndLogin } from './helpers/auth'
 import { acceptConfirm } from './helpers/confirm'
+import { CARD } from './helpers/cards'
 
 // Passcode from the seeded E2E catalog fixture
 // (server/db/fixtures/catalog-fixture.ts) — the fixture has exactly one
@@ -63,7 +64,7 @@ test.describe('Chat assistant', () => {
     // --- applied for real: 1 seeded + 2 proposed = 3 -----------------------
     await page.goto('/inventory')
     await page.getByRole('button', { name: 'Übersicht', exact: true }).click()
-    await expect(page.getByText('Dark Magician').first()).toBeVisible()
+    await expect(page.getByText(CARD.darkMagician).first()).toBeVisible()
     await expect(page.getByText('×3 ges.')).toBeVisible()
 
     // --- new conversation, image input --------------------------------------

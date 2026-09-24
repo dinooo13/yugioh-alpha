@@ -7,13 +7,15 @@ import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm'
 import type { SQL } from 'drizzle-orm'
 import type { useDb } from '../db'
 import { catalogCard, catalogCardImage, collection, deck, deckCard, ownedCard, ruleFormat } from '../db/schema'
-import { buildWarnings, cardCategoryRank, DECK_LIMITS, loadDeckCovers } from './decks'
+import { buildWarnings, DECK_LIMITS, loadDeckCovers, sortDeckSections } from './decks'
 import { loadCardDataForValidation } from './deck-validation'
 import { ruleFormatsById } from './rule-formats'
 import { grantedResourceIds } from './sharing'
 import { cardNameMatches } from './card-name-search'
+import { cardNameDeSql, cardSortKey } from './card-translation-sql'
 import { evaluateDeck } from '../../shared/rule-formats'
 import type { DeckSection } from '../../shared/deck-sections'
+import type { AppLocale } from '../../shared/locale'
 import type {
   PublicProfileSummary,
   SharedCardListItem,
@@ -35,6 +37,7 @@ function loadSharedDeckCardRows(db: Db, deckId: string): SharedDeckCardRow[] {
       section: deckCard.section,
       quantity: deckCard.quantity,
       name: catalogCard.name,
+      nameDe: cardNameDeSql(),
       type: catalogCard.type,
       frameType: catalogCard.frameType,
       attribute: catalogCard.attribute,
@@ -57,12 +60,16 @@ function loadSharedDeckCardRows(db: Db, deckId: string): SharedDeckCardRow[] {
   return rows.map(row => ({ ...row, section: row.section as DeckSection }))
 }
 
-/** Deck detail minus every ownership-derived field. Quantities only. */
+/**
+ * Deck detail minus every ownership-derived field. Quantities only. Sections
+ * are sorted by the card names in `cardLocale` (ADR 0015).
+ */
 export function buildSharedDeckView(
   db: Db,
   deckRow: typeof deck.$inferSelect,
   owner: PublicProfileSummary,
   isOwner = false,
+  cardLocale: AppLocale = 'en',
 ): SharedDeckView {
   const rows = loadSharedDeckCardRows(db, deckRow.id)
 
@@ -84,10 +91,7 @@ export function buildSharedDeckView(
     sections[row.section].push(row)
   }
 
-  sections.main.sort((a, b) =>
-    cardCategoryRank(a.type) - cardCategoryRank(b.type) || a.name.localeCompare(b.name))
-  sections.extra.sort((a, b) => a.name.localeCompare(b.name))
-  sections.side.sort((a, b) => a.name.localeCompare(b.name))
+  sortDeckSections(sections, cardLocale)
 
   const sum = (section: DeckSection) =>
     sections[section].reduce((total, row) => total + row.quantity, 0)
@@ -121,7 +125,14 @@ export function buildSharedDeckView(
   }
 }
 
-export interface SharedCardListOptions { q?: string, page?: number, pageSize?: number, sort?: 'name' | '-name' | 'quantity' }
+export interface SharedCardListOptions {
+  q?: string
+  page?: number
+  pageSize?: number
+  sort?: 'name' | '-name' | 'quantity'
+  /** The viewer's card language: "by name" sorts by the German name in `de` (ADR 0015). */
+  cardLocale?: AppLocale
+}
 
 const CARD_LIST_SORTS = new Set(['name', '-name', 'quantity'])
 
@@ -166,11 +177,12 @@ function listAggregatedCards(db: Db, where: SQL, options: SharedCardListOptions)
   const pageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, options.pageSize ?? DEFAULT_PAGE_SIZE))
   const totalQuantitySql = sql<number>`sum(${ownedCard.quantity})`
 
+  const nameKey = cardSortKey(options.cardLocale ?? 'en')
   const orderBy = options.sort === '-name'
-    ? [desc(catalogCard.name)]
+    ? [desc(nameKey)]
     : options.sort === 'quantity'
-      ? [desc(totalQuantitySql), asc(catalogCard.name)]
-      : [asc(catalogCard.name)]
+      ? [desc(totalQuantitySql), asc(nameKey)]
+      : [asc(nameKey)]
 
   const pageRows = db
     .select({ catalogCardId: ownedCard.catalogCardId, quantity: totalQuantitySql })
@@ -197,6 +209,7 @@ function listAggregatedCards(db: Db, where: SQL, options: SharedCardListOptions)
         .select({
           catalogCardId: catalogCard.id,
           name: catalogCard.name,
+          nameDe: cardNameDeSql(),
           type: catalogCard.type,
           frameType: catalogCard.frameType,
           attribute: catalogCard.attribute,
@@ -221,6 +234,7 @@ function listAggregatedCards(db: Db, where: SQL, options: SharedCardListOptions)
     return {
       catalogCardId: row.catalogCardId,
       name: display?.name ?? '',
+      nameDe: display?.nameDe ?? null,
       type: display?.type ?? '',
       frameType: display?.frameType ?? null,
       attribute: display?.attribute ?? null,

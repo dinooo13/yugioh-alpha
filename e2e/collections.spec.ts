@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 import { registerAndLogin } from './helpers/auth'
 import { acceptConfirm } from './helpers/confirm'
+import { CARD } from './helpers/cards'
 
 // Passcodes from the seeded E2E catalog fixture
 // (server/db/fixtures/catalog-fixture.ts).
@@ -49,32 +50,32 @@ test.describe('collections on the inventory page', () => {
     await pickScope(page, /^Alle Sammlungen/)
     await expect(page).toHaveURL(/\/inventory$/)
     await expect(heading).toHaveText('Alle Karten')
-    await page.getByRole('combobox', { name: 'Sammlung für Dark Magician' }).click()
+    await page.getByRole('combobox', { name: `Sammlung für ${CARD.darkMagician}` }).click()
     await page.getByRole('option', { name: 'Box 1', exact: true }).click()
 
     // Liste scoped to Box 1: only its rows.
     await pickScope(page, 'Box 1 (2)')
     await expect(heading).toHaveText('Box 1')
-    await expect(page.getByRole('combobox', { name: 'Sammlung für Dark Magician' })).toBeVisible()
-    await expect(page.getByRole('combobox', { name: 'Sammlung für Pot of Greed' })).toHaveCount(0)
+    await expect(page.getByRole('combobox', { name: `Sammlung für ${CARD.darkMagician}` })).toBeVisible()
+    await expect(page.getByRole('combobox', { name: `Sammlung für ${CARD.potOfGreed}` })).toHaveCount(0)
 
     // Übersicht keeps the same scope.
     await page.getByRole('button', { name: 'Übersicht' }).click()
     await expect(page).toHaveURL(/view=overview/)
     await expect(page).toHaveURL(/collectionId=/)
-    await expect(page.getByLabel('Dark Magician vergrößern')).toBeVisible()
-    await expect(page.getByLabel('Pot of Greed vergrößern')).toHaveCount(0)
+    await expect(page.getByLabel(`${CARD.darkMagician} vergrößern`)).toBeVisible()
+    await expect(page.getByLabel(`${CARD.potOfGreed} vergrößern`)).toHaveCount(0)
 
     // "(keine Sammlung)": only the unassigned card, in both views.
     await pickScope(page, /^\(keine Sammlung\)/)
     await expect(heading).toHaveText('Ohne Sammlung')
     await expect(page).toHaveURL(/view=overview/)
-    await expect(page.getByLabel('Pot of Greed vergrößern')).toBeVisible()
-    await expect(page.getByLabel('Dark Magician vergrößern')).toHaveCount(0)
+    await expect(page.getByLabel(`${CARD.potOfGreed} vergrößern`)).toBeVisible()
+    await expect(page.getByLabel(`${CARD.darkMagician} vergrößern`)).toHaveCount(0)
     await page.getByRole('button', { name: 'Liste' }).click()
     await expect(page).not.toHaveURL(/view=/)
-    await expect(page.getByRole('combobox', { name: 'Sammlung für Pot of Greed' })).toBeVisible()
-    await expect(page.getByRole('combobox', { name: 'Sammlung für Dark Magician' })).toHaveCount(0)
+    await expect(page.getByRole('combobox', { name: `Sammlung für ${CARD.potOfGreed}` })).toBeVisible()
+    await expect(page.getByRole('combobox', { name: `Sammlung für ${CARD.darkMagician}` })).toHaveCount(0)
 
     // Rename.
     await pickScope(page, 'Box 1 (2)')
@@ -100,7 +101,7 @@ test.describe('collections on the inventory page', () => {
     const anonymousPage = await anonymous.newPage()
     await anonymousPage.goto(publicUrl)
     await expect(anonymousPage.getByRole('heading', { name: 'Binder' })).toBeVisible()
-    await expect(anonymousPage.getByText('Dark Magician').first()).toBeVisible()
+    await expect(anonymousPage.getByText(CARD.darkMagician).first()).toBeVisible()
     await anonymous.close()
 
     // Delete: back to all cards, the cards stay.
@@ -108,7 +109,7 @@ test.describe('collections on the inventory page', () => {
     await acceptConfirm(page)
     await expect(page).toHaveURL('/inventory')
     await expect(heading).toHaveText('Alle Karten')
-    await expect(page.getByRole('combobox', { name: 'Sammlung für Dark Magician' })).toBeVisible()
+    await expect(page.getByRole('combobox', { name: `Sammlung für ${CARD.darkMagician}` })).toBeVisible()
   })
 
   test('"In Liste bearbeiten" opens the card\'s rows in Liste (#32)', async ({ page }) => {
@@ -123,16 +124,16 @@ test.describe('collections on the inventory page', () => {
 
     await page.getByRole('button', { name: 'Übersicht' }).click()
     await expect(page).toHaveURL(/view=overview/)
-    await page.getByLabel('Dark Magician vergrößern').click()
+    await page.getByLabel(`${CARD.darkMagician} vergrößern`).click()
     await page.getByRole('dialog').getByRole('button', { name: 'In Liste bearbeiten' }).click()
 
     await expect(page).toHaveURL(new RegExp(`card=${DARK_MAGICIAN}`))
     await expect(page).not.toHaveURL(/view=/)
     const listeToggle = page.getByRole('button', { name: 'Liste', exact: true })
     await expect(listeToggle).toHaveAttribute('aria-pressed', 'true')
-    await expect(page.getByText('Nur: Dark Magician')).toBeVisible()
-    await expect(page.getByRole('combobox', { name: 'Sammlung für Dark Magician' })).toBeVisible()
-    await expect(page.getByRole('combobox', { name: 'Sammlung für Pot of Greed' })).toHaveCount(0)
+    await expect(page.getByText(`Nur: ${CARD.darkMagician}`)).toBeVisible()
+    await expect(page.getByRole('combobox', { name: `Sammlung für ${CARD.darkMagician}` })).toBeVisible()
+    await expect(page.getByRole('combobox', { name: `Sammlung für ${CARD.potOfGreed}` })).toHaveCount(0)
 
     // Nothing flips the view back once the search debounce has passed.
     await page.waitForTimeout(500)
@@ -142,6 +143,6 @@ test.describe('collections on the inventory page', () => {
     // Back returns to the Übersicht.
     await page.goBack()
     await expect(page).toHaveURL(/view=overview/)
-    await expect(page.getByLabel('Dark Magician vergrößern')).toBeVisible()
+    await expect(page.getByLabel(`${CARD.darkMagician} vergrößern`)).toBeVisible()
   })
 })

@@ -8,6 +8,7 @@
       "display_name_too_long": "Der Anzeigename darf höchstens 60 Zeichen lang sein.",
       "bio_too_long": "Der Text „Über mich“ darf höchstens 500 Zeichen lang sein.",
       "invalid_locale": "Diese Sprache wird nicht unterstützt.",
+      "invalid_card_locale": "Diese Kartensprache gibt es nicht.",
       "quantity_invalid": "Die Anzahl muss eine ganze Zahl ab 1 sein.",
       "quantity_too_large": "Die Anzahl darf höchstens {max} betragen.",
       "owned_card_not_found": "Diese Karte ist nicht mehr in deinem Inventar.",

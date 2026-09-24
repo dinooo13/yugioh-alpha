@@ -2,6 +2,7 @@
 interface CatalogCard {
   id: number
   name: string
+  nameDe: string | null
   type: string
   imageUrlSmall: string | null
   printings: Array<{
@@ -17,6 +18,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const { cardName } = useCardText()
 
 const query = ref('')
 const debouncedQuery = ref('')
@@ -65,11 +67,11 @@ const { data, pending } = await useFetch<{ items: CatalogCard[] }>('/api/invento
       >
         <CardThumb
           :src="card.imageUrlSmall"
-          :alt="card.name"
+          :alt="cardName(card)"
           size="sm"
         />
         <span class="min-w-0">
-          <span class="block truncate text-sm font-medium text-gray-900">{{ card.name }}</span>
+          <span class="block truncate text-sm font-medium text-gray-900">{{ cardName(card) }}</span>
           <span class="block truncate text-xs text-gray-500">{{ card.type }}</span>
         </span>
       </button>

@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { registerAndLogin } from './helpers/auth'
 import { acceptConfirm } from './helpers/confirm'
+import { CARD } from './helpers/cards'
 
 // Passcodes from the seeded E2E catalog fixture
 // (server/db/fixtures/catalog-fixture.ts).
@@ -47,8 +48,8 @@ test.describe('rule formats', () => {
     // Pot of Greed is forbidden by name, picked through the card search.
     await page.getByRole('button', { name: 'Regel hinzufügen: Einzelne Karten' }).click()
     await page.getByLabel('Karte für die Regel suchen').fill('Pot of Greed')
-    await page.getByRole('button', { name: 'Pot of Greed' }).click()
-    await expect(page.getByText('Verboten: Pot of Greed')).toBeVisible()
+    await page.getByRole('button', { name: CARD.potOfGreed }).click()
+    await expect(page.getByText(`Verboten: ${CARD.potOfGreed}`)).toBeVisible()
 
     await page.getByRole('button', { name: 'Format erstellen' }).click()
     await expect(page).toHaveURL('/formats')
@@ -67,15 +68,15 @@ test.describe('rule formats', () => {
     const mainCount = page.getByLabel('Anzahl im Main Deck')
 
     await search.fill('Dark Magician')
-    await page.getByRole('button', { name: 'Dark Magician zum Main Deck hinzufügen', exact: true }).click()
+    await page.getByRole('button', { name: `${CARD.darkMagician} zum Main Deck hinzufügen`, exact: true }).click()
     await expect(mainCount).toHaveText('1/40–60')
 
     await search.fill('Stardust')
-    await page.getByRole('button', { name: 'Stardust Dragon zum Extra Deck hinzufügen', exact: true }).click()
+    await page.getByRole('button', { name: `${CARD.stardustDragon} zum Extra Deck hinzufügen`, exact: true }).click()
     await expect(page.getByLabel('Anzahl im Extra Deck')).toHaveText('1/15')
 
     await search.fill('Pot of Greed')
-    await page.getByRole('button', { name: 'Pot of Greed zum Main Deck hinzufügen', exact: true }).click()
+    await page.getByRole('button', { name: `${CARD.potOfGreed} zum Main Deck hinzufügen`, exact: true }).click()
     await expect(mainCount).toHaveText('2/40–60')
 
     // --- Assign the custom format ------------------------------------------
@@ -86,17 +87,17 @@ test.describe('rule formats', () => {
     await page.getByRole('option', { name: 'Nur alte Karten (eigenes)' }).click()
 
     await expect(status).toContainText('Nicht legal')
-    await expect(page.getByText('Stardust Dragon ist in diesem Format verboten.')).toBeVisible()
-    await expect(page.getByText('Pot of Greed ist in diesem Format verboten.')).toBeVisible()
+    await expect(page.getByText(`${CARD.stardustDragon} ist in diesem Format verboten.`)).toBeVisible()
+    await expect(page.getByText(`${CARD.potOfGreed} ist in diesem Format verboten.`)).toBeVisible()
 
     // The offending rows are badged in the deck list.
-    const potRow = page.getByRole('listitem').filter({ hasText: 'Pot of Greed' }).first()
+    const potRow = page.getByRole('listitem').filter({ hasText: CARD.potOfGreed }).first()
     await expect(potRow.getByText('Verboten')).toBeVisible()
 
     // --- Remove the offending cards ----------------------------------------
-    await page.getByRole('button', { name: 'Pot of Greed aus dem Main Deck entfernen', exact: true }).click()
+    await page.getByRole('button', { name: `${CARD.potOfGreed} aus dem Main Deck entfernen`, exact: true }).click()
     await expect(mainCount).toHaveText('1/40–60')
-    await page.getByRole('button', { name: 'Stardust Dragon aus dem Extra Deck entfernen', exact: true }).click()
+    await page.getByRole('button', { name: `${CARD.stardustDragon} aus dem Extra Deck entfernen`, exact: true }).click()
 
     await expect(status).toHaveText('Legal')
 

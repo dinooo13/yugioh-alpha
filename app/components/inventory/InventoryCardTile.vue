@@ -15,13 +15,14 @@ const showInline = computed(() => breakdown.value.length <= 2)
 const subtitle = computed(() => cardSubtitle(props.item))
 
 const { t } = useI18n()
+const { cardName } = useCardText()
 </script>
 
 <template>
   <article class="group flex min-w-0 flex-col overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md">
     <button
       type="button"
-      :aria-label="t('card.enlarge', { name: item.name })"
+      :aria-label="t('card.enlarge', { name: cardName(item) })"
       class="block w-full cursor-zoom-in focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
       @click="emit('preview')"
     >
@@ -29,7 +30,7 @@ const { t } = useI18n()
       <CardThumb
         :src="item.imageSmall"
         :src-large="item.imageLarge"
-        :alt="item.name"
+        :alt="cardName(item)"
         size="full"
         sizes="(min-width: 1280px) 270px, (min-width: 640px) 30vw, 48vw"
       />
@@ -38,7 +39,7 @@ const { t } = useI18n()
     <div class="space-y-2 p-3">
       <div class="space-y-0.5">
         <h2 class="line-clamp-2 text-sm font-semibold leading-5 text-gray-900 group-hover:text-primary sm:text-base">
-          {{ item.name }}
+          {{ cardName(item) }}
         </h2>
         <p class="truncate text-xs text-gray-500">
           {{ subtitle }}

@@ -6,7 +6,10 @@ import type { useDb } from '../db'
 import { catalogCard, catalogCardImage, deck, deckCard, ruleFormat } from '../db/schema'
 import { ownedQuantitiesByCard } from './inventory'
 import { cardNameMatches, escapedLike, escapeLikeTerm } from './card-name-search'
-import { evaluateDeck } from '../../shared/rule-formats'
+import { cardNameDeSql } from './card-translation-sql'
+import { compareCardNames } from '../../shared/card-text'
+import type { AppLocale } from '../../shared/locale'
+import { evaluateDeck, germanName } from '../../shared/rule-formats'
 import type { DeckValidation, DeckWarning, RuleSet } from '../../shared/rule-formats'
 import { loadCardDataForValidation } from './deck-validation'
 import { requireAssignableFormat, ruleFormatsById } from './rule-formats'
@@ -91,6 +94,8 @@ export interface DeckListOptions {
 export interface DeckCardRow {
   catalogCardId: number
   name: string
+  /** Official German name (ADR 0015); null when there is none. */
+  nameDe: string | null
   type: string
   frameType: string | null
   attribute: string | null
@@ -421,12 +426,40 @@ export function cardCategoryRank(type: string): number {
   return 0
 }
 
+/**
+ * Sorts deck sections in place, the conventional deck-list order: the Main
+ * Deck by monsters / spells / traps, then by name; Extra and Side by name.
+ * Names are compared in the card language (ADR 0015) — `en` (the default,
+ * which the assistant and snapshots use) by the English name, `de` by the
+ * German name where there is one. Endpoints re-sort their response in the
+ * request's card language. Shared with server/utils/shared-views.ts.
+ */
+export function sortDeckSections<T extends { type: string, name: string, nameDe?: string | null }>(
+  sections: Record<DeckSection, T[]>,
+  cardLocale: AppLocale = 'en',
+): Record<DeckSection, T[]> {
+  const byName = (a: T, b: T) => compareCardNames(a, b, cardLocale)
+  sections.main.sort((a, b) => cardCategoryRank(a.type) - cardCategoryRank(b.type) || byName(a, b))
+  sections.extra.sort(byName)
+  sections.side.sort(byName)
+  return sections
+}
+
+/** A deck detail with its sections sorted in the request's card language (ADR 0015). */
+export function inCardLocale<T extends { sections: Record<DeckSection, Array<{ type: string, name: string, nameDe?: string | null }>> }>(
+  detail: T,
+  cardLocale: AppLocale,
+): T {
+  sortDeckSections(detail.sections, cardLocale)
+  return detail
+}
+
 // Exported for reuse by server/utils/shared-views.ts: warnings are computed
 // from counts/quantities only (no ownership data), so they are safe to reuse
 // verbatim in the shared (read-only) deck view.
 export function buildWarnings(
   counts: { main: number, extra: number, side: number },
-  rows: Array<{ catalogCardId: number, name: string, quantity: number }>,
+  rows: Array<{ catalogCardId: number, name: string, nameDe?: string | null, quantity: number }>,
 ): DeckWarning[] {
   const warnings: DeckWarning[] = []
 
@@ -465,9 +498,9 @@ export function buildWarnings(
 
   // The standard copy limit counts every copy in the deck — main, extra, and
   // side combined.
-  const copiesByCard = new Map<number, { name: string, copies: number }>()
+  const copiesByCard = new Map<number, { name: string, nameDe: string | null, copies: number }>()
   for (const row of rows) {
-    const entry = copiesByCard.get(row.catalogCardId) ?? { name: row.name, copies: 0 }
+    const entry = copiesByCard.get(row.catalogCardId) ?? { name: row.name, nameDe: row.nameDe ?? null, copies: 0 }
     entry.copies += row.quantity
     copiesByCard.set(row.catalogCardId, entry)
   }
@@ -477,7 +510,7 @@ export function buildWarnings(
       warnings.push({
         code: 'copies_above_max',
         cardId,
-        params: { cardId, cardName: entry.name, copies: entry.copies, maxCopies: DECK_LIMITS.maxCopies },
+        params: { cardId, cardName: entry.name, ...germanName(entry.nameDe), copies: entry.copies, maxCopies: DECK_LIMITS.maxCopies },
         message: `${entry.name}: ${entry.copies} copies in the deck; the usual maximum is ${DECK_LIMITS.maxCopies}.`,
       })
     }
@@ -493,6 +526,7 @@ function loadDeckCardRows(db: Db, userId: string, deckId: string): DeckCardRow[]
       section: deckCard.section,
       quantity: deckCard.quantity,
       name: catalogCard.name,
+      nameDe: cardNameDeSql(),
       type: catalogCard.type,
       frameType: catalogCard.frameType,
       attribute: catalogCard.attribute,
@@ -573,10 +607,7 @@ function buildDeckDetail(db: Db, userId: string, deckRow: typeof deck.$inferSele
     sections[row.section].push(row)
   }
 
-  sections.main.sort((a, b) =>
-    cardCategoryRank(a.type) - cardCategoryRank(b.type) || a.name.localeCompare(b.name))
-  sections.extra.sort((a, b) => a.name.localeCompare(b.name))
-  sections.side.sort((a, b) => a.name.localeCompare(b.name))
+  sortDeckSections(sections)
 
   const sum = (section: DeckSection) =>
     sections[section].reduce((total, row) => total + row.quantity, 0)
@@ -1029,6 +1060,7 @@ function toDeckCover(candidate: DeckCoverCandidate): DeckCover {
   return {
     catalogCardId: candidate.catalogCardId,
     name: candidate.name,
+    nameDe: candidate.nameDe,
     imageSmall: candidate.imageSmall,
     imageLarge: candidate.imageLarge,
   }
@@ -1055,6 +1087,7 @@ export function loadDeckCovers(db: Db, deckIds: string[]): Map<string, DeckCover
       section: deckCard.section,
       createdAt: deckCard.createdAt,
       name: catalogCard.name,
+      nameDe: cardNameDeSql(),
       type: catalogCard.type,
       imageSmall: sql<string | null>`min(${catalogCardImage.imageUrlSmall})`,
       imageLarge: sql<string | null>`min(${catalogCardImage.imageUrl})`,

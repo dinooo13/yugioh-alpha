@@ -1,7 +1,8 @@
 import { createError, getQuery, getRouterParam } from 'h3'
 import { useDb } from '../../../db'
-import { removeDeckCard, validateDeckCardInput } from '../../../utils/decks'
+import { inCardLocale, removeDeckCard, validateDeckCardInput } from '../../../utils/decks'
 import { requireUser } from '../../../utils/session'
+import { resolveCardLocale } from '../../../utils/ui-locale'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
@@ -17,5 +18,8 @@ export default defineEventHandler(async (event) => {
     section: query.section,
   })
 
-  return removeDeckCard(useDb(), user.id, id, input.catalogCardId, input.section)
+  return inCardLocale(
+    removeDeckCard(useDb(), user.id, id, input.catalogCardId, input.section),
+    await resolveCardLocale(event),
+  )
 })

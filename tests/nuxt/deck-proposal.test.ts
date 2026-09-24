@@ -132,7 +132,7 @@ describe('previewDeckProposal', () => {
     expect(preview.counts).toEqual({ main: 4, extra: 0, side: 0, total: 4 })
     expect(preview.validation!.legal).toBe(false)
     expect(preview.validation!.issues.some(issue => issue.includes('Pot of Greed'))).toBe(true)
-    expect(preview.missing).toEqual([{ catalogCardId: CARD.potOfGreed, name: 'Pot of Greed', needed: 1, owned: 0 }])
+    expect(preview.missing).toEqual([{ catalogCardId: CARD.potOfGreed, name: 'Pot of Greed', nameDe: null, needed: 1, owned: 0 }])
   })
 
   it('with formatId null previews an existing deck without any format, even though it has one', () => {

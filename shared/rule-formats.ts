@@ -100,6 +100,8 @@ export interface BanlistInfo {
 export interface ValidationCardData {
   id: number
   name: string
+  /** Official German name (ADR 0015), display only: it goes into issue params as `cardNameDe`. */
+  nameDe?: string | null
   type: string
   frameType?: string | null
   attribute?: string | null
@@ -140,7 +142,10 @@ export interface ValidationIssueParams {
   min?: number
   max?: number
   cardId?: number
+  /** The card's English name (canonical; the assistant reads it). */
   cardName?: string
+  /** The card's official German name (ADR 0015), when it has one — the UI shows it in German card language. */
+  cardNameDe?: string
   /** Copies of the card across the deck. */
   copies?: number
   maxCopies?: number
@@ -371,6 +376,11 @@ export interface DescribeOptions {
 
 // --- Evaluation ------------------------------------------------------------
 
+/** `{ cardNameDe }` for an issue's params when the card has a German name, else nothing. */
+export function germanName(nameDe: string | null | undefined): { cardNameDe?: string } {
+  return nameDe ? { cardNameDe: nameDe } : {}
+}
+
 function toCardMap(
   cardData: Iterable<ValidationCardData> | Map<number, ValidationCardData>,
 ): Map<number, ValidationCardData> {
@@ -535,7 +545,7 @@ export function evaluateDeck(
         severity: 'error',
         code: 'card_forbidden',
         cardId,
-        params: { cardId, cardName: card.name },
+        params: { cardId, cardName: card.name, ...germanName(card.nameDe) },
         message: `${card.name} is forbidden in this format.`,
       })
     }
@@ -544,7 +554,7 @@ export function evaluateDeck(
         severity: 'error',
         code: 'card_limit_exceeded',
         cardId,
-        params: { cardId, cardName: card.name, copies, maxCopies },
+        params: { cardId, cardName: card.name, ...germanName(card.nameDe), copies, maxCopies },
         message: `${card.name}: ${copies} copies in the deck; ${maxCopies === 1 ? '1 copy is' : `${maxCopies} copies are`} allowed.`,
       })
     }

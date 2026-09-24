@@ -9,6 +9,7 @@ interface PrintingOption {
 interface CatalogCardOption {
   id: number
   name: string
+  nameDe?: string | null
   type: string
   printings?: PrintingOption[]
 }
@@ -44,6 +45,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const { cardName } = useCardText()
 const apiError = useApiError()
 const { languageItems, conditionItems, editionItems } = useCardOptionItems()
 
@@ -165,7 +167,7 @@ async function save() {
       >
         <div v-if="card">
           <p class="text-sm font-medium text-gray-900">
-            {{ card.name }}
+            {{ cardName(card) }}
           </p>
           <p class="text-xs text-gray-500">
             {{ card.type }}

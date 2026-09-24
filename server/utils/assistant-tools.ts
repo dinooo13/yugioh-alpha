@@ -43,10 +43,11 @@ import {
 import type { DeckCardInput, DeckCardRow, DeckDetail, DeckSection } from './decks'
 import { isExtraDeckCard, isSectionAllowedForCard } from '../../shared/deck-sections'
 import { listRuleFormats, requireAccessibleFormat, requireAssignableFormat } from './rule-formats'
-import { loadCardDataForValidation, loadCardNames, maxCopiesByCard, missingCatalogCardIds } from './deck-validation'
+import { loadCardDataForValidation, loadCardNameRecords, maxCopiesByCard, missingCatalogCardIds } from './deck-validation'
 import { previewDeckProposal } from './deck-proposal'
 import { ACTION_SUMMARY, TOOL_DESCRIPTIONS, TOOL_PARAM_DESCRIPTIONS, TOOL_TEXT } from './assistant-prompts'
 import type { AssistantActionKind, AssistantDeckPreview } from '../../shared/assistant-chat'
+import type { DeckValidation } from '../../shared/rule-formats'
 
 type Db = ReturnType<typeof useDb>
 
@@ -479,14 +480,14 @@ function toolValidateDeck(db: Db, userId: string, args: unknown) {
 
   if (formatId) {
     const format = requireAccessibleFormat(db, userId, formatId)
-    return validateDeckWithRules(db, userId, deckId, format.rules)
+    return validationForModel(validateDeckWithRules(db, userId, deckId, format.rules))
   }
 
   const detail = getDeckDetail(db, userId, deckId)
   if (!detail.validation) {
     badRequest(TOOL_TEXT.noFormatAssigned)
   }
-  return detail.validation
+  return validationForModel(detail.validation)
 }
 
 // --- Write tools (propose a pending action; never mutate directly) ------------
@@ -494,14 +495,25 @@ function toolValidateDeck(db: Db, userId: string, args: unknown) {
 /**
  * A preview as the model reads it: the issues as canonical English text only
  * — `issueDetails` (code + params) is for the UI's action card and would just
- * repeat every issue in the tool result.
+ * repeat every issue in the tool result — and the missing cards without
+ * their display-only German names (ADR 0015; the model's card names are
+ * #34 F3d's business).
  */
 function previewForModel(preview: AssistantDeckPreview): AssistantDeckPreview {
+  const missing = preview.missing.map(({ nameDe: _nameDe, ...card }) => card)
   if (!preview.validation) {
-    return preview
+    return { ...preview, missing }
   }
   const { issueDetails: _issueDetails, ...validation } = preview.validation
-  return { ...preview, validation }
+  return { ...preview, validation, missing }
+}
+
+/** A deck validation as the model reads it: issue params without the display-only German card name (ADR 0015). */
+function validationForModel(validation: DeckValidation): DeckValidation {
+  return {
+    ...validation,
+    issues: validation.issues.map(({ params: { cardNameDe: _cardNameDe, ...params }, ...issue }) => ({ ...issue, params })),
+  }
 }
 
 function pendingOutcome(
@@ -516,10 +528,18 @@ function pendingOutcome(
   }
 }
 
-/** The proposal's rows plus each card's name — for the action card's table and summary only (see `executeActionPayload`). */
-function withCardNames<T extends { catalogCardId: number }>(db: Db, cards: T[]): Array<T & { name: string }> {
-  const names = loadCardNames(db, cards.map(card => card.catalogCardId))
-  return cards.map(card => ({ ...card, name: names[card.catalogCardId] ?? `#${card.catalogCardId}` }))
+/**
+ * The proposal's rows plus each card's English and German (ADR 0015) name —
+ * for the action card's table and summary only (see `executeActionPayload`);
+ * the model never reads the payload.
+ */
+function withCardNames<T extends { catalogCardId: number }>(db: Db, cards: T[]): Array<T & { name: string, nameDe: string | null }> {
+  const { cardNames, cardNamesDe } = loadCardNameRecords(db, cards.map(card => card.catalogCardId))
+  return cards.map(card => ({
+    ...card,
+    name: cardNames[card.catalogCardId] ?? `#${card.catalogCardId}`,
+    nameDe: cardNamesDe[card.catalogCardId] ?? null,
+  }))
 }
 
 async function toolAddToInventory(db: Db, userId: string, args: unknown): Promise<ToolOutcome> {

@@ -67,6 +67,7 @@ function deck(overrides: Partial<DeckListItem> = {}): DeckListItem {
     cover: {
       catalogCardId: 46986414,
       name: 'Dark Magician',
+      nameDe: null,
       imageSmall: 'https://images.example/cards_small/46986414.jpg',
       imageLarge: 'https://images.example/cards/46986414.jpg',
     },

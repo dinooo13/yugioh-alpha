@@ -129,6 +129,19 @@ describe('validateProfileUpdateInput', () => {
         .toThrow(expect.objectContaining({ statusCode: 400, statusMessage: 'locale must be one of de, en' }))
     }
   })
+
+  it('accepts a supported card language and null (follow the interface), rejects anything else', () => {
+    expect(validateProfileUpdateInput({ cardLocale: 'de' })).toEqual({ cardLocale: 'de' })
+    expect(validateProfileUpdateInput({ cardLocale: 'en' })).toEqual({ cardLocale: 'en' })
+    expect(validateProfileUpdateInput({ cardLocale: null })).toEqual({ cardLocale: null })
+    for (const cardLocale of ['fr', 'DE', 'follow', '', 0, false, []]) {
+      expect(() => validateProfileUpdateInput({ cardLocale })).toThrow(expect.objectContaining({
+        statusCode: 400,
+        statusMessage: 'cardLocale must be one of de, en',
+        data: { code: 'invalid_card_locale' },
+      }))
+    }
+  })
 })
 
 describe('updateProfile', () => {
@@ -163,6 +176,21 @@ describe('updateProfile', () => {
     const reset = updateProfile(db, 'user-a', { locale: null })
     expect(reset.locale).toBeNull()
     expect(toOwnProfile(reset).locale).toBeNull()
+  })
+
+  it('stores the card language apart from the interface language and resets it with null', () => {
+    const created = ensureProfile(db, 'user-a')
+    expect(created.cardLocale).toBeNull()
+    expect(toOwnProfile(created).cardLocale).toBeNull()
+
+    const german = updateProfile(db, 'user-a', { locale: 'en', cardLocale: 'de' })
+    expect(german).toMatchObject({ locale: 'en', cardLocale: 'de' })
+    expect(toOwnProfile(german)).toMatchObject({ locale: 'en', cardLocale: 'de' })
+
+    expect(updateProfile(db, 'user-a', { locale: 'de' }).cardLocale).toBe('de')
+
+    const reset = updateProfile(db, 'user-a', { cardLocale: null })
+    expect(reset).toMatchObject({ locale: 'de', cardLocale: null })
   })
 
   it('succeeds when the handle is the caller own', () => {

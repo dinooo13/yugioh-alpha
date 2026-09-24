@@ -36,6 +36,7 @@ const PAGE_SIZE = 20
 usePageTitle('decks.list.title')
 
 const { t } = useI18n()
+const { cardName } = useCardText()
 const count = useCount()
 const apiError = useApiError()
 const { formatName, sortFormats } = useFormatLabel()
@@ -370,7 +371,7 @@ function statusColor(deck: DeckListItem) {
             size="lg"
             :src="deck.cover?.imageSmall"
             :src-large="deck.cover?.imageLarge"
-            :alt="deck.cover?.name ?? deck.name"
+            :alt="deck.cover ? cardName(deck.cover) : deck.name"
             :no-image-label="deck.cover ? undefined : t('decks.list.emptyCover')"
           />
         </NuxtLink>

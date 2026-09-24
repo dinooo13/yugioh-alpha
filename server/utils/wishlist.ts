@@ -6,6 +6,8 @@ import type { useDb } from '../db'
 import { catalogCard, catalogCardImage, wishlistItem } from '../db/schema'
 import { ownedQuantitiesByCard } from './inventory'
 import { cardNameMatches } from './card-name-search'
+import { cardNameDeSql, cardSortKey } from './card-translation-sql'
+import type { AppLocale } from '../../shared/locale'
 import type { WishlistItemView, WishlistResponse, WishlistVisibility } from '../../shared/sharing'
 
 type Db = ReturnType<typeof useDb>
@@ -18,7 +20,13 @@ const MAX_PAGE_SIZE = 100
 
 export interface WishlistInput { catalogCardId: number, quantity: number, note: string | null }
 export type WishlistUpdateInput = Partial<Omit<WishlistInput, 'catalogCardId'>>
-export interface WishlistListOptions { q?: string, page?: number, pageSize?: number }
+export interface WishlistListOptions {
+  q?: string
+  page?: number
+  pageSize?: number
+  /** "By name" sorts by the German name in `de` (ADR 0015). */
+  cardLocale?: AppLocale
+}
 export type WishlistPage = WishlistResponse
 
 function badRequest(message: string): never {
@@ -124,6 +132,7 @@ function buildWishlistItemView(
   const card = db
     .select({
       name: catalogCard.name,
+      nameDe: cardNameDeSql(),
       type: catalogCard.type,
       imageSmall: sql<string | null>`min(${catalogCardImage.imageUrlSmall})`,
     })
@@ -137,6 +146,7 @@ function buildWishlistItemView(
     id: row.id,
     catalogCardId: row.catalogCardId,
     name: card.name,
+    nameDe: card.nameDe,
     type: card.type,
     imageSmall: card.imageSmall,
     quantity: row.quantity,
@@ -240,7 +250,8 @@ export function removeWishlistItemByCard(db: Db, userId: string, catalogCardId: 
   }
 }
 
-function wishlistCardRowsQuery(db: Db, where: SQL, page: number, pageSize: number) {
+// Sorted by the card name in `cardLocale` (ADR 0015).
+function wishlistCardRowsQuery(db: Db, where: SQL, page: number, pageSize: number, cardLocale: AppLocale) {
   return db
     .select({
       id: wishlistItem.id,
@@ -250,6 +261,7 @@ function wishlistCardRowsQuery(db: Db, where: SQL, page: number, pageSize: numbe
       createdAt: wishlistItem.createdAt,
       updatedAt: wishlistItem.updatedAt,
       name: catalogCard.name,
+      nameDe: cardNameDeSql(),
       type: catalogCard.type,
       imageSmall: sql<string | null>`min(${catalogCardImage.imageUrlSmall})`,
     })
@@ -258,7 +270,7 @@ function wishlistCardRowsQuery(db: Db, where: SQL, page: number, pageSize: numbe
     .leftJoin(catalogCardImage, eq(catalogCardImage.cardId, catalogCard.id))
     .where(where)
     .groupBy(wishlistItem.id)
-    .orderBy(asc(catalogCard.name))
+    .orderBy(asc(cardSortKey(cardLocale)))
     .limit(pageSize)
     .offset((page - 1) * pageSize)
     .all()
@@ -285,7 +297,7 @@ export function listWishlist(db: Db, userId: string, options: WishlistListOption
   }
   const where = and(...clauses) as SQL
 
-  const rows = wishlistCardRowsQuery(db, where, page, pageSize)
+  const rows = wishlistCardRowsQuery(db, where, page, pageSize, options.cardLocale ?? 'en')
   const total = wishlistCardTotal(db, where)
   const owned = ownedQuantitiesByCard(db, userId, rows.map(row => row.catalogCardId))
 
@@ -294,6 +306,7 @@ export function listWishlist(db: Db, userId: string, options: WishlistListOption
       id: row.id,
       catalogCardId: row.catalogCardId,
       name: row.name,
+      nameDe: row.nameDe,
       type: row.type,
       imageSmall: row.imageSmall,
       quantity: row.quantity,
@@ -309,12 +322,16 @@ export function listWishlist(db: Db, userId: string, options: WishlistListOption
 }
 
 /** Public view: identical rows minus `owned`; `note` stays (the "looking for" hint). */
-export function listPublicWishlist(db: Db, ownerUserId: string, options: { page?: number, pageSize?: number } = {}): WishlistPage {
+export function listPublicWishlist(
+  db: Db,
+  ownerUserId: string,
+  options: { page?: number, pageSize?: number, cardLocale?: AppLocale } = {},
+): WishlistPage {
   const page = Math.max(1, options.page ?? 1)
   const pageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, options.pageSize ?? DEFAULT_PAGE_SIZE))
   const where = eq(wishlistItem.userId, ownerUserId)
 
-  const rows = wishlistCardRowsQuery(db, where, page, pageSize)
+  const rows = wishlistCardRowsQuery(db, where, page, pageSize, options.cardLocale ?? 'en')
   const total = wishlistCardTotal(db, where)
 
   return {
@@ -322,6 +339,7 @@ export function listPublicWishlist(db: Db, ownerUserId: string, options: { page?
       id: row.id,
       catalogCardId: row.catalogCardId,
       name: row.name,
+      nameDe: row.nameDe,
       type: row.type,
       imageSmall: row.imageSmall,
       quantity: row.quantity,

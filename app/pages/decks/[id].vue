@@ -12,6 +12,7 @@ import type { Visibility } from '~~/shared/sharing'
 interface DeckCardRow {
   catalogCardId: number
   name: string
+  nameDe: string | null
   type: string
   frameType: string | null
   attribute: string | null
@@ -54,6 +55,7 @@ interface RuleFormatListItem {
 interface SourceCard {
   catalogCardId: number
   name: string
+  nameDe: string | null
   type: string
   frameType: string | null
   attribute: string | null
@@ -66,6 +68,7 @@ interface SourceCard {
 interface InventorySearchItem {
   catalogCardId: number
   name: string
+  nameDe: string | null
   type: string
   attribute: string | null
   race: string | null
@@ -77,6 +80,7 @@ interface InventorySearchItem {
 interface CatalogSearchItem {
   id: number
   name: string
+  nameDe: string | null
   type: string
   frameType: string | null
   attribute: string | null
@@ -96,6 +100,7 @@ const route = useRoute()
 const deckId = computed(() => String(route.params.id ?? ''))
 
 const { t, n } = useI18n()
+const { cardName } = useCardText()
 const count = useCount()
 const apiError = useApiError()
 const validationText = useValidationText()
@@ -247,7 +252,7 @@ function statusReasonsFor(catalogCardId: number): string | undefined {
     return undefined
   }
   const format = deck.value.format
-  const cardNames = Object.fromEntries(DECK_SECTIONS.flatMap(section => sections.value[section].map(row => [row.catalogCardId, row.name])))
+  const cardNames = Object.fromEntries(DECK_SECTIONS.flatMap(section => sections.value[section].map(row => [row.catalogCardId, cardName(row)])))
   return entry.reasons
     .map(reason => describeCapReason(reason, { cardNames, filterLabel: label => (format ? ruleLabel(format, label) : label) }))
     .join(' · ')
@@ -343,6 +348,7 @@ const sourceCards = computed<SourceCard[]>(() => sourceItems.value.map((item) =>
   return {
     catalogCardId,
     name: item.name,
+    nameDe: item.nameDe ?? null,
     type: item.type,
     frameType: catalogItem.frameType ?? null,
     attribute: item.attribute ?? null,
@@ -551,7 +557,7 @@ async function addCard(card: SourceCard, section: DeckSection) {
  */
 function allSectionsDisallowedReason(card: SourceCard): string | null {
   const disallowed = DECK_SECTIONS.every(section => !isSectionAllowedForCard(card, section))
-  return disallowed ? t('decks.editor.addPanel.noSection', { name: card.name }) : null
+  return disallowed ? t('decks.editor.addPanel.noSection', { name: cardName(card) }) : null
 }
 
 async function removeCard(row: DeckCardRow) {
@@ -865,7 +871,7 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
               >
                 <CardThumb
                   :src="row.imageSmall"
-                  :alt="row.name"
+                  :alt="cardName(row)"
                   size="sm"
                   class="row-span-2 self-start @lg:row-span-1 @lg:self-center"
                 />
@@ -873,9 +879,9 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
                 <div class="min-w-0">
                   <p
                     class="line-clamp-2 text-sm font-medium break-words text-gray-900"
-                    :title="row.name"
+                    :title="cardName(row)"
                   >
-                    {{ row.name }}
+                    {{ cardName(row) }}
                   </p>
                   <p class="truncate text-xs text-gray-500">
                     {{ cardMetaLine(row) }}
@@ -919,7 +925,7 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
                     size="xs"
                     class="tap-target"
                     :disabled="isMutating"
-                    :aria-label="t('decks.editor.row.removeOne', { name: row.name, section: sectionName(section) })"
+                    :aria-label="t('decks.editor.row.removeOne', { name: cardName(row), section: sectionName(section) })"
                     @click="setQuantity(row.catalogCardId, section, row.quantity - 1)"
                   />
                   <!-- Spin buttons hidden: − and + already step, and the
@@ -933,7 +939,7 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
                     class="w-12"
                     :ui="{ base: 'text-center tabular-nums max-lg:min-h-11 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none' }"
                     :disabled="isMutating"
-                    :aria-label="t('decks.editor.row.quantity', { name: row.name, section: sectionName(section) })"
+                    :aria-label="t('decks.editor.row.quantity', { name: cardName(row), section: sectionName(section) })"
                     @change="(event: Event) => onQuantityInput(row, (event.target as HTMLInputElement).value)"
                   />
                   <UButton
@@ -943,7 +949,7 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
                     size="xs"
                     class="tap-target"
                     :disabled="isMutating"
-                    :aria-label="t('decks.editor.row.addOne', { name: row.name, section: sectionName(section) })"
+                    :aria-label="t('decks.editor.row.addOne', { name: cardName(row), section: sectionName(section) })"
                     @click="setQuantity(row.catalogCardId, section, row.quantity + 1)"
                   />
                   <UDropdownMenu :items="rowMenuItems(row)">
@@ -954,7 +960,7 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
                       size="xs"
                       class="tap-target"
                       :disabled="isMutating"
-                      :aria-label="t('decks.editor.row.options', { name: row.name })"
+                      :aria-label="t('decks.editor.row.options', { name: cardName(row) })"
                     />
                   </UDropdownMenu>
                   <UButton
@@ -964,7 +970,7 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
                     size="xs"
                     class="tap-target"
                     :disabled="isMutating"
-                    :aria-label="t('decks.editor.row.remove', { name: row.name, section: sectionName(section) })"
+                    :aria-label="t('decks.editor.row.remove', { name: cardName(row), section: sectionName(section) })"
                     @click="removeCard(row)"
                   />
                 </div>
@@ -1086,13 +1092,13 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
                   >
                     <CardThumb
                       :src="card.imageSmall"
-                      :alt="card.name"
+                      :alt="cardName(card)"
                       size="md"
                     />
 
                     <div class="min-w-0 flex-1">
                       <p class="truncate text-sm font-medium text-gray-900">
-                        {{ card.name }}
+                        {{ cardName(card) }}
                       </p>
                       <p class="truncate text-xs text-gray-500">
                         {{ cardMetaLine(card) }}
@@ -1132,9 +1138,9 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
                           :disabled="!isSectionAllowedForCard(card, section) || isMutating"
                           :title="isSectionAllowedForCard(card, section)
                             ? undefined
-                            : t('decks.editor.addPanel.cannotAdd', { name: card.name, section: sectionName(section) })"
+                            : t('decks.editor.addPanel.cannotAdd', { name: cardName(card), section: sectionName(section) })"
                           :label="t('decks.editor.addPanel.addButton', { section: t(`decks.sectionShort.${section}`) })"
-                          :aria-label="t('decks.editor.addPanel.addTo', { name: card.name, section: sectionName(section) })"
+                          :aria-label="t('decks.editor.addPanel.addTo', { name: cardName(card), section: sectionName(section) })"
                           @click="addCard(card, section)"
                         />
                       </div>

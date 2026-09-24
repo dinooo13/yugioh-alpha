@@ -5,6 +5,7 @@ definePageMeta({ layout: 'public' })
 
 const route = useRoute()
 const { t } = useI18n()
+const { cardName } = useCardText()
 const count = useCount()
 const handle = computed(() => String(route.params.handle ?? ''))
 
@@ -140,7 +141,7 @@ const isEmpty = computed(() => {
                   size="md"
                   :src="deck.cover?.imageSmall"
                   :src-large="deck.cover?.imageLarge"
-                  :alt="deck.cover?.name ?? deck.name"
+                  :alt="deck.cover ? cardName(deck.cover) : deck.name"
                   :no-image-label="deck.cover ? t('card.noImage') : t('players.profile.emptyDeckCover')"
                 />
               </NuxtLink>
@@ -236,7 +237,7 @@ const isEmpty = computed(() => {
               :key="item.id"
               class="flex items-center justify-between gap-3 py-2 text-sm"
             >
-              <span class="truncate text-gray-900">{{ item.name }}</span>
+              <span class="truncate text-gray-900">{{ cardName(item) }}</span>
               <span class="shrink-0 font-semibold tabular-nums text-gray-700">{{ item.quantity }}×</span>
             </li>
           </ul>

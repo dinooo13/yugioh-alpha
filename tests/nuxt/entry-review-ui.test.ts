@@ -32,6 +32,7 @@ afterEach(async () => {
 
 function candidate(overrides: Partial<EntryCandidate> & { name: string, cardId: number }): EntryCandidate {
   return {
+    nameDe: null,
     type: 'Normal Monster',
     frameType: 'normal',
     imageSmall: null,

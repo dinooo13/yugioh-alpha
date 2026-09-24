@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { registerAndLogin } from './helpers/auth'
 import { acceptConfirm } from './helpers/confirm'
+import { CARD } from './helpers/cards'
 
 // Passcodes from the seeded E2E catalog fixture
 // (server/db/fixtures/catalog-fixture.ts).
@@ -40,7 +41,7 @@ test.describe('deckbuilder', () => {
 
     // --- Add 3× Dark Magician while owning only 2 ---------------------------
     await page.getByLabel('Karten für das Deck suchen').fill('Dark Magician')
-    const addDarkMagician = page.getByRole('button', { name: 'Dark Magician zum Main Deck hinzufügen', exact: true })
+    const addDarkMagician = page.getByRole('button', { name: `${CARD.darkMagician} zum Main Deck hinzufügen`, exact: true })
 
     await addDarkMagician.click()
     await expect(mainCount).toHaveText('1/40–60')
@@ -56,9 +57,9 @@ test.describe('deckbuilder', () => {
 
     // --- An Extra Deck monster cannot go into the Main Deck -----------------
     await page.getByLabel('Karten für das Deck suchen').fill('Stardust')
-    await expect(page.getByRole('button', { name: 'Stardust Dragon zum Main Deck hinzufügen', exact: true })).toBeDisabled()
+    await expect(page.getByRole('button', { name: `${CARD.stardustDragon} zum Main Deck hinzufügen`, exact: true })).toBeDisabled()
 
-    await page.getByRole('button', { name: 'Stardust Dragon zum Extra Deck hinzufügen', exact: true }).click()
+    await page.getByRole('button', { name: `${CARD.stardustDragon} zum Extra Deck hinzufügen`, exact: true }).click()
     await expect(extraCount).toHaveText('1/15')
     await expect(mainCount).toHaveText('3/40–60')
     await expect(page.getByText('4 Karten insgesamt')).toBeVisible()
@@ -124,7 +125,7 @@ test.describe('deckbuilder on a phone', () => {
     // An empty deck opens with the add panel expanded.
     const search = page.getByLabel('Karten für das Deck suchen')
     const mainCount = page.getByLabel('Anzahl im Main Deck')
-    const addDarkMagician = page.getByRole('button', { name: 'Dark Magician zum Main Deck hinzufügen', exact: true })
+    const addDarkMagician = page.getByRole('button', { name: `${CARD.darkMagician} zum Main Deck hinzufügen`, exact: true })
     await expect(search).toBeVisible()
 
     await search.fill('Dark Magician')
@@ -196,21 +197,21 @@ test.describe('deckbuilder on a phone', () => {
     }
 
     await page.goto(`/decks/${deck.id}`)
-    const darkMagicianRow = page.locator('li:has(p[title="Dark Magician"])')
-    const potOfGreedRow = page.locator('li:has(p[title="Pot of Greed"])')
+    const darkMagicianRow = page.locator(`li:has(p[title="${CARD.darkMagician}"])`)
+    const potOfGreedRow = page.locator(`li:has(p[title="${CARD.potOfGreed}"])`)
 
     // By rule, the Main Deck monster is the cover.
     await expect(darkMagicianRow.getByText('Titelkarte (automatisch)')).toBeVisible()
     await expect(potOfGreedRow.getByText(/Titelkarte/)).toHaveCount(0)
 
-    await page.getByRole('button', { name: 'Optionen für Pot of Greed', exact: true }).click()
+    await page.getByRole('button', { name: `Optionen für ${CARD.potOfGreed}`, exact: true }).click()
     await page.getByRole('menuitem', { name: 'Als Titelkarte festlegen' }).click()
 
     await expect(potOfGreedRow.getByText('Titelkarte', { exact: true })).toBeVisible()
     await expect(darkMagicianRow.getByText(/Titelkarte/)).toHaveCount(0)
     expect(await listedCoverId()).toBe(POT_OF_GREED)
 
-    await page.getByRole('button', { name: 'Optionen für Pot of Greed', exact: true }).click()
+    await page.getByRole('button', { name: `Optionen für ${CARD.potOfGreed}`, exact: true }).click()
     await page.getByRole('menuitem', { name: 'Titelkarte automatisch wählen' }).click()
 
     await expect(darkMagicianRow.getByText('Titelkarte (automatisch)')).toBeVisible()
@@ -248,7 +249,7 @@ test.describe('deckbuilder at 1024px', () => {
     expect(await heading.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
 
     // Card names get real width and are not clipped.
-    for (const cardName of ['Odd-Eyes Pendulum Dragon', 'Blue-Eyes Ultimate Dragon']) {
+    for (const cardName of [CARD.oddEyesPendulumDragon, CARD.blueEyesUltimateDragon]) {
       const nameLine = page.locator(`p[title="${cardName}"]`)
       await expect(nameLine).toHaveText(cardName)
       const box = await nameLine.boundingBox()
@@ -276,7 +277,7 @@ test.describe('deckbuilder at 1024px', () => {
 
     await page.getByRole('button', { name: 'Mehr laden' }).click()
     // Alphabetically the 14th fixture card, i.e. on page 2.
-    await expect(page.getByRole('button', { name: 'Summoned Skull zum Main Deck hinzufügen', exact: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: `${CARD.summonedSkull} zum Main Deck hinzufügen`, exact: true })).toBeVisible()
     if (total <= 24) {
       await expect(page.getByRole('button', { name: 'Mehr laden' })).toHaveCount(0)
     }

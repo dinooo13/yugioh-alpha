@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { registerAndLogin } from './helpers/auth'
+import { CARD } from './helpers/cards'
 
 test.describe('catalog seed', () => {
   test('search finds a seeded card', async ({ page }) => {
@@ -8,7 +9,7 @@ test.describe('catalog seed', () => {
     await page.goto('/catalog')
     await page.getByLabel('Karten suchen').fill('Dark Magician')
 
-    await expect(page.getByRole('heading', { name: 'Dark Magician' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: CARD.darkMagician })).toBeVisible()
   })
 
   test('search finds a card by its German name (ADR 0015)', async ({ page }) => {
@@ -17,8 +18,8 @@ test.describe('catalog seed', () => {
     await page.goto('/catalog')
     await page.getByLabel('Karten suchen').fill('Dunkler Magier')
 
-    // Still displayed in English until the card language arrives (F3c).
-    await expect(page.getByRole('heading', { name: 'Dark Magician' })).toBeVisible()
-    await expect(page.getByRole('heading', { name: 'Pot of Greed' })).toHaveCount(0)
+    // Shown in the card language, which follows the German interface (F3c).
+    await expect(page.getByRole('heading', { name: CARD.darkMagician })).toBeVisible()
+    await expect(page.getByRole('heading', { name: CARD.potOfGreed })).toHaveCount(0)
   })
 })

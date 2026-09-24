@@ -19,6 +19,7 @@ const apiError = useApiError()
 const validationText = useValidationText()
 const { formatName } = useFormatLabel()
 const { languageLabel, conditionLabel, editionLabel } = useCardOptionItems()
+const { cardName } = useCardText()
 
 const isExpanded = ref(false)
 const isApplying = ref(false)
@@ -67,7 +68,15 @@ function rowsOf(payload: Record<string, unknown>): Array<Record<string, unknown>
   return []
 }
 
-const rows = computed(() => rowsOf(props.action.payload))
+/** A stored card name in the card language (ADR 0015); `nameDe` is missing on actions stored before #34 F3c. */
+function displayCardName(row: Record<string, unknown>): unknown {
+  if (typeof row.name !== 'string') {
+    return row.name
+  }
+  return cardName({ name: row.name, nameDe: typeof row.nameDe === 'string' ? row.nameDe : null })
+}
+
+const rows = computed(() => rowsOf(props.action.payload).map((row): Record<string, unknown> => ({ ...row, name: displayCardName(row) })))
 
 /**
  * The summary line from the action's kind and payload. The fields were
@@ -188,7 +197,7 @@ const preview = computed<DeckPreview | null>(() => {
       : null,
     missing: raw.missing.filter(isPlainObject).map(card => ({
       catalogCardId: Number(card.catalogCardId),
-      name: String(card.name ?? ''),
+      name: String(displayCardName(card) ?? ''),
       needed: Number(card.needed) || 0,
       owned: Number(card.owned) || 0,
     })),

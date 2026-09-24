@@ -2,6 +2,7 @@ import { createError, getQuery, getRouterParam, setHeader } from 'h3'
 import { useDb } from '../../../../db'
 import { getProfileByHandle, toPublicProfile } from '../../../../utils/profiles'
 import { getOptionalUser } from '../../../../utils/session'
+import { resolveCardLocale } from '../../../../utils/ui-locale'
 import { requireViewableDeck } from '../../../../utils/sharing'
 import { buildSharedDeckView } from '../../../../utils/shared-views'
 import type { SharedDeckView } from '../../../../../shared/sharing'
@@ -35,5 +36,5 @@ export default defineEventHandler(async (event): Promise<SharedDeckView> => {
     expectedOwnerUserId: profile.userId,
   })
 
-  return buildSharedDeckView(db, row, toPublicProfile(profile), access.isOwner)
+  return buildSharedDeckView(db, row, toPublicProfile(profile), access.isOwner, await resolveCardLocale(event))
 })

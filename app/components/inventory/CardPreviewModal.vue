@@ -14,6 +14,7 @@ defineEmits<{
 const open = defineModel<boolean>('open', { default: false })
 
 const { t } = useI18n()
+const { cardName } = useCardText()
 
 const imageSrc = computed(() => props.item ? (props.item.imageLarge ?? props.item.imageSmall) : null)
 const isMonster = computed(() => props.item ? props.item.atk !== null || props.item.def !== null : false)
@@ -22,7 +23,7 @@ const isMonster = computed(() => props.item ? props.item.atk !== null || props.i
 <template>
   <CardImageModal
     v-model:open="open"
-    :title="item?.name ?? ''"
+    :title="item ? cardName(item) : ''"
     :description="item ? cardSubtitle(item) : undefined"
     :src="imageSrc"
   >

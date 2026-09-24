@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { CARD_TRANSLATION_REPO, CARD_TRANSLATION_REPO_URL } from '~~/shared/card-text'
+
 interface CatalogFacets {
   types: string[]
   attributes: string[]
@@ -10,6 +12,7 @@ interface CatalogFacets {
 interface CatalogCardSummary {
   id: number
   name: string
+  nameDe: string | null
   type: string
   frameType: string | null
   attribute: string | null
@@ -31,9 +34,11 @@ interface CatalogCardDetail {
   card: {
     id: number
     name: string
+    nameDe: string | null
     type: string
     frameType: string | null
     desc: string
+    descDe: string | null
     race: string | null
     archetype: string | null
     attribute: string | null
@@ -68,6 +73,7 @@ const PAGE_SIZE = 24
 usePageTitle('catalog.title')
 
 const { t } = useI18n()
+const { cardLocale, cardName, cardDesc, englishName, hasGermanText } = useCardText()
 const count = useCount()
 
 const route = useRoute()
@@ -444,7 +450,7 @@ async function onAddedToInventory() {
         :key="card.id"
         role="button"
         tabindex="0"
-        :aria-label="card.name"
+        :aria-label="cardName(card)"
         class="group min-w-0 cursor-pointer overflow-hidden rounded-md border border-gray-200 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
         @click="openCard(card.id)"
         @keydown.enter="openCard(card.id)"
@@ -453,12 +459,12 @@ async function onAddedToInventory() {
         <!-- Plain thumbnail: the whole tile is already the button. -->
         <CardThumb
           :src="card.imageSmall"
-          :alt="card.name"
+          :alt="cardName(card)"
           size="full"
         />
         <div class="space-y-1 p-3">
           <h2 class="line-clamp-2 min-h-10 text-sm font-semibold leading-5 text-gray-900 group-hover:text-primary">
-            {{ card.name }}
+            {{ cardName(card) }}
           </h2>
           <p class="truncate text-xs text-gray-500">
             {{ card.type }}
@@ -538,7 +544,7 @@ async function onAddedToInventory() {
         <div class="h-full overflow-y-auto p-6">
           <div class="mb-5 flex items-center justify-between gap-3">
             <h2 class="truncate text-lg font-semibold text-gray-900">
-              {{ detail?.card.name ?? t('catalog.detail.fallbackTitle') }}
+              {{ detail ? cardName(detail.card) : t('catalog.detail.fallbackTitle') }}
             </h2>
             <UButton
               icon="i-lucide-x"
@@ -574,7 +580,7 @@ async function onAddedToInventory() {
             <CardThumb
               :src="detail.images[0]?.imageUrlSmall"
               :src-large="detail.images[0]?.imageUrl"
-              :alt="detail.card.name"
+              :alt="cardName(detail.card)"
               size="full"
               sizes="320px"
               loading="eager"
@@ -583,8 +589,14 @@ async function onAddedToInventory() {
 
             <div class="space-y-2">
               <h3 class="text-xl font-semibold text-gray-900">
-                {{ detail.card.name }}
+                {{ cardName(detail.card) }}
               </h3>
+              <p
+                v-if="englishName(detail.card)"
+                class="text-sm text-gray-500"
+              >
+                {{ t('card.englishName', { name: englishName(detail.card) }) }}
+              </p>
               <p class="text-sm text-gray-600">
                 {{ detail.card.type }}
                 <template v-if="detail.card.attribute">
@@ -606,9 +618,31 @@ async function onAddedToInventory() {
               <h4 class="text-sm font-semibold text-gray-900">
                 {{ t('catalog.detail.cardText') }}
               </h4>
-              <p class="mt-2 whitespace-pre-line text-sm leading-6 text-gray-700">
-                {{ detail.card.desc }}
+              <p
+                v-if="cardLocale === 'de' && !hasGermanText(detail.card)"
+                class="mt-2 text-xs text-gray-500"
+              >
+                {{ t('card.germanTextMissing') }}
               </p>
+              <p class="mt-2 whitespace-pre-line text-sm leading-6 text-gray-700">
+                {{ cardDesc(detail.card) }}
+              </p>
+              <i18n-t
+                v-if="cardLocale === 'de' && (hasGermanText(detail.card) || englishName(detail.card))"
+                keypath="card.translationSource"
+                tag="p"
+                scope="global"
+                class="mt-2 text-xs text-gray-500"
+              >
+                <template #source>
+                  <a
+                    :href="CARD_TRANSLATION_REPO_URL"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="break-all font-medium text-primary hover:underline"
+                  >{{ CARD_TRANSLATION_REPO }}</a>
+                </template>
+              </i18n-t>
             </section>
 
             <section v-if="detail.printings.length > 0">

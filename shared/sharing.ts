@@ -42,6 +42,8 @@ export interface OwnProfile {
   wishlistVisibility: WishlistVisibility
   /** Chosen interface language (ADR 0014); null = not chosen. */
   locale: AppLocale | null
+  /** Chosen card language (ADR 0015); null = follow the interface language. */
+  cardLocale: AppLocale | null
   createdAt: string
   updatedAt: string
 }
@@ -87,6 +89,8 @@ export interface PublicProfileResponse {
 export interface SharedDeckCardRow {
   catalogCardId: number
   name: string
+  /** Official German name (ADR 0015); null when there is none. */
+  nameDe: string | null
   type: string
   frameType: string | null
   attribute: string | null
@@ -117,6 +121,8 @@ export interface SharedDeckView {
 export interface SharedCardListItem {
   catalogCardId: number
   name: string
+  /** Official German name (ADR 0015); null when there is none. */
+  nameDe: string | null
   type: string
   frameType: string | null
   attribute: string | null
@@ -145,6 +151,8 @@ export interface WishlistItemView {
   id: string
   catalogCardId: number
   name: string
+  /** Official German name (ADR 0015); null when there is none. */
+  nameDe: string | null
   type: string
   imageSmall: string | null
   quantity: number

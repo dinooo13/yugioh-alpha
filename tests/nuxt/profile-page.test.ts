@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
+import type { VueWrapper } from '@vue/test-utils'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
-import { ULocaleSelect } from '#components'
+import { ULocaleSelect, USelect } from '#components'
 import ProfilePage from '~/pages/profile.vue'
 import type { OwnProfile } from '~~/shared/sharing'
 import { setTestLocale } from './fixtures/locale'
@@ -15,6 +16,7 @@ function profile(overrides: Partial<OwnProfile> = {}): OwnProfile {
     inventoryVisibility: 'private',
     wishlistVisibility: 'private',
     locale: null,
+    cardLocale: null,
     createdAt: '2025-01-01T00:00:00.000Z',
     updatedAt: '2025-01-01T00:00:00.000Z',
     ...overrides,
@@ -30,6 +32,7 @@ mockNuxtImport('useFetch', () => {
 afterEach(async () => {
   vi.unstubAllGlobals()
   useNuxtData('own-profile').data.value = undefined
+  useState('card-locale-choice').value = null
   document.cookie = 'ui_locale=; Max-Age=0; path=/'
   await setTestLocale('de')
 })
@@ -198,5 +201,79 @@ describe('profile page', () => {
     expect(document.cookie).not.toContain('ui_locale=en')
     expect(component.find('h1').text()).toBe('Profil')
     expect(useToast().toasts.value.map(toast => toast.title)).toContain('Sprache konnte nicht gespeichert werden')
+  })
+
+  interface SelectWrapper {
+    props: () => { id?: string, modelValue?: string, items?: Array<{ label: string, value: string }> }
+    vm: { $emit: (event: string, value: string) => void }
+  }
+
+  function cardLocaleSelect(component: VueWrapper): SelectWrapper {
+    const selects = component.findAllComponents(USelect) as unknown as SelectWrapper[]
+    return selects.find(select => select.props().id === 'profile-card-locale')!
+  }
+
+  it('shows the card language setting, following the interface language by default', async () => {
+    state.profile = profile()
+    vi.stubGlobal('$fetch', vi.fn(() => Promise.resolve(state.profile)))
+
+    const component = await mountSuspended(ProfilePage)
+    const settings = component.find('#settings').text()
+
+    expect(settings).toContain('Kartensprache')
+    expect(settings).toContain('Die Sprache von Kartennamen und Kartentexten. Kartenbilder bleiben englisch.')
+    const select = cardLocaleSelect(component)
+    expect(select.props().modelValue).toBe('follow')
+    expect(select.props().items!.map(item => item.label))
+      .toEqual(['Wie Anzeigesprache (Deutsch)', 'Deutsch', 'Englisch'])
+  })
+
+  it('names the follow option after the interface language in English', async () => {
+    await setTestLocale('en')
+    state.profile = profile()
+    vi.stubGlobal('$fetch', vi.fn(() => Promise.resolve(state.profile)))
+
+    const component = await mountSuspended(ProfilePage)
+    const select = cardLocaleSelect(component)
+    expect(component.find('#settings').text()).toContain('Card language')
+    expect(select.props().items!.map(item => item.label))
+      .toEqual(['Same as interface (English)', 'German', 'English'])
+  })
+
+  it('saves the card language to the profile and switches the card names at once', async () => {
+    state.profile = profile()
+    useNuxtData('own-profile').data.value = profile()
+    const fetchMock = vi.fn(() => Promise.resolve(profile({ cardLocale: 'en' })))
+    vi.stubGlobal('$fetch', fetchMock)
+
+    const component = await mountSuspended(ProfilePage)
+    cardLocaleSelect(component).vm.$emit('update:modelValue', 'en')
+    await flushPromises()
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/profile', { method: 'PATCH', body: { cardLocale: 'en' } })
+    expect(useState('card-locale-choice').value).toBe('en')
+    expect(useNuxtData<OwnProfile>('own-profile').data.value?.cardLocale).toBe('en')
+    // The interface language stays.
+    expect(useNuxtApp().$i18n.locale.value).toBe('de')
+    expect(component.find('#settings').text()).toContain('Gespeichert')
+
+    // "Follow" resets it to null.
+    fetchMock.mockClear()
+    cardLocaleSelect(component).vm.$emit('update:modelValue', 'follow')
+    await flushPromises()
+    expect(fetchMock).toHaveBeenCalledWith('/api/profile', { method: 'PATCH', body: { cardLocale: null } })
+    expect(useState('card-locale-choice').value).toBeNull()
+  })
+
+  it('keeps the card language and shows a toast when saving it fails', async () => {
+    state.profile = profile()
+    vi.stubGlobal('$fetch', vi.fn(() => Promise.reject(new Error('offline'))))
+
+    const component = await mountSuspended(ProfilePage)
+    cardLocaleSelect(component).vm.$emit('update:modelValue', 'de')
+    await flushPromises()
+
+    expect(useState('card-locale-choice').value).toBeNull()
+    expect(useToast().toasts.value.map(toast => toast.title)).toContain('Kartensprache konnte nicht gespeichert werden')
   })
 })

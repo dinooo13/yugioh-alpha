@@ -542,6 +542,7 @@ describe('loadInventoryCardDisplay', () => {
     expect(display.get(46986414)).toEqual({
       catalogCardId: 46986414,
       name: 'Dark Magician',
+      nameDe: null,
       type: 'Normal Monster',
       attribute: 'DARK',
       race: 'Spellcaster',
@@ -652,7 +653,7 @@ describe('inventory search auth', () => {
     }))
 
     const { requireUser } = await import('../../server/utils/session')
-    const fakeEvent = { headers: new Headers() } as unknown as Parameters<typeof requireUser>[0]
+    const fakeEvent = { headers: new Headers(), context: {} } as unknown as Parameters<typeof requireUser>[0]
 
     await expect(requireUser(fakeEvent)).rejects.toMatchObject({ statusCode: 401 })
 

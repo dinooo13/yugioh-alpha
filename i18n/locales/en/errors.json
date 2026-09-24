@@ -8,6 +8,7 @@
       "display_name_too_long": "The display name can be at most 60 characters long.",
       "bio_too_long": "“About me” can be at most 500 characters long.",
       "invalid_locale": "This language isn't supported.",
+      "invalid_card_locale": "That card language doesn't exist.",
       "quantity_invalid": "The quantity must be a whole number of at least 1.",
       "quantity_too_large": "The quantity can be at most {max}.",
       "owned_card_not_found": "This card is no longer in your inventory.",

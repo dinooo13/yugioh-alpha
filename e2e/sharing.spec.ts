@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { logout, registerAndLogin, uniqueEmail } from './helpers/auth'
+import { CARD } from './helpers/cards'
 
 // Passcodes from the seeded E2E catalog fixture
 // (server/db/fixtures/catalog-fixture.ts).
@@ -42,7 +43,7 @@ test.describe('sharing', () => {
     await expect(page).not.toHaveURL(/\/login/)
     await expect(page.getByRole('heading', { name: 'Geteiltes Deck' })).toBeVisible()
     await expect(page.getByText('Geteilt von', { exact: false })).toBeVisible()
-    await expect(page.getByText('Dark Magician')).toBeVisible()
+    await expect(page.getByText(CARD.darkMagician)).toBeVisible()
     await expect(page.getByText('3×')).toBeVisible()
     await expect(page.getByText('fehlt')).toHaveCount(0)
 
@@ -139,11 +140,11 @@ test.describe('sharing', () => {
     await expect(anonPage.getByRole('heading', { name: 'Inventar von E2E Test User' })).toBeVisible()
     await expect(anonPage).toHaveTitle('Inventar von E2E Test User – yugioh alpha')
 
-    await expect(anonPage.getByText('Dark Magician')).toBeVisible()
+    await expect(anonPage.getByText(CARD.darkMagician)).toBeVisible()
     await expect(anonPage.getByText('2×')).toBeVisible()
 
     await anonPage.getByLabel('Karten durchsuchen').fill('Blue')
-    await expect(anonPage.getByText('Dark Magician')).toHaveCount(0)
+    await expect(anonPage.getByText(CARD.darkMagician)).toHaveCount(0)
 
     // A hides the inventory again; the anonymous page then 404s.
     await page.goto('/profile')

@@ -1,6 +1,8 @@
 import { and, asc, count, desc, eq, inArray, isNotNull, ne, sql } from 'drizzle-orm'
 import type { useDb } from '../db'
 import { catalogCard, catalogCardImage, catalogPrinting, catalogSet } from '../db/schema'
+import type { AppLocale } from '../../shared/locale'
+import { cardDescDeSql, cardNameDeSql, cardSortKey } from './card-translation-sql'
 import { buildCardListWhere, type CardListQuery } from './catalog-query'
 
 type Db = ReturnType<typeof useDb>
@@ -8,6 +10,8 @@ type Db = ReturnType<typeof useDb>
 export interface CatalogCardSummary {
   id: number
   name: string
+  /** Official German name (ADR 0015); null when there is none. */
+  nameDe: string | null
   type: string
   frameType: string | null
   attribute: string | null
@@ -18,14 +22,19 @@ export interface CatalogCardSummary {
   imageSmall: string | null
 }
 
-export async function searchCatalog(db: Db, filters: CardListQuery) {
+/**
+ * One page of catalog cards. `cardLocale` is the card language the names are
+ * shown in (ADR 0015): "by name" sorts by the German name in `de`.
+ */
+export async function searchCatalog(db: Db, filters: CardListQuery, cardLocale: AppLocale = 'en') {
   const where = buildCardListWhere(filters)
   const offset = (filters.page - 1) * filters.pageSize
+  const nameKey = cardSortKey(cardLocale)
   const orderBy = filters.sort === '-name'
-    ? [desc(catalogCard.name)]
+    ? [desc(nameKey)]
     : filters.sort === 'newest'
-      ? [sql`${catalogCard.tcgDate} is null`, desc(catalogCard.tcgDate), asc(catalogCard.name)]
-      : [asc(catalogCard.name)]
+      ? [sql`${catalogCard.tcgDate} is null`, desc(catalogCard.tcgDate), asc(nameKey)]
+      : [asc(nameKey)]
 
   const totalRows = await db
     .select({ total: count() })
@@ -36,6 +45,7 @@ export async function searchCatalog(db: Db, filters: CardListQuery) {
     .select({
       id: catalogCard.id,
       name: catalogCard.name,
+      nameDe: cardNameDeSql(),
       type: catalogCard.type,
       frameType: catalogCard.frameType,
       attribute: catalogCard.attribute,
@@ -83,11 +93,36 @@ export async function searchCatalog(db: Db, filters: CardListQuery) {
 }
 
 export async function getCatalogCardDetail(db: Db, id: number) {
-  const card = await db.query.catalogCard.findFirst({
-    where: eq(catalogCard.id, id),
-    // Internal join/search columns (ADR 0015), not part of the API.
-    columns: { konamiId: false, nameSearch: false },
-  })
+  // An explicit column list: the internal join/search columns (`konamiId`,
+  // `nameSearch`, ADR 0015) stay out of the API.
+  const card = await db
+    .select({
+      id: catalogCard.id,
+      name: catalogCard.name,
+      nameDe: cardNameDeSql(),
+      type: catalogCard.type,
+      frameType: catalogCard.frameType,
+      desc: catalogCard.desc,
+      descDe: cardDescDeSql(),
+      race: catalogCard.race,
+      archetype: catalogCard.archetype,
+      attribute: catalogCard.attribute,
+      atk: catalogCard.atk,
+      def: catalogCard.def,
+      level: catalogCard.level,
+      linkval: catalogCard.linkval,
+      scale: catalogCard.scale,
+      linkMarkers: catalogCard.linkMarkers,
+      banlistInfo: catalogCard.banlistInfo,
+      cardPrices: catalogCard.cardPrices,
+      tcgDate: catalogCard.tcgDate,
+      ocgDate: catalogCard.ocgDate,
+      ygoprodeckUrl: catalogCard.ygoprodeckUrl,
+      syncedAt: catalogCard.syncedAt,
+    })
+    .from(catalogCard)
+    .where(eq(catalogCard.id, id))
+    .get()
 
   if (!card) {
     return null
