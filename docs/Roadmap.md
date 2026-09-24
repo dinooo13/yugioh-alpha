@@ -400,7 +400,7 @@ F2 is implemented, as four stacked PRs:
 
 See [`docs/adr/0014-ui-internationalisation.md`](adr/0014-ui-internationalisation.md).
 
-F3 is in progress, as four stacked PRs:
+F3 is implemented, as four stacked PRs:
 
 - F3a — the data layer (implemented): official German card names and texts
   from the ygoresources card-history repo in `catalog_card_translation`,
@@ -425,7 +425,17 @@ F3 is in progress, as four stacked PRs:
   editor and the assistant's action cards. Cards without German data (OCG-only
   cards, tokens, …) stay English. Lists sorted by name sort by the German name
   in German; switching the setting applies at once
-- F3d — card data labels and the assistant (open)
+- F3d — card data labels and the assistant (implemented): card types,
+  attributes and races (including the Spell/Trap subtypes) are shown in the
+  card language with Konami's official German words ("FINSTERNIS", "Hexer",
+  "Empfänger-Monster", "Schnell") — on tiles, subtitles, deck rows and in the
+  filters, whose values stay English; unknown values are shown as stored.
+  The assistant names cards in the card language: in German its tool results
+  and the linked deck's context carry the official German name (`nameDe`,
+  `descDe` for a card's text), and the model calls cards by it; in English
+  nothing changes
+
+Phase 9 (#34) is done.
 
 See [`docs/adr/0015-german-card-data.md`](adr/0015-german-card-data.md).
 
