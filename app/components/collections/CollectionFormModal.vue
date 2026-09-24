@@ -32,6 +32,7 @@ const form = reactive({
 const isSubmitting = ref(false)
 // Field-level problems go to their UFormField (wired up via
 // aria-describedby/aria-invalid); errorMessage is for the server's answer.
+// Bound as `|| undefined`: UFormField's `error` is Boolean|String, so '' would count as true.
 const nameError = ref('')
 const errorMessage = ref('')
 
@@ -113,7 +114,7 @@ async function save() {
       >
         <UFormField
           :label="t('collections.form.name')"
-          :error="nameError"
+          :error="nameError || undefined"
         >
           <UInput
             v-model="form.name"

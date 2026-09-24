@@ -278,6 +278,7 @@ const cardNames = reactive<Record<string, string>>({ ...(props.initialValues?.ca
 
 // The name check belongs to its UFormField (aria-describedby/aria-invalid);
 // errorMessage is for the server's answer.
+// Bound as `|| undefined`: UFormField's `error` is Boolean|String, so '' would count as true.
 const nameError = ref('')
 const errorMessage = ref('')
 const isSaving = ref(false)
@@ -451,7 +452,7 @@ async function save() {
     <div class="space-y-4 panel p-4">
       <UFormField
         :label="t('formats.editor.name')"
-        :error="nameError"
+        :error="nameError || undefined"
       >
         <UInput
           ref="nameInput"

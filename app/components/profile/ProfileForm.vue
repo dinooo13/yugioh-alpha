@@ -30,6 +30,7 @@ watch(() => props.profile, (profile) => {
 const isSubmitting = ref(false)
 // Field-level problems go to their UFormField (wired up via
 // aria-describedby/aria-invalid); errorMessage is for everything else.
+// Bound as `|| undefined`: UFormField's `error` is Boolean|String, so '' would count as true.
 const handleError = ref('')
 const displayNameError = ref('')
 const errorMessage = ref('')
@@ -104,7 +105,7 @@ async function save() {
   >
     <UFormField
       :label="t('profile.form.displayName')"
-      :error="displayNameError"
+      :error="displayNameError || undefined"
     >
       <UInput
         v-model="form.displayName"
@@ -116,7 +117,7 @@ async function save() {
 
     <UFormField
       :label="t('profile.form.handle')"
-      :error="handleError"
+      :error="handleError || undefined"
     >
       <UInput
         v-model="form.handle"

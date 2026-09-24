@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { PAIRING_SYSTEMS, TOURNAMENT_DESCRIPTION_MAX_LENGTH, TOURNAMENT_NAME_MAX_LENGTH } from '~~/shared/tournaments'
+import { MAX_PLANNED_ROUNDS, PAIRING_SYSTEMS, TOURNAMENT_DESCRIPTION_MAX_LENGTH, TOURNAMENT_NAME_MAX_LENGTH } from '~~/shared/tournaments'
 import type { PairingSystem, TournamentDetail } from '~~/shared/tournaments'
 
 usePageTitle('tournaments.new.title')
@@ -45,6 +45,7 @@ const form = reactive({
 const isSubmitting = ref(false)
 // The name check belongs to its UFormField (aria-describedby/aria-invalid);
 // errorMessage is for the server's answer.
+// Bound as `|| undefined`: UFormField's `error` is Boolean|String, so '' would count as true.
 const nameError = ref('')
 const errorMessage = ref('')
 
@@ -112,7 +113,7 @@ async function submit() {
     >
       <UFormField
         :label="t('tournaments.new.name')"
-        :error="nameError"
+        :error="nameError || undefined"
       >
         <UInput
           v-model="form.name"
@@ -157,7 +158,7 @@ async function submit() {
           v-model="form.plannedRounds"
           type="number"
           min="1"
-          max="20"
+          :max="MAX_PLANNED_ROUNDS"
           :placeholder="t('tournaments.new.plannedRoundsPlaceholder')"
           :aria-label="t('tournaments.new.plannedRounds')"
           :disabled="form.pairingSystem === 'round_robin'"
