@@ -13,50 +13,8 @@
     "totalQuantity": "×{count} total",
     "field": {
       "quantity": "Quantity",
-      "printingLanguage": "Printing language",
-      "condition": "Condition",
-      "edition": "Edition",
-      "printing": "Printing",
       "collection": "Collection",
       "note": "Note"
-    },
-    "printingLanguage": {
-      "en": "EN",
-      "de": "DE",
-      "fr": "FR",
-      "it": "IT",
-      "es": "ES",
-      "pt": "PT",
-      "ja": "JA",
-      "ko": "KO"
-    },
-    "condition": {
-      "mint": "Mint",
-      "near_mint": "Near Mint",
-      "excellent": "Excellent",
-      "good": "Good",
-      "light_played": "Lightly Played",
-      "played": "Played",
-      "poor": "Poor"
-    },
-    "conditionShort": {
-      "mint": "M",
-      "near_mint": "NM",
-      "excellent": "EX",
-      "good": "GD",
-      "light_played": "LP",
-      "played": "PL",
-      "poor": "PO"
-    },
-    "edition": {
-      "first": "1st Edition",
-      "unlimited": "Unlimited",
-      "limited": "Limited"
-    },
-    "editionShort": {
-      "first": "1st",
-      "unlimited": "Unlimited",
-      "limited": "Limited"
     },
     "value": {
       "type": {

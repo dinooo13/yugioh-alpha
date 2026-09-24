@@ -4,13 +4,6 @@
 
 export type EntryMatchedBy = 'passcode' | 'set_code' | 'exact' | 'prefix' | 'contains' | 'fuzzy'
 
-export interface EntryCandidatePrinting {
-  id: string
-  setCode: string
-  setName: string
-  rarity: string | null
-}
-
 export interface EntryCandidate {
   cardId: number
   name: string
@@ -21,7 +14,6 @@ export interface EntryCandidate {
   imageSmall: string | null
   score: number
   matchedBy: EntryMatchedBy
-  printings: EntryCandidatePrinting[]
 }
 
 export interface ParsedEntryLine {
@@ -42,23 +34,18 @@ export interface EntryRow {
   raw: string
   query: string
   quantity: number
+  /** A parsed set code only identifies the card; no printing is stored (ADR 0017). */
   setCode: string | null
   candidates: EntryCandidate[]
   selectedCardId: number | null
-  printingId: string | null
   /** Set code and name pointed at different cards — never auto-selected. */
   conflict: boolean
-  /** Per-row overrides; `null` means "use the Standardwerte panel value". */
-  language: string | null
-  condition: string | null
-  edition: string | null
+  /** Per-row collection override; `null` means "use the default collection". */
   collectionId: string | null
 }
 
 export interface EntryDefaults {
-  language: string
-  condition: string
-  edition: string
+  /** A collection id, or `NO_COLLECTION_VALUE` for "no collection". */
   collectionId: string
 }
 
@@ -69,21 +56,15 @@ export interface EntryBulkEntry {
 
 export interface EntryBulkItem {
   catalogCardId: number
-  printingId: string | null
   collectionId: string | null
   quantity: number
-  language: string
-  condition: string
-  edition: string
 }
 
 export type EntryRowStatus = 'sicher' | 'unsicher' | 'ohne_treffer'
 
 /** Sentinel for "no collection" in a `USelect` (empty values are unselectable). */
 export const NO_COLLECTION_VALUE = '__no_collection__'
-/** Sentinel for "no specific printing" in a `USelect`. */
-export const NO_PRINTING_VALUE = '__no_printing__'
-/** Sentinel for "inherit the Standardwerte value" in a per-row `USelect`. */
+/** Sentinel for "inherit the default collection" in a per-row `USelect`. */
 export const DEFAULT_VALUE = '__default__'
 
 /** Above this score a name match is trusted enough to preselect. */
@@ -101,14 +82,6 @@ export const CERTAIN_MATCHES: readonly EntryMatchedBy[] = ['passcode', 'set_code
 
 export function isCertainMatch(candidate: EntryCandidate): boolean {
   return CERTAIN_MATCHES.includes(candidate.matchedBy) || candidate.score >= AUTO_SELECT_SCORE
-}
-
-function printingForSetCode(candidate: EntryCandidate | undefined, setCode: string | null): string | null {
-  if (!candidate || !setCode) {
-    return null
-  }
-  const match = candidate.printings.find(printing => printing.setCode.toLowerCase() === setCode.toLowerCase())
-  return match?.id ?? null
 }
 
 function createRowId(): string {
@@ -151,10 +124,6 @@ export function createEntryRow(result: EntrySuggestResult): EntryRow {
     setCode,
     candidates: result.candidates,
     selectedCardId: preselected?.cardId ?? null,
-    printingId: printingForSetCode(preselected, setCode),
-    language: null,
-    condition: null,
-    edition: null,
     collectionId: null,
   }
 }
@@ -204,20 +173,13 @@ export function summarizeEntryRows(rows: EntryRow[]): EntrySummary {
   return summary
 }
 
-function effective(rowValue: string | null, fallback: string): string {
-  return rowValue ?? fallback
-}
-
-/** Resolves a row against the Standardwerte panel (per-row override wins). */
-export function effectiveRowValues(row: EntryRow, defaults: EntryDefaults) {
-  const collectionId = effective(row.collectionId, defaults.collectionId)
-
-  return {
-    language: effective(row.language, defaults.language),
-    condition: effective(row.condition, defaults.condition),
-    edition: effective(row.edition, defaults.edition),
-    collectionId: collectionId === NO_COLLECTION_VALUE ? null : collectionId,
-  }
+/**
+ * The collection a row is saved into: its own override, else the default
+ * collection. `null` means "no collection".
+ */
+export function effectiveCollectionId(row: EntryRow, defaults: EntryDefaults): string | null {
+  const collectionId = row.collectionId ?? defaults.collectionId
+  return collectionId === NO_COLLECTION_VALUE ? null : collectionId
 }
 
 /**
@@ -226,22 +188,14 @@ export function effectiveRowValues(row: EntryRow, defaults: EntryDefaults) {
  * the row the user actually sees.
  */
 export function buildBulkEntries(rows: EntryRow[], defaults: EntryDefaults): EntryBulkEntry[] {
-  return rows.filter(isEntryRowResolved).map((row) => {
-    const values = effectiveRowValues(row, defaults)
-
-    return {
-      rowId: row.id,
-      item: {
-        catalogCardId: row.selectedCardId!,
-        printingId: row.printingId,
-        collectionId: values.collectionId,
-        quantity: row.quantity,
-        language: values.language,
-        condition: values.condition,
-        edition: values.edition,
-      },
-    }
-  })
+  return rows.filter(isEntryRowResolved).map(row => ({
+    rowId: row.id,
+    item: {
+      catalogCardId: row.selectedCardId!,
+      collectionId: effectiveCollectionId(row, defaults),
+      quantity: row.quantity,
+    },
+  }))
 }
 
 /** Splits the payload into server-sized batches (`INVENTORY_BULK_MAX_ITEMS`). */

@@ -5,16 +5,12 @@ interface InventoryListItem {
   id: string
   collectionId: string | null
   quantity: number
-  language: string
-  condition: string
-  edition: string
+  note?: string | null
   cardName: string
   /** Official German name (ADR 0015); null when there is none. */
   cardNameDe?: string | null
   cardType: string
   imageUrlSmall: string | null
-  setName: string | null
-  rarity: string | null
 }
 
 const props = defineProps<{
@@ -29,20 +25,15 @@ const emit = defineEmits<{
   remove: []
 }>()
 
-const { t } = useI18n()
+const { t, n } = useI18n()
 const { cardName, cardValue } = useCardText()
 const frame = computed(() => cardFrame({ type: props.item.cardType }))
 const displayName = computed(() => cardName({ name: props.item.cardName, nameDe: props.item.cardNameDe }))
-const { editionShortLabel, conditionShortLabel } = useCardOptionItems()
-
-const editionLabel = computed(() => editionShortLabel(props.item.edition))
-const conditionLabel = computed(() => conditionShortLabel(props.item.condition))
-const languageLabel = computed(() => props.item.language.toUpperCase())
 </script>
 
 <template>
   <!-- One markup for every width: stacked on phones, a single row from `sm`
-       up. No column header — each attribute is a labelled badge instead. -->
+       up. No column header. -->
   <li class="flex gap-3 px-4 py-3 sm:items-center">
     <CardThumb
       :src="item.imageUrlSmall"
@@ -65,39 +56,20 @@ const languageLabel = computed(() => props.item.language.toUpperCase())
             class="frame-dot"
             aria-hidden="true"
           />
-          <span class="truncate">{{ cardValue('type', item.cardType) }}<span v-if="item.setName"> · {{ item.setName }}</span><span v-if="item.rarity"> · {{ item.rarity }}</span></span>
+          <span class="truncate">{{ cardValue('type', item.cardType) }}</span>
         </div>
-        <div class="flex flex-wrap gap-1">
-          <UBadge
-            size="sm"
-            color="neutral"
-            variant="soft"
-            :title="t('inventory.row.fieldValue', { field: t('card.field.printingLanguage'), value: languageLabel })"
-          >
-            <span class="sr-only">{{ t('card.field.printingLanguage') }} </span>{{ languageLabel }}
-          </UBadge>
-          <UBadge
-            size="sm"
-            color="neutral"
-            variant="soft"
-            :title="t('inventory.row.fieldValue', { field: t('card.field.edition'), value: editionLabel })"
-          >
-            <span class="sr-only">{{ t('card.field.edition') }} </span>{{ editionLabel }}
-          </UBadge>
-          <UBadge
-            size="sm"
-            color="neutral"
-            variant="soft"
-            :title="t('inventory.row.fieldValue', { field: t('card.field.condition'), value: conditionLabel })"
-          >
-            <span class="sr-only">{{ t('card.field.condition') }} </span>{{ conditionLabel }}
-          </UBadge>
-        </div>
+        <p
+          v-if="item.note"
+          class="line-clamp-1 text-xs text-muted"
+          :title="item.note"
+        >
+          <span class="sr-only">{{ t('card.field.note') }}: </span>{{ item.note }}
+        </p>
       </div>
 
       <div class="flex min-w-0 items-center gap-2">
         <span class="w-10 shrink-0 text-right font-numeric text-sm font-semibold tracking-[0.04em] text-highlighted tabular-nums">
-          ×{{ item.quantity }}
+          ×{{ n(item.quantity, 'integer') }}
         </span>
         <USelect
           :model-value="item.collectionId ?? noAssignmentValue"

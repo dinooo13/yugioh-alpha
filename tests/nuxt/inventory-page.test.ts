@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
+import CollectionActions from '~/components/collections/CollectionActions.vue'
 import AddToInventoryModal from '~/components/inventory/AddToInventoryModal.vue'
 import InventoryPage from '~/pages/inventory/index.vue'
 import { setTestLocale } from './fixtures/locale'
@@ -43,16 +44,13 @@ describe('inventory page', () => {
     expect(component.text()).toContain('Dark Magician')
     expect(component.text()).toContain('Normales Monster')
     expect(component.text()).toContain('×3')
-    expect(component.text()).toContain('NM')
 
     // One responsive markup for every width — each control exists once.
     expect(component.findAll('[aria-label="Sammlung für Dark Magician"]')).toHaveLength(1)
     expect(component.findAll('[aria-label="Karte bearbeiten"]')).toHaveLength(1)
     expect(component.findAll('[aria-label="Karte entfernen"]')).toHaveLength(1)
-    // The printing language is labelled "Drucksprache" (ADR 0014 terminology).
-    expect(component.find('[title="Drucksprache: EN"]').exists()).toBe(true)
-    expect(component.find('[title="Zustand: NM"]').exists()).toBe(true)
-    expect(component.find('[title="Auflage: 1st"]').exists()).toBe(true)
+    // No collector details since ADR 0017.
+    expect(component.text()).not.toMatch(/Drucksprache|Zustand|Auflage|Legend of Blue Eyes|Ultra Rare/)
 
     // The thumbnail keeps the whole card visible instead of cropping it.
     const thumbnail = component.find('img[alt="Dark Magician"]')
@@ -81,9 +79,30 @@ describe('inventory page', () => {
     expect(component.findAll('[aria-label="Collection for Dark Magician"]')).toHaveLength(1)
     expect(component.findAll('[aria-label="Edit card"]')).toHaveLength(1)
     expect(component.findAll('[aria-label="Remove card"]')).toHaveLength(1)
-    expect(component.find('[title="Printing language: EN"]').exists()).toBe(true)
-    expect(component.find('[title="Condition: NM"]').exists()).toBe(true)
+    expect(text).toContain('Note: Binder 2')
+    expect(text).not.toMatch(/Printing language|Condition|Near Mint/)
     expect(text).not.toMatch(/Karte|Sammlung|Übersicht|Liste/)
+  })
+
+  it('shows the note of a row', async () => {
+    inventoryState.pending = false
+    inventoryState.response = ownedDarkMagician()
+
+    const component = await mountSuspended(InventoryPage)
+
+    const note = component.find('li p[title="Binder 2"]')
+    expect(note.exists()).toBe(true)
+    // The sr-only prefix names the field for screen readers.
+    expect(note.text()).toBe('Notiz: Binder 2')
+  })
+
+  it('formats large quantities for the locale (#62)', async () => {
+    inventoryState.pending = false
+    inventoryState.response = ownedDarkMagician({ quantity: 1234 })
+
+    const component = await mountSuspended(InventoryPage)
+
+    expect(component.text()).toContain('×1.234')
   })
 
   it('renders skeleton rows while the list is loading', async () => {
@@ -100,24 +119,20 @@ describe('inventory page', () => {
   })
 })
 
-function ownedDarkMagician() {
+function ownedDarkMagician(overrides: Record<string, unknown> = {}) {
   return {
     total: 1,
     items: [
       {
         id: 'owned-1',
         catalogCardId: 46986414,
-        printingId: 'LOB-005',
+        collectionId: null,
         quantity: 3,
-        language: 'en',
-        condition: 'near_mint',
-        edition: 'first',
-        note: null,
+        note: 'Binder 2',
         cardName: 'Dark Magician',
         cardType: 'Normal Monster',
         imageUrlSmall: 'https://images.example/dm-small.jpg',
-        setName: 'Legend of Blue Eyes White Dragon',
-        rarity: 'Ultra Rare',
+        ...overrides,
       },
     ] as Array<Record<string, unknown>>,
   }
@@ -134,13 +149,6 @@ describe('add to inventory modal', () => {
           id: 46986414,
           name: 'Dark Magician',
           type: 'Normal Monster',
-          printings: [
-            {
-              id: 'LOB-005',
-              setName: 'Legend of Blue Eyes White Dragon',
-              rarity: 'Ultra Rare',
-            },
-          ],
         },
       },
     })
@@ -155,5 +163,31 @@ describe('add to inventory modal', () => {
     expect(consoleError).not.toHaveBeenCalled()
 
     consoleError.mockRestore()
+  })
+
+  it('formats the collection counts for the locale (#62)', async () => {
+    const component = await mountSuspended(CollectionActions, {
+      props: { modelValue: '', collections: [], allCount: 1234, unassignedCount: 0 },
+    })
+
+    expect(component.text()).toContain('Alle Sammlungen (1.234)')
+  })
+
+  it('asks only for quantity, collection and note (ADR 0017)', async () => {
+    const component = await mountSuspended(AddToInventoryModal, {
+      props: {
+        open: true,
+        card: { id: 46986414, name: 'Dark Magician', type: 'Normal Monster' },
+      },
+    })
+    await nextTick()
+
+    const text = document.body.textContent ?? ''
+    expect(text).toContain('Anzahl')
+    expect(text).toContain('Sammlung')
+    expect(text).toContain('Notiz')
+    expect(text).not.toMatch(/Drucksprache|Zustand|Auflage|Set-Ausgabe/)
+
+    component.unmount()
   })
 })

@@ -31,9 +31,12 @@ test.describe('Schnellerfassung', () => {
 
     await page.goto('/inventory')
     await waitForHydration(page)
+    // "SDY-006" only identifies Dark Magician (no printing is stored, ADR
+    // 0017), so it merges into the same stack: one "Liste" row.
+    await expect(page.getByRole('combobox', { name: `Sammlung für ${CARD.darkMagician}` })).toHaveCount(1)
     await page.getByRole('button', { name: 'Übersicht' }).click()
 
-    // 2 loose copies + 1 from the SDY-006 printing row.
+    // 2 + 1 copies of Dark Magician in one stack.
     await expect(page.getByText(CARD.darkMagician).first()).toBeVisible()
     await expect(page.getByText('×3 ges.')).toBeVisible()
     await expect(page.getByText(CARD.potOfGreed).first()).toBeVisible()

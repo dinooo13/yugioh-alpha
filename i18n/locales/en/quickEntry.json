@@ -17,7 +17,7 @@
     },
     "queueFull": {
       "title": "The review list is full",
-      "description": "The review list holds {max} lines — {dropped} line(s) were not added. Save the existing lines first."
+      "description": "The review list holds {max} lines — {dropped} line was not added. Save the existing lines first. | The review list holds {max} lines — {dropped} lines were not added. Save the existing lines first."
     },
     "errors": {
       "title": "That didn't work",
@@ -31,15 +31,9 @@
         "description": "{created} new · {merged} merged"
       }
     },
-    "field": {
-      "edition": "Edition"
-    },
     "defaults": {
-      "title": "Defaults",
-      "description": "Apply to every line unless a line sets something else.",
-      "printingLanguage": "Default printing language",
-      "condition": "Default condition",
-      "edition": "Default edition",
+      "title": "Default collection",
+      "description": "Applies to every line you don't pick a collection for.",
       "collection": "Default collection"
     },
     "summary": {
@@ -76,16 +70,14 @@
     },
     "row": {
       "candidate": "{name} · {matchedBy} {score}%",
-      "noPrinting": "No specific printing",
       "useDefault": "Default",
       "conflict": "The set code and the name point to different cards — please pick one.",
       "quantityFor": "Quantity for {line}",
-      "adjustValues": "Adjust values for {line}",
       "remove": "Remove {line}",
       "pickCandidate": "Pick a match...",
       "candidateFor": "Match for {line}",
+      "collectionFor": "Collection for {line}",
       "noSuggestions": "No suggestions — please search the catalog.",
-      "printingFor": "Printing for {line}",
       "catalog": "Catalog"
     }
   }

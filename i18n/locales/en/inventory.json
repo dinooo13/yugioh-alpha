@@ -21,14 +21,10 @@
       "label": "Search inventory",
       "inText": "Also search card text",
       "facetsOverviewOnly": "These filters only apply to \"Overview\". \"List\" filters by search text and collection.",
-      "catalogGroup": "Catalog",
-      "ownedGroup": "Owned",
       "type": "Type",
       "attribute": "Attribute",
       "race": "Monster type",
       "level": "Level",
-      "set": "Set",
-      "allSets": "All sets",
       "reset": "Reset",
       "sortLabel": "Sort by",
       "sort": {
@@ -60,7 +56,6 @@
       "fallbackName": "Card"
     },
     "row": {
-      "fieldValue": "{field}: {value}",
       "collectionFor": "Collection for {name}",
       "edit": "Edit card",
       "remove": "Remove card"
@@ -85,9 +80,6 @@
     "addModal": {
       "addTitle": "Add card",
       "editTitle": "Edit card",
-      "noPrinting": "No specific printing",
-      "editionHelp": "How this card was printed (1st Edition/Unlimited).",
-      "printingHelp": "The exact set/rarity in which you own this card.",
       "noCard": "Please pick a card first.",
       "saveFailed": "Couldn't save the card."
     },

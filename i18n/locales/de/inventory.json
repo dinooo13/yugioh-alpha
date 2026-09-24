@@ -21,14 +21,10 @@
       "label": "Inventar durchsuchen",
       "inText": "Auch im Kartentext suchen",
       "facetsOverviewOnly": "Diese Filter wirken nur in \"Übersicht\". \"Liste\" filtert nach Suchtext und Sammlung.",
-      "catalogGroup": "Katalog",
-      "ownedGroup": "Besitz",
       "type": "Typ",
       "attribute": "Attribut",
       "race": "Monsterart",
       "level": "Level",
-      "set": "Set",
-      "allSets": "Alle Sets",
       "reset": "Reset",
       "sortLabel": "Sortierung",
       "sort": {
@@ -60,7 +56,6 @@
       "fallbackName": "Karte"
     },
     "row": {
-      "fieldValue": "{field}: {value}",
       "collectionFor": "Sammlung für {name}",
       "edit": "Karte bearbeiten",
       "remove": "Karte entfernen"
@@ -85,9 +80,6 @@
     "addModal": {
       "addTitle": "Karte hinzufügen",
       "editTitle": "Karte bearbeiten",
-      "noPrinting": "Keine bestimmte Set-Ausgabe",
-      "editionHelp": "Wie oft diese Karte gedruckt wurde (Erstauflage/Unlimitiert).",
-      "printingHelp": "Das konkrete Set/die Rarität, in der du diese Karte besitzt.",
       "noCard": "Bitte zuerst eine Karte auswählen.",
       "saveFailed": "Die Karte konnte nicht gespeichert werden."
     },

@@ -10,7 +10,7 @@ import {
   createEntryRows,
   summarizeEntryRows,
 } from '~/utils/card-entry'
-import type { EntryCandidate, EntryRow, EntrySuggestResult } from '~/utils/card-entry'
+import type { EntryCandidate, EntryDefaults, EntryRow, EntrySuggestResult } from '~/utils/card-entry'
 import { setTestLocale } from './fixtures/locale'
 
 mockNuxtImport('useFetch', () => {
@@ -38,7 +38,6 @@ function candidate(overrides: Partial<EntryCandidate> & { name: string, cardId: 
     imageSmall: null,
     score: 1,
     matchedBy: 'exact',
-    printings: [],
     ...overrides,
   }
 }
@@ -63,10 +62,6 @@ const setCodeResult = result('SDY-006', [
     cardId: 46986414,
     name: 'Dark Magician',
     matchedBy: 'set_code',
-    printings: [
-      { id: 'LOB-005', setCode: 'LOB-005', setName: 'Legend of Blue Eyes White Dragon', rarity: 'Ultra Rare' },
-      { id: 'SDY-006', setCode: 'SDY-006', setName: 'Starter Deck: Yugi', rarity: 'Ultra Rare' },
-    ],
   }),
 ], { setCode: 'SDY-006', query: 'SDY-006' })
 
@@ -123,10 +118,13 @@ describe('entry row preselection', () => {
     expect(summarizeEntryRows([row!])).toMatchObject({ unsicher: 1, sicher: 0 })
   })
 
-  it('preselects the printing that matches a parsed set code', () => {
+  it('a parsed set code preselects the card; no printing is stored (ADR 0017)', () => {
     const [row] = createEntryRows([setCodeResult])
 
-    expect(row).toMatchObject({ selectedCardId: 46986414, setCode: 'SDY-006', printingId: 'SDY-006' })
+    expect(row).toMatchObject({ selectedCardId: 46986414, setCode: 'SDY-006', collectionId: null })
+    expect(row).not.toHaveProperty('printingId')
+    expect(buildBulkEntries([row!], { collectionId: '__no_collection__' })[0]!.item)
+      .toEqual({ catalogCardId: 46986414, collectionId: null, quantity: 1 })
   })
 
   it('gives every row a unique id', () => {
@@ -159,9 +157,24 @@ describe('EntryReviewTable', () => {
     expect(text).toContain('1 ohne Treffer')
     expect(text).toContain('Dark Magician')
     expect(text).toContain('Kein Treffer')
-    expect(text).toContain('Standardwerte')
-    expect(text).toContain('Normales Monster · EN · Neuwertig (Near Mint) · Unlimitiert')
+    expect(text).toContain('Standard-Sammlung')
+    expect(text).toContain('Normales Monster')
+    // No collector details since ADR 0017.
+    expect(text).not.toMatch(/Drucksprache|Neuwertig|Unlimitiert|Printing/)
+    expect(component.find('[aria-label="Sammlung für Dark Magician"]').exists()).toBe(true)
+    expect(component.find('[aria-label="Standard-Sammlung"]').exists()).toBe(true)
   })
+
+  it('formats the summary counts for the locale (#62)', async () => {
+    const component = await mountSuspended(EntryReviewTable, {
+      props: { rows: createEntryRows(Array.from({ length: 1234 }, () => exactResult)), collections: [] },
+      global: { stubs: { EntryReviewRow: true } },
+    })
+
+    expect(component.text()).toContain('1.234 gesamt')
+    // 1234 (stubbed) rows would slow every later locale switch down.
+    component.unmount()
+  }, 20_000)
 
   it('explains a contradicting set code on the row', async () => {
     const component = await mountTable(createEntryRows([conflictResult]))
@@ -191,22 +204,24 @@ describe('EntryReviewTable', () => {
     expect(findButton(component, 'Nur aufgelöste speichern')).toBeUndefined()
   })
 
-  it('propagates the Standardwerte to every row without an override', async () => {
+  it('applies the default collection to rows without their own collection', async () => {
     const rows = createEntryRows([exactResult, setCodeResult])
-    rows[1]!.language = 'fr'
+    rows[1]!.collectionId = 'col-1'
 
     const component = await mountTable(rows)
-    expect(component.text()).toContain('EN · Neuwertig (Near Mint) · Unlimitiert')
-    expect(component.text()).toContain('FR · Neuwertig (Near Mint) · Unlimitiert')
+    const rowSelects = component.findAll('[aria-label^="Sammlung für"]')
+    expect(rowSelects.map(select => select.text())).toEqual(['Standard', 'Box 1'])
 
-    const vm = component.vm as unknown as { defaults: { language: string, condition: string } }
-    vm.defaults.language = 'de'
-    vm.defaults.condition = 'played'
+    const vm = component.vm as unknown as { defaults: EntryDefaults }
+    expect(buildBulkEntries(rows, vm.defaults).map(entry => entry.item.collectionId)).toEqual([null, 'col-1'])
+
+    vm.defaults.collectionId = 'col-1'
     await nextTick()
+    expect(buildBulkEntries(rows, vm.defaults).map(entry => entry.item.collectionId)).toEqual(['col-1', 'col-1'])
 
-    expect(component.text()).toContain('DE · Bespielt (Played) · Unlimitiert')
-    // The per-row override survives a defaults change.
-    expect(component.text()).toContain('FR · Bespielt (Played) · Unlimitiert')
+    // A row's own "no collection" survives a change of the default.
+    rows[1]!.collectionId = '__no_collection__'
+    expect(buildBulkEntries(rows, vm.defaults).map(entry => entry.item.collectionId)).toEqual(['col-1', null])
   })
 
   it('preselects the collection the user came from', async () => {
@@ -301,47 +316,22 @@ describe('EntryReviewTable', () => {
 })
 
 describe('bulk payload', () => {
-  it('only includes resolved rows and applies defaults plus per-row overrides', () => {
+  it('only includes resolved rows and applies the default plus per-row collections', () => {
     const rows = createEntryRows([exactResult, setCodeResult, noMatchResult])
     rows[0]!.quantity = 2
-    rows[1]!.language = 'de'
     rows[1]!.collectionId = 'col-1'
 
-    const entries = buildBulkEntries(rows, {
-      language: 'en',
-      condition: 'near_mint',
-      edition: 'first',
-      collectionId: '__no_collection__',
-    })
+    const entries = buildBulkEntries(rows, { collectionId: '__no_collection__' })
 
     expect(entries.map(entry => entry.rowId)).toEqual([rows[0]!.id, rows[1]!.id])
     expect(entries.map(entry => entry.item)).toEqual([
-      {
-        catalogCardId: 46986414,
-        printingId: null,
-        collectionId: null,
-        quantity: 2,
-        language: 'en',
-        condition: 'near_mint',
-        edition: 'first',
-      },
-      {
-        catalogCardId: 46986414,
-        printingId: 'SDY-006',
-        collectionId: 'col-1',
-        quantity: 1,
-        language: 'de',
-        condition: 'near_mint',
-        edition: 'first',
-      },
+      { catalogCardId: 46986414, collectionId: null, quantity: 2 },
+      { catalogCardId: 46986414, collectionId: 'col-1', quantity: 1 },
     ])
   })
 
   it('splits the payload into batches the endpoint accepts', () => {
     const entries = buildBulkEntries(createEntryRows(Array.from({ length: 120 }, () => exactResult)), {
-      language: 'en',
-      condition: 'near_mint',
-      edition: 'unlimited',
       collectionId: '__no_collection__',
     })
 
@@ -389,14 +379,15 @@ describe('Schnellerfassung page', () => {
 
     const text = component.text()
     expect(text).toContain('Check and correct')
-    expect(text).toContain('Defaults')
-    expect(text).toContain('Printing language')
+    expect(text).toContain('Default collection')
+    expect(text).not.toContain('Printing language')
     expect(text).toContain('2 total')
     expect(text).toContain('1 certain')
     expect(text).toContain('1 without a match')
     expect(text).toContain('No match')
     expect(text).toContain('Dark Magician · Exact 100%')
-    expect(text).toContain('Normal Monster · EN · Near Mint · Unlimited')
+    expect(text).toContain('Normal Monster')
+    expect(component.find('[aria-label="Collection for Dark Magician"]').exists()).toBe(true)
     expect(text).toContain('Save resolved only')
     expect(text).not.toMatch(/gesamt|sicher|Treffer|Standard|Neuwertig|Zustand|Sammlung/)
   })

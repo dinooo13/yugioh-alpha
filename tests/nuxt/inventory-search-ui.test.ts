@@ -49,10 +49,6 @@ const emptyFacets = {
   attributes: [] as string[],
   races: [] as string[],
   levels: [] as number[],
-  sets: [] as Array<{ id: string, name: string }>,
-  languages: [] as string[],
-  conditions: [] as string[],
-  editions: [] as string[],
 }
 
 const state = vi.hoisted(() => ({
@@ -63,10 +59,6 @@ const state = vi.hoisted(() => ({
     attributes: [] as string[],
     races: [] as string[],
     levels: [] as number[],
-    sets: [] as Array<{ id: string, name: string }>,
-    languages: [] as string[],
-    conditions: [] as string[],
-    editions: [] as string[],
   },
   searchPending: false,
   // Every `useFetch(url, opts)` call, so tests can read the reactive query.
@@ -110,9 +102,6 @@ describe('inventory search panel (Übersicht)', () => {
       types: ['Normal Monster'],
       attributes: ['LIGHT'],
       races: ['Dragon'],
-      languages: ['en', 'de'],
-      conditions: ['near_mint'],
-      editions: ['first'],
     }
     state.search = {
       items: [
@@ -144,11 +133,16 @@ describe('inventory search panel (Übersicht)', () => {
 
     const text = component.text()
 
-    // Filter panel controls (catalog + ownership facets, sort, reset).
-    expect(text).toContain('Katalog')
-    expect(text).toContain('Besitz')
+    // Filter panel controls (catalog facets, sort, reset). No set or
+    // ownership filters since ADR 0017.
+    expect(component.find('[aria-label="Typ"]').exists()).toBe(true)
+    expect(component.find('[aria-label="Monsterart"]').exists()).toBe(true)
     expect(text).toContain('Sortierung')
     expect(text).toContain('Reset')
+    expect(text).not.toContain('Besitz')
+    expect(component.find('[aria-label="Set"]').exists()).toBe(false)
+    expect(component.find('[aria-label="Drucksprache"]').exists()).toBe(false)
+    expect(component.find('[aria-label="Zustand"]').exists()).toBe(false)
 
     // Aggregated result: name, total quantity, and per-collection breakdown.
     expect(text).toContain('Blue-Eyes White Dragon')

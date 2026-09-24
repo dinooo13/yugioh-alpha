@@ -5,12 +5,6 @@ interface CatalogCard {
   nameDe: string | null
   type: string
   imageUrlSmall: string | null
-  printings: Array<{
-    id: string
-    cardId: number
-    setName: string
-    rarity: string | null
-  }>
 }
 
 const emit = defineEmits<{

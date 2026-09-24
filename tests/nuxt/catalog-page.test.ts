@@ -149,8 +149,10 @@ describe('catalog page', () => {
 
     expect(body().text()).toContain('Karte hinzufügen')
     expect(body().text()).toContain('Blauäugiger w. Drache')
-    expect(body().text()).toContain('Drucksprache')
-    expect(body().text()).toContain('Neuwertig (Near Mint)')
+    expect(body().text()).toContain('Anzahl')
+    expect(body().text()).toContain('Sammlung')
+    // No collector details since ADR 0017.
+    expect(body().text()).not.toContain('Drucksprache')
   })
 
   it('shows the result count with a thousands separator and the right plural', async () => {
@@ -186,9 +188,9 @@ describe('catalog page', () => {
 
     const modal = body().text()
     expect(modal).toContain('Add card')
-    expect(modal).toContain('Printing language')
-    expect(modal).toContain('Near Mint')
-    expect(modal).not.toContain('Neuwertig')
+    expect(modal).toContain('Quantity')
+    expect(modal).toContain('Collection')
+    expect(modal).not.toContain('Anzahl')
   })
 
   it('shows English card names in a German interface when the profile says so', async () => {
