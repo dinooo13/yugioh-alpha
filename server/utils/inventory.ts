@@ -9,21 +9,22 @@ import {
   catalogSet,
   ownedCard,
 } from '../db/schema'
-import { UNASSIGNED_COLLECTION_ID } from '../../shared/inventory'
+import { CARD_CONDITIONS, CARD_EDITIONS, PRINTING_LANGUAGES, UNASSIGNED_COLLECTION_ID } from '../../shared/inventory'
+import type { CardCondition, CardEdition, PrintingLanguage } from '../../shared/inventory'
 import { assertCollectionOwnedByUser } from './collections'
 
 type Db = ReturnType<typeof useDb>
 
-export const LANGUAGES = ['en', 'de', 'fr', 'it', 'es', 'pt', 'ja', 'ko'] as const
-export const CONDITIONS = ['mint', 'near_mint', 'excellent', 'good', 'light_played', 'played', 'poor'] as const
-export const EDITIONS = ['first', 'unlimited', 'limited'] as const
+export const LANGUAGES = PRINTING_LANGUAGES
+export const CONDITIONS = CARD_CONDITIONS
+export const EDITIONS = CARD_EDITIONS
 // Upper bound for a single owned-card stack. Guards against a typo (or a
 // misparsed entry line) turning into a five-digit quantity.
 export const MAX_QUANTITY = 999
 
-export type InventoryLanguage = typeof LANGUAGES[number]
-export type InventoryCondition = typeof CONDITIONS[number]
-export type InventoryEdition = typeof EDITIONS[number]
+export type InventoryLanguage = PrintingLanguage
+export type InventoryCondition = CardCondition
+export type InventoryEdition = CardEdition
 
 export interface InventoryInput {
   catalogCardId: number
@@ -46,8 +47,15 @@ export interface InventoryListOptions {
   catalogCardId?: number
 }
 
-function badRequest(message: string): never {
-  throw createError({ statusCode: 400, statusMessage: message })
+// `code` (+ `params`) is what the UI translates (`errors.api.<code>`, ADR
+// 0014); the English statusMessage stays technical. Only errors a user can
+// actually run into through the UI carry a code.
+function badRequest(message: string, code?: string, params?: Record<string, unknown>): never {
+  throw createError({ statusCode: 400, statusMessage: message, data: code ? { code, params } : undefined })
+}
+
+function ownedCardNotFound(): never {
+  throw createError({ statusCode: 404, statusMessage: 'Owned card not found', data: { code: 'owned_card_not_found' } })
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -62,12 +70,14 @@ function normalizePositiveInteger(value: unknown, field: string, fallback?: numb
     badRequest(`${field} is required`)
   }
 
+  // Only the quantity is typed by hand in the UI; the ids come from pickers.
+  const isQuantity = field === 'quantity'
   const numberValue = typeof value === 'number' ? value : Number(value)
   if (!Number.isInteger(numberValue) || numberValue < 1) {
-    badRequest(`${field} must be a positive integer`)
+    badRequest(`${field} must be a positive integer`, isQuantity ? 'quantity_invalid' : undefined)
   }
   if (max !== undefined && numberValue > max) {
-    badRequest(`${field} must be at most ${max}`)
+    badRequest(`${field} must be at most ${max}`, isQuantity ? 'quantity_too_large' : undefined, { max })
   }
 
   return numberValue
@@ -254,6 +264,9 @@ export const INVENTORY_BULK_MAX_ITEMS = 200
 export interface InventoryBulkItemError {
   index: number
   message: string
+  /** Translatable reason (`errors.api.<code>`), when the item error has one. */
+  code?: string
+  params?: Record<string, unknown>
 }
 
 export interface InventoryBulkResult {
@@ -267,19 +280,28 @@ export interface InventoryBulkResult {
  * index. Anything else (a bug, a database failure) is not the caller's fault
  * and must not be flattened into a 400 with a leaked internal message.
  */
-function clientErrorMessage(error: unknown): string | undefined {
+function clientItemError(error: unknown): Omit<InventoryBulkItemError, 'index'> | undefined {
   if (!error || typeof error !== 'object') {
     return undefined
   }
 
-  const candidate = error as { statusCode?: unknown, statusMessage?: unknown }
+  const candidate = error as { statusCode?: unknown, statusMessage?: unknown, data?: unknown }
   if (typeof candidate.statusCode !== 'number' || candidate.statusCode < 400 || candidate.statusCode >= 500) {
     return undefined
   }
 
-  return typeof candidate.statusMessage === 'string' && candidate.statusMessage !== ''
+  const message = typeof candidate.statusMessage === 'string' && candidate.statusMessage !== ''
     ? candidate.statusMessage
     : 'Invalid item'
+  const data = candidate.data && typeof candidate.data === 'object'
+    ? candidate.data as { code?: unknown, params?: unknown }
+    : undefined
+  if (typeof data?.code !== 'string') {
+    return { message }
+  }
+  return data.params && typeof data.params === 'object'
+    ? { message, code: data.code, params: data.params as Record<string, unknown> }
+    : { message, code: data.code }
 }
 
 /**
@@ -317,11 +339,11 @@ export function validateInventoryBulkInput(db: Db, userId: string, body: unknown
       inputs.push(input)
     }
     catch (error) {
-      const message = clientErrorMessage(error)
-      if (message === undefined) {
+      const itemError = clientItemError(error)
+      if (itemError === undefined) {
         throw error
       }
-      errors.push({ index, message })
+      errors.push({ index, ...itemError })
     }
   })
 
@@ -329,7 +351,7 @@ export function validateInventoryBulkInput(db: Db, userId: string, body: unknown
     throw createError({
       statusCode: 400,
       statusMessage: 'Some items are invalid',
-      data: { errors },
+      data: { code: 'items_invalid', errors },
     })
   }
 
@@ -386,7 +408,7 @@ export async function updateOwnedCard(
   patch: Partial<InventoryInput>,
 ) {
   if (patch.quantity !== undefined && patch.quantity < 1) {
-    badRequest('quantity must be a positive integer')
+    badRequest('quantity must be a positive integer', 'quantity_invalid')
   }
 
   const current = db
@@ -396,7 +418,7 @@ export async function updateOwnedCard(
     .get()
 
   if (!current) {
-    throw createError({ statusCode: 404, statusMessage: 'Owned card not found' })
+    ownedCardNotFound()
   }
 
   const input: InventoryInput = {
@@ -461,7 +483,7 @@ export async function deleteOwnedCard(db: Db, userId: string, id: string) {
     .all()
 
   if (deleted.length === 0) {
-    throw createError({ statusCode: 404, statusMessage: 'Owned card not found' })
+    ownedCardNotFound()
   }
 }
 

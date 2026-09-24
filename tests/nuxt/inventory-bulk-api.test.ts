@@ -141,7 +141,7 @@ describe('bulk inventory validation', () => {
 
     expect(thrown?.statusCode).toBe(400)
     expect(thrown?.data?.errors).toEqual([
-      { index: 1, message: 'collection_id does not reference a collection you own' },
+      { index: 1, message: 'collection_id does not reference a collection you own', code: 'collection_not_found' },
     ])
   })
 

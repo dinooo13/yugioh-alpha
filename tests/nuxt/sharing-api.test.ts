@@ -292,12 +292,12 @@ describe('share grants', () => {
 
   it('404s for an unknown user', () => {
     expect(() => addShareGrant(db, 'user-a', 'deck', deckId, 'no-such-user'))
-      .toThrow(expect.objectContaining({ statusCode: 404 }))
+      .toThrow(expect.objectContaining({ statusCode: 404, data: { code: 'share_user_not_found' } }))
   })
 
   it('404s for a foreign resource', () => {
     expect(() => addShareGrant(db, 'user-b', 'deck', deckId, 'user-c'))
-      .toThrow(expect.objectContaining({ statusCode: 404 }))
+      .toThrow(expect.objectContaining({ statusCode: 404, data: { code: 'deck_not_found' } }))
   })
 
   it('is idempotent: a second add does not duplicate the row', () => {
@@ -319,7 +319,7 @@ describe('share grants', () => {
 
   it('removeShareGrant 404s when absent', () => {
     expect(() => removeShareGrant(db, 'user-a', 'deck', deckId, 'user-b'))
-      .toThrow(expect.objectContaining({ statusCode: 404 }))
+      .toThrow(expect.objectContaining({ statusCode: 404, data: { code: 'share_not_found' } }))
   })
 
   it('removeShareGrant removes an existing grant', () => {

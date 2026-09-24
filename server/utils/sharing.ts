@@ -14,8 +14,11 @@ function badRequest(message: string): never {
   throw createError({ statusCode: 400, statusMessage: message })
 }
 
-function notFound(message: string): never {
-  throw createError({ statusCode: 404, statusMessage: message })
+// `code` is what the UI translates (`errors.api.<code>`, ADR 0014). Only the
+// owner-side paths set one: the public views must keep every "no access"
+// case indistinguishable (ADR 0004) and render their own notice anyway.
+function notFound(message: string, code?: string): never {
+  throw createError({ statusCode: 404, statusMessage: message, data: code ? { code } : undefined })
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -257,7 +260,7 @@ function loadShareableRow(db: Db, ownerUserId: string, type: ShareResourceType, 
   if (type === 'deck') {
     const row = db.select().from(deck).where(and(eq(deck.id, resourceId), eq(deck.userId, ownerUserId))).get()
     if (!row) {
-      notFound('Deck not found')
+      notFound('Deck not found', 'deck_not_found')
     }
     return { kind: 'deck', row }
   }
@@ -265,7 +268,7 @@ function loadShareableRow(db: Db, ownerUserId: string, type: ShareResourceType, 
   if (type === 'collection') {
     const row = db.select().from(collection).where(and(eq(collection.id, resourceId), eq(collection.userId, ownerUserId))).get()
     if (!row) {
-      notFound('Collection not found')
+      notFound('Collection not found', 'collection_not_found')
     }
     return { kind: 'collection', row }
   }
@@ -368,7 +371,7 @@ export function addShareGrant(
 
   const grantedUserRow = db.select({ id: user.id }).from(user).where(eq(user.id, grantedUserId)).get()
   if (!grantedUserRow) {
-    notFound('Player not found')
+    notFound('Player not found', 'share_user_not_found')
   }
 
   // A user can exist without ever having visited a page that lazily creates
@@ -421,7 +424,7 @@ export function removeShareGrant(
     .all()
 
   if (deleted.length === 0) {
-    notFound('Share not found')
+    notFound('Share not found', 'share_not_found')
   }
 
   return getShareState(db, ownerUserId, type, resourceId)
