@@ -2,6 +2,7 @@ import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 import { registerAndLogin } from './helpers/auth'
+import { CARD } from './helpers/cards'
 
 // Automated WCAG 2.1 A/AA checks (color contrast included) on the key pages,
 // in both color modes (docs/adr/0016-visual-design-system.md). Complements
@@ -19,14 +20,19 @@ async function useColorMode(page: Page, mode: typeof COLOR_MODES[number]) {
   await page.emulateMedia({ reducedMotion: 'reduce' })
 }
 
-async function axeViolations(page: Page, path: string): Promise<string[]> {
-  await page.goto(path)
-  await page.waitForLoadState('networkidle')
+/** Runs axe on the page as it is now; `label` names it in the violations. */
+async function axeCurrent(page: Page, label: string): Promise<string[]> {
   const results = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
     .analyze()
   return results.violations.map(violation =>
-    `${path}: ${violation.id} (${violation.impact}) — ${violation.nodes.slice(0, 3).map(node => node.target.join(' ')).join(' | ')}`)
+    `${label}: ${violation.id} (${violation.impact}) — ${violation.nodes.slice(0, 3).map(node => node.target.join(' ')).join(' | ')}`)
+}
+
+async function axeViolations(page: Page, path: string): Promise<string[]> {
+  await page.goto(path)
+  await page.waitForLoadState('networkidle')
+  return axeCurrent(page, path)
 }
 
 test.describe('axe: no WCAG A/AA violations', () => {
@@ -68,6 +74,27 @@ test.describe('axe: no WCAG A/AA violations', () => {
       ]) {
         violations.push(...await axeViolations(page, path))
       }
+
+      // The card detail overlay in the inventory (#88); the catalog one is
+      // `/catalog?card=` above.
+      await page.goto('/inventory?view=overview')
+      await page.waitForLoadState('networkidle')
+      await page.getByRole('button', { name: `${CARD.darkMagician} vergrößern` }).click()
+      const overlay = page.getByRole('dialog', { name: CARD.darkMagician })
+      await expect(overlay.getByRole('heading', { name: 'Im Inventar' })).toBeVisible()
+      await page.waitForLoadState('networkidle')
+      // The open animation (fade/scale) runs even under reduced motion;
+      // mid-way its colors would fail the contrast check.
+      await page.evaluate(() => Promise.all(document.getAnimations().map(animation => animation.finished)))
+      violations.push(...await axeCurrent(page, 'inventory card overlay'))
+
+      // "Zum Inventar" stacks the add dialog on top of the catalog overlay.
+      await page.goto(`/catalog?card=${DARK_MAGICIAN}`)
+      await page.waitForLoadState('networkidle')
+      await page.getByRole('dialog', { name: CARD.darkMagician }).getByRole('button', { name: 'Zum Inventar' }).click()
+      await expect(page.getByRole('dialog', { name: 'Karte hinzufügen' })).toBeVisible()
+      await page.evaluate(() => Promise.all(document.getAnimations().map(animation => animation.finished)))
+      violations.push(...await axeCurrent(page, 'catalog card overlay + add dialog'))
 
       expect(violations).toEqual([])
     })
