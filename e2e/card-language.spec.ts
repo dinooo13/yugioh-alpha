@@ -80,8 +80,9 @@ test.describe('card language', () => {
     await searchCatalog(page, 'Dark Magician')
     await page.getByRole('button', { name: CARD.darkMagician, exact: true }).click()
 
-    const detail = page.getByRole('dialog')
-    await expect(detail.getByRole('heading', { name: CARD.darkMagician, level: 3 })).toBeVisible()
+    // The card name is the dialog's title, and so its accessible name (#88).
+    const detail = page.getByRole('dialog', { name: CARD.darkMagician })
+    await expect(detail.getByRole('heading', { name: CARD.darkMagician, level: 2 })).toBeVisible()
     await expect(detail.getByText(`Englisch: ${CARD_EN.darkMagician}`)).toBeVisible()
     await expect(detail.getByText('Hexer', { exact: false }).first()).toBeVisible()
     await expect(detail.getByText('Deutsche Kartentexte')).toHaveCount(0)
@@ -89,9 +90,10 @@ test.describe('card language', () => {
     // Raigeki has no German data in the fixture: English name and text, and a hint.
     await searchCatalog(page, 'Raigeki')
     await page.getByRole('button', { name: CARD.raigeki, exact: true }).click()
-    await expect(detail.getByRole('heading', { name: CARD.raigeki, level: 3 })).toBeVisible()
-    await expect(detail.getByText('Für diese Karte gibt es keinen deutschen Kartentext.')).toBeVisible()
-    await expect(detail.getByText('Englisch:', { exact: false })).toHaveCount(0)
+    const raigeki = page.getByRole('dialog', { name: CARD.raigeki })
+    await expect(raigeki.getByRole('heading', { name: CARD.raigeki, level: 2 })).toBeVisible()
+    await expect(raigeki.getByText('Für diese Karte gibt es keinen deutschen Kartentext.')).toBeVisible()
+    await expect(raigeki.getByText('Englisch:', { exact: false })).toHaveCount(0)
   })
 
   test('card data labels follow the card language; filter values stay English (#34 F3d)', async ({ page }) => {
