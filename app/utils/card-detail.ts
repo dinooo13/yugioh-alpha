@@ -1,0 +1,69 @@
+// Types of the shared card detail overlay (`CardDetailModal`, #88).
+
+/** `GET /api/catalog/cards/:id`: the card with both languages, its printings and its scans. */
+export interface CatalogCardDetail {
+  card: {
+    id: number
+    name: string
+    nameDe: string | null
+    type: string
+    frameType: string | null
+    desc: string
+    descDe: string | null
+    race: string | null
+    archetype: string | null
+    attribute: string | null
+    atk: number | null
+    def: number | null
+    level: number | null
+    linkval: number | null
+    scale: number | null
+    linkMarkers: string[] | null
+    banlistInfo: Record<string, string> | null
+    cardPrices: Record<string, string> | null
+    tcgDate: string | null
+    ocgDate: string | null
+    ygoprodeckUrl: string | null
+  }
+  printings: Array<{
+    setCode: string
+    setName: string
+    rarity: string | null
+    price: string | null
+  }>
+  images: Array<{
+    id: number
+    imageUrl: string
+    imageUrlSmall: string | null
+    imageUrlCropped: string | null
+  }>
+}
+
+/**
+ * What the caller already knows about the card (a catalog tile, an inventory
+ * search result), shown at once while the full detail loads.
+ */
+export interface CardDetailPreview {
+  name: string
+  nameDe?: string | null
+  type: string
+  frameType?: string | null
+  attribute: string | null
+  race?: string | null
+  level: number | null
+  atk: number | null
+  def: number | null
+  imageSmall?: string | null
+  imageLarge?: string | null
+}
+
+/** `catalog` adds the English name, printings and release dates; `inventory` shows only the card. */
+export type CardDetailVariant = 'catalog' | 'inventory'
+
+/** The card an overlay action works on (the shape `AddToInventoryModal` takes). */
+export interface CardDetailSummary {
+  id: number
+  name: string
+  nameDe?: string | null
+  type: string
+}

@@ -34,7 +34,7 @@ afterEach(async () => {
   await setTestLocale('de')
 })
 
-function cardDetail(overrides: { nameDe?: string | null, descDe?: string | null } = {}) {
+function cardDetail(overrides: { nameDe?: string | null, descDe?: string | null } = {}, printings: Array<{ setCode: string, setName: string, rarity: string | null, price: string | null }> = []) {
   return {
     card: {
       id: 1,
@@ -60,7 +60,7 @@ function cardDetail(overrides: { nameDe?: string | null, descDe?: string | null 
       ygoprodeckUrl: null,
       ...overrides,
     },
-    printings: [],
+    printings,
     images: [],
   }
 }
@@ -213,6 +213,28 @@ describe('catalog page', () => {
     // No source credit in the UI (#87, ADR 0017); the README names the source.
     expect(detail).not.toContain('Deutsche Kartentexte')
     expect(body().find('a[href*="yugioh-card-history"]').exists()).toBe(false)
+  })
+
+  it('shows the printings and the actions in the detail; "Zum Inventar" opens the add dialog on top (#88)', async () => {
+    await openDetail(cardDetail({}, [{ setCode: 'LOB-001', setName: 'Legend of Blue Eyes White Dragon', rarity: 'Ultra Rare', price: null }]))
+
+    const dialog = body().find('[role="dialog"]')
+    expect(dialog.find('h2').text()).toBe('Blauäugiger w. Drache')
+    expect(dialog.text()).toContain('Printings')
+    expect(dialog.text()).toContain('Legend of Blue Eyes White Dragon')
+    expect(dialog.text()).toMatch(/LOB-001\s*·\s*Ultra Rare/)
+    expect(dialog.text()).toContain('Zur Wunschliste')
+
+    const addButton = dialog.findAll('button').find(btn => btn.text() === 'Zum Inventar')
+    expect(addButton).toBeTruthy()
+    await addButton!.trigger('click')
+
+    await vi.waitFor(() => {
+      expect(body().findAll('[role="dialog"]')).toHaveLength(2)
+    })
+    const addDialog = body().findAll('[role="dialog"]')[1]!
+    expect(addDialog.text()).toContain('Karte hinzufügen')
+    expect(addDialog.text()).toContain('Blauäugiger w. Drache')
   })
 
   it('falls back to the English text with a hint when a card has no German data', async () => {

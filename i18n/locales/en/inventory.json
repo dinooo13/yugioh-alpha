@@ -68,7 +68,8 @@
     },
     "preview": {
       "editInList": "Edit in list",
-      "openInCatalog": "Open in catalog"
+      "openInCatalog": "Open in catalog",
+      "owned": "In your inventory"
     },
     "picker": {
       "title": "Pick a card from the catalog",

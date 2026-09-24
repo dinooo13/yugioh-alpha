@@ -358,7 +358,7 @@ async function removeItem(item: InventoryItem) {
   }
 }
 
-// "Übersicht": clicking a tile's artwork opens the full-size card.
+// "Übersicht": clicking a tile's artwork opens the card detail overlay (#88).
 const previewItem = ref<SearchResultItem | null>(null)
 const isPreviewOpen = ref(false)
 
@@ -730,10 +730,38 @@ async function onSaved() {
       @saved="onSaved"
     />
 
-    <InventoryCardPreviewModal
+    <CardDetailModal
       v-model:open="isPreviewOpen"
-      :item="previewItem"
-      @edit-in-list="editInList"
-    />
+      :card-id="previewItem?.catalogCardId ?? null"
+      :preview="previewItem"
+      variant="inventory"
+    >
+      <template #context>
+        <InventoryOwnedCardSummary
+          v-if="previewItem"
+          :item="previewItem"
+        />
+      </template>
+      <template #actions>
+        <UButton
+          v-if="previewItem"
+          icon="i-lucide-list"
+          :label="t('inventory.preview.editInList')"
+          color="neutral"
+          variant="outline"
+          class="tap-target"
+          @click="editInList(previewItem)"
+        />
+        <UButton
+          v-if="previewItem"
+          :to="`/catalog?card=${previewItem.catalogCardId}`"
+          icon="i-lucide-book-open"
+          :label="t('inventory.preview.openInCatalog')"
+          color="neutral"
+          variant="outline"
+          class="tap-target"
+        />
+      </template>
+    </CardDetailModal>
   </div>
 </template>

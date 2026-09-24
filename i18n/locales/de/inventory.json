@@ -68,7 +68,8 @@
     },
     "preview": {
       "editInList": "In Liste bearbeiten",
-      "openInCatalog": "Im Katalog öffnen"
+      "openInCatalog": "Im Katalog öffnen",
+      "owned": "Im Inventar"
     },
     "picker": {
       "title": "Karte aus dem Katalog wählen",
