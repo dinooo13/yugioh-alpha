@@ -106,6 +106,13 @@
       "when": 1790245382609,
       "tag": "0014_owned_card_drop_collector_details",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "6",
+      "when": 1790249062789,
+      "tag": "0015_catalog_card_retired",
+      "breakpoints": true
     }
   ]
 }
