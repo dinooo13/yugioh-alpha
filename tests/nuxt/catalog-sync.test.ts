@@ -4,7 +4,15 @@ import Database from 'better-sqlite3'
 import { beforeEach, describe, expect, it } from 'vitest'
 import * as schema from '../../server/db/schema'
 import { backfillCatalogNameSearch, syncCatalog } from '../../server/utils/catalog-sync'
-import { darkMagicianFixture, potOfGreedFixture } from './fixtures/ygoprodeck-cards'
+import {
+  darkMagicianFixture,
+  droppedFixture,
+  oddEyesFixture,
+  oddEyesStaleFixture,
+  placeholderFixture,
+  placeholderRealFixture,
+  potOfGreedFixture,
+} from './fixtures/ygoprodeck-cards'
 
 function createTestDb() {
   const sqlite = new Database(':memory:')
@@ -68,6 +76,42 @@ describe('syncCatalog', () => {
       cardCount: 1,
     })
     expect(runs[0]!.finishedAt).not.toBeNull()
+  })
+
+  it('retires cards the response no longer lists and links their replacement', async () => {
+    const first = await syncCatalog(db, {
+      fetchAllCards: async () => [darkMagicianFixture, oddEyesStaleFixture, placeholderFixture, droppedFixture],
+    })
+    expect(first).toEqual({
+      runId: first.runId,
+      cardCount: 4,
+      retirement: {
+        retired: 0,
+        restored: 0,
+        withReplacement: 0,
+        withoutReplacement: 0,
+        remapped: { ownedCards: 0, deckCards: 0, deckCovers: 0, wishlistItems: 0, ruleFormats: 0 },
+        skipped: false,
+      },
+    })
+
+    const second = await syncCatalog(db, {
+      fetchAllCards: async () => [darkMagicianFixture, oddEyesFixture, placeholderRealFixture],
+    })
+    expect(second.cardCount).toBe(3)
+    expect(second.retirement).toMatchObject({ retired: 3, restored: 0, withReplacement: 2, withoutReplacement: 1, skipped: false })
+
+    const rows = new Map(db.select().from(schema.catalogCard).all().map(row => [row.id, row]))
+    expect(rows.size).toBe(6)
+    expect(rows.get(oddEyesStaleFixture.id)).toMatchObject({ replacedById: oddEyesFixture.id })
+    expect(rows.get(placeholderFixture.id)).toMatchObject({ replacedById: placeholderRealFixture.id })
+    expect(rows.get(droppedFixture.id)).toMatchObject({ replacedById: null })
+    for (const id of [oddEyesStaleFixture.id, placeholderFixture.id, droppedFixture.id]) {
+      expect(rows.get(id)!.retiredAt).toBeInstanceOf(Date)
+    }
+    for (const id of [darkMagicianFixture.id, oddEyesFixture.id, placeholderRealFixture.id]) {
+      expect(rows.get(id)).toMatchObject({ retiredAt: null, replacedById: null })
+    }
   })
 
   it('records an error run and re-raises when the fetch fails', async () => {

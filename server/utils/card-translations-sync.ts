@@ -149,11 +149,13 @@ function translationPathPattern(): { pattern: RegExp, localeByDir: Map<string, A
   return { pattern: /^[^/]+\/([^/]+)\/(\d+)\.json$/, localeByDir }
 }
 
+// Active cards only: retired rows (ADR 0019) left YGOPRODeck before it sent
+// Konami ids and would inflate the count for good.
 function countCardsWithoutKonamiId(db: Db): number {
   const [row] = db
     .select({ count: sql<number>`count(*)` })
     .from(catalogCard)
-    .where(isNull(catalogCard.konamiId))
+    .where(and(isNull(catalogCard.konamiId), isNull(catalogCard.retiredAt)))
     .all()
   return row?.count ?? 0
 }

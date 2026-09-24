@@ -67,3 +67,40 @@ export const potOfGreedFixture: YgoproCard = {
   misc_info: [{ tcg_date: '2002-03-08', konami_id: 4844 }],
   ygoprodeck_url: 'https://ygoprodeck.com/card/pot-of-greed',
 }
+
+// Retired catalog cards (ADR 0019): rows YGOPRODeck dropped or renumbered.
+
+function simpleCard(
+  id: number,
+  name: string,
+  type: string,
+  extra: Partial<YgoproCard> = {},
+): YgoproCard {
+  return {
+    id,
+    name,
+    type,
+    desc: `${name} text.`,
+    card_images: [{ id, image_url: `https://images.ygoprodeck.com/images/cards/${id}.jpg` }],
+    ...extra,
+  }
+}
+
+/** Odd-Eyes Pendulum Dragon's old passcode; no Konami id (it left before the API sent one). */
+export const oddEyesStaleFixture = simpleCard(16178681, 'Odd-Eyes Pendulum Dragon', 'Pendulum Effect Monster')
+/** Odd-Eyes Pendulum Dragon's current passcode. */
+export const oddEyesFixture = simpleCard(16178683, 'Odd-Eyes Pendulum Dragon', 'Pendulum Effect Monster', {
+  misc_info: [{ konami_id: 11213 }],
+})
+/** A pre-release placeholder passcode, with the Konami id of the real card. */
+export const placeholderFixture = simpleCard(101402024, 'Adamancipator Conductor', 'Tuner Monster', {
+  misc_info: [{ konami_id: 23346 }],
+})
+export const placeholderRealFixture = simpleCard(24925387, 'Adamancipator Conductor', 'Tuner Monster', {
+  misc_info: [{ konami_id: 23346 }],
+})
+/** A placeholder whose name YGOPRODeck stored with an HTML entity. */
+export const entityNameStaleFixture = simpleCard(101402053, 'Graceful &amp; Skull Dice', 'Spell Card')
+export const entityNameFixture = simpleCard(76630812, 'Graceful & Skull Dice', 'Spell Card')
+/** A placeholder renamed at release: no replacement can be found. */
+export const droppedFixture = simpleCard(101402013, 'Leviathan of Atlantis - Daedalus', 'Effect Monster')
