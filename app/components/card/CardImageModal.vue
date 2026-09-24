@@ -20,6 +20,8 @@ const { t } = useI18n()
 const open = defineModel<boolean>('open', { default: false })
 
 const resolvedNoImageLabel = computed(() => props.noImageLabel ?? t('card.noImage'))
+
+const { style: tiltStyle, onMove: onTiltMove, onLeave: onTiltLeave } = useCardTilt()
 </script>
 
 <template>
@@ -30,18 +32,25 @@ const resolvedNoImageLabel = computed(() => props.noImageLabel ?? t('card.noImag
   >
     <template #body>
       <div class="space-y-4">
-        <img
+        <div
           v-if="src"
-          :src="src"
-          :alt="title"
-          decoding="async"
-          class="mx-auto aspect-[59/86] max-h-[70vh] w-auto rounded-md object-contain"
+          class="mx-auto w-fit rounded-[4.5%/3.1%] shadow-glow-primary transition-transform duration-300 ease-out-expo will-change-transform"
+          :style="tiltStyle"
+          @pointermove="onTiltMove"
+          @pointerleave="onTiltLeave"
         >
+          <img
+            :src="src"
+            :alt="title"
+            decoding="async"
+            class="block aspect-[59/86] max-h-[70vh] w-auto rounded-[4.5%/3.1%] object-contain"
+          >
+        </div>
         <div
           v-else
           role="img"
           :aria-label="t('card.noImageFor', { name: title, label: resolvedNoImageLabel })"
-          class="mx-auto flex aspect-[59/86] w-48 flex-col items-center justify-center gap-1 rounded-md bg-elevated text-xs text-muted"
+          class="card-back mx-auto flex aspect-[59/86] w-48 flex-col items-center justify-center gap-1 rounded-[4.5%/3.1%] text-xs font-medium"
         >
           <UIcon
             name="i-lucide-image-off"

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { cardFrame } from '~/utils/card-frame'
+
 interface InventoryListItem {
   id: string
   collectionId: string | null
@@ -29,6 +31,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const { cardName, cardValue } = useCardText()
+const frame = computed(() => cardFrame({ type: props.item.cardType }))
 const displayName = computed(() => cardName({ name: props.item.cardName, nameDe: props.item.cardNameDe }))
 const { editionShortLabel, conditionShortLabel } = useCardOptionItems()
 
@@ -53,8 +56,16 @@ const languageLabel = computed(() => props.item.language.toUpperCase())
         <div class="line-clamp-2 text-sm font-medium text-highlighted sm:truncate">
           {{ displayName }}
         </div>
-        <div class="truncate text-xs text-muted">
-          {{ cardValue('type', item.cardType) }}<span v-if="item.setName"> · {{ item.setName }}</span><span v-if="item.rarity"> · {{ item.rarity }}</span>
+        <div
+          class="flex min-w-0 items-center gap-1.5 text-xs text-muted"
+          :data-frame="frame?.frame"
+          :data-pendulum="frame?.pendulum ? '' : undefined"
+        >
+          <span
+            class="frame-dot"
+            aria-hidden="true"
+          />
+          <span class="truncate">{{ cardValue('type', item.cardType) }}<span v-if="item.setName"> · {{ item.setName }}</span><span v-if="item.rarity"> · {{ item.rarity }}</span></span>
         </div>
         <div class="flex flex-wrap gap-1">
           <UBadge
@@ -85,7 +96,7 @@ const languageLabel = computed(() => props.item.language.toUpperCase())
       </div>
 
       <div class="flex min-w-0 items-center gap-2">
-        <span class="w-10 shrink-0 text-right text-sm font-semibold tabular-nums text-highlighted">
+        <span class="w-10 shrink-0 text-right font-numeric text-sm font-semibold tracking-[0.04em] text-highlighted tabular-nums">
           ×{{ item.quantity }}
         </span>
         <USelect

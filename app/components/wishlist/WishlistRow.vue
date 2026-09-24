@@ -80,8 +80,9 @@ async function remove() {
         <p class="truncate text-sm font-medium text-highlighted">
           {{ cardName(item) }}
         </p>
-        <p class="text-xs text-muted">
-          {{ cardValue('type', item.type) }}
+        <p class="flex min-w-0 items-center gap-1.5 text-xs text-muted">
+          <CardFrameDot :type="item.type" />
+          <span class="truncate">{{ cardValue('type', item.type) }}</span>
         </p>
         <p
           v-if="item.owned !== undefined"

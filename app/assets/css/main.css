@@ -286,3 +286,130 @@
     background-image: none;
   }
 }
+
+/* ------------------------------------------------------------------------
+ * Cards (ADR 0016): frame colors as a vocabulary, an original card back for
+ * missing scans and a foil sheen. Decorative only — the type, attribute and
+ * the "no image" label are always written out as well.
+ * --------------------------------------------------------------------- */
+
+@layer components {
+  [data-frame="normal"] { --frame: var(--color-frame-normal); }
+  [data-frame="effect"] { --frame: var(--color-frame-effect); }
+  [data-frame="ritual"] { --frame: var(--color-frame-ritual); }
+  [data-frame="fusion"] { --frame: var(--color-frame-fusion); }
+  [data-frame="synchro"] { --frame: var(--color-frame-synchro); }
+  [data-frame="xyz"] { --frame: var(--color-frame-xyz); }
+  [data-frame="link"] { --frame: var(--color-frame-link); }
+  [data-frame="spell"] { --frame: var(--color-frame-spell); }
+  [data-frame="trap"] { --frame: var(--color-frame-trap); }
+  [data-frame="token"] { --frame: var(--color-frame-token); }
+  [data-frame="skill"] { --frame: var(--color-frame-skill); }
+  [data-pendulum] { --frame-2: var(--color-frame-spell); }
+
+  [data-attribute="dark"] { --orb: var(--color-attr-dark); }
+  [data-attribute="light"] { --orb: var(--color-attr-light); }
+  [data-attribute="earth"] { --orb: var(--color-attr-earth); }
+  [data-attribute="water"] { --orb: var(--color-attr-water); }
+  [data-attribute="fire"] { --orb: var(--color-attr-fire); }
+  [data-attribute="wind"] { --orb: var(--color-attr-wind); }
+  [data-attribute="divine"] { --orb: var(--color-attr-divine); }
+
+  /* A frame-colored bar (pendulum: split with the spell color). The hairline
+     keeps the pale (synchro) and near-black (xyz) frames visible. */
+  .frame-stripe {
+    background: linear-gradient(90deg, var(--frame, transparent) 50%, var(--frame-2, var(--frame, transparent)) 50%);
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--ui-border-accented) 70%, transparent);
+  }
+
+  .frame-stripe-y {
+    background: linear-gradient(180deg, var(--frame, transparent) 50%, var(--frame-2, var(--frame, transparent)) 50%);
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--ui-border-accented) 70%, transparent);
+  }
+
+  .frame-dot {
+    display: inline-block;
+    flex-shrink: 0;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 9999px;
+    background: linear-gradient(90deg, var(--frame, transparent) 50%, var(--frame-2, var(--frame, transparent)) 50%);
+    box-shadow: 0 0 0 1px color-mix(in oklab, var(--ui-text) 22%, transparent);
+  }
+
+  /* A little glass sphere in the attribute color. */
+  .attribute-orb {
+    display: inline-block;
+    flex-shrink: 0;
+    width: 0.625rem;
+    height: 0.625rem;
+    border-radius: 9999px;
+    background: radial-gradient(circle at 32% 30%, rgb(255 255 255 / 0.85), transparent 38%), var(--orb, var(--ui-text-dimmed));
+    box-shadow: 0 0 0 1px color-mix(in oklab, var(--ui-text) 20%, transparent), 0 0 6px -1px var(--orb, transparent);
+  }
+
+  /* The arcane card back: an original motif (concentric ellipses around a
+     glowing oval, a gold inner frame) on deep violet. Stands in for a
+     missing scan and backs the fanned deck covers. Always dark, in both
+     modes, so its text color is fixed. */
+  .card-back {
+    position: relative;
+    isolation: isolate;
+    color: rgb(233 231 253 / 0.86);
+    background:
+      radial-gradient(ellipse 30% 22% at 50% 50%, rgb(151 135 248 / 0.55), transparent 72%),
+      repeating-radial-gradient(ellipse 60% 48% at 50% 50%, transparent 0 8%, rgb(232 181 46 / 0.16) 8% 8.8%),
+      linear-gradient(160deg, var(--color-brand-900), var(--color-island) 78%);
+  }
+
+  .card-back::before {
+    content: "";
+    position: absolute;
+    inset: 6% 7%;
+    z-index: -1;
+    border: 1px solid rgb(232 181 46 / 0.45);
+    border-radius: 3.5% / 2.4%;
+    pointer-events: none;
+  }
+
+  /* Foil: a sheen that sweeps across a card on hover/focus of its `.group`,
+     only for pointer devices that don't ask for reduced motion. */
+  .foil {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .foil::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0;
+    mix-blend-mode: color-dodge;
+    background: linear-gradient(115deg, transparent 25%, rgb(255 230 160 / 0.35) 40%, rgb(170 140 255 / 0.3) 50%, rgb(120 220 255 / 0.25) 60%, transparent 75%);
+    background-size: 250% 250%;
+    background-position: 100% 100%;
+    transition: opacity 200ms var(--ease-out-expo), background-position 900ms var(--ease-out-expo);
+  }
+}
+
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  :is(.group:hover, .group:focus-within) .foil::after {
+    opacity: 0.9;
+    background-position: 0 0;
+  }
+}
+
+@media (forced-colors: active) {
+  .foil::after,
+  .card-back::before {
+    display: none;
+  }
+
+  .frame-stripe,
+  .frame-stripe-y,
+  .frame-dot,
+  .attribute-orb {
+    forced-color-adjust: none;
+  }
+}

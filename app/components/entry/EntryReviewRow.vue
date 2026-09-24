@@ -199,8 +199,12 @@ function onPicked(card: PickedCatalogCard) {
         <p class="mt-1 truncate text-sm font-medium text-highlighted">
           {{ selected ? cardName(selected) : t('quickEntry.status.ohne_treffer') }}
         </p>
-        <p class="truncate text-xs text-muted">
-          <span v-if="selected">{{ cardValue('type', selected.type) }} · </span>{{ valuesLabel }}
+        <p class="flex min-w-0 items-center gap-1.5 text-xs text-muted">
+          <CardFrameDot
+            v-if="selected"
+            :type="selected.type"
+          />
+          <span class="truncate"><span v-if="selected">{{ cardValue('type', selected.type) }} · </span>{{ valuesLabel }}</span>
         </p>
         <p
           v-if="row.conflict"
