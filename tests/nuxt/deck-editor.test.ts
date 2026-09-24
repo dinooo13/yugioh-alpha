@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { flushPromises } from '@vue/test-utils'
+import { enableAutoUnmount, flushPromises } from '@vue/test-utils'
 import type { DOMWrapper } from '@vue/test-utils'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
 import { DecksDeckFormModal, UDropdownMenu, USelect } from '#components'
@@ -117,8 +117,13 @@ function deckDetail(
     warnings,
     cover: null as { catalogCardId: number, name: string, imageSmall: string | null, imageLarge: string | null } | null,
     coverIsChosen: false,
+    inactiveCoverChoice: null as { catalogCardId: number, name: string, imageSmall: string | null, imageLarge: string | null } | null,
   }
 }
+
+// mountSuspended leaves every page mounted; unmount it after each test so a
+// later locale switch doesn't re-render all earlier pages.
+enableAutoUnmount(afterEach)
 
 afterEach(async () => {
   await setTestLocale('de')
@@ -921,6 +926,49 @@ describe('deck editor cover card', () => {
       { method: 'PATCH', body: { coverCardId: null } },
     ]])
     expect(rowItem(component, 'Dark Magician', 'main').text()).toContain('Titelkarte (automatisch)')
+  })
+
+  it('hints at a chosen cover that is no longer in Main/Extra and clears it (#57)', async () => {
+    state.source = { items: [], total: 0 }
+    state.deck = { ...coverDeck(), inactiveCoverChoice: coverOf(12580477, 'Raigeki') }
+
+    const fetchMock = stubDeckFetch(() => Promise.resolve(coverDeck()))
+    const component = await mountSuspended(DeckEditorPage)
+
+    expect(component.text()).toContain('Gewählte Titelkarte nicht aktiv')
+    expect(component.text()).toContain('"Raigeki" ist nicht mehr im Main oder Extra Deck')
+    // The rule's pick is still marked as the automatic cover.
+    expect(rowItem(component, 'Dark Magician', 'main').text()).toContain('Titelkarte (automatisch)')
+
+    const clear = component.findAll('button').find(button => button.text() === 'Auswahl aufheben')
+    expect(clear).toBeTruthy()
+    await clear!.trigger('click')
+    await flushPromises()
+    await component.vm.$nextTick()
+
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).startsWith('/api/decks/'))).toEqual([[
+      '/api/decks/deck-1',
+      { method: 'PATCH', body: { coverCardId: null } },
+    ]])
+    expect(component.text()).not.toContain('Gewählte Titelkarte nicht aktiv')
+  })
+
+  it('shows no inactive-cover hint without a stored choice', async () => {
+    state.source = { items: [], total: 0 }
+    state.deck = coverDeck()
+
+    const component = await mountSuspended(DeckEditorPage)
+
+    expect(component.text()).not.toContain('Gewählte Titelkarte nicht aktiv')
+  })
+
+  it('shows no inactive-cover hint while the chosen cover is active', async () => {
+    state.source = { items: [], total: 0 }
+    state.deck = coverDeck({ id: POT_OF_GREED, name: 'Pot of Greed' }, true)
+
+    const component = await mountSuspended(DeckEditorPage)
+
+    expect(component.text()).not.toContain('Gewählte Titelkarte nicht aktiv')
   })
 })
 

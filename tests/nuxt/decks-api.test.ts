@@ -965,18 +965,52 @@ describe('deck cover', () => {
       expect(removed.cover?.catalogCardId).toBe(CARD.darkMagician)
       expect(removed.coverIsChosen).toBe(false)
       expect(coverOf(deck.id)?.catalogCardId).toBe(CARD.darkMagician)
-      // The choice itself is kept …
+      // The choice itself is kept, and the detail reports it as inactive (#57) …
       expect(storedCoverCardId(deck.id)).toBe(CARD.potOfGreed)
+      expect(removed.inactiveCoverChoice).toEqual({
+        catalogCardId: CARD.potOfGreed,
+        name: 'Pot of Greed',
+        nameDe: null,
+        imageSmall: IMAGE.potOfGreedSmall,
+        imageLarge: 'https://images.example/cards/55144522.jpg',
+      })
 
       // … so re-adding the card brings it back.
       const readded = upsertDeckCard(db, 'user-a', deck.id, { catalogCardId: CARD.potOfGreed, section: 'main', quantity: 1 })
       expect(readded.cover?.catalogCardId).toBe(CARD.potOfGreed)
       expect(readded.coverIsChosen).toBe(true)
+      expect(readded.inactiveCoverChoice).toBeNull()
 
       const moved = moveDeckCard(db, 'user-a', deck.id, { catalogCardId: CARD.potOfGreed, from: 'main', to: 'side' })
       expect(moved.cover?.catalogCardId).toBe(CARD.darkMagician)
       expect(moved.coverIsChosen).toBe(false)
+      expect(moved.inactiveCoverChoice).toMatchObject({ catalogCardId: CARD.potOfGreed, name: 'Pot of Greed' })
       expect(coverOf(deck.id)?.catalogCardId).toBe(CARD.darkMagician)
+    })
+
+    it('drops the inactive choice once it is cleared with coverCardId null (#57)', () => {
+      const deck = seededDeck()
+      updateDeck(db, 'user-a', deck.id, { coverCardId: CARD.potOfGreed })
+      const removed = removeDeckCard(db, 'user-a', deck.id, CARD.potOfGreed, 'main')
+      expect(removed.inactiveCoverChoice).toMatchObject({ catalogCardId: CARD.potOfGreed })
+
+      const cleared = updateDeck(db, 'user-a', deck.id, { coverCardId: null })
+
+      expect(cleared).toMatchObject({ cover: { catalogCardId: CARD.darkMagician }, coverIsChosen: false, inactiveCoverChoice: null })
+      expect(storedCoverCardId(deck.id)).toBeNull()
+    })
+
+    it('reports the choice as inactive when no Main/Extra card is left (#57)', () => {
+      const deck = seededDeck()
+      updateDeck(db, 'user-a', deck.id, { coverCardId: CARD.stardustDragon })
+
+      removeDeckCard(db, 'user-a', deck.id, CARD.darkMagician, 'main')
+      removeDeckCard(db, 'user-a', deck.id, CARD.potOfGreed, 'main')
+      const emptied = removeDeckCard(db, 'user-a', deck.id, CARD.stardustDragon, 'extra')
+
+      expect(emptied.cover).toBeNull()
+      expect(emptied.coverIsChosen).toBe(false)
+      expect(emptied.inactiveCoverChoice).toMatchObject({ catalogCardId: CARD.stardustDragon, imageSmall: IMAGE.stardustSmall })
     })
 
     it('moves updatedAt for a cover-only change', () => {
@@ -1031,6 +1065,7 @@ describe('deck cover', () => {
       expect(getDeckDetail(db, 'user-a', deck.id)).toMatchObject({
         cover: { catalogCardId: CARD.darkMagician },
         coverIsChosen: false,
+        inactiveCoverChoice: null,
       })
     })
 
@@ -1039,11 +1074,13 @@ describe('deck cover', () => {
       expect(getDeckDetail(db, 'user-a', deck.id)).toMatchObject({
         cover: { catalogCardId: CARD.darkMagician, imageSmall: IMAGE.darkMagicianSmall },
         coverIsChosen: false,
+        inactiveCoverChoice: null,
       })
 
       const empty = createDeck(db, 'user-a', { name: 'Leer', description: null })
       expect(empty.cover).toBeNull()
       expect(empty.coverIsChosen).toBe(false)
+      expect(empty.inactiveCoverChoice).toBeNull()
     })
   })
 })
