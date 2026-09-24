@@ -139,13 +139,12 @@ const isEmpty = computed(() => {
             <li
               v-for="deck in data.decks"
               :key="deck.id"
-              class="group panel flex gap-4 overflow-hidden p-4 transition-[translate,box-shadow,border-color] duration-200 ease-out-expo hover:border-primary/40 hover:shadow-lift motion-safe:hover:-translate-y-0.5"
+              class="group panel relative flex gap-4 p-4 transition-[translate,box-shadow,border-color] duration-200 ease-out-expo hover:border-primary/40 hover:shadow-lift motion-safe:hover:-translate-y-0.5"
             >
-              <!-- Decorative cover (#29) next to the deck name link, fanned
-                   out like the owner's deck list (ADR 0016). -->
-              <NuxtLink
-                :to="`/players/${handle}/decks/${deck.id}`"
-                tabindex="-1"
+              <!-- Decorative cover (#29), fanned out like the owner's deck
+                   list (ADR 0016); the stretched deck link covers the tile
+                   (#134). -->
+              <div
                 aria-hidden="true"
                 class="deck-fan shrink-0 self-start"
               >
@@ -159,13 +158,13 @@ const isEmpty = computed(() => {
                   :alt="deck.cover ? cardName(deck.cover) : deck.name"
                   :no-image-label="deck.cover ? t('card.noImage') : t('players.profile.emptyDeckCover')"
                 />
-              </NuxtLink>
+              </div>
               <div class="min-w-0 flex-1">
                 <NuxtLink
                   :to="`/players/${handle}/decks/${deck.id}`"
-                  class="block min-w-0"
+                  class="stretched-link block min-w-0 rounded-sm"
                 >
-                  <h3 class="truncate text-base font-semibold text-highlighted transition-colors group-hover:text-primary">
+                  <h3 class="line-clamp-2 break-words text-base font-semibold text-highlighted transition-colors group-hover:text-primary">
                     {{ deck.name }}
                   </h3>
                 </NuxtLink>
@@ -193,13 +192,13 @@ const isEmpty = computed(() => {
             <li
               v-for="collection in data.collections"
               :key="collection.id"
-              class="panel p-4 transition-[box-shadow,border-color] duration-200 hover:border-primary/40 hover:shadow-lift"
+              class="group panel relative p-4 transition-[box-shadow,border-color] duration-200 hover:border-primary/40 hover:shadow-lift"
             >
               <NuxtLink
                 :to="`/players/${handle}/collections/${collection.id}`"
-                class="min-w-0"
+                class="stretched-link block min-w-0 rounded-sm"
               >
-                <h3 class="truncate text-base font-semibold text-highlighted hover:text-primary">
+                <h3 class="truncate text-base font-semibold text-highlighted transition-colors group-hover:text-primary">
                   {{ collection.name }}
                 </h3>
               </NuxtLink>

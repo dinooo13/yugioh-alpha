@@ -357,14 +357,12 @@ function statusColor(deck: DeckListItem) {
       <li
         v-for="deck in decks"
         :key="deck.id"
-        class="group panel flex gap-4 overflow-hidden p-4 transition-[translate,box-shadow,border-color] duration-200 ease-out-expo hover:border-primary/40 hover:shadow-lift motion-safe:hover:-translate-y-0.5"
+        class="group panel relative flex gap-4 p-4 transition-[translate,box-shadow,border-color] duration-200 ease-out-expo hover:border-primary/40 hover:shadow-lift motion-safe:hover:-translate-y-0.5"
       >
-        <!-- Cover card (#29): purely decorative next to the deck name link,
-             so it is kept out of the tab order and the accessibility tree.
-             Two card backs fan out behind it (ADR 0016). -->
-        <NuxtLink
-          :to="`/decks/${deck.id}`"
-          tabindex="-1"
+        <!-- Cover card (#29): decorative; the stretched deck link covers the
+             tile (#134), so it stays out of the accessibility tree. Two card
+             backs fan out behind it (ADR 0016). -->
+        <div
           aria-hidden="true"
           class="deck-fan shrink-0 self-start"
         >
@@ -378,15 +376,15 @@ function statusColor(deck: DeckListItem) {
             :alt="deck.cover ? cardName(deck.cover) : deck.name"
             :no-image-label="deck.cover ? undefined : t('decks.list.emptyCover')"
           />
-        </NuxtLink>
+        </div>
 
         <div class="flex min-w-0 flex-1 flex-col">
           <div class="flex items-start justify-between gap-2">
             <NuxtLink
               :to="`/decks/${deck.id}`"
-              class="min-w-0 flex-1"
+              class="stretched-link min-w-0 flex-1 rounded-sm"
             >
-              <h2 class="truncate text-base font-semibold text-highlighted transition-colors group-hover:text-primary">
+              <h2 class="line-clamp-2 break-words text-base font-semibold text-highlighted transition-colors group-hover:text-primary">
                 {{ deck.name }}
               </h2>
               <p
@@ -404,7 +402,7 @@ function statusColor(deck: DeckListItem) {
                 variant="ghost"
                 size="xs"
                 :aria-label="t('decks.list.options', { name: deck.name })"
-                class="tap-target"
+                class="tap-target relative z-10"
               />
             </UDropdownMenu>
           </div>

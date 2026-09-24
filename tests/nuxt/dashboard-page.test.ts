@@ -69,6 +69,34 @@ describe('dashboard page', () => {
     expect(text).toContain('0 Turniere')
   })
 
+  it('makes each whole card a link to its list; the quick action stays a separate link above it (#134)', async () => {
+    state.collections = { items: [], allCount: 5 }
+    state.decks = { total: 2 }
+    state.tournaments = { total: 1 }
+
+    const component = await mountSuspended(DashboardPage)
+    const articles = component.findAll('article')
+    expect(articles).toHaveLength(3)
+
+    const expected = [
+      { list: '/inventory', title: 'Inventar', cta: '/inventory/quick-entry' },
+      { list: '/decks', title: 'Decks', cta: '/decks?new=1' },
+      { list: '/tournaments', title: 'Turniere', cta: '/tournaments/new' },
+    ]
+    articles.forEach((article, index) => {
+      const { list, title, cta } = expected[index]!
+      const stretched = article.findAll('a.stretched-link')
+      expect(stretched).toHaveLength(1)
+      expect(stretched[0]!.attributes('href')).toBe(list)
+      expect(stretched[0]!.text()).toBe(title)
+
+      const action = article.find(`a[href="${cta}"]`)
+      expect(action.exists()).toBe(true)
+      expect(action.classes()).toContain('z-10')
+      expect(stretched[0]!.element.contains(action.element)).toBe(false)
+    })
+  })
+
   it('renders in English with English plurals', async () => {
     await setTestLocale('en')
     state.collections = { items: [], allCount: 1 }

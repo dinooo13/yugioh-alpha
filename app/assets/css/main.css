@@ -168,6 +168,13 @@
     outline: 2px solid var(--app-focus);
     outline-offset: 2px;
   }
+
+  /* Tailwind 4 leaves buttons on the browser's default arrow; anything
+     clickable shows the pointer (#134). Cursor utilities (zoom-in,
+     not-allowed) still win: they are in the utilities layer. */
+  :where(button:not(:disabled), [role="button"]:not([aria-disabled="true"])) {
+    cursor: pointer;
+  }
 }
 
 ::selection {
@@ -211,6 +218,29 @@
   text-transform: uppercase;
   letter-spacing: 0.12em;
   color: var(--ui-text-muted);
+}
+
+/* A whole-card click target (#134): the card's one main link or button
+   covers the card (the card needs `relative`). Other controls in the card
+   sit above it with `relative z-10`; never nest a control inside the link.
+   The focus ring goes around the whole card. */
+@utility stretched-link {
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    border-radius: calc(var(--ui-radius) * 3);
+  }
+
+  &:focus-visible {
+    outline: none;
+  }
+
+  &:focus-visible::after {
+    outline: 2px solid var(--app-focus);
+    outline-offset: 2px;
+  }
 }
 
 /* The page's one hero CTA: a lit arcane gradient on top of `bg-primary`. */

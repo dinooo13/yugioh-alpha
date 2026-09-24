@@ -164,7 +164,7 @@ const cards = computed<OnboardingCard[]>(() => [
             </span>
             <NuxtLink
               :to="card.listTo"
-              class="truncate rounded-sm hover:text-primary hover:underline"
+              class="stretched-link truncate rounded-sm transition-colors group-hover:text-primary"
             >
               {{ card.title }}
             </NuxtLink>
@@ -184,7 +184,7 @@ const cards = computed<OnboardingCard[]>(() => [
         </p>
 
         <UButton
-          class="mt-5 justify-center"
+          class="relative z-10 mt-5 justify-center"
           color="neutral"
           variant="outline"
           :label="card.cta"

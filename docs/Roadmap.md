@@ -480,6 +480,8 @@ the floating tilt/foil card with the card text in the card language; the
 catalog adds the English name, printings and actions, the inventory the
 owned quantity per collection with notes (#87: no source credit in the UI,
 ADR 0017). #63: the catalog filters use the inventory's multi-select menus.
+#134: whole cards are click targets (`stretched-link`), clickable things show
+the pointer, `?` ATK/DEF, select menus as wide as their options.
 
 ## Recommended Build Order
 

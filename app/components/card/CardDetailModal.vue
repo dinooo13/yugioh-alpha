@@ -18,6 +18,7 @@
  */
 import { cardFrame } from '~/utils/card-frame'
 import type { CardDetailPreview, CardDetailSummary, CardDetailVariant } from '~/utils/card-detail'
+import { formatCardStat } from '~~/shared/card-stats'
 
 const props = withDefaults(defineProps<{
   cardId: number | null
@@ -141,7 +142,7 @@ const hasDates = computed(() => Boolean(detail.value?.card.tcgDate || detail.val
                 ATK
               </dt>
               <dd class="font-numeric text-base font-bold tracking-[0.04em] text-highlighted tabular-nums">
-                {{ shown.atk ?? '–' }}
+                {{ formatCardStat(shown.atk) }}
               </dd>
             </div>
             <div class="flex items-baseline gap-1.5">
@@ -149,7 +150,7 @@ const hasDates = computed(() => Boolean(detail.value?.card.tcgDate || detail.val
                 DEF
               </dt>
               <dd class="font-numeric text-base font-bold tracking-[0.04em] text-highlighted tabular-nums">
-                {{ shown.def ?? '–' }}
+                {{ formatCardStat(shown.def) }}
               </dd>
             </div>
           </dl>

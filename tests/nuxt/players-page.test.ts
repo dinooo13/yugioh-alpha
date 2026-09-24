@@ -89,6 +89,20 @@ describe('public profile page', () => {
     // Initials avatar (#29) and the deck tile's cover card.
     expect(component.find('[data-slot="fallback"]').text()).toBe('F')
     expect(component.find('img[src="https://images.example/cards_small/89631139.jpg"]').exists()).toBe(true)
+
+    // Whole tiles are click targets (#134): one stretched link per tile, the
+    // decorative cover outside any link.
+    const [deckTile, collectionTile] = component.findAll('li')
+    const deckLinks = deckTile!.findAll('a')
+    expect(deckLinks).toHaveLength(1)
+    expect(deckLinks[0]!.attributes('href')).toBe('/players/fabian/decks/deck-1')
+    expect(deckLinks[0]!.classes()).toContain('stretched-link')
+    expect(deckTile!.find('img').element.closest('a')).toBeNull()
+
+    const collectionLinks = collectionTile!.findAll('a')
+    expect(collectionLinks).toHaveLength(1)
+    expect(collectionLinks[0]!.attributes('href')).toBe('/players/fabian/collections/col-1')
+    expect(collectionLinks[0]!.classes()).toContain('stretched-link')
   })
 
   it('renders in English with English plurals', async () => {
