@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { LocationQueryValue } from 'vue-router'
 import { cardFrame } from '~/utils/card-frame'
 import type { CardDetailSummary } from '~/utils/card-detail'
 
@@ -36,18 +37,29 @@ const PAGE_SIZE = 24
 usePageTitle('catalog.title')
 
 const { t } = useI18n()
-const { cardName, cardValueOptions } = useCardText()
+const { cardName } = useCardText()
 const count = useCount()
 
 const route = useRoute()
 const router = useRouter()
 
+// `?type=A,B` or repeated keys; old single-value links (`?attribute=DARK`) still work.
+function queryList(value: LocationQueryValue | LocationQueryValue[] | undefined): string[] {
+  return (Array.isArray(value) ? value : [value])
+    .flatMap(item => (item ?? '').split(','))
+    .map(item => item.trim())
+    .filter(Boolean)
+}
+
+// Multi-select facets go to the API and the URL as comma lists (#63).
+const csv = (values: Array<string | number>) => values.length ? values.join(',') : undefined
+
 const searchInput = ref(typeof route.query.q === 'string' ? route.query.q : '')
 const debouncedSearch = ref(searchInput.value)
-const type = ref(typeof route.query.type === 'string' ? route.query.type : '')
-const attribute = ref(typeof route.query.attribute === 'string' ? route.query.attribute : '')
-const race = ref(typeof route.query.race === 'string' ? route.query.race : '')
-const level = ref(typeof route.query.level === 'string' ? route.query.level : '')
+const type = ref<string[]>(queryList(route.query.type))
+const attribute = ref<string[]>(queryList(route.query.attribute))
+const race = ref<string[]>(queryList(route.query.race))
+const level = ref<number[]>(queryList(route.query.level).map(value => Number.parseInt(value, 10)).filter(Number.isFinite))
 const setId = ref(typeof route.query.setId === 'string' ? route.query.setId : '')
 const sort = ref(typeof route.query.sort === 'string' ? route.query.sort : 'name')
 const page = ref(Number.parseInt(typeof route.query.page === 'string' ? route.query.page : '1', 10) || 1)
@@ -63,15 +75,15 @@ watch(searchInput, (value) => {
 })
 
 const filtersActive = computed(() =>
-  Boolean(debouncedSearch.value.trim() || type.value || attribute.value || race.value || level.value || setId.value),
+  Boolean(debouncedSearch.value.trim() || type.value.length || attribute.value.length || race.value.length || level.value.length || setId.value),
 )
 
 const cardQuery = computed(() => ({
   q: debouncedSearch.value.trim() || undefined,
-  type: type.value || undefined,
-  attribute: attribute.value || undefined,
-  race: race.value || undefined,
-  level: level.value || undefined,
+  type: csv(type.value),
+  attribute: csv(attribute.value),
+  race: csv(race.value),
+  level: csv(level.value),
   setId: setId.value || undefined,
   sort: sort.value,
   page: page.value,
@@ -82,16 +94,17 @@ const { data: facets } = await useFetch<CatalogFacets>('/api/catalog/facets', {
   default: () => ({ types: [], attributes: [], races: [], levels: [], sets: [] }),
 })
 
-// Filter values stay English (the API filters on them); labels follow the card language.
-const typeOptions = computed(() => cardValueOptions('type', facets.value.types))
-const attributeOptions = computed(() => cardValueOptions('attribute', facets.value.attributes))
-const raceOptions = computed(() => cardValueOptions('race', facets.value.races))
+const sortItems = computed(() => [
+  { label: t('catalog.sort.nameAsc'), value: 'name' },
+  { label: t('catalog.sort.nameDesc'), value: '-name' },
+  { label: t('catalog.sort.newest'), value: 'newest' },
+])
 
 // A plain `<select>` with 1000+ sets meant scrolling through an unsearchable
-// list to find one (UX review #5) — `USelectMenu` is searchable by default,
-// but reka-ui reserves the empty string for "clear selection", so "no set"
-// uses a non-empty sentinel mapped back to `''` (matching the
-// InventorySearchPanel convention).
+// list to find one (UX review #5) — `USelectMenu` is searchable by default.
+// The set filter stays single-select, and reka-ui reserves the empty string
+// for "clear selection", so "no set" uses a non-empty sentinel mapped back
+// to `''`.
 const noSetValue = '__all_sets__'
 const setItems = computed(() => [
   { label: t('catalog.filters.allSets'), value: noSetValue },
@@ -125,17 +138,17 @@ const {
 
 watch([type, attribute, race, level, setId, sort, debouncedSearch], () => {
   page.value = 1
-})
+}, { deep: true })
 
 watch([debouncedSearch, type, attribute, race, level, setId, sort, page], async () => {
   await router.replace({
     query: {
       ...route.query,
       q: debouncedSearch.value.trim() || undefined,
-      type: type.value || undefined,
-      attribute: attribute.value || undefined,
-      race: race.value || undefined,
-      level: level.value || undefined,
+      type: csv(type.value),
+      attribute: csv(attribute.value),
+      race: csv(race.value),
+      level: csv(level.value),
       setId: setId.value || undefined,
       sort: sort.value === 'name' ? undefined : sort.value,
       page: page.value > 1 ? String(page.value) : undefined,
@@ -164,10 +177,10 @@ function closeCard() {
 function resetFilters() {
   searchInput.value = ''
   debouncedSearch.value = ''
-  type.value = ''
-  attribute.value = ''
-  race.value = ''
-  level.value = ''
+  type.value = []
+  attribute.value = []
+  race.value = []
+  level.value = []
   setId.value = ''
   sort.value = 'name'
   page.value = 1
@@ -213,84 +226,22 @@ async function onAddedToInventory() {
       />
 
       <section class="panel space-y-3 p-3 sm:p-4">
-        <div class="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_repeat(3,minmax(10rem,12rem))]">
-          <UInput
-            v-model="searchInput"
-            icon="i-lucide-search"
-            :placeholder="t('catalog.search.placeholder')"
-            :aria-label="t('catalog.search.label')"
-            class="min-w-0"
+        <UInput
+          v-model="searchInput"
+          icon="i-lucide-search"
+          :placeholder="t('catalog.search.placeholder')"
+          :aria-label="t('catalog.search.label')"
+          class="w-full"
+        />
+
+        <div class="grid grid-cols-2 gap-3 lg:grid-cols-[repeat(5,minmax(0,1fr))_auto]">
+          <CardFacetFilters
+            v-model:type="type"
+            v-model:attribute="attribute"
+            v-model:race="race"
+            v-model:level="level"
+            :facets="facets"
           />
-
-          <select
-            v-model="type"
-            :aria-label="t('catalog.filters.type')"
-            class="h-10 min-w-0 w-full rounded-md border border-default bg-default px-3 text-sm text-default shadow-xs outline-none transition-colors hover:border-accented focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/25"
-          >
-            <option value="">
-              {{ t('catalog.filters.type') }}
-            </option>
-            <option
-              v-for="option in typeOptions"
-              :key="option.value"
-              :value="option.value"
-            >
-              {{ option.label }}
-            </option>
-          </select>
-
-          <select
-            v-model="attribute"
-            :aria-label="t('catalog.filters.attribute')"
-            class="h-10 min-w-0 w-full rounded-md border border-default bg-default px-3 text-sm text-default shadow-xs outline-none transition-colors hover:border-accented focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/25"
-          >
-            <option value="">
-              {{ t('catalog.filters.attribute') }}
-            </option>
-            <option
-              v-for="option in attributeOptions"
-              :key="option.value"
-              :value="option.value"
-            >
-              {{ option.label }}
-            </option>
-          </select>
-
-          <select
-            v-model="level"
-            :aria-label="t('catalog.filters.level')"
-            class="h-10 min-w-0 w-full rounded-md border border-default bg-default px-3 text-sm text-default shadow-xs outline-none transition-colors hover:border-accented focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/25"
-          >
-            <option value="">
-              {{ t('catalog.filters.level') }}
-            </option>
-            <option
-              v-for="option in facets.levels"
-              :key="option"
-              :value="String(option)"
-            >
-              {{ t('card.level', { level: option }) }}
-            </option>
-          </select>
-        </div>
-
-        <div class="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(10rem,12rem)_auto]">
-          <select
-            v-model="race"
-            :aria-label="t('catalog.filters.race')"
-            class="h-10 min-w-0 w-full rounded-md border border-default bg-default px-3 text-sm text-default shadow-xs outline-none transition-colors hover:border-accented focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/25"
-          >
-            <option value="">
-              {{ t('catalog.filters.race') }}
-            </option>
-            <option
-              v-for="option in raceOptions"
-              :key="option.value"
-              :value="option.value"
-            >
-              {{ option.label }}
-            </option>
-          </select>
 
           <USelectMenu
             v-model="setSelection"
@@ -318,23 +269,17 @@ async function onAddedToInventory() {
         {{ cardsTotalLabel }}
       </p>
 
-      <label class="flex items-center gap-2 text-sm text-toned">
-        {{ t('catalog.sort.label') }}
-        <select
+      <UFormField
+        :label="t('catalog.sort.label')"
+        class="flex items-center gap-2"
+      >
+        <USelect
           v-model="sort"
-          class="h-9 rounded-md border border-default bg-default px-2 text-sm text-default shadow-xs outline-none transition-colors hover:border-accented focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/25"
-        >
-          <option value="name">
-            {{ t('catalog.sort.nameAsc') }}
-          </option>
-          <option value="-name">
-            {{ t('catalog.sort.nameDesc') }}
-          </option>
-          <option value="newest">
-            {{ t('catalog.sort.newest') }}
-          </option>
-        </select>
-      </label>
+          :items="sortItems"
+          :aria-label="t('catalog.sort.label')"
+          class="w-40"
+        />
+      </UFormField>
     </div>
 
     <UAlert

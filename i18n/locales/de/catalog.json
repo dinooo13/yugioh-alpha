@@ -8,10 +8,6 @@
       "label": "Karten suchen"
     },
     "filters": {
-      "type": "Typ",
-      "attribute": "Attribut",
-      "level": "Level",
-      "race": "Monsterart",
       "set": "Set",
       "allSets": "Alle Sets",
       "reset": "Zurücksetzen"

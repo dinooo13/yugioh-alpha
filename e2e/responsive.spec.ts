@@ -69,6 +69,8 @@ test.describe('responsive layout at 390px', () => {
       { path: `/decks/${deck.id}`, appShell: true },
       { path: `/tournaments/${tournament.id}`, appShell: true },
       { path: '/catalog', appShell: true },
+      // Long multi-selections in the filter menus (#63) must truncate, not widen the page.
+      { path: '/catalog?type=Normal%20Monster,Effect%20Monster,Synchro%20Monster,XYZ%20Monster&race=Spellcaster,Dragon&attribute=DARK,LIGHT,WIND&level=1,4,7,8', appShell: true },
       { path: `/formats/${format.id}`, appShell: true },
       { path: '/wishlist', appShell: true },
       { path: '/tournaments', appShell: true },

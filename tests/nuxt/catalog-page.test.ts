@@ -1,16 +1,31 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DOMWrapper, flushPromises } from '@vue/test-utils'
-import { nextTick } from 'vue'
+import { nextTick, toValue } from 'vue'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
+import { CardFacetFilters, USelect } from '#components'
 import CatalogPage from '~/pages/catalog.vue'
 import { setTestLocale } from './fixtures/locale'
+import { selectWithOption } from './fixtures/select-wrapper'
+
+// The global auth middleware would bounce `route: '/catalog?…'` to /login
+// without a session — stub it so the page sees its own query.
+vi.mock('~/utils/session', () => ({
+  getAuthSession: vi.fn(() => Promise.resolve({ session: {}, user: { email: 'fabian@example.com', name: 'Fabian Meyer' } })),
+}))
 
 const catalogState = vi.hoisted(() => ({
   total: 1,
   // One `pending` for the card search across mounts, so a test can flip the
   // grid to its loading skeletons (#98).
   searchPending: null as null | { value: boolean },
+  // Every `useFetch(url, opts)` call, so tests can read the reactive query.
+  calls: [] as Array<{ url: string, opts?: { query?: unknown } }>,
 }))
+
+function lastQuery(url: string): Record<string, unknown> {
+  const call = catalogState.calls.filter(c => c.url === url).at(-1)
+  return toValue(call?.opts?.query as Record<string, unknown>)
+}
 
 // UModal teleports its content to <body> (same note as in collections-ui.test.ts).
 function body() {
@@ -34,6 +49,7 @@ afterEach(async () => {
   }
   document.body.innerHTML = ''
   catalogState.total = 1
+  catalogState.calls = []
   if (catalogState.searchPending) {
     catalogState.searchPending.value = false
   }
@@ -83,8 +99,9 @@ async function openDetail(detail: ReturnType<typeof cardDetail>) {
 }
 
 mockNuxtImport('useFetch', () => {
-  return vi.fn((url: string | (() => string | null)) => {
+  return vi.fn((url: string | (() => string | null), opts?: { query?: unknown }) => {
     const resolvedUrl = typeof url === 'function' ? url() : url
+    catalogState.calls.push({ url: resolvedUrl ?? '', opts })
 
     if (resolvedUrl === '/api/catalog/facets') {
       return {
@@ -138,7 +155,11 @@ describe('catalog page', () => {
 
     expect(component.text()).toContain('Katalog')
     expect(component.find('input[aria-label="Karten suchen"]').exists()).toBe(true)
-    expect(component.find('select[aria-label="Typ"]').exists()).toBe(true)
+    // The inventory's filter menus, no native selects left (#63).
+    expect(component.find('select').exists()).toBe(false)
+    for (const label of ['Typ', 'Attribut', 'Monsterart', 'Level', 'Sortierung']) {
+      expect(component.find(`[aria-label="${label}"]`).exists()).toBe(true)
+    }
     // German card names by default: the card language follows the interface (ADR 0015).
     expect(component.text()).toContain('Blauäugiger w. Drache')
     expect(component.text()).not.toContain('Blue-Eyes White Dragon')
@@ -147,6 +168,47 @@ describe('catalog page', () => {
     // options (UX review #5) — now a searchable `USelectMenu`.
     expect(component.find('select[aria-label="Set"]').exists()).toBe(false)
     expect(component.find('[aria-label="Set"]').exists()).toBe(true)
+  })
+
+  it('reads the facet filters from a deep link (#63)', async () => {
+    const component = await mountPage({ route: '/catalog?attribute=LIGHT&level=8' })
+
+    expect(lastQuery('/api/catalog/cards')).toMatchObject({ attribute: 'LIGHT', level: '8' })
+    // The triggers show the selection in the card language; the value stays English.
+    expect(component.find('[aria-label="Attribut"]').text()).toContain('LICHT')
+    expect(component.find('[aria-label="Level"]').text()).toContain('Level 8')
+  })
+
+  it('writes a multi-selection as a comma list; reset clears it (#63)', async () => {
+    const component = await mountPage()
+    const route = useRouter().currentRoute
+
+    component.findComponent(CardFacetFilters).vm.$emit('update:attribute', ['LIGHT', 'DARK'])
+    await vi.waitFor(() => {
+      expect(route.value.query.attribute).toBe('LIGHT,DARK')
+    })
+    expect(lastQuery('/api/catalog/cards')).toMatchObject({ attribute: 'LIGHT,DARK', page: 1 })
+
+    const reset = component.findAll('button').find(btn => btn.text() === 'Zurücksetzen')
+    await reset!.trigger('click')
+    await vi.waitFor(() => {
+      expect(route.value.query.attribute).toBeUndefined()
+    })
+    expect(lastQuery('/api/catalog/cards').attribute).toBeUndefined()
+    expect(component.findComponent(CardFacetFilters).props('attribute')).toEqual([])
+  })
+
+  it('writes the sort to the URL (#63)', async () => {
+    const component = await mountPage()
+    const route = useRouter().currentRoute
+
+    const sort = selectWithOption(component.findAllComponents(USelect), '-name')
+    expect(sort).toBeTruthy()
+    await sort!.setValue('-name')
+    await vi.waitFor(() => {
+      expect(route.value.query.sort).toBe('-name')
+    })
+    expect(lastQuery('/api/catalog/cards')).toMatchObject({ sort: '-name' })
   })
 
   it('opens the add-to-inventory modal pre-filled with the clicked card (#6)', async () => {
@@ -211,7 +273,8 @@ describe('catalog page', () => {
     expect(text).toContain('Blue-Eyes White Dragon')
     expect(text).not.toContain('Blauäugiger')
     expect(component.find('input[aria-label="Search cards"]').exists()).toBe(true)
-    expect(component.find('select[aria-label="Type"]').exists()).toBe(true)
+    expect(component.find('[aria-label="Type"]').exists()).toBe(true)
+    expect(component.find('[aria-label="Sort by"]').exists()).toBe(true)
     expect(text).not.toContain('Karten')
     expect(text).not.toContain('Zum Inventar')
 
