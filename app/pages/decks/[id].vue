@@ -102,7 +102,7 @@ const route = useRoute()
 const deckId = computed(() => String(route.params.id ?? ''))
 
 const { t, n } = useI18n()
-const { cardName, cardValue, cardValueOptions } = useCardText()
+const { cardName, cardMetaLine, cardValueOptions } = useCardText()
 const count = useCount()
 const apiError = useApiError()
 const validationText = useValidationText()
@@ -478,12 +478,6 @@ const SECTION_COUNT_CLASS = {
 
 function sectionCountClass(section: DeckSection): string {
   return SECTION_COUNT_CLASS[sectionCountState(section)]
-}
-
-function cardMetaLine(card: { type: string, level: number | null, attribute: string | null }): string {
-  return [cardValue('type', card.type), card.level !== null ? t('card.stars', { level: card.level }) : null, card.attribute ? cardValue('attribute', card.attribute) : null]
-    .filter(Boolean)
-    .join(' · ')
 }
 
 // --- Mutations -------------------------------------------------------------

@@ -17,8 +17,8 @@ const emit = defineEmits<{
   'update:page': [value: number]
 }>()
 
-const { t } = useI18n()
-const { cardName, cardValue } = useCardText()
+const { t, n } = useI18n()
+const { cardName, cardMetaLine } = useCardText()
 
 const searchInput = ref('')
 let debounceTimer: ReturnType<typeof setTimeout> | undefined
@@ -45,12 +45,6 @@ function previousPage() {
 function nextPage() {
   emit('update:page', Math.min(totalPages.value, props.page + 1))
 }
-
-function cardMetaLine(card: SharedCardListItem): string {
-  return [cardValue('type', card.type), card.level !== null ? t('card.stars', { level: card.level }) : null, card.attribute ? cardValue('attribute', card.attribute) : null]
-    .filter(Boolean)
-    .join(' · ')
-}
 </script>
 
 <template>
@@ -76,8 +70,8 @@ function cardMetaLine(card: SharedCardListItem): string {
       class="space-y-2"
     >
       <USkeleton
-        v-for="n in 3"
-        :key="n"
+        v-for="index in 3"
+        :key="index"
         class="h-16 w-full"
       />
     </div>
@@ -117,7 +111,7 @@ function cardMetaLine(card: SharedCardListItem): string {
         </div>
 
         <span class="shrink-0 font-numeric text-sm font-semibold tracking-[0.04em] text-default tabular-nums">
-          {{ card.quantity }}×
+          {{ n(card.quantity, 'integer') }}×
         </span>
       </li>
     </ul>
