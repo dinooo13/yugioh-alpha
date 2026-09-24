@@ -23,6 +23,10 @@
         "count": "{count} Turnier | {count} Turniere",
         "cta": "Turnier anlegen"
       }
+    },
+    "hero": {
+      "greeting": "Willkommen zurück, {name}",
+      "greetingNoName": "Willkommen zurück"
     }
   }
 }

@@ -412,3 +412,55 @@
     forced-color-adjust: none;
   }
 }
+
+/* ------------------------------------------------------------------------
+ * Ceremony (ADR 0016): counters, floating cards.
+ * --------------------------------------------------------------------- */
+
+/* A "life points" counter: the numeric face; gold in dark mode, a short gold
+   meter underneath in light mode. */
+@utility lp-counter {
+  display: inline-block;
+  position: relative;
+  font-family: var(--font-numeric);
+  font-size: 2.5rem;
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ui-text-highlighted);
+  padding-bottom: 0.5rem;
+
+  &::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 1.75rem;
+    height: 2px;
+    border-radius: 9999px;
+    background: var(--ui-secondary);
+  }
+
+  &:where(.dark, .dark *) {
+    background-image: linear-gradient(180deg, var(--color-millennium-200), var(--color-millennium-400));
+    background-clip: text;
+    color: transparent;
+  }
+
+  @media (forced-colors: active) {
+    color: CanvasText;
+    background: none;
+  }
+}
+
+@keyframes card-float {
+  0%,
+  100% {
+    transform: translateX(var(--x, 0)) translateY(0) rotate(var(--r, 0deg));
+  }
+
+  50% {
+    transform: translateX(var(--x, 0)) translateY(-5px) rotate(var(--r, 0deg));
+  }
+}

@@ -23,6 +23,10 @@
         "count": "{count} tournament | {count} tournaments",
         "cta": "Create tournament"
       }
+    },
+    "hero": {
+      "greeting": "Welcome back, {name}",
+      "greetingNoName": "Welcome back"
     }
   }
 }
