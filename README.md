@@ -92,6 +92,9 @@ included. See [`docs/adr/0015-german-card-data.md`](./docs/adr/0015-german-card-
   "catalog has no konami ids; run catalog:sync first". Neither sync is scheduled.
 - Cards without a Konami id or without a German file (OCG-only cards, tokens,
   skills, …) have no German data and fall back to English.
+- Card search is bilingual everywhere: a search matches the English or the German
+  name, ignoring case, umlauts, `ß`, spaces and punctuation
+  (`server/utils/card-name-search.ts`).
 
 German card texts: [ygoresources.com](https://db.ygoresources.com/) — card-history
 repo. The texts are Konami's; the repo has no licence. Turning the sync off

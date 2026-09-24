@@ -409,7 +409,13 @@ F3 is in progress, as four stacked PRs:
   skipped when the repo's commit is unchanged (`catalog:sync-translations`,
   `POST /api/admin/catalog/translations/sync`, and after every
   `catalog:sync`); German fixture data for tests. No visible change yet
-- F3b — bilingual card search everywhere (open)
+- F3b — bilingual card search everywhere (implemented): every card search
+  (catalog, inventory, deck editor, rule format picker, wishlist, shared
+  views, deck list, the assistant's search tools) matches the English and
+  the German name, folded for case, umlauts, `ß`, spaces and punctuation
+  ("blauaugiger w drache", "BLAUÄUGIGER"); "also search card text" covers
+  the German text. Quick entry recognizes German names too, fuzzy matches
+  included, and now folds `ß`. Results are still shown in English
 - F3c — the card language setting and German names and texts in the UI (open)
 - F3d — card data labels and the assistant (open)
 
