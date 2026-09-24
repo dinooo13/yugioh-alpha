@@ -17,7 +17,7 @@ const REDIRECTS: ReadonlyArray<readonly [string, string]> = [
   ['/katalog?card=46986414', '/catalog?card=46986414'],
   ['/assistent', '/assistant'],
   ['/assistent/abc', '/assistant/abc'],
-  ['/decks/assistent', '/assistant?intent=new-deck'],
+  ['/decks/assistent', '/assistant'],
   ['/decks?neu=1', '/decks?new=1'],
   ['/formate', '/formats'],
   ['/formate/neu', '/formats/new'],

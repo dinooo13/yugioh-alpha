@@ -13,6 +13,8 @@ Implemented (84a–84c). 84c removed the former engine and its SSE endpoint
 `POST /api/assistant/chat/:id/messages`, so the side-by-side note under
 Consequences no longer holds. The legacy converter stays.
 
+The per-turn deck context kept under Decision was removed by [ADR 0021](0021-no-deck-link-in-assistant-conversations.md).
+
 ## Context
 
 The chat assistant (ADR 0010) ran on a hand-written engine: a `fetch` + SSE

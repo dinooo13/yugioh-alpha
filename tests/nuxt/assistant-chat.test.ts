@@ -1,6 +1,5 @@
 // Conversations of the chat assistant (server/utils/assistant-chat.ts):
-// CRUD, the deck link and its per-turn context block (ADR 0011), and the
-// display data of proposals (#69). The turn itself is covered in
+// CRUD, no deck link (ADR 0021), and the display data of proposals (#69). The turn itself is covered in
 // assistant-turn.test.ts.
 
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
@@ -10,22 +9,17 @@ import Database from 'better-sqlite3'
 import { beforeEach, describe, expect, it } from 'vitest'
 import * as schema from '../../server/db/schema'
 import {
-  buildDeckContextBlock,
   createConversation,
   deleteConversation,
   hydrateActionViews,
   listConversations,
-  loadDeckRef,
   requireOwnConversation,
-  validateCreateConversationInput,
 } from '../../server/utils/assistant-chat'
 import { applyAction, rejectAction } from '../../server/utils/assistant-tools'
 import { loadUiMessages, persistUserMessage } from '../../server/utils/assistant-ui-messages'
-import { createDeck, deleteDeck, updateDeck, upsertDeckCard } from '../../server/utils/decks'
-import { createRuleFormat, validateRuleFormatInput } from '../../server/utils/rule-formats'
+import { createDeck, deleteDeck, upsertDeckCard } from '../../server/utils/decks'
 import { readFileSync } from 'node:fs'
-import { ASSISTANT_CONVERSATION_TITLE_MAX, ASSISTANT_ERROR_CODES, deckConversationTitle } from '../../shared/assistant-chat'
-import { seedGermanNames } from './fixtures/german-names'
+import { ASSISTANT_ERROR_CODES } from '../../shared/assistant-chat'
 
 const CARD = {
   darkMagician: 46986414,
@@ -98,7 +92,7 @@ describe('conversation CRUD', () => {
 
   it('titles a new conversation in the given locale (German by default)', () => {
     expect(createConversation(db, 'user-a').title).toBe('Neue Unterhaltung')
-    expect(createConversation(db, 'user-a', {}, 'en').title).toBe('New conversation')
+    expect(createConversation(db, 'user-a', 'en').title).toBe('New conversation')
   })
 
   it('has a translation for every assistant error code (errors.api.<code>; `unexpected` has its own fallback key)', () => {
@@ -110,132 +104,33 @@ describe('conversation CRUD', () => {
   })
 })
 
-describe('validateCreateConversationInput (POST /api/assistant/chat body)', () => {
-  it('accepts an empty body or an optional deckId', () => {
-    expect(validateCreateConversationInput(undefined)).toEqual({})
-    expect(validateCreateConversationInput({})).toEqual({})
-    expect(validateCreateConversationInput({ deckId: null })).toEqual({})
-    expect(validateCreateConversationInput({ deckId: ' deck-1 ' })).toEqual({ deckId: 'deck-1' })
-  })
+describe('no deck link (ADR 0021)', () => {
+  it('always creates a new, plain conversation — no deck in the summary, no reuse of an empty one', () => {
+    const first = createConversation(db, 'user-a')
+    const second = createConversation(db, 'user-a')
 
-  it('rejects a non-object body or a non-string/empty deckId', () => {
-    expect(() => validateCreateConversationInput('deck-1')).toThrowError()
-    expect(() => validateCreateConversationInput(['deck-1'])).toThrowError()
-    expect(() => validateCreateConversationInput({ deckId: 42 })).toThrowError()
-    expect(() => validateCreateConversationInput({ deckId: '  ' })).toThrowError()
-  })
-})
-
-describe('deckConversationTitle', () => {
-  it('is "Deck: <name>" for a short name', () => {
-    expect(deckConversationTitle('Magier')).toBe('Deck: Magier')
-  })
-
-  it('truncates to ASSISTANT_CONVERSATION_TITLE_MAX with an ellipsis', () => {
-    const title = deckConversationTitle('x'.repeat(80))
-    expect(title).toHaveLength(ASSISTANT_CONVERSATION_TITLE_MAX)
-    expect(title.startsWith('Deck: xxx')).toBe(true)
-    expect(title.endsWith('…')).toBe(true)
-  })
-})
-
-describe('deck-linked conversations (ADR 0011)', () => {
-  function seedDeck(userId = 'user-a', name = 'Magier-Deck') {
-    const deck = createDeck(db, userId, { name, description: null })
-    upsertDeckCard(db, userId, deck.id, { catalogCardId: CARD.darkMagician, section: 'main', quantity: 2 })
-    return deck
-  }
-
-  it('links a new conversation to the caller\'s deck and titles it after the deck', () => {
-    const deck = seedDeck()
-    const conversation = createConversation(db, 'user-a', { deckId: deck.id })
-
-    expect(conversation).toMatchObject({ title: 'Deck: Magier-Deck', deck: { id: deck.id, name: 'Magier-Deck' } })
-    expect(loadDeckRef(db, requireOwnConversation(db, 'user-a', conversation.id).deckId)).toEqual({ id: deck.id, name: 'Magier-Deck' })
-    // A plain conversation has no deck.
-    expect(createConversation(db, 'user-a').deck).toBeNull()
-  })
-
-  it('404s for another user\'s (or an unknown) deck', () => {
-    const foreign = seedDeck('user-b')
-    expect(statusOf(() => createConversation(db, 'user-a', { deckId: foreign.id }))).toBe(404)
-    expect(statusOf(() => createConversation(db, 'user-a', { deckId: 'does-not-exist' }))).toBe(404)
-  })
-
-  it('reuses an empty linked conversation, and starts a new one once it has messages', () => {
-    const deck = seedDeck()
-    const first = createConversation(db, 'user-a', { deckId: deck.id })
-    expect(createConversation(db, 'user-a', { deckId: deck.id }).id).toBe(first.id)
-
-    addUserMessage(first.id, 'Hallo')
-
-    const second = createConversation(db, 'user-a', { deckId: deck.id })
     expect(second.id).not.toBe(first.id)
-    expect(second.deck).toEqual({ id: deck.id, name: 'Magier-Deck' })
+    expect([first.title, second.title]).toEqual(['Neue Unterhaltung', 'Neue Unterhaltung'])
+    expect(Object.keys(first).sort()).toEqual(['createdAt', 'id', 'title', 'updatedAt'])
+    expect(requireOwnConversation(db, 'user-a', first.id).deckId).toBeNull()
   })
 
-  it('unlinks (deck → null) instead of deleting the conversation when the deck is deleted', () => {
-    const deck = seedDeck()
-    const conversation = createConversation(db, 'user-a', { deckId: deck.id })
+  it('keeps a legacy deck-linked conversation, its messages and its title when the deck is deleted (deck_id → null)', () => {
+    const deck = createDeck(db, 'user-a', { name: 'Magier-Deck', description: null })
+    upsertDeckCard(db, 'user-a', deck.id, { catalogCardId: CARD.darkMagician, section: 'main', quantity: 2 })
+    const conversation = createConversation(db, 'user-a')
+    db.update(schema.assistantConversation)
+      .set({ deckId: deck.id, title: 'Deck: Magier-Deck' })
+      .where(eq(schema.assistantConversation.id, conversation.id))
+      .run()
     addUserMessage(conversation.id, 'Hallo')
 
     deleteDeck(db, 'user-a', deck.id)
 
-    expect(requireOwnConversation(db, 'user-a', conversation.id).deckId).toBeNull()
+    const row = requireOwnConversation(db, 'user-a', conversation.id)
+    expect(row.deckId).toBeNull()
+    expect(row.title).toBe('Deck: Magier-Deck')
     expect(loadUiMessages(db, 'user-a', conversation.id).map(message => message.role)).toEqual(['user'])
-  })
-
-  it('describes the deck\'s current state as a context block, in English (ADR 0014)', () => {
-    const format = createRuleFormat(db, 'user-a', validateRuleFormatInput({
-      name: 'Streng',
-      rules: { rules: [{ kind: 'copies', maxCopies: 1 }] },
-    }))
-    const deck = seedDeck()
-    updateDeck(db, 'user-a', deck.id, { formatId: format.id })
-
-    const block = buildDeckContextBlock(db, 'user-a', deck.id, 'de')!
-    expect(block).toContain(`Deck ID: ${deck.id}`)
-    expect(block).toContain('Deck name: Magier-Deck')
-    expect(block).toContain(`Format: Streng (ID ${format.id})`)
-    expect(block).toContain('Counts: Main 2 · Extra 0 · Side 0')
-    expect(block).toMatch(/Legality: not legal – Dark Magician: 2 copies in the deck; 1 copy is allowed\./)
-    // German card language: a nameDe column, empty for a card without a German name.
-    expect(block).toContain('Cards (catalogCardId|name|nameDe|section|quantity|owned):')
-    expect(block).toContain(`${CARD.darkMagician}|Dark Magician||main|2|0`)
-    expect(block).toContain(`update_deck_cards and deckId=${deck.id}`)
-    expect(block).toContain('its format only with set_deck_format and this deckId')
-  })
-
-  it('rebuilds the block from the deck as it is now, e.g. after an applied change', () => {
-    const deck = seedDeck()
-    expect(buildDeckContextBlock(db, 'user-a', deck.id)).toContain('Legality: no format')
-    expect(buildDeckContextBlock(db, 'user-a', deck.id)).not.toContain('Pot of Greed|main')
-
-    upsertDeckCard(db, 'user-a', deck.id, { catalogCardId: CARD.potOfGreed, section: 'main', quantity: 1 })
-
-    const block = buildDeckContextBlock(db, 'user-a', deck.id)!
-    expect(block).toContain(`${CARD.potOfGreed}|Pot of Greed|main|1|0`)
-    expect(block).toContain('Counts: Main 3 · Extra 0 · Side 0')
-  })
-
-  it('lists the deck\'s cards with their German names in German card language only (ADR 0015)', () => {
-    seedGermanNames(db, { [CARD.darkMagician]: 'Dunkler Magier' })
-    const deck = seedDeck()
-
-    const german = buildDeckContextBlock(db, 'user-a', deck.id, 'de')!
-    const english = buildDeckContextBlock(db, 'user-a', deck.id, 'en')!
-
-    expect(german).toContain('Cards (catalogCardId|name|nameDe|section|quantity|owned):')
-    expect(german).toContain(`${CARD.darkMagician}|Dark Magician|Dunkler Magier|main|2|0`)
-    expect(english).toContain('Cards (catalogCardId|name|section|quantity|owned):')
-    expect(english).toContain(`${CARD.darkMagician}|Dark Magician|main|2|0`)
-    expect(english).not.toContain('Dunkler Magier')
-  })
-
-  it('has no block for a deleted or foreign deck', () => {
-    const foreign = seedDeck('user-b')
-    expect(buildDeckContextBlock(db, 'user-a', foreign.id)).toBeNull()
-    expect(buildDeckContextBlock(db, 'user-a', 'does-not-exist')).toBeNull()
   })
 })
 

@@ -547,23 +547,6 @@ describe('AssistantChatThread: the title request after a turn (#129)', () => {
     expect(component.emitted('loaded')!.at(-1)).toEqual([conversationSummary({ title: 'Thema: Hallo' })])
   })
 
-  it('asks for a deck-linked conversation too', async () => {
-    const deck = { id: 'deck-1', name: 'Magier' }
-    vi.stubGlobal('$fetch', vi.fn((url: string) => {
-      if (url === '/api/assistant/chat/conv-1/messages') {
-        return Promise.resolve({ conversation: conversationSummary({ title: 'Deck: Magier', deck }), messages: [] })
-      }
-      return Promise.resolve(url === '/api/assistant/chat/conv-1/title'
-        ? { generated: true, conversation: conversationSummary({ title: 'Thema: Was fehlt', deck }) }
-        : null)
-    }))
-    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(uiStreamResponse(textAnswer('a1', 'Eine Falle.')))))
-
-    const component = await mountThread()
-    await sendText(component, 'Was fehlt?')
-    await vi.waitFor(() => expect(component.emitted('titleChange')).toHaveLength(1))
-  })
-
   it('reports nothing when the title stayed', async () => {
     const fetchMock = stubMessages([], url => url === '/api/assistant/chat/conv-1/title'
       ? { generated: false, conversation: conversationSummary() }

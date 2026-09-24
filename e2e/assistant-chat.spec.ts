@@ -352,8 +352,8 @@ test.describe('Chat assistant on the AI SDK (#84)', () => {
 // --- #128 / #129: card names in chips, collapsed reasoning, model titles ----
 
 test.describe('Assistant polish (#128, #129)', () => {
-  async function openNewConversation(page: Page, data?: { deckId: string }): Promise<string> {
-    const createResponse = await page.request.post('/api/assistant/chat', data ? { data } : undefined)
+  async function openNewConversation(page: Page): Promise<string> {
+    const createResponse = await page.request.post('/api/assistant/chat')
     expect(createResponse.ok()).toBe(true)
     const { id } = await createResponse.json() as { id: string }
     await page.goto(`/assistant/${id}`)
@@ -431,20 +431,5 @@ test.describe('Assistant polish (#128, #129)', () => {
       return (await response.json() as { conversation: { title: string } }).conversation.title
     }).toBe('titel-fehler bitte')
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('titel-fehler bitte')
-  })
-
-  test('a deck conversation gets a title too, and keeps its deck chip', async ({ page }) => {
-    await registerAndLogin(page)
-    const deckResponse = await page.request.post('/api/decks', { data: { name: 'Titel-Deck' } })
-    expect(deckResponse.ok()).toBe(true)
-    const deck = await deckResponse.json() as { id: string }
-    await openNewConversation(page, { deckId: deck.id })
-
-    const deckChip = page.getByRole('link', { name: 'Deck Titel-Deck öffnen', exact: true })
-    await expect(deckChip).toHaveText('Deck: Titel-Deck')
-    await send(page, 'Was ist in meinem Deck?')
-    await expect(page.getByText('Kontext-Deck: Titel-Deck (0 Karten)')).toBeVisible()
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Thema: Was ist in meinem')
-    await expect(deckChip).toBeVisible()
   })
 })

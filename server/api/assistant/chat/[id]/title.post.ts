@@ -1,6 +1,6 @@
 import { createError, getRouterParam } from 'h3'
 import { useDb } from '../../../../db'
-import { loadDeckRef, requireOwnConversation, toConversationSummary } from '../../../../utils/assistant-chat'
+import { requireOwnConversation, toConversationSummary } from '../../../../utils/assistant-chat'
 import { getAssistantStatus } from '../../../../utils/assistant-model'
 import { generateConversationTitle } from '../../../../utils/assistant-title'
 import { requireUser } from '../../../../utils/session'
@@ -26,7 +26,7 @@ export default defineEventHandler(async (event): Promise<AssistantConversationTi
 
   if (!getAssistantStatus().chat) {
     const conversation = requireOwnConversation(db, user.id, id)
-    return { conversation: toConversationSummary(conversation, loadDeckRef(db, conversation.deckId)), generated: false }
+    return { conversation: toConversationSummary(conversation), generated: false }
   }
 
   const locale = await resolveUiLocale(event)

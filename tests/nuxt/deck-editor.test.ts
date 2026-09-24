@@ -60,7 +60,6 @@ const state = vi.hoisted(() => ({
       { id: 'own-1', name: 'Nur alte Karten', isBuiltin: false },
     ],
   },
-  assistantStatus: { enabled: false, provider: null, model: null, chat: false, vision: false, visionModel: null } as Record<string, unknown>,
 }))
 
 mockNuxtImport('useFetch', () => {
@@ -78,9 +77,6 @@ mockNuxtImport('useFetch', () => {
     }
     if (resolvedUrl === '/api/formats') {
       return { data: ref(state.formats), pending: ref(false), error: ref(null), refresh: vi.fn() }
-    }
-    if (resolvedUrl === '/api/assistant/status') {
-      return { data: ref(state.assistantStatus), pending: ref(false), error: ref(null), refresh: vi.fn() }
     }
     return { data: ref(state.deck), pending: ref(false), error: ref(null), refresh: vi.fn() }
   }
@@ -136,30 +132,6 @@ afterEach(async () => {
   }
   vi.unstubAllGlobals()
   state.ownedQuantities = {}
-  state.assistantStatus = { enabled: false, provider: null, model: null, chat: false, vision: false, visionModel: null }
-})
-
-describe('deck editor: chat assistant entry point', () => {
-  it('links "Mit KI bearbeiten" to the assistant with this deck when chat is enabled', async () => {
-    state.assistantStatus = { enabled: true, provider: 'fake', model: 'fake', chat: true, vision: true, visionModel: null }
-    state.deck = deckDetail({})
-
-    const component = await mountSuspended(DeckEditorPage)
-
-    const link = component.findAll('a').find(anchor => anchor.text().includes('Mit KI bearbeiten'))
-    expect(link).toBeTruthy()
-    expect(link!.attributes('href')).toBe('/assistant?deckId=deck-1')
-    expect(component.text()).not.toContain('KI-Vorschläge')
-  })
-
-  it('hides it when the assistant is not configured', async () => {
-    state.deck = deckDetail({})
-
-    const component = await mountSuspended(DeckEditorPage)
-
-    expect(component.text()).not.toContain('Mit KI bearbeiten')
-    expect(component.text()).not.toContain('KI-Vorschläge')
-  })
 })
 
 describe('deck editor', () => {
@@ -195,6 +167,10 @@ describe('deck editor', () => {
 
     expect(text).toContain('Das Main Deck hat 3 Karten, mindestens 40 sind üblich.')
     expect(text).toContain('Zurück zu den Decks')
+
+    // No entry point into the assistant (ADR 0021).
+    expect(component.find('a[href^="/assistant"]').exists()).toBe(false)
+    expect(text).not.toContain('Mit KI')
   })
 
   it('marks an undersized and an oversized section', async () => {

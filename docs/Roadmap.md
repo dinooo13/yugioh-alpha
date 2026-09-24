@@ -238,10 +238,10 @@ Product outcome:
 Users can get meaningful deckbuilding help that understands their collection and constraints.
 
 Implemented: deck assistance lives in the chat assistant at `/assistant` (see
-[Phase 8](#phase-8-chat-assistent-mit-werkzeugen)). "Mit KI erstellen" on `/decks` opens a
-conversation with a new-deck draft; "Mit KI bearbeiten" in the deck editor opens a conversation
-linked to that deck, whose current contents, format, and legality the assistant sees on every
-turn. The assistant prefers the user's inventory (`search_inventory` reports each owned card's
+[Phase 8](#phase-8-chat-assistent-mit-werkzeugen)). Deck help happens in the chat: the user
+names the deck, the assistant reads it with its tools (the deck link and the deck entry points
+were removed, #130, [ADR 0021](adr/0021-no-deck-link-in-assistant-conversations.md)). The
+assistant prefers the user's inventory (`search_inventory` reports each owned card's
 copy limit in a format and leaves out forbidden cards), checks proposals with `validate_deck`,
 and every proposed deck or deck change shows the rule engine's legality verdict and the cards
 the user doesn't own (enough of) — separately from the deck itself — before it is confirmed.
@@ -343,8 +343,9 @@ supports streaming and tool calls, with an optional
 [`docs/adr/0010-chat-assistant-with-tools.md`](adr/0010-chat-assistant-with-tools.md).
 Since [ADR 0011](adr/0011-deck-assistance-in-chat.md) the chat is also the only deck
 assistant: the one-shot `/decks/assistent` builder and the deck editor's "KI-Vorschläge"
-panel are gone, replaced by entry points into `/assistant` — a conversation can be linked to
-a deck ("Mit KI bearbeiten"), and deck proposals carry a legality/missing-cards preview.
+panel are gone, replaced by the chat; deck proposals carry a legality/missing-cards preview.
+Since [ADR 0021](adr/0021-no-deck-link-in-assistant-conversations.md) (#130) conversations
+aren't linked to decks and there are no deck entry points.
 The recommended OpenCode Go model is `mimo-v2.6-pro` (MiMo V2.6 Pro), which
 covers text, streamed tool calls, and image turns without a separate vision
 model; see [`.env.example`](../.env.example).
@@ -437,9 +438,9 @@ F3 is implemented, as four stacked PRs:
   "Empfänger-Monster", "Schnell") — on tiles, subtitles, deck rows and in the
   filters, whose values stay English; unknown values are shown as stored.
   The assistant names cards in the card language: in German its tool results
-  and the linked deck's context carry the official German name (`nameDe`,
-  `descDe` for a card's text), and the model calls cards by it; in English
-  nothing changes
+  (and the linked deck's context, until ADR 0021 removed it) carry the
+  official German name (`nameDe`, `descDe` for a card's text), and the model
+  calls cards by it; in English nothing changes
 
 Phase 9 (#34) is done.
 

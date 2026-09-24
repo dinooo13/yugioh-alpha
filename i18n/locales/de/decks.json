@@ -35,7 +35,6 @@
     "list": {
       "title": "Decks",
       "count": "{count} Deck | {count} Decks",
-      "createWithAi": "Mit KI erstellen",
       "newDeck": "Neues Deck",
       "searchPlaceholder": "Decks durchsuchen (Name oder Karte)...",
       "searchLabel": "Decks durchsuchen",
@@ -85,7 +84,6 @@
       "loadFailedDescription": "Bitte versuche es später erneut.",
       "totalCards": "{count} Karte insgesamt | {count} Karten insgesamt",
       "addCards": "Karten hinzufügen",
-      "editWithAi": "Mit KI bearbeiten",
       "share": "Teilen",
       "moreActions": "Weitere Aktionen",
       "formatLabel": "Format",

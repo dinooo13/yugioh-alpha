@@ -76,12 +76,11 @@ function nextDate(): Date {
   return new Date(clock)
 }
 
-/** One turn as assistant-turn.ts stores it: the user message (the first one names the conversation, unless it is deck-linked) and the answer. */
+/** One turn as assistant-turn.ts stores it: the user message (the first one names the conversation) and the answer. */
 function addTurn(conversationId: string, text: string, answer = 'Ich habe 1 Karte gefunden: Dark Magician', imageCount = 0) {
-  const conversation = db.select().from(schema.assistantConversation).where(eq(schema.assistantConversation.id, conversationId)).get()!
   const isFirst = db.select().from(schema.assistantMessage).where(eq(schema.assistantMessage.conversationId, conversationId)).all().length === 0
   const userRow = persistUserMessage(db, { conversationId, id: crypto.randomUUID(), text, imageCount, now: nextDate() })
-  if (isFirst && text !== '' && !conversation.deckId) {
+  if (isFirst && text !== '') {
     db.update(schema.assistantConversation).set({ title: conversationTitleFromText(text) }).where(eq(schema.assistantConversation.id, conversationId)).run()
   }
   const answerRow = insertAssistantPlaceholder(db, { conversationId, id: crypto.randomUUID(), after: userRow.createdAt })
@@ -124,7 +123,7 @@ describe('generateConversationTitle', () => {
   })
 
   it('names a conversation whose first message was a photo (the default title) from the answer', async () => {
-    const conversation = createConversation(db, 'user-a', {}, 'en')
+    const conversation = createConversation(db, 'user-a', 'en')
     addTurn(conversation.id, '', 'Auf dem Bild sehe ich: Dark Magician.', 1)
     expect(storedConversation(conversation.id).title).toBe('New conversation')
 
@@ -132,14 +131,21 @@ describe('generateConversationTitle', () => {
     expect(result).toMatchObject({ generated: true, conversation: { title: 'Thema: Auf dem Bild sehe' } })
   })
 
-  it('names a deck-linked conversation too, replacing "Deck: <name>" (the deck stays its chip)', async () => {
+  it('keeps a legacy "Deck: <name>" title (ADR 0021: a user title, not an automatic one)', async () => {
     const deck = createDeck(db, 'user-a', { name: 'Magier-Deck', description: null })
-    const conversation = createConversation(db, 'user-a', { deckId: deck.id })
+    const conversation = createConversation(db, 'user-a')
     addTurn(conversation.id, 'Was fehlt meinem Deck?')
-    expect(storedConversation(conversation.id).title).toBe('Deck: Magier-Deck')
+    // A conversation linked before ADR 0021 kept its deck title after the first message.
+    db.update(schema.assistantConversation)
+      .set({ deckId: deck.id, title: 'Deck: Magier-Deck' })
+      .where(eq(schema.assistantConversation.id, conversation.id))
+      .run()
+    const { titleModel, calls } = mockTitleModel('Sollte nicht kommen')
 
-    const result = await generateConversationTitle({ db, userId: 'user-a', conversationId: conversation.id, locale: 'de', titleModel: fakeTitleModel })
-    expect(result).toMatchObject({ generated: true, conversation: { title: 'Thema: Was fehlt meinem Deck?', deck: { id: deck.id, name: 'Magier-Deck' } } })
+    const result = await generateConversationTitle({ db, userId: 'user-a', conversationId: conversation.id, locale: 'de', titleModel })
+    expect(result).toMatchObject({ generated: false, conversation: { title: 'Deck: Magier-Deck' } })
+    expect(result.conversation).not.toHaveProperty('deck')
+    expect(calls).toHaveLength(0)
   })
 
   it('keeps a title that isn\'t automatic (as a renamed one would be)', async () => {
@@ -239,9 +245,9 @@ describe('generateConversationTitle', () => {
 })
 
 describe('automaticTitles', () => {
-  it('lists the first message, both default titles and the deck title', () => {
+  it('lists the first message and both default titles', () => {
     expect(automaticTitles('suche Dark Magician')).toEqual(['suche Dark Magician', 'Neue Unterhaltung', 'New conversation'])
-    expect(automaticTitles('', 'Magier')).toEqual(['Neue Unterhaltung', 'New conversation', 'Deck: Magier'])
+    expect(automaticTitles('')).toEqual(['Neue Unterhaltung', 'New conversation'])
     expect(automaticTitles('x'.repeat(100))[0]).toHaveLength(80)
   })
 })

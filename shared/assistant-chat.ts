@@ -75,32 +75,12 @@ export interface AssistantConversationListItem {
   updatedAt: string
 }
 
-/** The deck a conversation is linked to (ADR 0011); null once the deck is deleted. */
-export interface AssistantConversationDeckRef {
-  id: string
-  name: string
-}
-
-/** Max length of a conversation title (server-side truncation and the default deck title). */
+/** Max length of a conversation title (server-side truncation). */
 export const ASSISTANT_CONVERSATION_TITLE_MAX = 80
-
-/**
- * The default title of a deck-linked conversation ("Deck: <name>"), truncated
- * to `ASSISTANT_CONVERSATION_TITLE_MAX` like every other title. The thread
- * page compares against it to tell whether the title still just repeats the
- * deck chip (#48).
- */
-export function deckConversationTitle(deckName: string): string {
-  const title = `Deck: ${deckName}`
-  return title.length > ASSISTANT_CONVERSATION_TITLE_MAX
-    ? `${title.slice(0, ASSISTANT_CONVERSATION_TITLE_MAX - 1)}…`
-    : title
-}
 
 export interface AssistantConversationSummary {
   id: string
   title: string
-  deck: AssistantConversationDeckRef | null
   createdAt: string
   updatedAt: string
 }

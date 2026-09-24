@@ -18,13 +18,14 @@ mark the old as superseded.
 | [0008](0008-tournament-model.md) | Tournament model | Accepted |
 | [0009](0009-openai-compatible-assistant-provider.md) | OpenAI-compatible assistant provider | Accepted (structured-output parts superseded by [0011](0011-deck-assistance-in-chat.md), the no-SDK transport by [0020](0020-assistant-on-the-ai-sdk.md)) |
 | [0010](0010-chat-assistant-with-tools.md) | Chat assistant with tools | Accepted (partly superseded by [0011](0011-deck-assistance-in-chat.md); engine parts by [0020](0020-assistant-on-the-ai-sdk.md)) |
-| [0011](0011-deck-assistance-in-chat.md) | Deck assistance in the chat assistant | Accepted |
+| [0011](0011-deck-assistance-in-chat.md) | Deck assistance in the chat assistant | Accepted (deck link superseded by [0021](0021-no-deck-link-in-assistant-conversations.md)) |
 | [0012](0012-deck-cover-card.md) | Deck cover card chosen by the user | Accepted |
-| [0013](0013-english-url-scheme.md) | English URL scheme and permanent redirects from German paths | Accepted |
+| [0013](0013-english-url-scheme.md) | English URL scheme and permanent redirects from German paths | Accepted (`/decks/assistent` target changed by [0021](0021-no-deck-link-in-assistant-conversations.md)) |
 | [0014](0014-ui-internationalisation.md) | UI internationalisation (German and English) | Accepted |
 | [0015](0015-german-card-data.md) | German card data and card display language | Accepted (implemented: F3a–F3c); UI credit superseded by [0017](0017-inventory-without-collector-details.md) |
 | [0016](0016-visual-design-system.md) | Visual design system and theming (Duel Arena) | Accepted |
 | [0017](0017-inventory-without-collector-details.md) | Inventory without collector details | Accepted |
 | [0018](0018-product-name-ygo-alpha.md) | Product name "YGO Alpha" | Accepted |
 | [0019](0019-retired-catalog-cards.md) | Retired catalog cards | Accepted |
-| [0020](0020-assistant-on-the-ai-sdk.md) | The chat assistant on the Vercel AI SDK | Accepted, implemented (84a–84c) |
+| [0020](0020-assistant-on-the-ai-sdk.md) | The chat assistant on the Vercel AI SDK | Accepted, implemented (84a–84c); per-turn deck context removed by [0021](0021-no-deck-link-in-assistant-conversations.md) |
+| [0021](0021-no-deck-link-in-assistant-conversations.md) | No deck link in assistant conversations | Accepted |

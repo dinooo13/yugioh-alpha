@@ -3,16 +3,11 @@
     "title": "Assistent",
     "index": {
       "intro": "Frag den Assistenten nach deinem Inventar, deinen Decks oder lass ihn eine Karte per Foto erkennen — er schlägt Änderungen vor, die du erst bestätigen musst.",
-      "preparing": "Unterhaltung wird vorbereitet …",
       "examples": {
         "inventory": "Welche Karten habe ich von Blue-Eyes?",
         "deck": "Baue mir ein Deck aus meinen Karten für GOAT",
         "photo": "Foto einer Karte hinzufügen"
       }
-    },
-    "intent": {
-      "new-deck": "Baue mir aus meinen Karten ein neues Deck. Format und Spielstil: ",
-      "edit-deck": "Wie kann ich dieses Deck mit Karten aus meinem Inventar verbessern?"
     },
     "unavailable": {
       "title": "Assistent nicht verfügbar",
@@ -33,8 +28,6 @@
       }
     },
     "thread": {
-      "deckChip": "Deck: {name}",
-      "openDeck": "Deck {name} öffnen",
       "empty": "Noch keine Nachrichten — schreib dem Assistenten, was er für dich tun soll.",
       "photo": "Foto {index}",
       "scrollToBottom": "Zum Ende springen",

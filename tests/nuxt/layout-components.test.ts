@@ -37,14 +37,14 @@ describe('LayoutPageHeader', () => {
     expect(component.findAll('header > div')).toHaveLength(1)
   })
 
-  it('shows an eyebrow above the title and can keep the title for screen readers only', async () => {
+  it('shows an eyebrow above the title', async () => {
     const component = await mountSuspended(PageHeader, {
-      props: { title: 'Deck: Magier', eyebrow: 'Assistent', hideTitle: true },
+      props: { title: 'Assistent-Titel', eyebrow: 'Assistent' },
     })
 
     expect(component.find('p').text()).toBe('Assistent')
-    expect(component.find('h1').text()).toBe('Deck: Magier')
-    expect(component.find('h1').classes()).toEqual(['sr-only'])
+    expect(component.find('h1').text()).toBe('Assistent-Titel')
+    expect(component.find('h1').classes()).not.toContain('sr-only')
   })
 
   it('accepts slot content for title and description', async () => {

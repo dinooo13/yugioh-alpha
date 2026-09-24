@@ -277,13 +277,6 @@ function statusColor(deck: DeckListItem) {
     >
       <template #actions>
         <UButton
-          icon="i-lucide-sparkles"
-          color="neutral"
-          variant="outline"
-          :label="t('decks.list.createWithAi')"
-          to="/assistant?intent=new-deck"
-        />
-        <UButton
           icon="i-lucide-plus"
           class="btn-summon"
           :label="t('decks.list.newDeck')"

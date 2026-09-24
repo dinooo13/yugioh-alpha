@@ -1,10 +1,10 @@
 // Model-generated conversation titles (#129). A conversation starts with an
-// automatic title — its first message (assistant-turn.ts), "Neue
-// Unterhaltung" for a photo-only first message, or "Deck: <name>" for a
-// deck-linked one (ADR 0011). After a completed turn the client asks the
-// server to name it (`POST /api/assistant/chat/:id/title`): a separate title
-// model (`NUXT_ASSISTANT_TITLE_MODEL`) reads the first message and the first
-// answer and writes a short title in the interface language.
+// automatic title — its first message (assistant-turn.ts), or "Neue
+// Unterhaltung" for a photo-only first message. After a completed turn the
+// client asks the server to name it (`POST /api/assistant/chat/:id/title`):
+// a separate title model (`NUXT_ASSISTANT_TITLE_MODEL`) reads the first
+// message and the first answer and writes a short title in the interface
+// language.
 //
 // Outside the turn: it runs after the stream closed and the turn lock was
 // released, never takes that lock and never fails a turn. Idempotent: only
@@ -15,11 +15,11 @@ import { and, count, eq } from 'drizzle-orm'
 import { generateText } from 'ai'
 import type { useDb } from '../db'
 import { assistantConversation, assistantMessage } from '../db/schema'
-import { ASSISTANT_TITLE_MAX_USER_MESSAGES, deckConversationTitle } from '../../shared/assistant-chat'
+import { ASSISTANT_TITLE_MAX_USER_MESSAGES } from '../../shared/assistant-chat'
 import type { AssistantConversationTitleResult } from '../../shared/assistant-chat'
 import type { AssistantUIMessage } from '../../shared/assistant-ui'
 import type { AppLocale } from '../../shared/locale'
-import { conversationTitleFromText, loadDeckRef, requireOwnConversation, toConversationSummary } from './assistant-chat'
+import { conversationTitleFromText, requireOwnConversation, toConversationSummary } from './assistant-chat'
 import { assistantErrorCode, useAssistantTitleModel } from './assistant-model'
 import type { AssistantTitleModel } from './assistant-model'
 import { buildTitleInstructions, buildTitlePrompt, TURN_TEXT } from './assistant-prompts'
@@ -71,16 +71,15 @@ export function cleanGeneratedTitle(raw: string): string | null {
 
 /**
  * The titles a conversation gets without the title model — the only ones it
- * replaces: the first message (as assistant-turn.ts stores it), the default
- * title of a photo-only first message (either language), and "Deck: <name>"
- * of a deck-linked conversation (the deck's current name).
+ * replaces: the first message (as assistant-turn.ts stores it) and the
+ * default title of a photo-only first message (either language). A legacy
+ * "Deck: <name>" title (ADR 0011) is a user title since ADR 0021.
  */
-export function automaticTitles(firstUserText: string, deckName?: string | null): string[] {
+export function automaticTitles(firstUserText: string): string[] {
   return [
     conversationTitleFromText(firstUserText),
     TURN_TEXT.de.defaultConversationTitle,
     TURN_TEXT.en.defaultConversationTitle,
-    ...(deckName ? [deckConversationTitle(deckName)] : []),
   ].filter(title => title !== '')
 }
 
@@ -122,8 +121,7 @@ export interface GenerateConversationTitleOptions {
 export async function generateConversationTitle(options: GenerateConversationTitleOptions): Promise<AssistantConversationTitleResult> {
   const { db, userId, conversationId, locale } = options
   const row = requireOwnConversation(db, userId, conversationId)
-  const deckRef = loadDeckRef(db, row.deckId)
-  const unchanged = (): AssistantConversationTitleResult => ({ conversation: toConversationSummary(row, deckRef), generated: false })
+  const unchanged = (): AssistantConversationTitleResult => ({ conversation: toConversationSummary(row), generated: false })
 
   const userMessages = db
     .select({ value: count() })
@@ -136,7 +134,7 @@ export async function generateConversationTitle(options: GenerateConversationTit
 
   const { userText, answerText } = firstExchange(loadUiMessages(db, userId, conversationId))
   const currentTitle = row.title
-  if (!automaticTitles(userText, deckRef?.name).includes(currentTitle) || (userText.trim() === '' && answerText.trim() === '')) {
+  if (!automaticTitles(userText).includes(currentTitle) || (userText.trim() === '' && answerText.trim() === '')) {
     return unchanged()
   }
 
@@ -182,5 +180,5 @@ export async function generateConversationTitle(options: GenerateConversationTit
     .run()
   // Re-read: deleted meanwhile → 404; renamed meanwhile → that title stays.
   const updated = requireOwnConversation(db, userId, conversationId)
-  return { conversation: toConversationSummary(updated, loadDeckRef(db, updated.deckId)), generated: changes === 1 }
+  return { conversation: toConversationSummary(updated), generated: changes === 1 }
 }

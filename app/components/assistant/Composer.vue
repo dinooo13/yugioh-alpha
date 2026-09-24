@@ -12,14 +12,11 @@ const props = withDefaults(defineProps<{
   status?: ChatStatus
   /** "Abbrechen" was pressed and the stopped turn is being fetched again. */
   cancelling?: boolean
-  /** Pre-fills the message field once, when the composer is created (e.g. a deck entry point's draft) — never sent on its own. */
-  initialText?: string
   /** The models the user may pick from; the picker only shows with more than one. */
   models?: string[]
 }>(), {
   status: 'ready',
   cancelling: false,
-  initialText: '',
   models: () => [],
 })
 
@@ -34,7 +31,7 @@ const model = defineModel<string | null>('model', { default: null })
 
 const { t } = useI18n()
 
-const text = ref(props.initialText)
+const text = ref('')
 const images = ref<string[]>([])
 const errorMessage = ref('')
 const isProcessingImage = ref(false)

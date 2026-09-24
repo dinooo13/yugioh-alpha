@@ -40,11 +40,10 @@ describe('SYSTEM_PROMPT', () => {
 })
 
 describe('buildSystemPrompt', () => {
-  it('puts the deck context and the image hint before the reply- and card-language instructions, which stay last', () => {
-    const prompt = buildSystemPrompt({ deckContext: 'Deck ID: d1', hasImages: true, locale: 'en', cardLocale: 'de' })
+  it('puts the image hint before the reply- and card-language instructions, which stay last', () => {
+    const prompt = buildSystemPrompt({ hasImages: true, locale: 'en', cardLocale: 'de' })
     const paragraphs = prompt.split('\n\n')
     expect(paragraphs.slice(-2)).toEqual([REPLY_LANGUAGE_INSTRUCTION.en, CARD_NAME_INSTRUCTION.de])
-    expect(prompt.indexOf('Deck ID: d1')).toBeLessThan(prompt.indexOf(IMAGE_HINT))
     expect(prompt.indexOf(IMAGE_HINT)).toBeLessThan(prompt.indexOf(REPLY_LANGUAGE_INSTRUCTION.en))
     expect(prompt.startsWith(SYSTEM_PROMPT)).toBe(true)
   })
@@ -52,7 +51,7 @@ describe('buildSystemPrompt', () => {
   it('names cards in the card language, independent of the reply language (ADR 0015)', () => {
     for (const locale of ['de', 'en'] as const) {
       for (const cardLocale of ['de', 'en'] as const) {
-        const prompt = buildSystemPrompt({ deckContext: null, hasImages: false, locale, cardLocale })
+        const prompt = buildSystemPrompt({ hasImages: false, locale, cardLocale })
         expect(prompt.endsWith(`\n\n${REPLY_LANGUAGE_INSTRUCTION[locale]}\n\n${CARD_NAME_INSTRUCTION[cardLocale]}`), `${locale}/${cardLocale}`).toBe(true)
       }
     }
@@ -68,8 +67,8 @@ describe('buildSystemPrompt', () => {
     expect(SYSTEM_PROMPT).toContain('the Yu-Gi-Oh! trading card game')
   })
 
-  it('leaves out the deck context and image hint when there are none', () => {
-    expect(buildSystemPrompt({ deckContext: null, hasImages: false, locale: 'de', cardLocale: 'de' }))
+  it('leaves out the image hint when there are no images', () => {
+    expect(buildSystemPrompt({ hasImages: false, locale: 'de', cardLocale: 'de' }))
       .toBe([SYSTEM_PROMPT, REPLY_LANGUAGE_INSTRUCTION.de, CARD_NAME_INSTRUCTION.de].join('\n\n'))
   })
 })

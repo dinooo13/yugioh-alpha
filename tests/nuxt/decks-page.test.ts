@@ -89,14 +89,13 @@ describe('decks page', () => {
     expect(component.text()).toContain('1 Deck')
   })
 
-  it('links "Mit KI erstellen" into the chat assistant with the new-deck intent', async () => {
+  it('has no entry point into the assistant (ADR 0021)', async () => {
     state.decks = { items: [], total: 0, page: 1, pageSize: 20 }
 
     const component = await mountSuspended(DecksPage)
 
-    const link = component.findAll('a').find(anchor => anchor.text().includes('Mit KI erstellen'))
-    expect(link).toBeTruthy()
-    expect(link!.attributes('href')).toBe('/assistant?intent=new-deck')
+    expect(component.find('a[href^="/assistant"]').exists()).toBe(false)
+    expect(component.text()).not.toContain('Mit KI')
   })
 
   it('shows per-section counts and a completeness badge per deck', async () => {
@@ -291,7 +290,7 @@ describe('decks page in English', () => {
     expect(component.find('h1').text()).toBe('Decks')
     expect(text).toContain('3 decks')
     expect(text).toContain('New deck')
-    expect(text).toContain('Create with AI')
+    expect(text).not.toContain('with AI')
     expect(text).toContain('All cards owned')
     expect(text).toContain('2 cards not owned')
     expect(text).toContain('No banlist')

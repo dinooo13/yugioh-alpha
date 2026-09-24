@@ -585,7 +585,6 @@ function fakeFindLastSearchResultCard(prompt: FakePromptMessage[]): { id: number
   return null
 }
 
-const FAKE_DECK_INTENT_PATTERN = /\bdeck\b/i
 const FAKE_ADD_INTENT_PATTERN_EN = /\badd\b/i
 /** Test trigger (#54): always calls search_catalog with empty arguments; answers in text once tools are switched off. */
 const FAKE_EMPTY_ARGUMENTS_TRIGGER = 'leere argumente'
@@ -600,18 +599,6 @@ const FAKE_SLOW_TEXT = Array.from({ length: 60 }, (_, index) => `Wort${index + 1
 const FAKE_GET_CARD_PATTERN = /\bkarte\s+(\d+)\b/i
 /** Test trigger (#128): an answer with reasoning before its text. */
 const FAKE_REASONING_TRIGGER = 'denk nach'
-
-/**
- * Proves the linked deck's context block (assistant-chat.ts
- * `buildDeckContextBlock`) reached the system prompt: answers with the deck
- * name and card total read back from it.
- */
-function fakeDeckContextAnswer(system: string): string {
-  const name = system.match(/^Deck name: (.*)$/m)?.[1] ?? '?'
-  const counts = system.match(/^Counts: Main (\d+) · Extra (\d+) · Side (\d+)$/m)
-  const total = counts ? Number(counts[1]) + Number(counts[2]) + Number(counts[3]) : 0
-  return `Kontext-Deck: ${name} (${total} Karten)`
-}
 
 function fakeText(text: string): FakeTurn {
   return { text, toolCalls: [] }
@@ -684,9 +671,6 @@ export function fakeTurn(options: Pick<FakeCallOptions, 'prompt' | 'toolChoice'>
     return card
       ? fakeToolCall('add_to_inventory', { items: [{ catalogCardId: card.id, quantity: fakeExtractQuantity(text) }] })
       : fakeText('Ich habe keine passende Karte gefunden.')
-  }
-  if (FAKE_DECK_INTENT_PATTERN.test(text) && system.includes('Deck ID:')) {
-    return fakeText(fakeDeckContextAnswer(system))
   }
   return fakeText(`Testantwort: ${text}`)
 }
