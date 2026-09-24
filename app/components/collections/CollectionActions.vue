@@ -26,7 +26,7 @@ const emit = defineEmits<{
 
 const model = defineModel<string>({ required: true })
 
-const { t } = useI18n()
+const { t, n } = useI18n()
 const apiError = useApiError()
 
 // reka-ui's <SelectItem> reserves `''` for "no selection", so "Alle
@@ -34,9 +34,9 @@ const apiError = useApiError()
 const allValue = '__all__'
 
 const selectItems = computed(() => [
-  { label: t('collections.select.all', { count: props.allCount }), value: allValue },
-  { label: t('collections.select.unassigned', { count: props.unassignedCount }), value: UNASSIGNED_COLLECTION_ID },
-  ...props.collections.map(c => ({ label: t('collections.select.collection', { name: c.name, count: c.cardCount }), value: c.id })),
+  { label: t('collections.select.all', { count: n(props.allCount, 'integer') }), value: allValue },
+  { label: t('collections.select.unassigned', { count: n(props.unassignedCount, 'integer') }), value: UNASSIGNED_COLLECTION_ID },
+  ...props.collections.map(c => ({ label: t('collections.select.collection', { name: c.name, count: n(c.cardCount, 'integer') }), value: c.id })),
 ])
 
 const selection = computed({

@@ -13,7 +13,7 @@ interface CollectionOption {
 
 usePageTitle('quickEntry.title')
 
-const { t } = useI18n()
+const { t, n } = useI18n()
 const apiError = useApiError()
 
 const toast = useToast()
@@ -49,11 +49,12 @@ async function requestSuggestions(body: { text?: string, items?: string[] }) {
 
     const free = Math.max(0, MAX_ENTRY_ROWS - rows.value.length)
     const accepted = response.results.slice(0, free)
-    if (accepted.length < response.results.length) {
+    const dropped = response.results.length - accepted.length
+    if (dropped > 0) {
       warningMessage.value = t('quickEntry.queueFull.description', {
-        max: MAX_ENTRY_ROWS,
-        dropped: response.results.length - accepted.length,
-      })
+        max: n(MAX_ENTRY_ROWS, 'integer'),
+        dropped: n(dropped, 'integer'),
+      }, dropped)
     }
 
     rows.value = [...rows.value, ...createEntryRows(accepted)]
@@ -86,7 +87,7 @@ async function submitList() {
     return
   }
   if (tooManyLines.value) {
-    errorMessage.value = t('quickEntry.errors.tooManyLines', { max: MAX_ENTRY_LINES })
+    errorMessage.value = t('quickEntry.errors.tooManyLines', { max: n(MAX_ENTRY_LINES, 'integer') })
     return
   }
 
@@ -101,7 +102,7 @@ async function submitList() {
 function onSaved(result: { created: number, merged: number }) {
   toast.add({
     title: t('quickEntry.toast.saved.title'),
-    description: t('quickEntry.toast.saved.description', { created: result.created, merged: result.merged }),
+    description: t('quickEntry.toast.saved.description', { created: n(result.created, 'integer'), merged: n(result.merged, 'integer') }),
     icon: 'i-lucide-check',
     color: 'success',
   })
@@ -169,7 +170,7 @@ function onSaved(result: { created: number, merged: number }) {
           v-if="tooManyLines"
           class="text-xs text-warning"
         >
-          {{ t('quickEntry.list.tooManyLines', { count: listLineCount, max: MAX_ENTRY_LINES }) }}
+          {{ t('quickEntry.list.tooManyLines', { count: n(listLineCount, 'integer'), max: n(MAX_ENTRY_LINES, 'integer') }) }}
         </p>
 
         <UButton

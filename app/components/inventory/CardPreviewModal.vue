@@ -13,7 +13,7 @@ defineEmits<{
 
 const open = defineModel<boolean>('open', { default: false })
 
-const { t } = useI18n()
+const { t, n } = useI18n()
 const { cardName, cardValue } = useCardText()
 
 const imageSrc = computed(() => props.item ? (props.item.imageLarge ?? props.item.imageSmall) : null)
@@ -52,7 +52,7 @@ const isMonster = computed(() => props.item ? props.item.atk !== null || props.i
 
       <div class="space-y-1 rounded-lg border border-default bg-elevated/40 p-3">
         <p class="font-numeric text-sm font-semibold tracking-[0.04em] text-highlighted tabular-nums">
-          {{ t('card.totalQuantity', { count: item.totalQuantity }) }}
+          {{ t('card.totalQuantity', { count: n(item.totalQuantity, 'integer') }) }}
         </p>
         <div
           v-for="entry in item.collectionBreakdown ?? []"
@@ -60,7 +60,7 @@ const isMonster = computed(() => props.item ? props.item.atk !== null || props.i
           class="flex items-center justify-between gap-4 text-sm"
         >
           <span class="min-w-0 truncate text-default">{{ breakdownLabel(entry, t) }}</span>
-          <span class="font-medium tabular-nums text-highlighted">×{{ entry.quantity }}</span>
+          <span class="font-medium tabular-nums text-highlighted">×{{ n(entry.quantity, 'integer') }}</span>
         </div>
       </div>
 
