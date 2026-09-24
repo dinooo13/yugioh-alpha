@@ -1,9 +1,10 @@
 import { useDb } from '../../../db'
 import { useAuth } from '../../../utils/auth'
-import { syncCatalog } from '../../../utils/catalog-sync'
+import { refreshCatalog } from '../../../utils/catalog-refresh'
 
 /**
- * Triggers a full catalog sync from YGOPRODeck.
+ * Triggers a full catalog refresh: the YGOPRODeck card sync, then the German
+ * card data sync (best effort, reported under `translations`; ADR 0015).
  *
  * MVP auth gate: any authenticated session (this is a single-user personal
  * app; a dedicated admin role is deferred — see
@@ -15,6 +16,6 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
   }
 
-  const result = await syncCatalog(useDb())
+  const result = await refreshCatalog(useDb())
   return result
 })

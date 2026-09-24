@@ -7,8 +7,9 @@
 // with banlist data — so upcoming feature branches (fast card entry,
 // deckbuilder, rule formats) have real, stable fixtures to build E2E tests
 // against without depending on network access to YGOPRODeck.
+import { foldCardName } from '../../../shared/card-name-fold'
 import type { useDb } from '../index'
-import { catalogCard, catalogCardImage, catalogPrinting, catalogSet } from '../schema'
+import { catalogCard, catalogCardImage, catalogCardTranslation, catalogPrinting, catalogSet } from '../schema'
 
 type Db = ReturnType<typeof useDb>
 
@@ -16,6 +17,7 @@ type CatalogCardRow = typeof catalogCard.$inferInsert
 type CatalogSetRow = typeof catalogSet.$inferInsert
 type CatalogPrintingRow = typeof catalogPrinting.$inferInsert
 type CatalogCardImageRow = typeof catalogCardImage.$inferInsert
+type CatalogCardTranslationRow = typeof catalogCardTranslation.$inferInsert
 
 // Fixed instant so re-running the fixture (or diffing seeded rows) is
 // deterministic instead of depending on wall-clock time.
@@ -47,7 +49,9 @@ function imageUrls(id: number) {
   }
 }
 
-export const CATALOG_FIXTURE_CARDS: CatalogCardRow[] = [
+// `nameSearch` is added below with the real folding function, so the
+// fixture can't drift from what the sync stores.
+export const CATALOG_FIXTURE_CARDS: CatalogCardRow[] = ([
   {
     id: CATALOG_FIXTURE_IDS.darkMagician,
     name: 'Dark Magician',
@@ -69,6 +73,7 @@ export const CATALOG_FIXTURE_CARDS: CatalogCardRow[] = [
     ocgDate: '1999-02-04',
     ygoprodeckUrl: 'https://ygoprodeck.com/card/dark-magician-4003',
     syncedAt: SYNCED_AT,
+    konamiId: 4041,
   },
   {
     id: CATALOG_FIXTURE_IDS.blueEyesWhiteDragon,
@@ -91,6 +96,7 @@ export const CATALOG_FIXTURE_CARDS: CatalogCardRow[] = [
     ocgDate: '1999-03-06',
     ygoprodeckUrl: 'https://ygoprodeck.com/card/blue-eyes-white-dragon-7485',
     syncedAt: SYNCED_AT,
+    konamiId: 4007,
   },
   {
     id: CATALOG_FIXTURE_IDS.summonedSkull,
@@ -113,6 +119,7 @@ export const CATALOG_FIXTURE_CARDS: CatalogCardRow[] = [
     ocgDate: '1999-07-22',
     ygoprodeckUrl: 'https://ygoprodeck.com/card/summoned-skull-5941',
     syncedAt: SYNCED_AT,
+    konamiId: 4028,
   },
   {
     id: CATALOG_FIXTURE_IDS.kuriboh,
@@ -135,6 +142,7 @@ export const CATALOG_FIXTURE_CARDS: CatalogCardRow[] = [
     ocgDate: '2000-01-27',
     ygoprodeckUrl: 'https://ygoprodeck.com/card/kuriboh-3456',
     syncedAt: SYNCED_AT,
+    konamiId: 4064,
   },
   {
     id: CATALOG_FIXTURE_IDS.potOfGreed,
@@ -157,6 +165,7 @@ export const CATALOG_FIXTURE_CARDS: CatalogCardRow[] = [
     ocgDate: '1999-05-27',
     ygoprodeckUrl: 'https://ygoprodeck.com/card/pot-of-greed-4698',
     syncedAt: SYNCED_AT,
+    konamiId: 4844,
   },
   {
     id: CATALOG_FIXTURE_IDS.raigeki,
@@ -180,6 +189,7 @@ export const CATALOG_FIXTURE_CARDS: CatalogCardRow[] = [
     ocgDate: '1999-03-06',
     ygoprodeckUrl: 'https://ygoprodeck.com/card/raigeki-1087',
     syncedAt: SYNCED_AT,
+    konamiId: 4343,
   },
   {
     id: CATALOG_FIXTURE_IDS.monsterReborn,
@@ -202,6 +212,7 @@ export const CATALOG_FIXTURE_CARDS: CatalogCardRow[] = [
     ocgDate: '1999-03-27',
     ygoprodeckUrl: 'https://ygoprodeck.com/card/monster-reborn-7027',
     syncedAt: SYNCED_AT,
+    konamiId: 4842,
   },
   {
     id: CATALOG_FIXTURE_IDS.mirrorForce,
@@ -224,6 +235,7 @@ export const CATALOG_FIXTURE_CARDS: CatalogCardRow[] = [
     ocgDate: '2000-01-27',
     ygoprodeckUrl: 'https://ygoprodeck.com/card/mirror-force-3764',
     syncedAt: SYNCED_AT,
+    konamiId: 4887,
   },
   {
     id: CATALOG_FIXTURE_IDS.blueEyesUltimateDragon,
@@ -246,6 +258,7 @@ export const CATALOG_FIXTURE_CARDS: CatalogCardRow[] = [
     ocgDate: '1999-08-26',
     ygoprodeckUrl: 'https://ygoprodeck.com/card/blue-eyes-ultimate-dragon-2067',
     syncedAt: SYNCED_AT,
+    konamiId: 4386,
   },
   {
     id: CATALOG_FIXTURE_IDS.stardustDragon,
@@ -268,6 +281,7 @@ export const CATALOG_FIXTURE_CARDS: CatalogCardRow[] = [
     ocgDate: '2008-04-19',
     ygoprodeckUrl: 'https://ygoprodeck.com/card/stardust-dragon-3794',
     syncedAt: SYNCED_AT,
+    konamiId: 7734,
   },
   {
     id: CATALOG_FIXTURE_IDS.utopia,
@@ -290,6 +304,7 @@ export const CATALOG_FIXTURE_CARDS: CatalogCardRow[] = [
     ocgDate: '2011-03-19',
     ygoprodeckUrl: 'https://ygoprodeck.com/card/number-39-utopia-7046',
     syncedAt: SYNCED_AT,
+    konamiId: 9575,
   },
   {
     id: CATALOG_FIXTURE_IDS.decodeTalker,
@@ -312,6 +327,7 @@ export const CATALOG_FIXTURE_CARDS: CatalogCardRow[] = [
     ocgDate: '2017-03-25',
     ygoprodeckUrl: 'https://ygoprodeck.com/card/decode-talker-8433',
     syncedAt: SYNCED_AT,
+    konamiId: 13036,
   },
   {
     id: CATALOG_FIXTURE_IDS.oddEyesPendulumDragon,
@@ -334,6 +350,7 @@ export const CATALOG_FIXTURE_CARDS: CatalogCardRow[] = [
     ocgDate: '2014-04-19',
     ygoprodeckUrl: 'https://ygoprodeck.com/card/odd-eyes-pendulum-dragon-1388',
     syncedAt: SYNCED_AT,
+    konamiId: 11213,
   },
   {
     id: CATALOG_FIXTURE_IDS.effectVeiler,
@@ -356,8 +373,9 @@ export const CATALOG_FIXTURE_CARDS: CatalogCardRow[] = [
     ocgDate: '2010-04-17',
     ygoprodeckUrl: 'https://ygoprodeck.com/card/effect-veiler-8093',
     syncedAt: SYNCED_AT,
+    konamiId: 8933,
   },
-]
+] satisfies Omit<CatalogCardRow, 'nameSearch'>[]).map(card => ({ ...card, nameSearch: foldCardName(card.name) }))
 
 export const CATALOG_FIXTURE_SETS: CatalogSetRow[] = [
   { id: 'starter-deck-yugi', name: 'Starter Deck: Yugi' },
@@ -396,6 +414,80 @@ export const CATALOG_FIXTURE_IMAGES: CatalogCardImageRow[] = Object.values(CATAL
 }))
 
 /**
+ * Official German names and texts (ADR 0015), copied from the ygoresources
+ * card-history repo (`de/<konamiId>.json`) — the data a real translation sync
+ * stores, Pendulum layout included. Raigeki has no entry on purpose: it is
+ * the "no German data, show English" case (its German name is "Raigeki" too,
+ * so E2E specs don't notice).
+ */
+const GERMAN_FIXTURE_TEXT: Partial<Record<keyof typeof CATALOG_FIXTURE_IDS, { name: string, desc: string }>> = {
+  darkMagician: {
+    name: 'Dunkler Magier',
+    desc: 'Der ultimative Hexer im Hinblick auf Angriff und Verteidigung.',
+  },
+  blueEyesWhiteDragon: {
+    name: 'Blauäugiger w. Drache',
+    desc: 'Dieser legendäre Drache ist eine mächtige Zerstörungsmaschine. Er ist buchstäblich unbesiegbar, nur wenige haben diese Furcht einflößende Kreatur gesehen und lange genug gelebt, um davon zu berichten.',
+  },
+  summonedSkull: {
+    name: 'Herbeigerufener Totenkopf',
+    desc: 'Ein Unterweltler, der seine Gegner mit dunklen Kräften verwirrt. Er ist einer der mächtigsten Unterweltler.\n\n(Diese Karte wird immer als „Erzunterweltler“-Karte behandelt.)',
+  },
+  kuriboh: {
+    name: 'Kuriboh',
+    desc: 'Während der Schadensberechnung, falls ein Monster deines Gegners angreift (Schnelleffekt): Du kannst diese Karte abwerfen; du erhältst aus dem Kampf keinen Kampfschaden.',
+  },
+  potOfGreed: {
+    name: 'Topf der Gier',
+    desc: 'Ziehe 2 Karten.',
+  },
+  monsterReborn: {
+    name: 'Wiedergeburt',
+    desc: 'Wähle 1 Monster in einem beliebigen Friedhof; beschwöre es als Spezialbeschwörung.',
+  },
+  mirrorForce: {
+    name: 'Spiegelkraft',
+    desc: 'Wenn ein Monster eines Gegners einen Angriff deklariert: Zerstöre alle Monster deines Gegners in Angriffsposition.',
+  },
+  blueEyesUltimateDragon: {
+    name: 'Blauäugiger ultimativer Drache',
+    desc: '„Blauäugiger w. Drache“ + „Blauäugiger w. Drache“ + „Blauäugiger w. Drache“',
+  },
+  stardustDragon: {
+    name: 'Sternenstaubdrache',
+    desc: '1 Empfänger + 1+ Nicht-Empfänger-Monster\nWenn eine Karte oder ein Effekt aktiviert wird, die oder der eine oder mehr Karten auf dem Spielfeld zerstören würde (Schnelleffekt): Du kannst diese Karte als Tribut anbieten; annulliere die Aktivierung und falls du dies tust, zerstöre sie. Während der End Phase, falls dieser Effekt in diesem Spielzug aktiviert (und nicht annulliert) wurde: Du kannst diese Karte als Spezialbeschwörung von deinem Friedhof beschwören.',
+  },
+  utopia: {
+    name: 'Nummer 39: Utopia',
+    desc: '2 Monster der Stufe 4\nWenn ein Monster einen Angriff deklariert: Du kannst 1 Material von dieser Karte abhängen; annulliere den Angriff. Falls diese Karte als Ziel für einen Angriff gewählt wird, solange sie kein Material hat: Zerstöre diese Karte.',
+  },
+  decodeTalker: {
+    name: 'Dekodier-Sprecher',
+    desc: '2+ Effektmonster\nDiese Karte erhält 500 ATK für jedes Monster, auf das sie zeigt. Wenn dein Gegner eine Karte oder einen Effekt aktiviert, die oder der eine oder mehr Karten, die du kontrollierst, als Ziel wählt (Schnelleffekt): Du kannst 1 Monster, auf das diese Karte zeigt, als Tribut anbieten; annulliere die Aktivierung und falls du dies tust, zerstöre jene Karte.',
+  },
+  oddEyesPendulumDragon: {
+    name: 'Buntäugiger Pendeldrache',
+    desc: '[ Pendeleffekt ]\nDu kannst den Kampfschaden, den du aus einem Angriff erhältst, an dem ein Pendelmonster beteiligt ist, das du kontrollierst, auf 0 reduzieren. Während deiner End Phase: Du kannst diese Karte zerstören und falls du dies tust, füge deiner Hand 1 Pendelmonster mit 1500 oder weniger ATK von deinem Deck hinzu. Du kannst jeden Pendeleffekt von „Buntäugiger Pendeldrache“ nur einmal pro Spielzug verwenden.\n\n[ Monstereffekt ]\nFalls diese Karte gegen ein Monster eines Gegners kämpft, wird der Kampfschaden verdoppelt, den diese Karte deinem Gegner zufügt.',
+  },
+  effectVeiler: {
+    name: 'Effektverschleierin',
+    desc: 'Während der Main Phase deines Gegners (Schnelleffekt): Du kannst diese Karte von deiner Hand auf den Friedhof legen und dann 1 Effektmonster wählen, das dein Gegner kontrolliert; annulliere bis zum Ende dieses Spielzugs die Effekte jenes offenen Monsters, das dein Gegner kontrolliert.',
+  },
+}
+
+export const CATALOG_FIXTURE_TRANSLATIONS: CatalogCardTranslationRow[] = Object.entries(GERMAN_FIXTURE_TEXT).map(
+  ([key, text]) => ({
+    cardId: CATALOG_FIXTURE_IDS[key as keyof typeof CATALOG_FIXTURE_IDS],
+    locale: 'de',
+    name: text.name,
+    nameSearch: foldCardName(text.name),
+    desc: text.desc,
+    source: 'ygoresources-git',
+    syncedAt: SYNCED_AT,
+  }),
+)
+
+/**
  * Upserts the fixture catalog into `db`, inside a single transaction, so
  * E2E and unit tests can rely on a small, deterministic card catalog
  * instead of depending on a full `catalog:sync` run. Idempotent — safe to
@@ -428,6 +520,16 @@ export function seedCatalogFixture(db: Db) {
       tx.insert(catalogCardImage)
         .values(image)
         .onConflictDoUpdate({ target: catalogCardImage.id, set: image })
+        .run()
+    }
+
+    for (const translation of CATALOG_FIXTURE_TRANSLATIONS) {
+      tx.insert(catalogCardTranslation)
+        .values(translation)
+        .onConflictDoUpdate({
+          target: [catalogCardTranslation.cardId, catalogCardTranslation.locale],
+          set: translation,
+        })
         .run()
     }
   })

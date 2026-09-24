@@ -7,6 +7,7 @@ import * as schema from '../../server/db/schema'
 import {
   CATALOG_FIXTURE_CARDS,
   CATALOG_FIXTURE_IDS,
+  CATALOG_FIXTURE_TRANSLATIONS,
   seedCatalogFixture,
 } from '../../server/db/fixtures/catalog-fixture'
 
@@ -62,5 +63,35 @@ describe('catalog fixture', () => {
       const images = db.select().from(schema.catalogCardImage).where(eq(schema.catalogCardImage.cardId, id)).all()
       expect(images.length).toBeGreaterThan(0)
     }
+  })
+})
+
+describe('catalog fixture translations', () => {
+  it('seeds the German names idempotently, all but Raigeki', () => {
+    const db = createTestDb()
+
+    seedCatalogFixture(db)
+    seedCatalogFixture(db)
+
+    const rows = db.select().from(schema.catalogCardTranslation).all()
+    expect(rows).toHaveLength(CATALOG_FIXTURE_TRANSLATIONS.length)
+    expect(rows).toHaveLength(Object.keys(CATALOG_FIXTURE_IDS).length - 1)
+    expect(rows.find(row => row.cardId === CATALOG_FIXTURE_IDS.raigeki)).toBeUndefined()
+    expect(rows.find(row => row.cardId === CATALOG_FIXTURE_IDS.darkMagician)).toMatchObject({
+      locale: 'de',
+      name: 'Dunkler Magier',
+      nameSearch: 'dunklermagier',
+      source: 'ygoresources-git',
+    })
+    expect(rows.find(row => row.cardId === CATALOG_FIXTURE_IDS.oddEyesPendulumDragon)!.desc)
+      .toMatch(/^\[ Pendeleffekt \]\n.+\n\n\[ Monstereffekt \]\n.+$/s)
+  })
+
+  it('gives every fixture card a Konami id and a folded search name', () => {
+    for (const card of CATALOG_FIXTURE_CARDS) {
+      expect(card.konamiId).toEqual(expect.any(Number))
+      expect(card.nameSearch).toMatch(/^[a-z0-9]+$/)
+    }
+    expect(CATALOG_FIXTURE_CARDS.find(card => card.id === CATALOG_FIXTURE_IDS.utopia)!.nameSearch).toBe('number39utopia')
   })
 })

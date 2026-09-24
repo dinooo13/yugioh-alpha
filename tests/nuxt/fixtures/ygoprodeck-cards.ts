@@ -36,7 +36,7 @@ export const darkMagicianFixture: YgoproCard = {
       image_url_cropped: 'https://images.ygoprodeck.com/images/cards_cropped/46986414.jpg',
     },
   ],
-  misc_info: [{ tcg_date: '2002-03-08', ocg_date: '1999-02-04' }],
+  misc_info: [{ tcg_date: '2002-03-08', ocg_date: '1999-02-04', konami_id: 4041 }],
   ygoprodeck_url: 'https://ygoprodeck.com/card/dark-magician-58',
 }
 
@@ -64,6 +64,6 @@ export const potOfGreedFixture: YgoproCard = {
       image_url_cropped: 'https://images.ygoprodeck.com/images/cards_cropped/55144522.jpg',
     },
   ],
-  misc_info: [{ tcg_date: '2002-03-08' }],
+  misc_info: [{ tcg_date: '2002-03-08', konami_id: 4844 }],
   ygoprodeck_url: 'https://ygoprodeck.com/card/pot-of-greed',
 }

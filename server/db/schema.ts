@@ -1,5 +1,5 @@
 import { relations } from 'drizzle-orm'
-import { sqliteTable, text, integer, index, uniqueIndex } from 'drizzle-orm/sqlite-core'
+import { sqliteTable, text, integer, index, primaryKey, uniqueIndex } from 'drizzle-orm/sqlite-core'
 import type { AssistantActionKind } from '../../shared/assistant-chat'
 import type { RuleSet } from '../../shared/rule-formats'
 import type { AppLocale } from '../../shared/locale'
@@ -101,12 +101,47 @@ export const catalogCard = sqliteTable(
     ocgDate: text('ocg_date'),
     ygoprodeckUrl: text('ygoprodeck_url'),
     syncedAt: integer('synced_at', { mode: 'timestamp' }).notNull(),
+    // Konami's own card id (YGOPRODeck `misc_info[0].konami_id`), the join key
+    // to the German card data (ADR 0015). Not unique: one Konami id can map to
+    // several passcodes. Only filled by a `catalog:sync` run.
+    konamiId: integer('konami_id'),
+    // `foldCardName(name)` (shared/card-name-fold.ts): lowercase, no accents,
+    // no spaces or punctuation. '' until the startup backfill has run.
+    nameSearch: text('name_search').notNull().default(''),
   },
   table => [
     index('idx_catalog_card_name').on(table.name),
     index('idx_catalog_card_type').on(table.type),
     index('idx_catalog_card_attribute').on(table.attribute),
     index('idx_catalog_card_tcg_date').on(table.tcgDate),
+    index('idx_catalog_card_konami_id').on(table.konamiId),
+  ],
+)
+
+/** Where a `catalog_card_translation` row came from (ADR 0015). */
+export type CardTranslationSource = 'ygoresources-git'
+
+// A card's name and text in another language (ADR 0015). English stays on
+// `catalog_card` (YGOPRODeck); German comes from the ygoresources card-history
+// repo, joined through `catalog_card.konami_id`. No row means "show English".
+export const catalogCardTranslation = sqliteTable(
+  'catalog_card_translation',
+  {
+    cardId: integer('card_id')
+      .notNull()
+      .references(() => catalogCard.id, { onDelete: 'cascade' }),
+    locale: text('locale').notNull().$type<AppLocale>(),
+    name: text('name').notNull(),
+    // `foldCardName(name)`, for accent- and case-insensitive name search.
+    nameSearch: text('name_search').notNull(),
+    desc: text('desc'),
+    source: text('source').notNull().$type<CardTranslationSource>(),
+    syncedAt: integer('synced_at', { mode: 'timestamp' }).notNull(),
+  },
+  table => [
+    primaryKey({ columns: [table.cardId, table.locale] }),
+    // Covering index for `locale = ? AND name_search LIKE ?` → card_id.
+    index('idx_catalog_card_translation_search').on(table.locale, table.nameSearch, table.cardId),
   ],
 )
 
@@ -163,10 +198,19 @@ export const catalogSync = sqliteTable('catalog_sync', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   startedAt: integer('started_at', { mode: 'timestamp' }).notNull(),
   finishedAt: integer('finished_at', { mode: 'timestamp' }),
-  status: text('status').notNull().$type<'running' | 'success' | 'error'>(),
+  // `skipped`: the source hadn't changed since the last successful run.
+  status: text('status').notNull().$type<'running' | 'success' | 'skipped' | 'error'>(),
   cardCount: integer('card_count'),
   error: text('error'),
+  // Which import the run was: the YGOPRODeck card sync or the translation
+  // sync (ADR 0015). Rows from before ADR 0015 are all YGOPRODeck runs.
+  source: text('source').notNull().default('ygoprodeck').$type<CatalogSyncSource>(),
+  // The upstream revision the run imported (the commit SHA for
+  // `ygoresources-git`), so an unchanged source can be skipped.
+  revision: text('revision'),
 })
+
+export type CatalogSyncSource = 'ygoprodeck' | CardTranslationSource
 
 // A user-owned storage location (Box 1, binder, trade pile, ...) that owned
 // cards can be assigned to. "Alle Karten" (all cards) is not a stored row —

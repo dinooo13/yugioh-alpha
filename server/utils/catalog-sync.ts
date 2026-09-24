@@ -1,4 +1,5 @@
 import { eq } from 'drizzle-orm'
+import { foldCardName } from '../../shared/card-name-fold'
 import type { useDb } from '../db'
 import { catalogCard, catalogCardImage, catalogPrinting, catalogSet, catalogSync } from '../db/schema'
 import { fetchAllCards, mapCardToRows, type MappedCard } from './ygoprodeck'
@@ -14,7 +15,7 @@ export interface CatalogSyncResult {
   cardCount: number
 }
 
-function chunk<T>(items: T[], size: number): T[][] {
+export function chunkRows<T>(items: T[], size: number): T[][] {
   const chunks: T[][] = []
   for (let i = 0; i < items.length; i += size) {
     chunks.push(items.slice(i, i + size))
@@ -87,7 +88,7 @@ export async function syncCatalog(
     const syncedAt = new Date()
     const mapped = cards.map(card => mapCardToRows(card, syncedAt))
 
-    for (const batch of chunk(mapped, CHUNK_SIZE)) {
+    for (const batch of chunkRows(mapped, CHUNK_SIZE)) {
       upsertChunk(db, batch)
     }
 
@@ -106,4 +107,37 @@ export async function syncCatalog(
       .run()
     throw error
   }
+}
+
+/**
+ * Fills `catalog_card.name_search` for rows that don't have it yet (ADR
+ * 0015): the column arrived with migration 0012 as `''`, and cards inserted
+ * without it (tests, old fixtures) stay `''` too. Runs at startup after the
+ * migrations, in one transaction; a no-op once every row is folded. Returns
+ * the number of rows updated.
+ *
+ * `konami_id` is not backfilled here — it only comes with the next
+ * `catalog:sync` run.
+ */
+export function backfillCatalogNameSearch(db: Db): number {
+  const rows = db
+    .select({ id: catalogCard.id, name: catalogCard.name })
+    .from(catalogCard)
+    .where(eq(catalogCard.nameSearch, ''))
+    .all()
+
+  let updated = 0
+  db.transaction((tx) => {
+    for (const row of rows) {
+      const nameSearch = foldCardName(row.name)
+      // A name that folds to '' (punctuation only) stays '' — the raw `LIKE`
+      // on `name` still finds it.
+      if (nameSearch === '') {
+        continue
+      }
+      tx.update(catalogCard).set({ nameSearch }).where(eq(catalogCard.id, row.id)).run()
+      updated += 1
+    }
+  })
+  return updated
 }

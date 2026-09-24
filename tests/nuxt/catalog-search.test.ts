@@ -177,6 +177,9 @@ describe('catalog search utilities', () => {
     const detail = await getCatalogCardDetail(db, 1)
 
     expect(detail?.card.name).toBe('Blue-Eyes White Dragon')
+    // Internal join/search columns (ADR 0015) stay out of the API.
+    expect(detail?.card).not.toHaveProperty('konamiId')
+    expect(detail?.card).not.toHaveProperty('nameSearch')
     expect(detail?.printings).toHaveLength(2)
     expect(detail?.printings[0]).toMatchObject({ setCode: 'LOB-001', setName: 'Legend of Blue Eyes' })
     expect(detail?.images.map(image => image.imageUrlSmall)).toEqual([
