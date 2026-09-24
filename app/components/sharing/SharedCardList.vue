@@ -17,6 +17,8 @@ const emit = defineEmits<{
   'update:page': [value: number]
 }>()
 
+const { t } = useI18n()
+
 const searchInput = ref('')
 let debounceTimer: ReturnType<typeof setTimeout> | undefined
 watch(searchInput, (value) => {
@@ -26,11 +28,11 @@ watch(searchInput, (value) => {
   }, 300)
 })
 
-const sortItems = [
-  { label: 'Name A–Z', value: 'name' },
-  { label: 'Name Z–A', value: '-name' },
-  { label: 'Anzahl', value: 'quantity' },
-]
+const sortItems = computed(() => [
+  { label: t('sharing.cardList.sort.nameAsc'), value: 'name' },
+  { label: t('sharing.cardList.sort.nameDesc'), value: '-name' },
+  { label: t('sharing.cardList.sort.quantity'), value: 'quantity' },
+])
 const sortValue = ref<SharedCardSort>('name')
 watch(sortValue, value => emit('update:sort', value))
 
@@ -44,7 +46,7 @@ function nextPage() {
 }
 
 function cardMetaLine(card: SharedCardListItem): string {
-  return [card.type, card.level !== null ? `Stufe ${card.level}` : null, card.attribute]
+  return [card.type, card.level !== null ? t('card.stars', { level: card.level }) : null, card.attribute]
     .filter(Boolean)
     .join(' · ')
 }
@@ -56,14 +58,14 @@ function cardMetaLine(card: SharedCardListItem): string {
       <UInput
         v-model="searchInput"
         icon="i-lucide-search"
-        placeholder="Karten durchsuchen..."
-        aria-label="Karten durchsuchen"
+        :placeholder="t('sharing.cardList.searchPlaceholder')"
+        :aria-label="t('sharing.cardList.searchLabel')"
         class="w-full max-w-xl"
       />
       <USelect
         v-model="sortValue"
         :items="sortItems"
-        aria-label="Sortierung"
+        :aria-label="t('sharing.cardList.sortLabel')"
         class="w-48"
       />
     </div>
@@ -83,7 +85,7 @@ function cardMetaLine(card: SharedCardListItem): string {
       v-else-if="items.length === 0"
       class="text-sm text-gray-500"
     >
-      Keine Karten gefunden.
+      {{ t('sharing.cardList.empty') }}
     </p>
 
     <ul
@@ -127,18 +129,18 @@ function cardMetaLine(card: SharedCardListItem): string {
         color="neutral"
         variant="outline"
         :disabled="page <= 1"
-        aria-label="Vorherige Seite"
+        :aria-label="t('common.pagination.previous')"
         @click="previousPage"
       />
       <span class="min-w-28 text-center text-sm text-gray-600">
-        Seite {{ page }} / {{ totalPages }}
+        {{ t('common.pagination.pageOf', { page, total: totalPages }) }}
       </span>
       <UButton
         icon="i-lucide-chevron-right"
         color="neutral"
         variant="outline"
         :disabled="page >= totalPages"
-        aria-label="Nächste Seite"
+        :aria-label="t('common.pagination.next')"
         @click="nextPage"
       />
     </div>

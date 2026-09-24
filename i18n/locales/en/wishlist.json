@@ -1,3 +1,35 @@
 {
-  "wishlist": {}
+  "wishlist": {
+    "title": "Wishlist",
+    "cardCount": "{count} card | {count} cards",
+    "changeVisibility": "Change visibility",
+    "search": {
+      "placeholder": "Search your wishlist...",
+      "label": "Search wishlist"
+    },
+    "empty": {
+      "title": "No cards on your wishlist yet.",
+      "description": "Add cards to your wishlist from the catalog.",
+      "cta": "Go to the catalog"
+    },
+    "toast": {
+      "removed": "Removed from your wishlist"
+    },
+    "button": {
+      "add": "Add to wishlist",
+      "onList": "On your wishlist"
+    },
+    "row": {
+      "owned": "Owned: {count}",
+      "notePlaceholder": "Note (optional)",
+      "noteFor": "Note for {name}",
+      "decrease": "Remove one copy of {name}",
+      "increase": "Add one copy of {name}",
+      "quantityOf": "Quantity of {name}"
+    },
+    "errors": {
+      "updateFailed": "Couldn't update the wishlist.",
+      "removeFailed": "Couldn't remove the entry."
+    }
+  }
 }

@@ -17,6 +17,20 @@ const EXTRACTED_FILES = [
   'app/pages/login.vue',
   'app/pages/register.vue',
   'app/pages/profile.vue',
+  // F2b: collection side (inventory, quick entry, catalog, wishlist,
+  // sharing, player pages except the player deck page)
+  'app/components/inventory/*.vue',
+  'app/components/entry/*.vue',
+  'app/components/collections/*.vue',
+  'app/components/card/*.vue',
+  'app/components/wishlist/*.vue',
+  'app/components/sharing/*.vue',
+  'app/pages/inventory/*.vue',
+  'app/pages/catalog.vue',
+  'app/pages/wishlist.vue',
+  'app/pages/players/[[]handle]/index.vue',
+  'app/pages/players/[[]handle]/inventory.vue',
+  'app/pages/players/[[]handle]/collections/*.vue',
 ]
 
 // The plugin's `flat/base` config minus its YAML block (no YAML catalogues)

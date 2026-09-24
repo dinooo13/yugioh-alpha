@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DOMWrapper, flushPromises } from '@vue/test-utils'
 import { mountSuspended } from '@nuxt/test-utils/runtime'
 import ShareModal from '~/components/sharing/ShareModal.vue'
-import type { ShareState } from '~~/shared/sharing'
+import type { ShareResourceType, ShareState } from '~~/shared/sharing'
+import { setTestLocale } from './fixtures/locale'
 
 function shareState(overrides: Partial<ShareState> = {}): ShareState {
   return {
@@ -22,12 +23,12 @@ function body() {
   return new DOMWrapper(document.body)
 }
 
-async function mountModal(fetchMock: ReturnType<typeof vi.fn>) {
+async function mountModal(fetchMock: ReturnType<typeof vi.fn>, resourceType: ShareResourceType = 'deck') {
   vi.stubGlobal('$fetch', fetchMock)
   const component = await mountSuspended(ShareModal, {
     props: {
       open: true,
-      resourceType: 'deck',
+      resourceType,
       resourceId: 'deck-1',
       resourceName: 'Test Deck',
       sharePath: '/players/fabian/decks/deck-1',
@@ -41,9 +42,10 @@ async function mountModal(fetchMock: ReturnType<typeof vi.fn>) {
   return component
 }
 
-afterEach(() => {
+afterEach(async () => {
   vi.unstubAllGlobals()
   document.body.innerHTML = ''
+  await setTestLocale('de')
 })
 
 describe('sharing share modal', () => {
@@ -188,5 +190,67 @@ describe('sharing share modal', () => {
     await new Promise(resolve => setTimeout(resolve, 350))
 
     expect(fetchMock.mock.calls.some(([url]) => url === '/api/users/search')).toBe(true)
+  })
+
+  it('translates an error code instead of showing the server message', async () => {
+    const fetchMock = vi.fn((url: string, options?: Record<string, unknown>) => {
+      if (url === '/api/users/search') {
+        return Promise.resolve({ items: [{ userId: 'user-c', handle: 'carla', displayName: 'Carla' }] })
+      }
+      if (options?.method === 'POST') {
+        return Promise.reject({ data: { statusCode: 404, statusMessage: 'Player not found', data: { code: 'share_user_not_found' } } })
+      }
+      return Promise.resolve(shareState())
+    })
+    await mountModal(fetchMock)
+
+    await body().find('input[aria-label="Spieler suchen"]').setValue('carla')
+    await new Promise(resolve => setTimeout(resolve, 350))
+    await flushPromises()
+    await body().findAll('button').find(btn => btn.text() === 'Hinzufügen')!.trigger('click')
+    await flushPromises()
+
+    expect(body().text()).toContain('Diesen Spieler gibt es nicht.')
+    expect(body().text()).not.toContain('Player not found')
+  })
+})
+
+describe('sharing share modal in English', () => {
+  it('renders the visibility labels and descriptions in English', async () => {
+    await setTestLocale('en')
+    await mountModal(vi.fn(() => Promise.resolve(shareState())))
+
+    const text = body().text()
+    expect(text).toContain('Share deck')
+    expect(text).toContain('Private')
+    expect(text).toContain('Only you can see this.')
+    expect(text).toContain('Link only')
+    expect(text).toContain('Anyone with the link can view it.')
+    expect(text).toContain('Public')
+    expect(text).toContain('Visible to everyone and listed on your profile.')
+    expect(text).toContain('Shared with individual players')
+    expect(text).toContain('Not shared with any players yet.')
+    expect(text).not.toMatch(/Privat\b|Öffentlich|Nur über Link/)
+  })
+
+  it('pluralizes the private description with grants', async () => {
+    await setTestLocale('en')
+    const grant = (id: string) => ({ userId: id, handle: id, displayName: id, createdAt: '2025-01-01T00:00:00.000Z' })
+
+    await mountModal(vi.fn(() => Promise.resolve(shareState({ grants: [grant('bella')] }))))
+    expect(body().text()).toContain('Only you and 1 player you shared it with can see this.')
+
+    document.body.innerHTML = ''
+    await mountModal(vi.fn(() => Promise.resolve(shareState({ grants: [grant('bella'), grant('carla')] }))))
+    expect(body().text()).toContain('Only you and 2 players you shared it with can see this.')
+    expect(body().text()).toContain('@carla')
+  })
+
+  it('uses the resource type for the title and the public hint', async () => {
+    await setTestLocale('en')
+    await mountModal(vi.fn(() => Promise.resolve(shareState({ resourceType: 'collection', visibility: 'public' }))), 'collection')
+
+    expect(body().text()).toContain('Share collection')
+    expect(body().text()).toContain('Not needed – this collection is visible to everyone.')
   })
 })

@@ -1,3 +1,105 @@
 {
-  "inventory": {}
+  "inventory": {
+    "title": "Inventory",
+    "cardCount": "{count} card | {count} cards",
+    "emptyDescription": "Find a card in the catalog and add your first copies.",
+    "noCollectionOption": "— (none)",
+    "scope": {
+      "all": "All cards",
+      "unassigned": "No collection"
+    },
+    "actions": {
+      "quickEntry": "Quick entry",
+      "addCard": "Add card"
+    },
+    "view": {
+      "list": "List",
+      "overview": "Overview"
+    },
+    "search": {
+      "placeholder": "Search your inventory...",
+      "label": "Search inventory",
+      "inText": "Also search card text",
+      "facetsOverviewOnly": "These filters only apply to \"Overview\". \"List\" filters by search text and collection.",
+      "catalogGroup": "Catalog",
+      "ownedGroup": "Owned",
+      "type": "Type",
+      "attribute": "Attribute",
+      "race": "Monster type",
+      "level": "Level",
+      "set": "Set",
+      "allSets": "All sets",
+      "reset": "Reset",
+      "sortLabel": "Sort by",
+      "sort": {
+        "nameAsc": "Name (A-Z)",
+        "nameDesc": "Name (Z-A)",
+        "quantity": "Quantity",
+        "newest": "Newest"
+      }
+    },
+    "overview": {
+      "loadFailed": "Couldn't load the search",
+      "tryAgain": "Please try again.",
+      "empty": "Your inventory is empty",
+      "noMatches": "No matches for these filters",
+      "noMatchesDescription": "Adjust the search or the filters to find more cards."
+    },
+    "list": {
+      "loading": "Loading inventory",
+      "noMatches": "No matches",
+      "noMatchesDescription": "Adjust the search or remove the card filter.",
+      "noUnassigned": "No cards without a collection",
+      "noUnassignedDescription": "Every card in your inventory belongs to a collection.",
+      "emptyCollection": "No cards in this collection yet",
+      "empty": "No cards in your inventory"
+    },
+    "cardFilter": {
+      "label": "Only: {name}",
+      "clear": "Remove card filter",
+      "fallbackName": "Card"
+    },
+    "row": {
+      "fieldValue": "{field}: {value}",
+      "collectionFor": "Collection for {name}",
+      "edit": "Edit card",
+      "remove": "Remove card"
+    },
+    "breakdown": {
+      "toggle": "Breakdown",
+      "entry": "{name} ×{count}",
+      "noCollection": "(no collection)",
+      "unnamedCollection": "Unnamed collection"
+    },
+    "preview": {
+      "editInList": "Edit in list",
+      "openInCatalog": "Open in catalog"
+    },
+    "picker": {
+      "title": "Pick a card from the catalog",
+      "searchPlaceholder": "Search the catalog...",
+      "searchLabel": "Search the catalog",
+      "searching": "Searching...",
+      "noResults": "No cards found."
+    },
+    "addModal": {
+      "addTitle": "Add card",
+      "editTitle": "Edit card",
+      "noPrinting": "No specific printing",
+      "editionHelp": "How this card was printed (1st Edition/Unlimited).",
+      "printingHelp": "The exact set/rarity in which you own this card.",
+      "noCard": "Please pick a card first.",
+      "saveFailed": "Couldn't save the card."
+    },
+    "confirm": {
+      "remove": {
+        "title": "Remove card",
+        "description": "Remove {name} from your inventory?"
+      }
+    },
+    "errors": {
+      "assignFailed": "Couldn't change the collection.",
+      "removeFailed": "Couldn't remove the card."
+    }
+  }
 }

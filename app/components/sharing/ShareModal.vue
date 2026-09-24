@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { VISIBILITIES, VISIBILITY_DESCRIPTIONS, VISIBILITY_LABELS } from '~~/shared/sharing'
-import type { ShareResourceType, ShareState, Visibility } from '~~/shared/sharing'
-import { apiErrorMessage } from '~/utils/card-entry'
+import { VISIBILITIES } from '~~/shared/sharing'
+import type { ShareState, ShareResourceType, Visibility } from '~~/shared/sharing'
 
 const props = defineProps<{
   open: boolean
@@ -22,23 +21,16 @@ const openProxy = computed({
   set: value => emit('update:open', value),
 })
 
-const TITLES: Record<ShareResourceType, string> = {
-  deck: 'Deck teilen',
-  collection: 'Sammlung teilen',
-  inventory: 'Inventar teilen',
-}
-const title = computed(() => TITLES[props.resourceType])
+const { t } = useI18n()
+const count = useCount()
+const apiError = useApiError()
 
-// Used both for the "private, but N grants exist" description below and for
-// the "public makes grants moot" hint on the grants section — German
-// requires the correct grammatical gender/article per resource type ("dieses
-// Deck" / "diese Sammlung" / "dieses Inventar").
-const RESOURCE_ARTICLE_LABELS: Record<ShareResourceType, string> = {
-  deck: 'dieses Deck',
-  collection: 'diese Sammlung',
-  inventory: 'dieses Inventar',
-}
-const resourceArticleLabel = computed(() => RESOURCE_ARTICLE_LABELS[props.resourceType])
+const title = computed(() => t(`sharing.shareModal.title.${props.resourceType}`))
+
+// The "public makes grants moot" hint on the grants section: one full
+// sentence per resource type, since German needs the matching article
+// ("dieses Deck" / "diese Sammlung" / "dieses Inventar").
+const publicHint = computed(() => t(`sharing.shareModal.publicHint.${props.resourceType}`))
 
 // "Privat – Nur du kannst das sehen." stopped being true the moment a grant
 // exists (UX review #20: a granted user really could open a "private" deck)
@@ -49,14 +41,14 @@ const visibilityItems = computed(() => {
     if (value === 'private' && grantCount > 0) {
       return {
         value,
-        label: VISIBILITY_LABELS[value],
-        description: `Nur du und ${grantCount} freigegebene${grantCount === 1 ? 'r' : ''} Spieler können das sehen.`,
+        label: t(`sharing.visibility.${value}.label`),
+        description: count('sharing.visibility.private.descriptionWithGrants', grantCount),
       }
     }
     return {
       value,
-      label: VISIBILITY_LABELS[value],
-      description: VISIBILITY_DESCRIPTIONS[value],
+      label: t(`sharing.visibility.${value}.label`),
+      description: t(`sharing.visibility.${value}.description`),
     }
   })
 })
@@ -75,7 +67,7 @@ async function load() {
     state.value = await $fetch<ShareState>(`/api/sharing/${props.resourceType}/${props.resourceId}`)
   }
   catch (error) {
-    errorMessage.value = apiErrorMessage(error, 'Freigabe konnte nicht geladen werden.')
+    errorMessage.value = apiError(error, 'sharing.shareModal.errors.loadFailed')
   }
   finally {
     isLoading.value = false
@@ -110,7 +102,7 @@ async function setVisibility(visibility: Visibility) {
     emit('updated', state.value.visibility)
   }
   catch (error) {
-    errorMessage.value = apiErrorMessage(error, 'Freigabe konnte nicht gespeichert werden.')
+    errorMessage.value = apiError(error, 'sharing.shareModal.errors.saveFailed')
   }
   finally {
     isSaving.value = false
@@ -145,8 +137,8 @@ const { confirm } = useConfirm()
 
 async function regenerateToken() {
   const confirmed = await confirm({
-    title: 'Neuen Link erzeugen',
-    description: 'Alte Links werden dadurch ungültig. Fortfahren?',
+    title: t('sharing.shareModal.confirm.regenerate.title'),
+    description: t('sharing.shareModal.confirm.regenerate.description'),
   })
   if (!confirmed) {
     return
@@ -161,7 +153,7 @@ async function regenerateToken() {
     })
   }
   catch (error) {
-    errorMessage.value = apiErrorMessage(error, 'Der Link konnte nicht erneuert werden.')
+    errorMessage.value = apiError(error, 'sharing.shareModal.errors.regenerateFailed')
   }
   finally {
     isSaving.value = false
@@ -177,7 +169,7 @@ async function addGrant(userId: string) {
     })
   }
   catch (error) {
-    errorMessage.value = apiErrorMessage(error, 'Der Spieler konnte nicht hinzugefügt werden.')
+    errorMessage.value = apiError(error, 'sharing.shareModal.errors.addGrantFailed')
   }
 }
 
@@ -189,7 +181,7 @@ async function removeGrant(userId: string) {
     })
   }
   catch (error) {
-    errorMessage.value = apiErrorMessage(error, 'Die Freigabe konnte nicht entfernt werden.')
+    errorMessage.value = apiError(error, 'sharing.shareModal.errors.removeGrantFailed')
   }
 }
 </script>
@@ -226,7 +218,7 @@ async function removeGrant(userId: string) {
             <UInput
               :model-value="shareUrl"
               readonly
-              aria-label="Freigabe-Link"
+              :aria-label="t('sharing.shareModal.linkLabel')"
               class="w-full"
             />
             <div class="flex flex-wrap gap-2">
@@ -234,7 +226,7 @@ async function removeGrant(userId: string) {
                 icon="i-lucide-copy"
                 color="neutral"
                 variant="outline"
-                :label="justCopied ? 'Link kopiert' : 'Link kopieren'"
+                :label="justCopied ? t('sharing.shareModal.linkCopied') : t('sharing.shareModal.copyLink')"
                 :disabled="!shareUrl"
                 @click="copyLink"
               />
@@ -242,7 +234,7 @@ async function removeGrant(userId: string) {
                 icon="i-lucide-refresh-cw"
                 color="neutral"
                 variant="ghost"
-                label="Neuen Link erzeugen"
+                :label="t('sharing.shareModal.regenerate')"
                 :disabled="isSaving"
                 @click="regenerateToken"
               />
@@ -254,14 +246,14 @@ async function removeGrant(userId: string) {
             :class="{ 'pointer-events-none opacity-50': state.visibility === 'public' }"
           >
             <h3 class="text-sm font-semibold text-gray-900">
-              Für einzelne Spieler freigegeben
+              {{ t('sharing.shareModal.grantsTitle') }}
             </h3>
 
             <p
               v-if="state.visibility === 'public'"
               class="text-sm text-gray-500"
             >
-              Nicht nötig – {{ resourceArticleLabel }} ist für alle sichtbar.
+              {{ publicHint }}
             </p>
 
             <SharingUserPicker @select="addGrant" />
@@ -270,7 +262,7 @@ async function removeGrant(userId: string) {
               v-if="state.grants.length === 0"
               class="text-sm text-gray-500"
             >
-              Noch keine Spieler freigegeben.
+              {{ t('sharing.shareModal.noGrants') }}
             </p>
             <ul
               v-else
@@ -286,14 +278,14 @@ async function removeGrant(userId: string) {
                     {{ grant.displayName }}
                   </p>
                   <p class="truncate text-xs text-gray-500">
-                    @{{ grant.handle }}
+                    {{ t('sharing.handle', { handle: grant.handle }) }}
                   </p>
                 </div>
                 <UButton
                   size="xs"
                   color="error"
                   variant="ghost"
-                  label="Entfernen"
+                  :label="t('common.remove')"
                   class="tap-target"
                   @click="removeGrant(grant.userId)"
                 />

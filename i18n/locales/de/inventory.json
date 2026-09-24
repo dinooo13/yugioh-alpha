@@ -1,3 +1,105 @@
 {
-  "inventory": {}
+  "inventory": {
+    "title": "Inventar",
+    "cardCount": "{count} Karte | {count} Karten",
+    "emptyDescription": "Suche eine Karte im Katalog und füge deine ersten Exemplare hinzu.",
+    "noCollectionOption": "— (keine)",
+    "scope": {
+      "all": "Alle Karten",
+      "unassigned": "Ohne Sammlung"
+    },
+    "actions": {
+      "quickEntry": "Schnellerfassung",
+      "addCard": "Karte hinzufügen"
+    },
+    "view": {
+      "list": "Liste",
+      "overview": "Übersicht"
+    },
+    "search": {
+      "placeholder": "Im Inventar suchen...",
+      "label": "Inventar durchsuchen",
+      "inText": "Auch im Kartentext suchen",
+      "facetsOverviewOnly": "Diese Filter wirken nur in \"Übersicht\". \"Liste\" filtert nach Suchtext und Sammlung.",
+      "catalogGroup": "Katalog",
+      "ownedGroup": "Besitz",
+      "type": "Typ",
+      "attribute": "Attribut",
+      "race": "Monsterart",
+      "level": "Level",
+      "set": "Set",
+      "allSets": "Alle Sets",
+      "reset": "Reset",
+      "sortLabel": "Sortierung",
+      "sort": {
+        "nameAsc": "Name (A-Z)",
+        "nameDesc": "Name (Z-A)",
+        "quantity": "Anzahl",
+        "newest": "Neueste"
+      }
+    },
+    "overview": {
+      "loadFailed": "Die Suche konnte nicht geladen werden",
+      "tryAgain": "Bitte versuche es erneut.",
+      "empty": "Inventar ist leer",
+      "noMatches": "Keine Treffer für diese Filter",
+      "noMatchesDescription": "Passe die Suche oder die Filter an, um mehr Karten zu finden."
+    },
+    "list": {
+      "loading": "Inventar wird geladen",
+      "noMatches": "Keine Treffer",
+      "noMatchesDescription": "Passe die Suche an oder entferne den Kartenfilter.",
+      "noUnassigned": "Keine Karten ohne Sammlung",
+      "noUnassignedDescription": "Jede Karte in deinem Inventar ist einer Sammlung zugeordnet.",
+      "emptyCollection": "Noch keine Karten in dieser Sammlung",
+      "empty": "Keine Karten im Inventar"
+    },
+    "cardFilter": {
+      "label": "Nur: {name}",
+      "clear": "Kartenfilter entfernen",
+      "fallbackName": "Karte"
+    },
+    "row": {
+      "fieldValue": "{field}: {value}",
+      "collectionFor": "Sammlung für {name}",
+      "edit": "Karte bearbeiten",
+      "remove": "Karte entfernen"
+    },
+    "breakdown": {
+      "toggle": "Aufschlüsselung",
+      "entry": "{name} ×{count}",
+      "noCollection": "(keine Sammlung)",
+      "unnamedCollection": "Unbenannte Sammlung"
+    },
+    "preview": {
+      "editInList": "In Liste bearbeiten",
+      "openInCatalog": "Im Katalog öffnen"
+    },
+    "picker": {
+      "title": "Karte aus dem Katalog wählen",
+      "searchPlaceholder": "Katalog durchsuchen...",
+      "searchLabel": "Katalog durchsuchen",
+      "searching": "Suche läuft...",
+      "noResults": "Keine Karten gefunden."
+    },
+    "addModal": {
+      "addTitle": "Karte hinzufügen",
+      "editTitle": "Karte bearbeiten",
+      "noPrinting": "Keine bestimmte Set-Ausgabe",
+      "editionHelp": "Wie oft diese Karte gedruckt wurde (Erstauflage/Unlimitiert).",
+      "printingHelp": "Das konkrete Set/die Rarität, in der du diese Karte besitzt.",
+      "noCard": "Bitte zuerst eine Karte auswählen.",
+      "saveFailed": "Die Karte konnte nicht gespeichert werden."
+    },
+    "confirm": {
+      "remove": {
+        "title": "Karte entfernen",
+        "description": "{name} aus dem Inventar entfernen?"
+      }
+    },
+    "errors": {
+      "assignFailed": "Die Sammlung konnte nicht geändert werden.",
+      "removeFailed": "Die Karte konnte nicht entfernt werden."
+    }
+  }
 }

@@ -1,3 +1,33 @@
 {
-  "collections": {}
+  "collections": {
+    "create": "Neue Sammlung",
+    "select": {
+      "all": "Alle Sammlungen ({count})",
+      "unassigned": "(keine Sammlung) ({count})",
+      "collection": "{name} ({count})"
+    },
+    "menu": {
+      "optionsFor": "Optionen für {name}",
+      "rename": "Umbenennen",
+      "share": "Teilen"
+    },
+    "form": {
+      "renameTitle": "Sammlung umbenennen",
+      "name": "Name",
+      "namePlaceholder": "z. B. Box 1",
+      "nameRequired": "Bitte einen Namen angeben.",
+      "description": "Beschreibung (optional)",
+      "create": "Erstellen"
+    },
+    "confirm": {
+      "delete": {
+        "title": "Sammlung löschen",
+        "description": "\"{name}\" löschen? Die Karten bleiben erhalten und werden zu \"Alle Karten\"."
+      }
+    },
+    "errors": {
+      "saveFailed": "Die Sammlung konnte nicht gespeichert werden.",
+      "deleteFailed": "Die Sammlung konnte nicht gelöscht werden."
+    }
+  }
 }

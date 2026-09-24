@@ -13,13 +13,15 @@ const emit = defineEmits<{
 const breakdown = computed(() => props.item.collectionBreakdown ?? [])
 const showInline = computed(() => breakdown.value.length <= 2)
 const subtitle = computed(() => cardSubtitle(props.item))
+
+const { t } = useI18n()
 </script>
 
 <template>
   <article class="group flex min-w-0 flex-col overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md">
     <button
       type="button"
-      :aria-label="`${item.name} vergrößern`"
+      :aria-label="t('card.enlarge', { name: item.name })"
       class="block w-full cursor-zoom-in focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
       @click="emit('preview')"
     >
@@ -44,7 +46,7 @@ const subtitle = computed(() => cardSubtitle(props.item))
       </div>
 
       <p class="text-sm font-semibold tabular-nums text-gray-900">
-        ×{{ item.totalQuantity }} ges.
+        {{ t('card.totalQuantity', { count: item.totalQuantity }) }}
       </p>
 
       <div class="flex min-w-0 flex-wrap items-center gap-1">
@@ -56,7 +58,7 @@ const subtitle = computed(() => cardSubtitle(props.item))
             variant="subtle"
             class="max-w-full"
           >
-            <span class="truncate">{{ breakdownLabel(entry) }} ×{{ entry.quantity }}</span>
+            <span class="truncate">{{ t('inventory.breakdown.entry', { name: breakdownLabel(entry, t), count: entry.quantity }) }}</span>
           </UBadge>
         </template>
         <UPopover v-else>
@@ -65,7 +67,7 @@ const subtitle = computed(() => cardSubtitle(props.item))
             color="neutral"
             variant="soft"
             trailing-icon="i-lucide-chevron-down"
-            label="Aufschlüsselung"
+            :label="t('inventory.breakdown.toggle')"
             class="tap-target"
           />
           <template #content>
@@ -75,7 +77,7 @@ const subtitle = computed(() => cardSubtitle(props.item))
                 :key="breakdownKey(entry)"
                 class="flex items-center justify-between gap-4 text-sm"
               >
-                <span class="text-gray-700">{{ breakdownLabel(entry) }}</span>
+                <span class="text-gray-700">{{ breakdownLabel(entry, t) }}</span>
                 <span class="font-medium tabular-nums text-gray-900">×{{ entry.quantity }}</span>
               </div>
             </div>

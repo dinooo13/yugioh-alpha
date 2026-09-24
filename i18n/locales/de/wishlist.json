@@ -1,3 +1,35 @@
 {
-  "wishlist": {}
+  "wishlist": {
+    "title": "Wunschliste",
+    "cardCount": "{count} Karte | {count} Karten",
+    "changeVisibility": "Sichtbarkeit ändern",
+    "search": {
+      "placeholder": "Wunschliste durchsuchen...",
+      "label": "Wunschliste durchsuchen"
+    },
+    "empty": {
+      "title": "Noch keine Karten auf der Wunschliste.",
+      "description": "Füge Karten im Katalog zu deiner Wunschliste hinzu.",
+      "cta": "Zum Katalog"
+    },
+    "toast": {
+      "removed": "Von der Wunschliste entfernt"
+    },
+    "button": {
+      "add": "Zur Wunschliste",
+      "onList": "Auf der Wunschliste"
+    },
+    "row": {
+      "owned": "Besitz: {count}",
+      "notePlaceholder": "Notiz (optional)",
+      "noteFor": "Notiz für {name}",
+      "decrease": "Ein Exemplar von {name} entfernen",
+      "increase": "Ein Exemplar von {name} hinzufügen",
+      "quantityOf": "Anzahl von {name}"
+    },
+    "errors": {
+      "updateFailed": "Die Wunschliste konnte nicht aktualisiert werden.",
+      "removeFailed": "Der Eintrag konnte nicht entfernt werden."
+    }
+  }
 }

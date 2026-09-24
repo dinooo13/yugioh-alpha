@@ -2,13 +2,9 @@
 import {
   DEFAULT_VALUE,
   MAX_ENTRY_QUANTITY,
-  ENTRY_CONDITION_ITEMS,
-  ENTRY_EDITION_ITEMS,
-  ENTRY_LANGUAGE_ITEMS,
-  ENTRY_MATCHED_BY_LABELS,
   NO_COLLECTION_VALUE,
   NO_PRINTING_VALUE,
-  effectiveValuesLabel,
+  effectiveRowValues,
   entryRowStatus,
   selectedCandidate,
 } from '~/utils/card-entry'
@@ -33,6 +29,16 @@ const emit = defineEmits<{
   remove: []
 }>()
 
+const { t } = useI18n()
+const {
+  languageItems,
+  conditionItems,
+  editionItems,
+  languageLabel,
+  conditionLabel,
+  editionLabel,
+} = useCardOptionItems()
+
 const isPickerOpen = ref(false)
 const showOverrides = ref(false)
 
@@ -42,16 +48,20 @@ const selected = computed(() => selectedCandidate(props.row))
 const statusMeta = computed(() => {
   switch (status.value) {
     case 'sicher':
-      return { label: 'Sicher', color: 'success' as const }
+      return { label: t('quickEntry.status.sicher'), color: 'success' as const }
     case 'unsicher':
-      return { label: 'Unsicher', color: 'warning' as const }
+      return { label: t('quickEntry.status.unsicher'), color: 'warning' as const }
     default:
-      return { label: 'Kein Treffer', color: 'error' as const }
+      return { label: t('quickEntry.status.ohne_treffer'), color: 'error' as const }
   }
 })
 
 const candidateItems = computed(() => props.row.candidates.map(candidate => ({
-  label: `${candidate.name} · ${ENTRY_MATCHED_BY_LABELS[candidate.matchedBy]} ${Math.round(candidate.score * 100)}%`,
+  label: t('quickEntry.row.candidate', {
+    name: candidate.name,
+    matchedBy: t(`quickEntry.matchedBy.${candidate.matchedBy}`),
+    score: Math.round(candidate.score * 100),
+  }),
   value: String(candidate.cardId),
 })))
 
@@ -72,7 +82,7 @@ const candidateValue = computed({
 })
 
 const printingItems = computed(() => [
-  { label: 'Keine bestimmte Edition', value: NO_PRINTING_VALUE },
+  { label: t('quickEntry.row.noPrinting'), value: NO_PRINTING_VALUE },
   ...(selected.value?.printings ?? []).map(printing => ({
     label: `${printing.setCode}${printing.setName ? ` · ${printing.setName}` : ''}${printing.rarity ? ` · ${printing.rarity}` : ''}`,
     value: printing.id,
@@ -92,12 +102,12 @@ const quantityValue = computed({
 })
 
 function overrideItems(items: Array<{ label: string, value: string }>) {
-  return [{ label: 'Standard', value: DEFAULT_VALUE }, ...items]
+  return [{ label: t('quickEntry.row.useDefault'), value: DEFAULT_VALUE }, ...items]
 }
 
 const collectionItems = computed(() => [
-  { label: 'Standard', value: DEFAULT_VALUE },
-  { label: '— (keine)', value: NO_COLLECTION_VALUE },
+  { label: t('quickEntry.row.useDefault'), value: DEFAULT_VALUE },
+  { label: t('inventory.noCollectionOption'), value: NO_COLLECTION_VALUE },
   ...props.collections.map(collection => ({ label: collection.name, value: collection.id })),
 ])
 
@@ -113,7 +123,16 @@ const conditionOverride = overrideValue('condition')
 const editionOverride = overrideValue('edition')
 const collectionOverride = overrideValue('collectionId')
 
-const valuesLabel = computed(() => effectiveValuesLabel(props.row, props.defaults))
+// Short "EN · Neuwertig (Near Mint) · Unlimitiert" summary of the row's
+// effective values (per-row override, else the Standardwerte panel).
+const valuesLabel = computed(() => {
+  const values = effectiveRowValues(props.row, props.defaults)
+  return [
+    languageLabel(values.language),
+    conditionLabel(values.condition),
+    editionLabel(values.edition),
+  ].join(' · ')
+})
 
 function onPicked(card: PickedCatalogCard) {
   const candidate: EntryCandidate = {
@@ -175,7 +194,7 @@ function onPicked(card: PickedCatalogCard) {
           />
         </div>
         <p class="mt-1 truncate text-sm font-medium text-gray-900">
-          {{ selected ? selected.name : 'Kein Treffer' }}
+          {{ selected ? selected.name : t('quickEntry.status.ohne_treffer') }}
         </p>
         <p class="truncate text-xs text-gray-500">
           <span v-if="selected">{{ selected.type }} · </span>{{ valuesLabel }}
@@ -184,12 +203,12 @@ function onPicked(card: PickedCatalogCard) {
           v-if="row.conflict"
           class="mt-1 text-xs text-amber-700"
         >
-          Set-Code und Name zeigen auf verschiedene Karten — bitte auswählen.
+          {{ t('quickEntry.row.conflict') }}
         </p>
       </div>
 
       <UFormField
-        label="Anzahl"
+        :label="t('card.field.quantity')"
         size="xs"
         class="w-20 shrink-0"
       >
@@ -198,7 +217,7 @@ function onPicked(card: PickedCatalogCard) {
           type="number"
           min="1"
           :max="MAX_ENTRY_QUANTITY"
-          :aria-label="`Anzahl für ${row.raw}`"
+          :aria-label="t('quickEntry.row.quantityFor', { line: row.raw })"
         />
       </UFormField>
 
@@ -207,7 +226,7 @@ function onPicked(card: PickedCatalogCard) {
           icon="i-lucide-sliders-horizontal"
           color="neutral"
           variant="ghost"
-          :aria-label="`Werte für ${row.raw} anpassen`"
+          :aria-label="t('quickEntry.row.adjustValues', { line: row.raw })"
           class="tap-target"
           @click="() => { showOverrides = !showOverrides }"
         />
@@ -215,7 +234,7 @@ function onPicked(card: PickedCatalogCard) {
           icon="i-lucide-x"
           color="neutral"
           variant="ghost"
-          :aria-label="`${row.raw} entfernen`"
+          :aria-label="t('quickEntry.row.remove', { line: row.raw })"
           class="tap-target"
           @click="emit('remove')"
         />
@@ -227,28 +246,28 @@ function onPicked(card: PickedCatalogCard) {
         v-if="row.candidates.length > 0"
         v-model="candidateValue"
         :items="candidateItems"
-        placeholder="Treffer auswählen..."
-        :aria-label="`Treffer für ${row.raw}`"
+        :placeholder="t('quickEntry.row.pickCandidate')"
+        :aria-label="t('quickEntry.row.candidateFor', { line: row.raw })"
       />
       <p
         v-else
         class="self-center text-xs text-gray-500"
       >
-        Keine Vorschläge — bitte im Katalog suchen.
+        {{ t('quickEntry.row.noSuggestions') }}
       </p>
 
       <USelect
         v-model="printingValue"
         :items="printingItems"
         :disabled="!selected"
-        :aria-label="`Printing für ${row.raw}`"
+        :aria-label="t('quickEntry.row.printingFor', { line: row.raw })"
       />
 
       <UButton
         icon="i-lucide-search"
         color="neutral"
         variant="outline"
-        label="Katalog"
+        :label="t('quickEntry.row.catalog')"
         @click="() => { isPickerOpen = true }"
       />
     </div>
@@ -257,25 +276,25 @@ function onPicked(card: PickedCatalogCard) {
       v-if="showOverrides"
       class="grid gap-3 rounded-md bg-gray-50 p-3 sm:grid-cols-4"
     >
-      <UFormField label="Sprache">
+      <UFormField :label="t('card.field.printingLanguage')">
         <USelect
           v-model="languageOverride"
-          :items="overrideItems(ENTRY_LANGUAGE_ITEMS)"
+          :items="overrideItems(languageItems)"
         />
       </UFormField>
-      <UFormField label="Zustand">
+      <UFormField :label="t('card.field.condition')">
         <USelect
           v-model="conditionOverride"
-          :items="overrideItems(ENTRY_CONDITION_ITEMS)"
+          :items="overrideItems(conditionItems)"
         />
       </UFormField>
-      <UFormField label="Edition">
+      <UFormField :label="t('quickEntry.field.edition')">
         <USelect
           v-model="editionOverride"
-          :items="overrideItems(ENTRY_EDITION_ITEMS)"
+          :items="overrideItems(editionItems)"
         />
       </UFormField>
-      <UFormField label="Sammlung">
+      <UFormField :label="t('card.field.collection')">
         <USelect
           v-model="collectionOverride"
           :items="collectionItems"
@@ -285,7 +304,7 @@ function onPicked(card: PickedCatalogCard) {
 
     <UModal
       v-model:open="isPickerOpen"
-      title="Karte aus dem Katalog wählen"
+      :title="t('inventory.picker.title')"
     >
       <template #body>
         <InventoryCatalogCardPicker @select="onPicked" />

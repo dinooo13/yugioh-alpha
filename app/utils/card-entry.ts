@@ -251,71 +251,18 @@ export function chunkBulkEntries(entries: EntryBulkEntry[], size = BULK_CHUNK_SI
   return chunks
 }
 
-// Mirrors LANGUAGES/CONDITIONS/EDITIONS in server/utils/inventory.ts (same
-// approach as InventoryAddToInventoryModal, which keeps its own label maps).
-export const ENTRY_LANGUAGE_ITEMS = [
-  { label: 'EN', value: 'en' },
-  { label: 'DE', value: 'de' },
-  { label: 'FR', value: 'fr' },
-  { label: 'IT', value: 'it' },
-  { label: 'ES', value: 'es' },
-  { label: 'PT', value: 'pt' },
-  { label: 'JA', value: 'ja' },
-  { label: 'KO', value: 'ko' },
-]
-
-// German-first labels, with the English term the community actually uses in
-// parentheses (UX review #9) — the stored `value`s are unchanged so this is
-// purely a display concern.
-export const ENTRY_CONDITION_ITEMS = [
-  { label: 'Makellos (Mint)', value: 'mint' },
-  { label: 'Neuwertig (Near Mint)', value: 'near_mint' },
-  { label: 'Sehr gut (Excellent)', value: 'excellent' },
-  { label: 'Gut (Good)', value: 'good' },
-  { label: 'Leicht bespielt (Lightly Played)', value: 'light_played' },
-  { label: 'Bespielt (Played)', value: 'played' },
-  { label: 'Schlecht (Poor)', value: 'poor' },
-]
-
-export const ENTRY_EDITION_ITEMS = [
-  { label: '1. Auflage', value: 'first' },
-  { label: 'Unlimitiert', value: 'unlimited' },
-  { label: 'Limitiert', value: 'limited' },
-]
-
-function labelOf(items: Array<{ label: string, value: string }>, value: string): string {
-  return items.find(item => item.value === value)?.label ?? value
-}
-
-/** Short "EN · NM · Unlimited"-style summary of a row's effective values. */
-export function effectiveValuesLabel(row: EntryRow, defaults: EntryDefaults): string {
-  const values = effectiveRowValues(row, defaults)
-
-  return [
-    labelOf(ENTRY_LANGUAGE_ITEMS, values.language),
-    labelOf(ENTRY_CONDITION_ITEMS, values.condition),
-    labelOf(ENTRY_EDITION_ITEMS, values.edition),
-  ].join(' · ')
-}
-
-export const ENTRY_MATCHED_BY_LABELS: Record<EntryMatchedBy, string> = {
-  passcode: 'Passcode',
-  set_code: 'Set-Code',
-  exact: 'Exakt',
-  prefix: 'Namensanfang',
-  contains: 'Enthält',
-  fuzzy: 'Ähnlich',
-}
-
 export interface ApiItemError {
   index: number
+  /** Technical English; the UI shows the translated `code` instead (ADR 0014). */
   message: string
+  code?: string
+  params?: Record<string, unknown>
 }
 
 interface ApiErrorBody {
   statusCode?: number
   statusMessage?: string
-  data?: { errors?: ApiItemError[], code?: string }
+  data?: { errors?: ApiItemError[], code?: string, params?: Record<string, unknown> }
 }
 
 function apiErrorBody(error: unknown): ApiErrorBody | undefined {
@@ -338,8 +285,14 @@ export function apiItemErrors(error: unknown): ApiItemError[] {
   return apiErrorBody(error)?.data?.errors ?? []
 }
 
-/** Machine-readable error code (`data.code`), used by the tournament pages. */
+/** Machine-readable error code (`data.code`), see `useApiError`. */
 export function apiErrorCode(error: unknown): string | undefined {
   const code = apiErrorBody(error)?.data?.code
   return typeof code === 'string' ? code : undefined
+}
+
+/** Named parameters for the code's message (`data.params`, e.g. `{ max }`). */
+export function apiErrorParams(error: unknown): Record<string, unknown> {
+  const params = apiErrorBody(error)?.data?.params
+  return params && typeof params === 'object' ? params : {}
 }

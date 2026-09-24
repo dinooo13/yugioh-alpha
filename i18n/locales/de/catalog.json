@@ -1,3 +1,43 @@
 {
-  "catalog": {}
+  "catalog": {
+    "title": "Katalog",
+    "description": "Durchsuche den globalen Kartenkatalog nach Name, Typ, Attribut, Monsterart, Level und Set.",
+    "resultCount": "{count} Karte | {count} Karten",
+    "search": {
+      "placeholder": "Karten suchen...",
+      "label": "Karten suchen"
+    },
+    "filters": {
+      "type": "Typ",
+      "attribute": "Attribut",
+      "level": "Level",
+      "race": "Monsterart",
+      "set": "Set",
+      "allSets": "Alle Sets",
+      "reset": "Zurücksetzen"
+    },
+    "sort": {
+      "label": "Sortierung",
+      "nameAsc": "Name A-Z",
+      "nameDesc": "Name Z-A",
+      "newest": "Neueste zuerst"
+    },
+    "loadFailed": "Katalog konnte nicht geladen werden",
+    "tryAgain": "Bitte versuche es erneut.",
+    "reload": "Erneut laden",
+    "empty": {
+      "noMatches": "Keine Karten gefunden",
+      "noMatchesDescription": "Passe Suche oder Filter an, um mehr Treffer zu sehen.",
+      "noCatalog": "Noch kein Katalog importiert",
+      "noCatalogDescription": "Starte zuerst den Katalog-Sync, damit Karten hier durchsucht und gefiltert werden können."
+    },
+    "addToInventory": "Zum Inventar",
+    "detail": {
+      "fallbackTitle": "Karte",
+      "notFound": "Karte nicht gefunden",
+      "notFoundDescription": "Der Detaildatensatz konnte nicht geladen werden.",
+      "cardText": "Kartentext",
+      "printings": "Printings"
+    }
+  }
 }

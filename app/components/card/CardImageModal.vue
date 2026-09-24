@@ -4,7 +4,7 @@
  * click-to-enlarge and as the base of the inventory card preview, which adds
  * its own details through the default slot.
  */
-withDefaults(defineProps<{
+const props = withDefaults(defineProps<{
   title: string
   description?: string
   src?: string | null
@@ -12,10 +12,14 @@ withDefaults(defineProps<{
 }>(), {
   description: undefined,
   src: null,
-  noImageLabel: 'Kein Bild',
+  noImageLabel: undefined,
 })
 
+const { t } = useI18n()
+
 const open = defineModel<boolean>('open', { default: false })
+
+const resolvedNoImageLabel = computed(() => props.noImageLabel ?? t('card.noImage'))
 </script>
 
 <template>
@@ -36,7 +40,7 @@ const open = defineModel<boolean>('open', { default: false })
         <div
           v-else
           role="img"
-          :aria-label="`${title}: ${noImageLabel}`"
+          :aria-label="t('card.noImageFor', { name: title, label: resolvedNoImageLabel })"
           class="mx-auto flex aspect-[59/86] w-48 flex-col items-center justify-center gap-1 rounded-md bg-gray-100 text-xs text-gray-400"
         >
           <UIcon
@@ -44,7 +48,7 @@ const open = defineModel<boolean>('open', { default: false })
             class="size-6"
             aria-hidden="true"
           />
-          {{ noImageLabel }}
+          {{ resolvedNoImageLabel }}
         </div>
 
         <slot />

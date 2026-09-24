@@ -65,7 +65,10 @@ interface CatalogCardDetail {
 
 const PAGE_SIZE = 24
 
-useHead({ title: 'Katalog – yugioh alpha' })
+usePageTitle('catalog.title')
+
+const { t } = useI18n()
+const count = useCount()
 
 const route = useRoute()
 const router = useRouter()
@@ -117,7 +120,7 @@ const { data: facets } = await useFetch<CatalogFacets>('/api/catalog/facets', {
 // InventorySearchPanel convention).
 const noSetValue = '__all_sets__'
 const setItems = computed(() => [
-  { label: 'Alle Sets', value: noSetValue },
+  { label: t('catalog.filters.allSets'), value: noSetValue },
   ...facets.value.sets.map(set => ({ label: set.name, value: set.id })),
 ])
 const setSelection = computed({
@@ -188,12 +191,9 @@ watch([debouncedSearch, type, attribute, race, level, setId, sort, page], async 
 }, { flush: 'post' })
 
 const totalPages = computed(() => Math.max(1, Math.ceil((cards.value?.total ?? 0) / PAGE_SIZE)))
-// `pluralize()` doesn't locale-format large counts — combined by hand here so
-// a one-hit search still reads "1 Karte" instead of "1 Karten" (UX review #10).
-const cardsTotalLabel = computed(() => {
-  const total = cards.value.total
-  return `${total.toLocaleString('de-DE')} ${total === 1 ? 'Karte' : 'Karten'}`
-})
+// Locale-formatted and pluralized, so a one-hit search reads "1 Karte" and
+// the full catalog "13.000 Karten" (UX review #10).
+const cardsTotalLabel = computed(() => count('catalog.resultCount', cards.value.total))
 
 watch(selectedCardId, async (cardId) => {
   detail.value = null
@@ -270,8 +270,8 @@ async function onAddedToInventory() {
   <div class="space-y-6">
     <div class="space-y-4">
       <LayoutPageHeader
-        title="Katalog"
-        description="Durchsuche den globalen Kartenkatalog nach Name, Typ, Attribut, Monsterart, Level und Set."
+        :title="t('catalog.title')"
+        :description="t('catalog.description')"
       />
 
       <section class="space-y-3 border-y border-gray-200 py-4">
@@ -279,18 +279,18 @@ async function onAddedToInventory() {
           <UInput
             v-model="searchInput"
             icon="i-lucide-search"
-            placeholder="Karten suchen..."
-            aria-label="Karten suchen"
+            :placeholder="t('catalog.search.placeholder')"
+            :aria-label="t('catalog.search.label')"
             class="min-w-0"
           />
 
           <select
             v-model="type"
-            aria-label="Typ"
+            :aria-label="t('catalog.filters.type')"
             class="h-10 min-w-0 w-full rounded-md border border-gray-200 bg-white px-3 text-sm text-gray-700 shadow-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
           >
             <option value="">
-              Typ
+              {{ t('catalog.filters.type') }}
             </option>
             <option
               v-for="option in facets.types"
@@ -303,11 +303,11 @@ async function onAddedToInventory() {
 
           <select
             v-model="attribute"
-            aria-label="Attribut"
+            :aria-label="t('catalog.filters.attribute')"
             class="h-10 min-w-0 w-full rounded-md border border-gray-200 bg-white px-3 text-sm text-gray-700 shadow-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
           >
             <option value="">
-              Attribut
+              {{ t('catalog.filters.attribute') }}
             </option>
             <option
               v-for="option in facets.attributes"
@@ -320,18 +320,18 @@ async function onAddedToInventory() {
 
           <select
             v-model="level"
-            aria-label="Level"
+            :aria-label="t('catalog.filters.level')"
             class="h-10 min-w-0 w-full rounded-md border border-gray-200 bg-white px-3 text-sm text-gray-700 shadow-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
           >
             <option value="">
-              Level
+              {{ t('catalog.filters.level') }}
             </option>
             <option
               v-for="option in facets.levels"
               :key="option"
               :value="String(option)"
             >
-              Level {{ option }}
+              {{ t('card.level', { level: option }) }}
             </option>
           </select>
         </div>
@@ -339,11 +339,11 @@ async function onAddedToInventory() {
         <div class="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(10rem,12rem)_auto]">
           <select
             v-model="race"
-            aria-label="Monsterart"
+            :aria-label="t('catalog.filters.race')"
             class="h-10 min-w-0 w-full rounded-md border border-gray-200 bg-white px-3 text-sm text-gray-700 shadow-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
           >
             <option value="">
-              Monsterart
+              {{ t('catalog.filters.race') }}
             </option>
             <option
               v-for="option in facets.races"
@@ -358,14 +358,14 @@ async function onAddedToInventory() {
             v-model="setSelection"
             :items="setItems"
             value-key="value"
-            aria-label="Set"
-            placeholder="Set"
+            :aria-label="t('catalog.filters.set')"
+            :placeholder="t('catalog.filters.set')"
             class="min-w-0 w-full"
           />
 
           <UButton
             icon="i-lucide-rotate-ccw"
-            label="Zurücksetzen"
+            :label="t('catalog.filters.reset')"
             color="neutral"
             variant="outline"
             class="min-w-0 justify-center"
@@ -381,19 +381,19 @@ async function onAddedToInventory() {
       </p>
 
       <label class="flex items-center gap-2 text-sm text-gray-600">
-        Sortierung
+        {{ t('catalog.sort.label') }}
         <select
           v-model="sort"
           class="h-9 rounded-md border border-gray-200 bg-white px-2 text-sm text-gray-700 shadow-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
         >
           <option value="name">
-            Name A-Z
+            {{ t('catalog.sort.nameAsc') }}
           </option>
           <option value="-name">
-            Name Z-A
+            {{ t('catalog.sort.nameDesc') }}
           </option>
           <option value="newest">
-            Neueste zuerst
+            {{ t('catalog.sort.newest') }}
           </option>
         </select>
       </label>
@@ -403,13 +403,13 @@ async function onAddedToInventory() {
       v-if="error"
       color="error"
       icon="i-lucide-circle-alert"
-      title="Katalog konnte nicht geladen werden"
-      description="Bitte versuche es erneut."
+      :title="t('catalog.loadFailed')"
+      :description="t('catalog.tryAgain')"
     >
       <template #actions>
         <UButton
           icon="i-lucide-refresh-cw"
-          label="Erneut laden"
+          :label="t('catalog.reload')"
           color="error"
           variant="outline"
           @click="reloadCards"
@@ -431,10 +431,8 @@ async function onAddedToInventory() {
     <LayoutEmptyState
       v-else-if="cards.total === 0"
       :icon="filtersActive ? 'i-lucide-search-x' : 'i-lucide-book-open'"
-      :title="filtersActive ? 'Keine Karten gefunden' : 'Noch kein Katalog importiert'"
-      :description="filtersActive
-        ? 'Passe Suche oder Filter an, um mehr Treffer zu sehen.'
-        : 'Starte zuerst den Katalog-Sync, damit Karten hier durchsucht und gefiltert werden können.'"
+      :title="filtersActive ? t('catalog.empty.noMatches') : t('catalog.empty.noCatalog')"
+      :description="filtersActive ? t('catalog.empty.noMatchesDescription') : t('catalog.empty.noCatalogDescription')"
     />
 
     <section
@@ -480,7 +478,7 @@ async function onAddedToInventory() {
               color="neutral"
               variant="soft"
             >
-              Lv {{ card.level }}
+              {{ t('card.levelShort', { level: card.level }) }}
             </UBadge>
           </div>
           <div class="flex flex-wrap gap-1">
@@ -488,7 +486,7 @@ async function onAddedToInventory() {
               icon="i-lucide-archive-restore"
               color="primary"
               size="xs"
-              label="Zum Inventar"
+              :label="t('catalog.addToInventory')"
               class="tap-target"
               @click.stop="openAddToInventory(card)"
               @keydown.stop
@@ -514,19 +512,19 @@ async function onAddedToInventory() {
         color="neutral"
         variant="outline"
         :disabled="page <= 1"
-        aria-label="Vorherige Seite"
+        :aria-label="t('common.pagination.previous')"
         class="tap-target"
         @click="previousPage"
       />
       <span class="min-w-28 text-center text-sm text-gray-600">
-        Seite {{ page }} / {{ totalPages }}
+        {{ t('common.pagination.pageOf', { page, total: totalPages }) }}
       </span>
       <UButton
         icon="i-lucide-chevron-right"
         color="neutral"
         variant="outline"
         :disabled="page >= totalPages"
-        aria-label="Nächste Seite"
+        :aria-label="t('common.pagination.next')"
         class="tap-target"
         @click="nextPage"
       />
@@ -540,13 +538,13 @@ async function onAddedToInventory() {
         <div class="h-full overflow-y-auto p-6">
           <div class="mb-5 flex items-center justify-between gap-3">
             <h2 class="truncate text-lg font-semibold text-gray-900">
-              {{ detail?.card.name ?? 'Karte' }}
+              {{ detail?.card.name ?? t('catalog.detail.fallbackTitle') }}
             </h2>
             <UButton
               icon="i-lucide-x"
               color="neutral"
               variant="ghost"
-              aria-label="Schließen"
+              :aria-label="t('common.close')"
               class="tap-target"
               @click="closeCard"
             />
@@ -565,8 +563,8 @@ async function onAddedToInventory() {
             v-else-if="detailError"
             color="error"
             icon="i-lucide-circle-alert"
-            title="Karte nicht gefunden"
-            description="Der Detaildatensatz konnte nicht geladen werden."
+            :title="t('catalog.detail.notFound')"
+            :description="t('catalog.detail.notFoundDescription')"
           />
 
           <article
@@ -593,20 +591,20 @@ async function onAddedToInventory() {
                   · {{ detail.card.attribute }}
                 </template>
                 <template v-if="detail.card.level">
-                  · Level {{ detail.card.level }}
+                  · {{ t('card.level', { level: detail.card.level }) }}
                 </template>
               </p>
               <p
                 v-if="detail.card.atk !== null || detail.card.def !== null"
                 class="text-sm text-gray-600"
               >
-                ATK {{ detail.card.atk ?? '-' }} / DEF {{ detail.card.def ?? '-' }}
+                {{ t('card.atkDef', { atk: detail.card.atk ?? '-', def: detail.card.def ?? '-' }) }}
               </p>
             </div>
 
             <section>
               <h4 class="text-sm font-semibold text-gray-900">
-                Kartentext
+                {{ t('catalog.detail.cardText') }}
               </h4>
               <p class="mt-2 whitespace-pre-line text-sm leading-6 text-gray-700">
                 {{ detail.card.desc }}
@@ -615,7 +613,7 @@ async function onAddedToInventory() {
 
             <section v-if="detail.printings.length > 0">
               <h4 class="text-sm font-semibold text-gray-900">
-                Printings
+                {{ t('catalog.detail.printings') }}
               </h4>
               <ul class="mt-2 divide-y divide-gray-200 rounded-md border border-gray-200">
                 <li

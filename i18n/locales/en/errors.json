@@ -7,7 +7,17 @@
       "display_name_required": "Please enter a display name.",
       "display_name_too_long": "The display name can be at most 60 characters long.",
       "bio_too_long": "“About me” can be at most 500 characters long.",
-      "invalid_locale": "This language isn't supported."
+      "invalid_locale": "This language isn't supported.",
+      "quantity_invalid": "The quantity must be a whole number of at least 1.",
+      "quantity_too_large": "The quantity can be at most {max}.",
+      "owned_card_not_found": "This card is no longer in your inventory.",
+      "items_invalid": "Some lines are invalid.",
+      "collection_not_found": "This collection no longer exists.",
+      "collection_name_taken": "A collection with this name already exists.",
+      "wishlist_item_not_found": "This entry is no longer on your wishlist.",
+      "deck_not_found": "This deck no longer exists.",
+      "share_user_not_found": "This player doesn't exist.",
+      "share_not_found": "This share no longer exists."
     }
   }
 }

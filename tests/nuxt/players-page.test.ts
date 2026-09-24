@@ -3,6 +3,7 @@ import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
 import PlayerIndexPage from '~/pages/players/[handle]/index.vue'
 import PlayerDeckPage from '~/pages/players/[handle]/decks/[id].vue'
 import type { PublicProfileResponse, SharedDeckView } from '~~/shared/sharing'
+import { setTestLocale } from './fixtures/locale'
 
 const state = vi.hoisted(() => ({
   profile: null as PublicProfileResponse | null,
@@ -31,8 +32,9 @@ mockNuxtImport('useRoute', () => {
   return () => ({ params: { handle: 'fabian', id: 'deck-1' }, query: {}, fullPath: '/players/fabian' })
 })
 
-afterEach(() => {
+afterEach(async () => {
   state.session = null
+  await setTestLocale('de')
 })
 
 function profileResponse(overrides: Partial<PublicProfileResponse> = {}): PublicProfileResponse {
@@ -86,6 +88,28 @@ describe('public profile page', () => {
     // Initials avatar (#29) and the deck tile's cover card.
     expect(component.find('[data-slot="fallback"]').text()).toBe('F')
     expect(component.find('img[src="https://images.example/cards_small/89631139.jpg"]').exists()).toBe(true)
+  })
+
+  it('renders in English with English plurals', async () => {
+    await setTestLocale('en')
+    state.error = null
+    state.profile = profileResponse({
+      viewer: { isAuthenticated: true, isOwner: true },
+      collections: [{ id: 'col-1', name: 'Binder', description: null, cardCount: 1, visibility: 'link' }],
+      inventory: { visible: true, cardCount: 1200 },
+    })
+
+    const component = await mountSuspended(PlayerIndexPage)
+    const text = component.text()
+
+    expect(text).toContain('@fabian')
+    expect(text).toContain('Preview of your profile – only you can see private content.')
+    expect(text).toContain('Collections')
+    expect(text).toContain('1 card')
+    expect(text).toContain('Link only')
+    expect(text).toContain('1,200 cards')
+    expect(text).toContain('View inventory')
+    expect(text).not.toMatch(/Karte|Sammlungen|Inventar/)
   })
 
   it('hides the inventory link when the inventory is not visible', async () => {

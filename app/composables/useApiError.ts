@@ -1,4 +1,20 @@
-import { apiErrorCode } from '~/utils/card-entry'
+import { apiErrorCode, apiErrorParams } from '~/utils/card-entry'
+
+/**
+ * Translates an API error code in the interface language (ADR 0014): the
+ * message under `errors.api.<code>` (with the error's named `params`, e.g.
+ * `{ max }`) when there is one, else the caller's fallback key.
+ *
+ * Also used for per-item errors (`/api/inventory/bulk`'s `data.errors[]`,
+ * which carry their own `code`/`params`).
+ */
+export function useApiErrorCode() {
+  const { t, te } = useI18n()
+  return (code: string | undefined, params: Record<string, unknown> | undefined, fallbackKey: string): string => {
+    const key = code ? `errors.api.${code}` : undefined
+    return key && te(key) ? t(key, params ?? {}) : t(fallbackKey)
+  }
+}
 
 /**
  * Turns a failed `$fetch` into a message in the interface language
@@ -10,10 +26,7 @@ import { apiErrorCode } from '~/utils/card-entry'
  * migrates the call sites of its own area.
  */
 export function useApiError() {
-  const { t, te } = useI18n()
-  return (error: unknown, fallbackKey: string): string => {
-    const code = apiErrorCode(error)
-    const key = code ? `errors.api.${code}` : undefined
-    return key && te(key) ? t(key) : t(fallbackKey)
-  }
+  const translate = useApiErrorCode()
+  return (error: unknown, fallbackKey: string): string =>
+    translate(apiErrorCode(error), apiErrorParams(error), fallbackKey)
 }

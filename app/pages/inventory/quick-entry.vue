@@ -2,7 +2,6 @@
 import {
   MAX_ENTRY_LINES,
   MAX_ENTRY_ROWS,
-  apiErrorMessage,
   createEntryRows,
 } from '~/utils/card-entry'
 import type { EntryRow, EntrySuggestResult } from '~/utils/card-entry'
@@ -12,7 +11,10 @@ interface CollectionOption {
   name: string
 }
 
-useHead({ title: 'Schnellerfassung – yugioh alpha' })
+usePageTitle('quickEntry.title')
+
+const { t } = useI18n()
+const apiError = useApiError()
 
 const toast = useToast()
 const route = useRoute()
@@ -48,16 +50,17 @@ async function requestSuggestions(body: { text?: string, items?: string[] }) {
     const free = Math.max(0, MAX_ENTRY_ROWS - rows.value.length)
     const accepted = response.results.slice(0, free)
     if (accepted.length < response.results.length) {
-      warningMessage.value = `Die Prüfliste fasst ${MAX_ENTRY_ROWS} Zeilen — `
-        + `${response.results.length - accepted.length} Zeile(n) wurden nicht übernommen. `
-        + 'Speichere zuerst die vorhandenen Zeilen.'
+      warningMessage.value = t('quickEntry.queueFull.description', {
+        max: MAX_ENTRY_ROWS,
+        dropped: response.results.length - accepted.length,
+      })
     }
 
     rows.value = [...rows.value, ...createEntryRows(accepted)]
     return accepted.length
   }
   catch (error) {
-    errorMessage.value = apiErrorMessage(error, 'Die Karten konnten nicht erkannt werden.')
+    errorMessage.value = apiError(error, 'quickEntry.errors.suggestFailed')
     return 0
   }
   finally {
@@ -67,6 +70,11 @@ async function requestSuggestions(body: { text?: string, items?: string[] }) {
 
 // --- Liste -----------------------------------------------------------------
 
+// Input syntax samples: card names and codes, the same in every language.
+const LIST_PLACEHOLDER = ['3x Dark Magician', 'Pot of Greed', 'Dark Magician (SDY-006)', '46986414'].join('\n')
+const LIST_EXAMPLES = ['3x Dark Magician', 'Dark Magician x3', 'Dark Magician (SDY-006)', 'SDY-006', '46986414']
+  .map((text, index, all) => ({ text, separator: index < all.length - 1 ? ', ' : '' }))
+
 const listText = ref('')
 
 const listLineCount = computed(() => listText.value.split(/\r?\n/).filter(line => line.trim() !== '').length)
@@ -74,11 +82,11 @@ const tooManyLines = computed(() => listLineCount.value > MAX_ENTRY_LINES)
 
 async function submitList() {
   if (listText.value.trim() === '') {
-    errorMessage.value = 'Bitte zuerst mindestens eine Karte eintragen.'
+    errorMessage.value = t('quickEntry.errors.empty')
     return
   }
   if (tooManyLines.value) {
-    errorMessage.value = `Bitte höchstens ${MAX_ENTRY_LINES} Zeilen auf einmal auswerten.`
+    errorMessage.value = t('quickEntry.errors.tooManyLines', { max: MAX_ENTRY_LINES })
     return
   }
 
@@ -92,8 +100,8 @@ async function submitList() {
 
 function onSaved(result: { created: number, merged: number }) {
   toast.add({
-    title: 'Karten gespeichert',
-    description: `${result.created} neu · ${result.merged} zusammengeführt`,
+    title: t('quickEntry.toast.saved.title'),
+    description: t('quickEntry.toast.saved.description', { created: result.created, merged: result.merged }),
     icon: 'i-lucide-check',
     color: 'success',
   })
@@ -105,11 +113,11 @@ function onSaved(result: { created: number, merged: number }) {
     <div class="space-y-2">
       <LayoutBackLink
         :to="{ path: '/inventory', query: presetCollectionId ? { collectionId: presetCollectionId } : {} }"
-        label="Zurück zum Inventar"
+        :label="t('quickEntry.backToInventory')"
       />
       <LayoutPageHeader
-        title="Schnellerfassung"
-        description="Karten als Liste tippen — und vor dem Speichern prüfen."
+        :title="t('quickEntry.title')"
+        :description="t('quickEntry.description')"
       />
     </div>
 
@@ -117,8 +125,8 @@ function onSaved(result: { created: number, merged: number }) {
       color="neutral"
       variant="subtle"
       icon="i-lucide-sparkles"
-      title="Karten per Foto? Nutze den Assistenten"
-      description="Ein Kartenfoto erkennen oder direkt ein Deck bauen lassen — das übernimmt jetzt der Assistent."
+      :title="t('quickEntry.assistantHint.title')"
+      :description="t('quickEntry.assistantHint.description')"
     >
       <template #actions>
         <UButton
@@ -126,7 +134,7 @@ function onSaved(result: { created: number, merged: number }) {
           size="xs"
           color="neutral"
           variant="outline"
-          label="Zum Assistenten"
+          :label="t('quickEntry.assistantHint.cta')"
           class="tap-target"
         />
       </template>
@@ -135,36 +143,38 @@ function onSaved(result: { created: number, merged: number }) {
     <div class="rounded-md border border-gray-200 bg-white p-4">
       <div class="space-y-3">
         <UFormField
-          label="Kartenliste"
-          description="Eine Karte pro Zeile. Anzahl, Set-Code oder Passcode werden automatisch erkannt."
+          :label="t('quickEntry.list.label')"
+          :description="t('quickEntry.list.description')"
         >
           <UTextarea
             v-model="listText"
             :rows="8"
             class="w-full"
-            aria-label="Kartenliste"
-            placeholder="3x Dark Magician&#10;Pot of Greed&#10;Dark Magician (SDY-006)&#10;46986414"
+            :aria-label="t('quickEntry.list.label')"
+            :placeholder="LIST_PLACEHOLDER"
           />
         </UFormField>
 
         <p class="text-xs text-gray-500">
-          Beispiele: <span class="font-mono">3x Dark Magician</span>,
-          <span class="font-mono">Dark Magician x3</span>,
-          <span class="font-mono">Dark Magician (SDY-006)</span>,
-          <span class="font-mono">SDY-006</span>,
-          <span class="font-mono">46986414</span>
+          {{ t('quickEntry.list.examples') }}
+          <template
+            v-for="example in LIST_EXAMPLES"
+            :key="example.text"
+          >
+            <span class="font-mono">{{ example.text }}</span>{{ example.separator }}
+          </template>
         </p>
 
         <p
           v-if="tooManyLines"
           class="text-xs text-amber-700"
         >
-          {{ listLineCount }} Zeilen — bitte höchstens {{ MAX_ENTRY_LINES }} auf einmal auswerten.
+          {{ t('quickEntry.list.tooManyLines', { count: listLineCount, max: MAX_ENTRY_LINES }) }}
         </p>
 
         <UButton
           icon="i-lucide-scan-text"
-          label="Karten erkennen"
+          :label="t('quickEntry.list.submit')"
           :loading="isSuggesting"
           :disabled="tooManyLines"
           @click="submitList"
@@ -176,7 +186,7 @@ function onSaved(result: { created: number, merged: number }) {
       v-if="errorMessage"
       color="error"
       variant="subtle"
-      title="Das hat nicht geklappt"
+      :title="t('quickEntry.errors.title')"
       :description="errorMessage"
     />
 
@@ -184,7 +194,7 @@ function onSaved(result: { created: number, merged: number }) {
       v-if="warningMessage"
       color="warning"
       variant="subtle"
-      title="Prüfliste ist voll"
+      :title="t('quickEntry.queueFull.title')"
       :description="warningMessage"
     />
 
@@ -193,7 +203,7 @@ function onSaved(result: { created: number, merged: number }) {
       class="space-y-4"
     >
       <h2 class="text-lg font-semibold text-gray-900">
-        Prüfen und korrigieren
+        {{ t('quickEntry.review.title') }}
       </h2>
       <EntryReviewTable
         v-model:rows="rows"
@@ -206,7 +216,7 @@ function onSaved(result: { created: number, merged: number }) {
       v-else-if="!isSuggesting"
       class="text-sm text-gray-500"
     >
-      Noch nichts zu prüfen — lies zuerst Karten als Liste ein.
+      {{ t('quickEntry.review.nothingYet') }}
     </p>
   </div>
 </template>

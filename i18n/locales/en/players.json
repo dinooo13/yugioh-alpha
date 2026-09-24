@@ -1,3 +1,28 @@
 {
-  "players": {}
+  "players": {
+    "cardCount": "{count} card | {count} cards",
+    "backToProfile": "Back to profile",
+    "profile": {
+      "fallbackTitle": "Profile",
+      "ownerPreview": "Preview of your profile – only you can see private content.",
+      "manageVisibility": "Manage visibility",
+      "ownerEmpty": "You're not sharing anything right now.",
+      "ownerEmptyDescription": "Decks, collections, inventory and wishlist stay private until you share them.",
+      "empty": "This profile isn't sharing anything right now.",
+      "decks": "Decks",
+      "emptyDeckCover": "Empty",
+      "collections": "Collections",
+      "inventory": "Inventory",
+      "viewInventory": "View inventory",
+      "wishlist": "Wishlist"
+    },
+    "inventory": {
+      "title": "{name}'s inventory",
+      "fallbackTitle": "Inventory"
+    },
+    "collection": {
+      "title": "Collection “{name}” by {owner}",
+      "fallbackTitle": "Collection"
+    }
+  }
 }

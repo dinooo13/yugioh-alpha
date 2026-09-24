@@ -8,19 +8,10 @@ import type { DeckSection } from './deck-sections'
 import type { AppLocale } from './locale'
 import type { DeckValidation } from './rule-formats'
 
+// Labels live in the i18n catalogues: `sharing.visibility.<v>.{label,description}`
+// (ADR 0014).
 export const VISIBILITIES = ['private', 'link', 'public'] as const
 export type Visibility = typeof VISIBILITIES[number]
-
-export const VISIBILITY_LABELS: Record<Visibility, string> = {
-  private: 'Privat',
-  link: 'Nur über Link',
-  public: 'Öffentlich',
-}
-export const VISIBILITY_DESCRIPTIONS: Record<Visibility, string> = {
-  private: 'Nur du kannst das sehen.',
-  link: 'Jede Person mit dem Link kann es ansehen.',
-  public: 'Für alle sichtbar und auf deinem Profil gelistet.',
-}
 
 export const SHARE_RESOURCE_TYPES = ['deck', 'collection', 'inventory'] as const
 export type ShareResourceType = typeof SHARE_RESOURCE_TYPES[number]

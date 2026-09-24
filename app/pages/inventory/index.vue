@@ -1,9 +1,7 @@
 <script setup lang="ts">
 import type { LocationQueryRaw } from 'vue-router'
-import { pluralize } from '~~/shared/plural'
 import { UNASSIGNED_COLLECTION_ID } from '~~/shared/inventory'
 import type { InventorySearchFilters } from '~/components/inventory/InventorySearchPanel.vue'
-import { apiErrorMessage } from '~/utils/card-entry'
 import type { InventorySearchResultItem } from '~/utils/inventory-search-result'
 
 interface InventoryItem {
@@ -75,7 +73,11 @@ function emptyFacets(): SearchFacets {
   }
 }
 
-useHead({ title: 'Inventar – yugioh alpha' })
+usePageTitle('inventory.title')
+
+const { t } = useI18n()
+const count = useCount()
+const apiError = useApiError()
 
 const route = useRoute()
 const router = useRouter()
@@ -188,7 +190,7 @@ const unassignedCount = computed(() => Math.max(
 
 const isUnassigned = computed(() => collectionId.value === UNASSIGNED_COLLECTION_ID)
 const activeCollection = computed(() => collectionOptions.value.find(c => c.id === collectionId.value) ?? null)
-const headerTitle = computed(() => activeCollection.value?.name ?? (isUnassigned.value ? 'Ohne Sammlung' : 'Alle Karten'))
+const headerTitle = computed(() => activeCollection.value?.name ?? (isUnassigned.value ? t('inventory.scope.unassigned') : t('inventory.scope.all')))
 const headerCount = computed(() => {
   if (activeCollection.value) {
     return activeCollection.value.cardCount
@@ -222,7 +224,7 @@ async function onCollectionDeleted() {
 
 const noAssignmentValue = '__no_collection__'
 const assignItems = computed(() => [
-  { label: '— (keine)', value: noAssignmentValue },
+  { label: t('inventory.noCollectionOption'), value: noAssignmentValue },
   ...collectionOptions.value.map(c => ({ label: c.name, value: c.id })),
 ])
 
@@ -236,24 +238,8 @@ async function assignToCollection(item: InventoryItem, value: string) {
     await Promise.all([refresh(), refreshCollections(), refreshSearch()])
   }
   catch (error) {
-    errorMessage.value = apiErrorMessage(error, 'Die Sammlung konnte nicht geändert werden.')
+    errorMessage.value = apiError(error, 'inventory.errors.assignFailed')
   }
-}
-
-const editionLabels: Record<string, string> = {
-  first: '1st',
-  unlimited: 'Unlimited',
-  limited: 'Limited',
-}
-
-const conditionLabels: Record<string, string> = {
-  mint: 'M',
-  near_mint: 'NM',
-  excellent: 'EX',
-  good: 'GD',
-  light_played: 'LP',
-  played: 'PL',
-  poor: 'PO',
 }
 
 // Any filter or scope change resets both views back to page 1.
@@ -392,8 +378,8 @@ const { confirm } = useConfirm()
 async function removeItem(item: InventoryItem) {
   errorMessage.value = ''
   const confirmed = await confirm({
-    title: 'Karte entfernen',
-    description: `${item.cardName} aus dem Inventar entfernen?`,
+    title: t('inventory.confirm.remove.title'),
+    description: t('inventory.confirm.remove.description', { name: item.cardName }),
   })
   if (!confirmed) {
     return
@@ -404,7 +390,7 @@ async function removeItem(item: InventoryItem) {
     await Promise.all([refresh(), refreshCollections(), refreshSearch(), refreshFacets()])
   }
   catch (error) {
-    errorMessage.value = apiErrorMessage(error, 'Die Karte konnte nicht entfernt werden.')
+    errorMessage.value = apiError(error, 'inventory.errors.removeFailed')
   }
 }
 
@@ -424,7 +410,7 @@ const cardFilterName = computed(() => {
   if (cardFilterSource.value && cardFilterSource.value.id === cardFilter.value) {
     return cardFilterSource.value.name
   }
-  return items.value[0]?.cardName ?? 'Karte'
+  return items.value[0]?.cardName ?? t('inventory.cardFilter.fallbackName')
 })
 
 // "In Liste bearbeiten": show this card's individual rows in "Liste".
@@ -463,7 +449,7 @@ async function onSaved() {
     >
       <template #description>
         <span class="inline-flex flex-wrap items-center gap-2">
-          {{ pluralize(headerCount, 'Karte', 'Karten') }}
+          {{ count('inventory.cardCount', headerCount) }}
           <SharingVisibilityBadge
             v-if="activeCollection"
             :visibility="activeCollection.visibility"
@@ -478,11 +464,11 @@ async function onSaved() {
           icon="i-lucide-zap"
           color="neutral"
           variant="outline"
-          label="Schnellerfassung"
+          :label="t('inventory.actions.quickEntry')"
         />
         <UButton
           icon="i-lucide-plus"
-          label="Karte hinzufügen"
+          :label="t('inventory.actions.addCard')"
           @click="() => { isPickerOpen = true }"
         />
       </template>
@@ -501,14 +487,14 @@ async function onSaved() {
 
         <UFieldGroup>
           <UButton
-            label="Liste"
+            :label="t('inventory.view.list')"
             color="neutral"
             :variant="mode === 'list' ? 'solid' : 'outline'"
             :aria-pressed="mode === 'list'"
             @click="() => { mode = 'list' }"
           />
           <UButton
-            label="Übersicht"
+            :label="t('inventory.view.overview')"
             color="neutral"
             :variant="mode === 'overview' ? 'solid' : 'outline'"
             :aria-pressed="mode === 'overview'"
@@ -521,13 +507,13 @@ async function onSaved() {
         <UInput
           v-model="filters.q"
           icon="i-lucide-search"
-          placeholder="Im Inventar suchen..."
-          aria-label="Inventar durchsuchen"
+          :placeholder="t('inventory.search.placeholder')"
+          :aria-label="t('inventory.search.label')"
           class="w-full max-w-xl"
         />
         <UCheckbox
           v-model="filters.inText"
-          label="Auch im Kartentext suchen"
+          :label="t('inventory.search.inText')"
         />
       </div>
     </div>
@@ -544,14 +530,12 @@ async function onSaved() {
     <InventorySearchPanel
       v-model:filters="filters"
       :facets="facets"
-      :edition-labels="editionLabels"
-      :condition-labels="conditionLabels"
     />
     <p
       v-if="mode === 'list' && hasActiveFacets"
       class="text-xs text-gray-500"
     >
-      Diese Filter wirken nur in "Übersicht". "Liste" filtert nach Suchtext und Sammlung.
+      {{ t('inventory.search.facetsOverviewOnly') }}
     </p>
 
     <!-- Übersicht: aggregated, faceted inventory-wide search -->
@@ -560,7 +544,7 @@ async function onSaved() {
       class="space-y-4"
     >
       <p class="text-sm text-gray-500">
-        {{ pluralize(searchTotal, 'Karte', 'Karten') }}
+        {{ count('inventory.cardCount', searchTotal) }}
       </p>
 
       <div
@@ -582,14 +566,14 @@ async function onSaved() {
           v-if="searchError"
           color="error"
           variant="subtle"
-          title="Die Suche konnte nicht geladen werden"
-          description="Bitte versuche es erneut."
+          :title="t('inventory.overview.loadFailed')"
+          :description="t('inventory.overview.tryAgain')"
           class="m-4"
         >
           <template #actions>
             <UButton
               icon="i-lucide-refresh-cw"
-              label="Erneut versuchen"
+              :label="t('common.retry')"
               color="error"
               variant="outline"
               @click="() => refreshSearch()"
@@ -600,14 +584,14 @@ async function onSaved() {
         <LayoutEmptyState
           v-else-if="!hasAnyFilter"
           icon="i-lucide-archive"
-          title="Inventar ist leer"
-          description="Suche eine Karte im Katalog und füge deine ersten Exemplare hinzu."
+          :title="t('inventory.overview.empty')"
+          :description="t('inventory.emptyDescription')"
           :bordered="false"
         >
           <template #actions>
             <UButton
               icon="i-lucide-plus"
-              label="Karte hinzufügen"
+              :label="t('inventory.actions.addCard')"
               @click="() => { isPickerOpen = true }"
             />
           </template>
@@ -616,8 +600,8 @@ async function onSaved() {
         <LayoutEmptyState
           v-else
           icon="i-lucide-search-x"
-          title="Keine Treffer für diese Filter"
-          description="Passe die Suche oder die Filter an, um mehr Karten zu finden."
+          :title="t('inventory.overview.noMatches')"
+          :description="t('inventory.overview.noMatchesDescription')"
           :bordered="false"
         />
       </div>
@@ -661,7 +645,7 @@ async function onSaved() {
           variant="subtle"
           size="lg"
           icon="i-lucide-filter"
-          :label="`Nur: ${cardFilterName}`"
+          :label="t('inventory.cardFilter.label', { name: cardFilterName })"
           class="max-w-full truncate"
         />
         <UButton
@@ -670,7 +654,7 @@ async function onSaved() {
           variant="ghost"
           size="xs"
           class="tap-target"
-          aria-label="Kartenfilter entfernen"
+          :aria-label="t('inventory.cardFilter.clear')"
           @click="clearCardFilter"
         />
       </div>
@@ -680,7 +664,7 @@ async function onSaved() {
           v-if="pending"
           class="divide-y divide-gray-100"
           aria-busy="true"
-          aria-label="Inventar wird geladen"
+          :aria-label="t('inventory.list.loading')"
         >
           <li
             v-for="n in 5"
@@ -698,30 +682,30 @@ async function onSaved() {
         <LayoutEmptyState
           v-else-if="items.length === 0 && (cardFilter || debouncedQ)"
           icon="i-lucide-search-x"
-          title="Keine Treffer"
-          description="Passe die Suche an oder entferne den Kartenfilter."
+          :title="t('inventory.list.noMatches')"
+          :description="t('inventory.list.noMatchesDescription')"
           :bordered="false"
         />
 
         <LayoutEmptyState
           v-else-if="items.length === 0 && isUnassigned"
           icon="i-lucide-archive"
-          title="Keine Karten ohne Sammlung"
-          description="Jede Karte in deinem Inventar ist einer Sammlung zugeordnet."
+          :title="t('inventory.list.noUnassigned')"
+          :description="t('inventory.list.noUnassignedDescription')"
           :bordered="false"
         />
 
         <LayoutEmptyState
           v-else-if="items.length === 0"
           icon="i-lucide-archive"
-          :title="collectionId ? 'Noch keine Karten in dieser Sammlung' : 'Keine Karten im Inventar'"
-          description="Suche eine Karte im Katalog und füge deine ersten Exemplare hinzu."
+          :title="collectionId ? t('inventory.list.emptyCollection') : t('inventory.list.empty')"
+          :description="t('inventory.emptyDescription')"
           :bordered="false"
         >
           <template #actions>
             <UButton
               icon="i-lucide-plus"
-              label="Karte hinzufügen"
+              :label="t('inventory.actions.addCard')"
               @click="() => { isPickerOpen = true }"
             />
           </template>
@@ -737,8 +721,6 @@ async function onSaved() {
             :item="item"
             :assign-items="assignItems"
             :no-assignment-value="noAssignmentValue"
-            :edition-labels="editionLabels"
-            :condition-labels="conditionLabels"
             @assign="(value: string) => assignToCollection(item, value)"
             @edit="openEdit(item)"
             @remove="removeItem(item)"
@@ -761,7 +743,7 @@ async function onSaved() {
 
     <UModal
       v-model:open="isPickerOpen"
-      title="Karte aus dem Katalog wählen"
+      :title="t('inventory.picker.title')"
     >
       <template #body>
         <InventoryCatalogCardPicker @select="openAdd" />

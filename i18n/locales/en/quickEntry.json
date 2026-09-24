@@ -1,3 +1,92 @@
 {
-  "quickEntry": {}
+  "quickEntry": {
+    "title": "Quick entry",
+    "description": "Type cards as a list — and check them before saving.",
+    "backToInventory": "Back to inventory",
+    "assistantHint": {
+      "title": "Cards from a photo? Use the assistant",
+      "description": "Recognizing a card photo or building a deck for you — the assistant handles that now.",
+      "cta": "Go to the assistant"
+    },
+    "list": {
+      "label": "Card list",
+      "description": "One card per line. Quantity, set code or passcode are detected automatically.",
+      "examples": "Examples:",
+      "tooManyLines": "{count} lines — please process at most {max} at a time.",
+      "submit": "Recognize cards"
+    },
+    "queueFull": {
+      "title": "The review list is full",
+      "description": "The review list holds {max} lines — {dropped} line(s) were not added. Save the existing lines first."
+    },
+    "errors": {
+      "title": "That didn't work",
+      "empty": "Please enter at least one card first.",
+      "tooManyLines": "Please process at most {max} lines at a time.",
+      "suggestFailed": "Couldn't recognize the cards."
+    },
+    "toast": {
+      "saved": {
+        "title": "Cards saved",
+        "description": "{created} new · {merged} merged"
+      }
+    },
+    "field": {
+      "edition": "Edition"
+    },
+    "defaults": {
+      "title": "Defaults",
+      "description": "Apply to every line unless a line sets something else.",
+      "printingLanguage": "Default printing language",
+      "condition": "Default condition",
+      "edition": "Default edition",
+      "collection": "Default collection"
+    },
+    "summary": {
+      "total": "{count} total",
+      "sicher": "{count} certain",
+      "unsicher": "{count} uncertain",
+      "ohne_treffer": "{count} without a match"
+    },
+    "status": {
+      "sicher": "Certain",
+      "unsicher": "Uncertain",
+      "ohne_treffer": "No match"
+    },
+    "matchedBy": {
+      "passcode": "Passcode",
+      "set_code": "Set code",
+      "exact": "Exact",
+      "prefix": "Name prefix",
+      "contains": "Contains",
+      "fuzzy": "Similar"
+    },
+    "review": {
+      "title": "Check and correct",
+      "nothingYet": "Nothing to check yet — enter some cards as a list first.",
+      "clear": "Clear list",
+      "saveResolved": "Save resolved only",
+      "saveAll": "Save all",
+      "unresolvedHint": "Some lines are still open. Pick a match or remove the line to save everything.",
+      "nothingResolved": "There are no resolved lines to save.",
+      "saveFailedTitle": "Saving failed",
+      "saveFailed": "Couldn't save the cards.",
+      "itemError": "“{line}”: {message}",
+      "itemInvalid": "This line is invalid."
+    },
+    "row": {
+      "candidate": "{name} · {matchedBy} {score}%",
+      "noPrinting": "No specific printing",
+      "useDefault": "Default",
+      "conflict": "The set code and the name point to different cards — please pick one.",
+      "quantityFor": "Quantity for {line}",
+      "adjustValues": "Adjust values for {line}",
+      "remove": "Remove {line}",
+      "pickCandidate": "Pick a match...",
+      "candidateFor": "Match for {line}",
+      "noSuggestions": "No suggestions — please search the catalog.",
+      "printingFor": "Printing for {line}",
+      "catalog": "Catalog"
+    }
+  }
 }

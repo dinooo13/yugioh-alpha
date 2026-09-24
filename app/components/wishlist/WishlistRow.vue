@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import type { WishlistItemView } from '~~/shared/sharing'
-import { apiErrorMessage } from '~/utils/card-entry'
 
 const props = defineProps<{
   item: WishlistItemView
@@ -10,6 +9,9 @@ const emit = defineEmits<{
   updated: [item: WishlistItemView]
   removed: [id: string]
 }>()
+
+const { t } = useI18n()
+const apiError = useApiError()
 
 const noteDraft = ref(props.item.note ?? '')
 watch(() => props.item.note, (value) => {
@@ -30,7 +32,7 @@ async function patch(body: Record<string, unknown>) {
     emit('updated', updated)
   }
   catch (error) {
-    errorMessage.value = apiErrorMessage(error, 'Die Wunschliste konnte nicht aktualisiert werden.')
+    errorMessage.value = apiError(error, 'wishlist.errors.updateFailed')
   }
   finally {
     isSaving.value = false
@@ -59,7 +61,7 @@ async function remove() {
     emit('removed', props.item.id)
   }
   catch (error) {
-    errorMessage.value = apiErrorMessage(error, 'Der Eintrag konnte nicht entfernt werden.')
+    errorMessage.value = apiError(error, 'wishlist.errors.removeFailed')
   }
 }
 </script>
@@ -84,12 +86,19 @@ async function remove() {
           v-if="item.owned !== undefined"
           class="mt-0.5 text-xs text-gray-500"
         >
-          Besitz: <span class="font-semibold tabular-nums">{{ item.owned }}</span>
+          <i18n-t
+            keypath="wishlist.row.owned"
+            scope="global"
+          >
+            <template #count>
+              <span class="font-semibold tabular-nums">{{ item.owned }}</span>
+            </template>
+          </i18n-t>
         </p>
         <UInput
           v-model="noteDraft"
-          placeholder="Notiz (optional)"
-          :aria-label="`Notiz für ${item.name}`"
+          :placeholder="t('wishlist.row.notePlaceholder')"
+          :aria-label="t('wishlist.row.noteFor', { name: item.name })"
           class="mt-1.5 max-w-xs"
           maxlength="200"
           @blur="onNoteBlur"
@@ -103,13 +112,13 @@ async function remove() {
           variant="outline"
           size="xs"
           :disabled="isSaving || item.quantity <= 1"
-          :aria-label="`Ein Exemplar von ${item.name} entfernen`"
+          :aria-label="t('wishlist.row.decrease', { name: item.name })"
           class="tap-target"
           @click="setQuantity(item.quantity - 1)"
         />
         <span
           class="w-8 text-center text-sm font-semibold tabular-nums"
-          :aria-label="`Anzahl von ${item.name}`"
+          :aria-label="t('wishlist.row.quantityOf', { name: item.name })"
         >
           {{ item.quantity }}
         </span>
@@ -119,7 +128,7 @@ async function remove() {
           variant="outline"
           size="xs"
           :disabled="isSaving"
-          :aria-label="`Ein Exemplar von ${item.name} hinzufügen`"
+          :aria-label="t('wishlist.row.increase', { name: item.name })"
           class="tap-target"
           @click="setQuantity(item.quantity + 1)"
         />
@@ -130,7 +139,7 @@ async function remove() {
         color="error"
         variant="ghost"
         size="xs"
-        label="Entfernen"
+        :label="t('common.remove')"
         class="tap-target"
         @click="remove"
       />

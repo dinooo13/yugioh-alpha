@@ -8,8 +8,10 @@ defineProps<{
   counts: { main: number, extra: number, side: number, total: number }
 }>()
 
+const { t } = useI18n()
+
 function cardMetaLine(card: SharedDeckCardRow): string {
-  return [card.type, card.level !== null ? `Stufe ${card.level}` : null, card.attribute]
+  return [card.type, card.level !== null ? t('card.stars', { level: card.level }) : null, card.attribute]
     .filter(Boolean)
     .join(' · ')
 }
@@ -28,7 +30,7 @@ function cardMetaLine(card: SharedDeckCardRow): string {
         </h2>
         <span
           class="text-sm font-semibold tabular-nums text-gray-500"
-          :aria-label="`Anzahl im ${DECK_SECTION_LABELS[section]}`"
+          :aria-label="t('sharing.deckSections.countIn', { section: DECK_SECTION_LABELS[section] })"
         >
           {{ counts[section] }}
         </span>
@@ -38,7 +40,7 @@ function cardMetaLine(card: SharedDeckCardRow): string {
         v-if="sections[section].length === 0"
         class="px-4 py-6 text-sm text-gray-500"
       >
-        Noch keine Karten im {{ DECK_SECTION_LABELS[section] }}.
+        {{ t('sharing.deckSections.empty', { section: DECK_SECTION_LABELS[section] }) }}
       </p>
 
       <ul

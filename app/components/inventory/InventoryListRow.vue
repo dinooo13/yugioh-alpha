@@ -17,8 +17,6 @@ const props = defineProps<{
   item: InventoryListItem
   assignItems: Array<{ label: string, value: string }>
   noAssignmentValue: string
-  editionLabels: Record<string, string>
-  conditionLabels: Record<string, string>
 }>()
 
 const emit = defineEmits<{
@@ -27,8 +25,11 @@ const emit = defineEmits<{
   remove: []
 }>()
 
-const editionLabel = computed(() => props.editionLabels[props.item.edition] ?? props.item.edition)
-const conditionLabel = computed(() => props.conditionLabels[props.item.condition] ?? props.item.condition)
+const { t } = useI18n()
+const { editionShortLabel, conditionShortLabel } = useCardOptionItems()
+
+const editionLabel = computed(() => editionShortLabel(props.item.edition))
+const conditionLabel = computed(() => conditionShortLabel(props.item.condition))
 const languageLabel = computed(() => props.item.language.toUpperCase())
 </script>
 
@@ -56,25 +57,25 @@ const languageLabel = computed(() => props.item.language.toUpperCase())
             size="sm"
             color="neutral"
             variant="soft"
-            :title="`Sprache: ${languageLabel}`"
+            :title="t('inventory.row.fieldValue', { field: t('card.field.printingLanguage'), value: languageLabel })"
           >
-            <span class="sr-only">Sprache </span>{{ languageLabel }}
+            <span class="sr-only">{{ t('card.field.printingLanguage') }} </span>{{ languageLabel }}
           </UBadge>
           <UBadge
             size="sm"
             color="neutral"
             variant="soft"
-            :title="`Auflage: ${editionLabel}`"
+            :title="t('inventory.row.fieldValue', { field: t('card.field.edition'), value: editionLabel })"
           >
-            <span class="sr-only">Auflage </span>{{ editionLabel }}
+            <span class="sr-only">{{ t('card.field.edition') }} </span>{{ editionLabel }}
           </UBadge>
           <UBadge
             size="sm"
             color="neutral"
             variant="soft"
-            :title="`Zustand: ${conditionLabel}`"
+            :title="t('inventory.row.fieldValue', { field: t('card.field.condition'), value: conditionLabel })"
           >
-            <span class="sr-only">Zustand </span>{{ conditionLabel }}
+            <span class="sr-only">{{ t('card.field.condition') }} </span>{{ conditionLabel }}
           </UBadge>
         </div>
       </div>
@@ -86,7 +87,7 @@ const languageLabel = computed(() => props.item.language.toUpperCase())
         <USelect
           :model-value="item.collectionId ?? noAssignmentValue"
           :items="assignItems"
-          :aria-label="`Sammlung für ${item.cardName}`"
+          :aria-label="t('inventory.row.collectionFor', { name: item.cardName })"
           class="min-w-0 flex-1 sm:w-44 sm:flex-none"
           @update:model-value="(value: string) => emit('assign', value)"
         />
@@ -95,14 +96,14 @@ const languageLabel = computed(() => props.item.language.toUpperCase())
             icon="i-lucide-pencil"
             color="neutral"
             variant="ghost"
-            aria-label="Karte bearbeiten"
+            :aria-label="t('inventory.row.edit')"
             @click="emit('edit')"
           />
           <UButton
             icon="i-lucide-trash-2"
             color="error"
             variant="ghost"
-            aria-label="Karte entfernen"
+            :aria-label="t('inventory.row.remove')"
             @click="emit('remove')"
           />
         </div>

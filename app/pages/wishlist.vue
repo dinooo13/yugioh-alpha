@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { pluralize } from '~~/shared/plural'
 import type { WishlistItemView, WishlistResponse } from '~~/shared/sharing'
 
 const PAGE_SIZE = 24
 
-useHead({ title: 'Wunschliste – yugioh alpha' })
+usePageTitle('wishlist.title')
 
+const { t } = useI18n()
+const count = useCount()
 const toast = useToast()
 
 const searchInput = ref('')
@@ -51,7 +52,7 @@ function onUpdated(updated: WishlistItemView) {
 }
 
 async function onRemoved(id: string) {
-  toast.add({ title: 'Von der Wunschliste entfernt', color: 'success' })
+  toast.add({ title: t('wishlist.toast.removed'), color: 'success' })
   if (!data.value) {
     return
   }
@@ -81,8 +82,8 @@ function nextPage() {
 <template>
   <div class="space-y-6">
     <LayoutPageHeader
-      title="Wunschliste"
-      :description="pluralize(total, 'Karte', 'Karten')"
+      :title="t('wishlist.title')"
+      :description="count('wishlist.cardCount', total)"
     >
       <template #actions>
         <SharingVisibilityBadge :visibility="ownProfile?.wishlistVisibility ?? null" />
@@ -90,7 +91,7 @@ function nextPage() {
           to="/profile#wishlist"
           class="text-sm font-medium text-primary hover:underline"
         >
-          Sichtbarkeit ändern
+          {{ t('wishlist.changeVisibility') }}
         </NuxtLink>
       </template>
     </LayoutPageHeader>
@@ -98,8 +99,8 @@ function nextPage() {
     <UInput
       v-model="searchInput"
       icon="i-lucide-search"
-      placeholder="Wunschliste durchsuchen..."
-      aria-label="Wunschliste durchsuchen"
+      :placeholder="t('wishlist.search.placeholder')"
+      :aria-label="t('wishlist.search.label')"
       class="w-full max-w-xl"
     />
 
@@ -117,13 +118,13 @@ function nextPage() {
     <LayoutEmptyState
       v-else-if="items.length === 0"
       icon="i-lucide-heart"
-      title="Noch keine Karten auf der Wunschliste."
-      description="Füge Karten im Katalog zu deiner Wunschliste hinzu."
+      :title="t('wishlist.empty.title')"
+      :description="t('wishlist.empty.description')"
     >
       <template #actions>
         <UButton
           icon="i-lucide-book-open"
-          label="Zum Katalog"
+          :label="t('wishlist.empty.cta')"
           to="/catalog"
         />
       </template>
@@ -151,18 +152,18 @@ function nextPage() {
         color="neutral"
         variant="outline"
         :disabled="page <= 1"
-        aria-label="Vorherige Seite"
+        :aria-label="t('common.pagination.previous')"
         @click="previousPage"
       />
       <span class="min-w-28 text-center text-sm text-gray-600">
-        Seite {{ page }} / {{ totalPages }}
+        {{ t('common.pagination.pageOf', { page, total: totalPages }) }}
       </span>
       <UButton
         icon="i-lucide-chevron-right"
         color="neutral"
         variant="outline"
         :disabled="page >= totalPages"
-        aria-label="Nächste Seite"
+        :aria-label="t('common.pagination.next')"
         @click="nextPage"
       />
     </div>

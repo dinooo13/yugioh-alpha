@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import type { UserSearchItem } from '~~/shared/sharing'
-import { apiErrorMessage } from '~/utils/card-entry'
 
 const emit = defineEmits<{
   select: [userId: string]
 }>()
+
+const { t } = useI18n()
+const apiError = useApiError()
 
 const searchInput = ref('')
 const debouncedSearch = ref('')
@@ -41,7 +43,7 @@ watch(debouncedSearch, async (term) => {
   }
   catch (error) {
     results.value = []
-    errorMessage.value = apiErrorMessage(error, 'Spieler konnten nicht geladen werden.')
+    errorMessage.value = apiError(error, 'sharing.userPicker.loadFailed')
   }
   finally {
     isSearching.value = false
@@ -63,8 +65,8 @@ function select(item: UserSearchItem) {
     <UInput
       v-model="searchInput"
       icon="i-lucide-search"
-      placeholder="Nutzername oder Anzeigename..."
-      aria-label="Spieler suchen"
+      :placeholder="t('sharing.userPicker.placeholder')"
+      :aria-label="t('sharing.userPicker.label')"
       autofocus
     />
 
@@ -82,12 +84,12 @@ function select(item: UserSearchItem) {
             {{ item.displayName }}
           </p>
           <p class="truncate text-xs text-gray-500">
-            @{{ item.handle }}
+            {{ t('sharing.handle', { handle: item.handle }) }}
           </p>
         </div>
         <UButton
           size="xs"
-          label="Hinzufügen"
+          :label="t('common.add')"
           class="tap-target"
           @click="select(item)"
         />
@@ -98,7 +100,7 @@ function select(item: UserSearchItem) {
       v-else-if="hasSearched && !isSearching && debouncedSearch.length >= 2"
       class="text-sm text-gray-500"
     >
-      Keine Spieler gefunden.
+      {{ t('sharing.userPicker.noResults') }}
     </p>
 
     <p

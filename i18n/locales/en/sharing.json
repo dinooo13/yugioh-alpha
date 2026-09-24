@@ -1,3 +1,78 @@
 {
-  "sharing": {}
+  "sharing": {
+    "handle": "{'@'}{handle}",
+    "visibility": {
+      "private": {
+        "label": "Private",
+        "description": "Only you can see this.",
+        "descriptionWithGrants": "Only you and {count} player you shared it with can see this. | Only you and {count} players you shared it with can see this."
+      },
+      "link": {
+        "label": "Link only",
+        "description": "Anyone with the link can view it."
+      },
+      "public": {
+        "label": "Public",
+        "description": "Visible to everyone and listed on your profile."
+      }
+    },
+    "shareModal": {
+      "title": {
+        "deck": "Share deck",
+        "collection": "Share collection",
+        "inventory": "Share inventory"
+      },
+      "publicHint": {
+        "deck": "Not needed – this deck is visible to everyone.",
+        "collection": "Not needed – this collection is visible to everyone.",
+        "inventory": "Not needed – this inventory is visible to everyone."
+      },
+      "linkLabel": "Share link",
+      "copyLink": "Copy link",
+      "linkCopied": "Link copied",
+      "regenerate": "Create a new link",
+      "grantsTitle": "Shared with individual players",
+      "noGrants": "Not shared with any players yet.",
+      "confirm": {
+        "regenerate": {
+          "title": "Create a new link",
+          "description": "Old links will stop working. Continue?"
+        }
+      },
+      "errors": {
+        "loadFailed": "Couldn't load the sharing settings.",
+        "saveFailed": "Couldn't save the sharing settings.",
+        "regenerateFailed": "Couldn't renew the link.",
+        "addGrantFailed": "Couldn't add the player.",
+        "removeGrantFailed": "Couldn't remove the share."
+      }
+    },
+    "userPicker": {
+      "placeholder": "Username or display name...",
+      "label": "Search players",
+      "noResults": "No players found.",
+      "loadFailed": "Couldn't load players."
+    },
+    "notFound": {
+      "title": "Not found or not shared.",
+      "description": "The link may have expired or the share may have been revoked.",
+      "loginHint": "If it was shared with your account, {link}.",
+      "loginLink": "sign in"
+    },
+    "cardList": {
+      "searchPlaceholder": "Search cards...",
+      "searchLabel": "Search cards",
+      "sortLabel": "Sort by",
+      "sort": {
+        "nameAsc": "Name A–Z",
+        "nameDesc": "Name Z–A",
+        "quantity": "Quantity"
+      },
+      "empty": "No cards found."
+    },
+    "deckSections": {
+      "countIn": "Count in the {section}",
+      "empty": "No cards in the {section} yet."
+    }
+  }
 }
