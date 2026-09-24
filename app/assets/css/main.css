@@ -576,12 +576,14 @@
 }
 
 @media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  /* Half the spread of the original fan (-12px/-14deg, 12px/12deg): the
+     card backs stay inside the tile, which no longer clips them (#134). */
   .group:hover .deck-fan > .fan-card:nth-child(1) {
-    transform: translateX(-12px) rotate(-14deg);
+    transform: translateX(-9px) rotate(-11deg);
   }
 
   .group:hover .deck-fan > .fan-card:nth-child(2) {
-    transform: translateX(12px) rotate(12deg);
+    transform: translateX(9px) rotate(9.5deg);
   }
 
   .group:hover .deck-fan > .fan-cover {
