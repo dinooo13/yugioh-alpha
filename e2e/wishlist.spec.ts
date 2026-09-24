@@ -10,8 +10,8 @@ test.describe('wishlist', () => {
     await page.goto('/catalog')
     await page.getByLabel('Karten suchen').fill('Kuriboh')
 
-    // Scope to the card tile (each has `role="button" aria-label="<name>"`,
-    // see app/pages/catalog.vue) — "Zur Wunschliste" itself is not unique
+    // Scope to the card tile (an `<article aria-label="<name>">`, see
+    // app/pages/catalog.vue) — "Zur Wunschliste" itself is not unique
     // across cards.
     const kuribohCard = page.getByLabel(CARD.kuriboh, { exact: true })
     await expect(kuribohCard).toBeVisible()

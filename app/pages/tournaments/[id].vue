@@ -258,7 +258,7 @@ const actionHint = computed(() => {
           >{{ t('tournaments.noFormat') }}</span>
         </div>
 
-        <dl class="mt-2 space-y-0.5 text-sm text-muted">
+        <div class="mt-2 space-y-0.5 text-sm text-muted">
           <div>
             {{ t('tournaments.detail.pairingSystem', { name: t(`tournaments.pairingSystem.${tournament.pairingSystem}.label`) }) }}
           </div>
@@ -269,7 +269,7 @@ const actionHint = computed(() => {
             {{ roundProgress }}
           </div>
           <div>{{ t('tournaments.detail.organizer', { name: tournament.organizerName }) }}</div>
-        </dl>
+        </div>
 
         <template
           v-if="tournament.role === 'organizer'"

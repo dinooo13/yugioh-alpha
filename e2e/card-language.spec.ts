@@ -107,7 +107,7 @@ test.describe('card language', () => {
     await expect(attribute.locator('option', { hasText: /^DARK$/ })).toHaveCount(0)
     await attribute.selectOption({ label: 'FINSTERNIS' })
     await expect(page).toHaveURL(/attribute=DARK/)
-    const tile = page.getByRole('button', { name: CARD.darkMagician, exact: true })
+    const tile = page.getByRole('article', { name: CARD.darkMagician, exact: true })
     await expect(tile.getByText('FINSTERNIS', { exact: true })).toBeVisible()
     await expect(tile.getByText('Normales Monster', { exact: true })).toBeVisible()
 
@@ -116,14 +116,14 @@ test.describe('card language', () => {
     await page.goto('/catalog?attribute=DARK')
     await page.waitForLoadState('networkidle')
     await expect(page.getByRole('combobox', { name: 'Attribute' }).locator('option', { hasText: 'FINSTERNIS' })).toHaveAttribute('value', 'DARK')
-    await expect(page.getByRole('button', { name: CARD.darkMagician, exact: true }).getByText('FINSTERNIS', { exact: true })).toBeVisible()
+    await expect(page.getByRole('article', { name: CARD.darkMagician, exact: true }).getByText('FINSTERNIS', { exact: true })).toBeVisible()
 
     // English cards: the stored values.
     await page.request.patch('/api/profile', { data: { cardLocale: 'en' } })
     await page.goto('/catalog?attribute=DARK')
     await page.waitForLoadState('networkidle')
     await expect(page.getByRole('combobox', { name: 'Attribute' }).locator('option', { hasText: /^DARK$/ })).toHaveAttribute('value', 'DARK')
-    const englishTile = page.getByRole('button', { name: CARD_EN.darkMagician, exact: true })
+    const englishTile = page.getByRole('article', { name: CARD_EN.darkMagician, exact: true })
     await expect(englishTile.getByText('DARK', { exact: true })).toBeVisible()
     await expect(englishTile.getByText('Normal Monster', { exact: true })).toBeVisible()
 
