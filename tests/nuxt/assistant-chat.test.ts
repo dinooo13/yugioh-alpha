@@ -20,7 +20,9 @@ import { getAssistantLimits } from '../../server/utils/assistant-limits'
 import { applyAction } from '../../server/utils/assistant-tools'
 import { createDeck, deleteDeck, updateDeck, upsertDeckCard } from '../../server/utils/decks'
 import { createRuleFormat, validateRuleFormatInput } from '../../server/utils/rule-formats'
-import { ASSISTANT_CONVERSATION_TITLE_MAX, deckConversationTitle } from '../../shared/assistant-chat'
+import { readFileSync } from 'node:fs'
+import { ASSISTANT_CONVERSATION_TITLE_MAX, ASSISTANT_ERROR_CODES, deckConversationTitle } from '../../shared/assistant-chat'
+import { REPLY_LANGUAGE_INSTRUCTION, TURN_TEXT } from '../../server/utils/assistant-prompts'
 
 const CARD = {
   darkMagician: 46986414,
@@ -205,9 +207,10 @@ describe('runChatTurn', () => {
     ])
 
     const toolCallEvent = events.find(event => event.type === 'tool_call')
-    expect(toolCallEvent).toMatchObject({ name: 'search_catalog', label: expect.stringContaining('Dark Magician') })
+    // Structured (ADR 0014): the UI builds the chip text in its language.
+    expect(toolCallEvent).toEqual({ type: 'tool_call', id: 'call-search_catalog', name: 'search_catalog', arguments: { query: 'Dark Magician' } })
     const toolResultEvent = events.find(event => event.type === 'tool_result')
-    expect(toolResultEvent).toMatchObject({ ok: true })
+    expect(toolResultEvent).toEqual({ type: 'tool_result', id: 'call-search_catalog', ok: true, outcome: { count: 1 } })
 
     const detail = getConversationDetail(db, 'user-a', conversation.id)
     expect(detail.messages.map(message => message.role)).toEqual(['user', 'assistant', 'tool', 'assistant'])
@@ -234,6 +237,7 @@ describe('runChatTurn', () => {
     const actionEvent = events.find(event => event.type === 'action_proposed')
     expect(actionEvent).toBeDefined()
     expect(actionEvent).toMatchObject({ action: { kind: 'add_to_inventory', status: 'pending' } })
+    expect(events.find(event => event.type === 'tool_result')).toMatchObject({ ok: true, outcome: { pending: true } })
 
     const detail = getConversationDetail(db, 'user-a', conversation.id)
     expect(detail.actions).toHaveLength(1)
@@ -252,7 +256,7 @@ describe('runChatTurn', () => {
     await runChatTurn(db, 'user-a', conversation.id, { text: 'füge eine unbekannte Karte hinzu', images: NO_IMAGES }, model, emit)
 
     const toolResultEvent = events.find(event => event.type === 'tool_result')
-    expect(toolResultEvent).toMatchObject({ ok: false })
+    expect(toolResultEvent).toMatchObject({ ok: false, outcome: { error: expect.any(String) } })
     expect(events.some(event => event.type === 'action_proposed')).toBe(false)
     expect(events.at(-1)).toMatchObject({ type: 'message_end' })
 
@@ -285,7 +289,7 @@ describe('runChatTurn', () => {
     const model: DeckAssistantModel = {
       id: 'broken',
       chat: async () => {
-        throw Object.assign(new Error('down'), { statusCode: 502, statusMessage: 'Der KI-Assistent ist derzeit nicht erreichbar.' })
+        throw Object.assign(new Error('down'), { statusCode: 502, statusMessage: 'The assistant is currently unreachable', data: { code: 'assistant_unreachable' } })
       },
     }
     const conversation = createConversation(db, 'user-a')
@@ -294,7 +298,8 @@ describe('runChatTurn', () => {
     await runChatTurn(db, 'user-a', conversation.id, { text: 'hallo', images: NO_IMAGES }, model, emit)
 
     expect(events.map(event => event.type)).toEqual(['message_start', 'error'])
-    expect(events[1]).toMatchObject({ message: 'Der KI-Assistent ist derzeit nicht erreichbar.' })
+    // The UI translates the code (errors.api.assistant_unreachable).
+    expect(events[1]).toEqual({ type: 'error', code: 'assistant_unreachable', message: 'The assistant is currently unreachable' })
 
     const detail = getConversationDetail(db, 'user-a', conversation.id)
     // The user message was persisted; no assistant message follows the failure.
@@ -401,7 +406,7 @@ describe('runChatTurn', () => {
     const model: DeckAssistantModel = {
       id: 'broken',
       chat: async () => {
-        throw Object.assign(new Error('down'), { statusCode: 502, statusMessage: 'Der KI-Assistent ist derzeit nicht erreichbar.' })
+        throw Object.assign(new Error('down'), { statusCode: 502, statusMessage: 'The assistant is currently unreachable', data: { code: 'assistant_unreachable' } })
       },
     }
 
@@ -485,7 +490,7 @@ describe('runChatTurn', () => {
     expect(messageEnd).toMatchObject({ message: { content: expect.stringContaining('keine Antwort erzeugen') } })
   })
 
-  it('runs a tool with a German error result instead of {} when the accumulated arguments are invalid JSON', async () => {
+  it('runs a tool with an error result instead of {} when the accumulated arguments are invalid JSON', async () => {
     const conversation = createConversation(db, 'user-a')
     const { model } = scriptedChatModel([
       { text: '', toolCalls: [{ id: 'call-1', name: 'search_catalog', arguments: '{"query": "Dark' }], finishReason: 'tool_calls' },
@@ -496,11 +501,11 @@ describe('runChatTurn', () => {
     await runChatTurn(db, 'user-a', conversation.id, { text: 'suche', images: NO_IMAGES }, model, emit)
 
     const toolResultEvent = events.find(event => event.type === 'tool_result')
-    expect(toolResultEvent).toMatchObject({ ok: false, summary: 'Ungültige Argumente' })
+    expect(toolResultEvent).toMatchObject({ ok: false, outcome: { error: 'Invalid arguments' } })
 
     const detail = getConversationDetail(db, 'user-a', conversation.id)
     const toolMessage = detail.messages.find(message => message.role === 'tool')!
-    expect(JSON.parse(toolMessage.content)).toEqual({ error: 'Ungültige Argumente' })
+    expect(JSON.parse(toolMessage.content)).toEqual({ error: 'Invalid arguments' })
   })
 
   it('replaces an over-budget tool result with a valid JSON error envelope instead of truncating the JSON string', async () => {
@@ -516,14 +521,91 @@ describe('runChatTurn', () => {
       toolCallResult('get_card', { id: CARD.darkMagician }),
       textResult('ok'),
     ])
-    const { emit } = collectEvents()
+    const { events, emit } = collectEvents()
 
     await runChatTurn(db, 'user-a', conversation.id, { text: 'details bitte', images: NO_IMAGES }, model, emit)
 
     const detail = getConversationDetail(db, 'user-a', conversation.id)
     const toolMessage = detail.messages.find(message => message.role === 'tool')!
     // Must stay valid, parseable JSON — never a mid-string cut.
-    expect(JSON.parse(toolMessage.content)).toEqual({ error: 'Ergebnis zu groß', hint: 'Bitte enger suchen.' })
+    expect(JSON.parse(toolMessage.content)).toEqual({ error: 'Result too large', hint: 'Please search more narrowly.' })
+    // The live chip reports what was persisted: failed.
+    expect(events.find(event => event.type === 'tool_result')).toMatchObject({ ok: false, outcome: { error: 'Result too large' } })
+  })
+})
+
+describe('runChatTurn: interface language (ADR 0014)', () => {
+  it('ends the system prompt with the reply-language instruction of the turn\'s locale (German by default)', async () => {
+    const conversation = createConversation(db, 'user-a')
+    const { model, calls } = scriptedChatModel([textResult('ok')])
+
+    await runChatTurn(db, 'user-a', conversation.id, { text: 'hallo', images: NO_IMAGES }, model, collectEvents().emit)
+    await runChatTurn(db, 'user-a', conversation.id, { text: 'hello', images: NO_IMAGES, locale: 'en' }, model, collectEvents().emit)
+    await runChatTurn(db, 'user-a', conversation.id, { text: 'hallo', images: ['data:image/png;base64,abc'], locale: 'de' }, model, collectEvents().emit)
+
+    expect(calls[0]!.system.endsWith(`\n\n${REPLY_LANGUAGE_INSTRUCTION.de}`)).toBe(true)
+    expect(calls[1]!.system.endsWith(`\n\n${REPLY_LANGUAGE_INSTRUCTION.en}`)).toBe(true)
+    expect(calls[1]!.system).toContain('Reply in English unless the user explicitly asks for another language.')
+    expect(calls[1]!.system).not.toContain('Reply in German')
+    // The instruction stays last, after the image hint.
+    expect(calls[2]!.system).toContain('search_catalog`, and ask if you are unsure.')
+    expect(calls[2]!.system.endsWith(REPLY_LANGUAGE_INSTRUCTION.de)).toBe(true)
+    // The model-facing prompt itself is English in every locale.
+    expect(calls[0]!.system.startsWith('You are a Yu-Gi-Oh! assistant')).toBe(true)
+  })
+
+  it('saves fallback answers in the turn\'s locale', async () => {
+    const conversation = createConversation(db, 'user-a')
+    const { model } = scriptedChatModel([{ text: '', toolCalls: [], finishReason: 'content_filter' }])
+
+    const german = collectEvents()
+    await runChatTurn(db, 'user-a', conversation.id, { text: 'hallo', images: NO_IMAGES }, model, german.emit)
+    const english = collectEvents()
+    await runChatTurn(db, 'user-a', conversation.id, { text: 'hello', images: NO_IMAGES, locale: 'en' }, model, english.emit)
+
+    expect(german.events.at(-1)).toMatchObject({ type: 'message_end', message: { content: TURN_TEXT.de.noAnswer } })
+    expect(english.events.at(-1)).toMatchObject({ type: 'message_end', message: { content: 'I couldn\'t come up with an answer to that. Please rephrase the question.' } })
+    const contents = getConversationDetail(db, 'user-a', conversation.id).messages.map(message => message.content)
+    expect(contents).toContain(TURN_TEXT.de.noAnswer)
+    expect(contents).toContain(TURN_TEXT.en.noAnswer)
+  })
+
+  it('marks a cut-off answer and a cancelled turn in the turn\'s locale', async () => {
+    const conversation = createConversation(db, 'user-a')
+    const cutOff = scriptedChatModel([{ text: 'Half an answer', toolCalls: [], finishReason: 'length' }])
+    const events = collectEvents()
+    await runChatTurn(db, 'user-a', conversation.id, { text: 'long', images: NO_IMAGES, locale: 'en' }, cutOff.model, events.emit)
+    expect(events.events.at(-1)).toMatchObject({ message: { content: 'Half an answer … (answer was shortened)' } })
+
+    const aborted = new AbortController()
+    aborted.abort()
+    const cancelled = collectEvents()
+    await runChatTurn(db, 'user-a', conversation.id, { text: 'stop', images: NO_IMAGES, locale: 'en' }, cutOff.model, cancelled.emit, aborted.signal)
+    expect(cancelled.events.at(-1)).toMatchObject({ message: { content: '… (cancelled)' } })
+
+    const german = collectEvents()
+    await runChatTurn(db, 'user-a', conversation.id, { text: 'stopp', images: NO_IMAGES }, cutOff.model, german.emit, aborted.signal)
+    expect(german.events.at(-1)).toMatchObject({ message: { content: '… (abgebrochen)' } })
+  })
+
+  it('has a translation for every assistant error code (errors.api.<code>; `unexpected` has its own fallback key)', () => {
+    for (const locale of ['de', 'en']) {
+      const api = (JSON.parse(readFileSync(`i18n/locales/${locale}/errors.json`, 'utf8')) as { errors: { api: Record<string, string> } }).errors.api
+      const missing = ASSISTANT_ERROR_CODES.filter(code => code !== 'unexpected' && !api[code])
+      expect(missing, locale).toEqual([])
+    }
+  })
+
+  it('titles a new conversation in the given locale (German by default)', () => {
+    expect(createConversation(db, 'user-a').title).toBe('Neue Unterhaltung')
+    expect(createConversation(db, 'user-a', {}, 'en').title).toBe('New conversation')
+  })
+
+  it('labels stored image attachments in the turn\'s locale', async () => {
+    const conversation = createConversation(db, 'user-a')
+    const { model } = scriptedChatModel([textResult('ok')])
+    await runChatTurn(db, 'user-a', conversation.id, { text: '', images: ['data:image/png;base64,abc'], locale: 'en' }, model, collectEvents().emit)
+    expect(getConversationDetail(db, 'user-a', conversation.id).messages[0]!.attachments).toEqual([{ kind: 'image', label: 'Photo 1' }])
   })
 })
 
@@ -638,16 +720,17 @@ describe('deck-linked conversations (ADR 0011)', () => {
     await runChatTurn(db, 'user-a', conversation.id, { text: 'Was ist in meinem Deck?', images: NO_IMAGES }, model, collectEvents().emit)
 
     const system = calls[0]!.system
-    expect(system).toContain(`Deck-ID: ${deck.id}`)
-    expect(system).toContain('Deckname: Magier-Deck')
+    expect(system).toContain(`Deck ID: ${deck.id}`)
+    expect(system).toContain('Deck name: Magier-Deck')
     expect(system).toContain(`Format: Streng (ID ${format.id})`)
-    expect(system).toContain('Anzahl: Main 2 · Extra 0 · Side 0')
-    // Validation issue messages are canonical English for the model (ADR 0014).
-    expect(system).toMatch(/Legalität: nicht legal – Dark Magician: 2 copies in the deck; 1 copy is allowed\./)
+    expect(system).toContain('Counts: Main 2 · Extra 0 · Side 0')
+    // Everything the model reads is English (ADR 0014).
+    expect(system).toMatch(/Legality: not legal – Dark Magician: 2 copies in the deck; 1 copy is allowed\./)
     expect(system).toContain(`${CARD.darkMagician}|Dark Magician|main|2|0`)
-    expect(system).toContain(`update_deck_cards mit deckId=${deck.id}`)
-    expect(system).toContain('set_deck_format')
-    expect(system).toContain('sein Format nur über set_deck_format mit dieser deckId')
+    expect(system).toContain(`update_deck_cards and deckId=${deck.id}`)
+    expect(system).toContain('its format only with set_deck_format and this deckId')
+    // The deck block comes before the reply-language instruction.
+    expect(system.indexOf('Deck ID:')).toBeLessThan(system.indexOf(REPLY_LANGUAGE_INSTRUCTION.de))
 
     expect(getConversationDetail(db, 'user-a', conversation.id).conversation.title).toBe('Deck: Magier-Deck')
   })
@@ -665,7 +748,7 @@ describe('deck-linked conversations (ADR 0011)', () => {
     ])
     const { events, emit } = collectEvents()
     await runChatTurn(db, 'user-a', conversation.id, { text: 'Füge Pot of Greed hinzu', images: NO_IMAGES }, model, emit)
-    expect(calls[0]!.system).toContain('Legalität: kein Format')
+    expect(calls[0]!.system).toContain('Legality: no format')
     expect(calls[0]!.system).not.toContain('Pot of Greed|main')
 
     const proposed = events.find(event => event.type === 'action_proposed')
@@ -675,11 +758,11 @@ describe('deck-linked conversations (ADR 0011)', () => {
     await runChatTurn(db, 'user-a', conversation.id, { text: 'Und jetzt?', images: NO_IMAGES }, model, collectEvents().emit)
     const nextSystem = calls.at(-1)!.system
     expect(nextSystem).toContain(`${CARD.potOfGreed}|Pot of Greed|main|1|0`)
-    expect(nextSystem).toContain('Anzahl: Main 3 · Extra 0 · Side 0')
+    expect(nextSystem).toContain('Counts: Main 3 · Extra 0 · Side 0')
 
     // Nothing of the block ends up in the persisted messages.
     const stored = getConversationDetail(db, 'user-a', conversation.id).messages
-    expect(stored.some(message => message.content.includes('Deck-ID:'))).toBe(false)
+    expect(stored.some(message => message.content.includes('Deck ID:'))).toBe(false)
   })
 
   it('adds no deck block to an unlinked conversation', async () => {
@@ -688,8 +771,8 @@ describe('deck-linked conversations (ADR 0011)', () => {
     const { model, calls } = scriptedChatModel([textResult('ok')])
     await runChatTurn(db, 'user-a', conversation.id, { text: 'Was ist in meinem Deck?', images: NO_IMAGES }, model, collectEvents().emit)
 
-    expect(calls[0]!.system).not.toContain('Deck-ID:')
-    expect(calls[0]!.system).toContain('Deckbau:')
+    expect(calls[0]!.system).not.toContain('Deck ID:')
+    expect(calls[0]!.system).toContain('Deck building:')
   })
 
   it('lets the fake model answer from the deck context end-to-end', async () => {
@@ -700,5 +783,36 @@ describe('deck-linked conversations (ADR 0011)', () => {
     await runChatTurn(db, 'user-a', conversation.id, { text: 'Was ist in meinem Deck?', images: NO_IMAGES }, createFakeModel(), emit)
 
     expect(events.at(-1)).toMatchObject({ type: 'message_end', message: { content: 'Kontext-Deck: Magier-Deck (2 Karten)' } })
+  })
+
+  it('names the caller\'s deck in tool calls, live and reloaded, instead of its id (#53)', async () => {
+    const deck = seedDeck()
+    const foreign = seedDeck('user-b', 'Fremdes Deck')
+    const conversation = createConversation(db, 'user-a', { deckId: deck.id })
+    const { model } = scriptedChatModel([
+      { text: '', toolCalls: [
+        { id: 'call-own', name: 'validate_deck', arguments: JSON.stringify({ deckId: deck.id, formatId: 'tcg-advanced' }) },
+        { id: 'call-get', name: 'get_deck', arguments: JSON.stringify({ id: deck.id }) },
+        { id: 'call-foreign', name: 'get_deck', arguments: JSON.stringify({ id: foreign.id }) },
+      ], finishReason: 'tool_calls' },
+      textResult('ok'),
+    ])
+    const { events, emit } = collectEvents()
+    await runChatTurn(db, 'user-a', conversation.id, { text: 'prüfe', images: NO_IMAGES }, model, emit)
+
+    const toolCalls = events.filter(event => event.type === 'tool_call')
+    expect(toolCalls).toEqual([
+      { type: 'tool_call', id: 'call-own', name: 'validate_deck', arguments: { deckId: deck.id, formatId: 'tcg-advanced' }, deckName: 'Magier-Deck' },
+      { type: 'tool_call', id: 'call-get', name: 'get_deck', arguments: { id: deck.id }, deckName: 'Magier-Deck' },
+      // Another user's deck is never named.
+      { type: 'tool_call', id: 'call-foreign', name: 'get_deck', arguments: { id: foreign.id } },
+    ])
+
+    // A reload resolves the deck's *current* name; nothing of it is stored.
+    updateDeck(db, 'user-a', deck.id, { name: 'Umbenannt' })
+    const reloaded = getConversationDetail(db, 'user-a', conversation.id).messages.find(message => message.toolCalls)!
+    expect(reloaded.toolCalls!.map(call => call.deckName)).toEqual(['Umbenannt', 'Umbenannt', undefined])
+    const stored = db.select().from(schema.assistantMessage).all().find(row => row.toolCalls)!
+    expect(JSON.stringify(stored.toolCalls)).not.toContain('Magier-Deck')
   })
 })

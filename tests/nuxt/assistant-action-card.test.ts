@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { mountSuspended } from '@nuxt/test-utils/runtime'
 import ActionCard from '~/components/assistant/ActionCard.vue'
 import type { AssistantActionView } from '~~/shared/assistant-chat'
+import { setTestLocale } from './fixtures/locale'
 
 function deckAction(overrides: Partial<AssistantActionView> = {}): AssistantActionView {
   return {
@@ -159,5 +160,137 @@ describe('AssistantActionCard', () => {
     const link = applied.find('a[href="/decks/deck-1"]')
     expect(link.exists()).toBe(true)
     expect(link.text()).toContain('Deck öffnen')
+  })
+
+  // --- #34 F2d: rendered from kind + payload in the interface language ---
+
+  function inventoryAction(overrides: Partial<AssistantActionView> = {}): AssistantActionView {
+    return {
+      id: 'action-3',
+      messageId: 'm1',
+      kind: 'add_to_inventory',
+      // Stored English since F2d — the card renders its own summary.
+      summary: 'Add 2 card(s) to the inventory: Dark Magician x2, Pot of Greed x1',
+      payload: {
+        items: [
+          { catalogCardId: 46986414, quantity: 2, language: 'de', condition: 'near_mint', edition: 'first', collectionId: null, printingId: null, note: null, name: 'Dark Magician' },
+          { catalogCardId: 55144522, quantity: 1, language: 'en', condition: 'played', edition: 'unlimited', collectionId: null, printingId: null, note: null, name: 'Pot of Greed' },
+        ],
+      },
+      status: 'pending',
+      ...overrides,
+    }
+  }
+
+  function issueDetailsAction(): AssistantActionView {
+    return formatAction({
+      summary: 'Change the format of the deck "Magier": no format → No banlist',
+      payload: {
+        deckId: 'deck-1',
+        deckName: 'Magier',
+        formatId: 'unlimited',
+        formatName: 'No banlist',
+        previousFormatId: 'goat',
+        previousFormatName: 'GOAT Format',
+        preview: {
+          formatId: 'unlimited',
+          formatName: 'No banlist',
+          counts: { main: 40, extra: 0, side: 0, total: 40 },
+          validation: {
+            legal: false,
+            issues: ['Dark Magician: 4 copies in the deck; 3 copies are allowed.'],
+            issueDetails: [{
+              severity: 'error',
+              code: 'card_limit_exceeded',
+              message: 'Dark Magician: 4 copies in the deck; 3 copies are allowed.',
+              params: { cardId: 46986414, cardName: 'Dark Magician', copies: 4, maxCopies: 3 },
+              cardId: 46986414,
+            }],
+          },
+          missing: [],
+        },
+      },
+    })
+  }
+
+  describe('in German', () => {
+    it('renders an add_to_inventory summary and rows from the payload, with option labels', async () => {
+      const component = await mountSuspended(ActionCard, { props: { action: inventoryAction() } })
+      expect(component.text()).toContain('2 Karte(n) zum Inventar hinzufügen: Dark Magician x2, Pot of Greed x1')
+      expect(component.text()).not.toContain('Add 2 card(s)')
+
+      const toggle = component.findAll('button').find(button => button.text().includes('Details anzeigen'))
+      await toggle!.trigger('click')
+      const headers = component.findAll('th').map(th => th.text())
+      expect(headers).toEqual(['Karte', 'Menge', 'Drucksprache', 'Zustand', 'Auflage'])
+      const text = component.text()
+      expect(text).toContain('Neuwertig (Near Mint)')
+      expect(text).toContain('1. Auflage')
+      expect(text).not.toContain('46986414')
+    })
+
+    it('falls back to the stored summary for an older add_to_inventory action without card names', async () => {
+      const component = await mountSuspended(ActionCard, {
+        props: {
+          action: inventoryAction({
+            summary: '1 Karte(n) zum Inventar hinzufügen: Dark Magician x2',
+            payload: { items: [{ catalogCardId: 46986414, quantity: 2 }] },
+          }),
+        },
+      })
+      expect(component.text()).toContain('1 Karte(n) zum Inventar hinzufügen: Dark Magician x2')
+    })
+
+    it('renders preview issues from code + params and built-in format names by id', async () => {
+      const component = await mountSuspended(ActionCard, { props: { action: issueDetailsAction() } })
+      const text = component.text()
+      expect(text).toContain('Format von Deck "Magier" ändern: GOAT Format → Ohne Banliste')
+      expect(text).toContain('Dark Magician: 4 Kopien im Deck, erlaubt sind 3 Kopien.')
+      expect(text).not.toContain('copies are allowed')
+    })
+  })
+
+  describe('in English', () => {
+    afterEach(() => setTestLocale('de'))
+
+    it('renders the summary, labels, preview and details in English', async () => {
+      await setTestLocale('en')
+      const component = await mountSuspended(ActionCard, { props: { action: issueDetailsAction() } })
+      const text = component.text()
+      expect(text).toContain('Change the deck format')
+      expect(text).toContain('Waiting for confirmation')
+      expect(text).toContain('Change the format of the deck "Magier": GOAT Format → No banlist')
+      expect(text).toContain('Not legal – 1 issue')
+      expect(text).toContain('Dark Magician: 4 copies in the deck; 3 copies are allowed.')
+      expect(text).toContain('As of the proposal')
+
+      const toggle = component.findAll('button').find(button => button.text().includes('Show details'))
+      await toggle!.trigger('click')
+      expect(component.text()).toContain('Previous format:')
+      expect(component.text()).toContain('New format:')
+      expect(component.findAll('button').map(button => button.text())).toEqual(expect.arrayContaining(['Hide details', 'Apply', 'Reject']))
+    })
+
+    it('renders an add_to_inventory proposal in English, rows via the card option labels', async () => {
+      await setTestLocale('en')
+      const component = await mountSuspended(ActionCard, { props: { action: inventoryAction() } })
+      expect(component.text()).toContain('Add cards to the inventory')
+      expect(component.text()).toContain('Add 2 cards to the inventory: Dark Magician x2, Pot of Greed x1')
+
+      const toggle = component.findAll('button').find(button => button.text().includes('Show details'))
+      await toggle!.trigger('click')
+      expect(component.findAll('th').map(th => th.text())).toEqual(['Card', 'Quantity', 'Printing language', 'Condition', 'Edition'])
+      expect(component.text()).toContain('Near Mint')
+      expect(component.text()).toContain('1st Edition')
+    })
+
+    it('uses the English singular for a one-card deck proposal', async () => {
+      await setTestLocale('en')
+      const single = await mountSuspended(ActionCard, {
+        props: { action: deckAction({ kind: 'create_deck', payload: { name: 'Solo', cards: [{ catalogCardId: 1, section: 'main', quantity: 1, name: 'X' }] } }) },
+      })
+      expect(single.text()).toContain('Create the new deck "Solo" with 1 card')
+      expect(single.text()).not.toContain('1 cards')
+    })
   })
 })

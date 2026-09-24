@@ -3,19 +3,18 @@
 // `/assistant?intent=new-deck` ("Mit KI erstellen" on /decks) and
 // `/assistant?deckId=…`, which continues as `?intent=edit-deck` ("Mit KI
 // bearbeiten" in the deck editor). Only a draft — never sent automatically.
+// The draft is the user's own message, so it is in the interface language
+// (`assistant.intent.<intent>`, ADR 0014).
 
-export const ASSISTANT_INTENT_DRAFTS = {
-  'new-deck': 'Baue mir aus meinen Karten ein neues Deck. Format und Spielstil: ',
-  'edit-deck': 'Wie kann ich dieses Deck mit Karten aus meinem Inventar verbessern?',
-} as const
+export const ASSISTANT_INTENTS = ['new-deck', 'edit-deck'] as const
 
-export type AssistantIntent = keyof typeof ASSISTANT_INTENT_DRAFTS
+export type AssistantIntent = typeof ASSISTANT_INTENTS[number]
 
 export function isAssistantIntent(value: unknown): value is AssistantIntent {
-  return typeof value === 'string' && Object.hasOwn(ASSISTANT_INTENT_DRAFTS, value)
+  return typeof value === 'string' && (ASSISTANT_INTENTS as readonly string[]).includes(value)
 }
 
-/** The composer draft for an `?intent=` query value, or '' for anything else. */
-export function assistantIntentDraft(value: unknown): string {
-  return isAssistantIntent(value) ? ASSISTANT_INTENT_DRAFTS[value] : ''
+/** The message key of the composer draft for an `?intent=` query value, or null for anything else. */
+export function assistantIntentDraftKey(value: unknown): `assistant.intent.${AssistantIntent}` | null {
+  return isAssistantIntent(value) ? `assistant.intent.${value}` : null
 }

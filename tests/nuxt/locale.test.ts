@@ -58,8 +58,14 @@ describe('pickUiLocale', () => {
   it('uses Accept-Language only when header detection is on', () => {
     expect(pickUiLocale({ acceptLanguage: 'en-US,en;q=0.9' }, false)).toBe('de')
     expect(pickUiLocale({ acceptLanguage: 'en-US,en;q=0.9' }, true)).toBe('en')
-    // F2a ships with detection off (DETECT_ACCEPT_LANGUAGE = false).
-    expect(pickUiLocale({ acceptLanguage: 'en-US,en;q=0.9' })).toBe('de')
+    // On since #34 F2d (DETECT_ACCEPT_LANGUAGE = true).
+    expect(pickUiLocale({ acceptLanguage: 'en-US,en;q=0.9' })).toBe('en')
+  })
+
+  it('lets the profile and the cookie beat Accept-Language', () => {
+    expect(pickUiLocale({ cookie: 'de', acceptLanguage: 'en-US' })).toBe('de')
+    expect(pickUiLocale({ profile: 'de', cookie: 'en', acceptLanguage: 'en-US' })).toBe('de')
+    expect(pickUiLocale({ profile: 'en', acceptLanguage: 'de-DE' })).toBe('en')
   })
 
   it('falls back to German for an unsupported header', () => {

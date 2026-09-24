@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { deckConversationTitle } from '~~/shared/assistant-chat'
-import { assistantIntentDraft } from '~/utils/assistant-intents'
+import { assistantIntentDraftKey } from '~/utils/assistant-intents'
 
-useHead({ title: 'Assistent – yugioh alpha' })
+usePageTitle('assistant.title')
+
+const { t } = useI18n()
 
 const route = useRoute()
 const router = useRouter()
@@ -14,7 +16,8 @@ const { data: status } = await useAssistantStatus()
 // conversation, see app/utils/assistant-intents.ts) pre-fills the composer
 // with a draft — never sent on its own. Read once here, since onMounted
 // drops it from the URL; cleared when switching conversations.
-const composerDraft = ref(assistantIntentDraft(route.query.intent))
+const draftKey = assistantIntentDraftKey(route.query.intent)
+const composerDraft = ref(draftKey ? t(draftKey) : '')
 
 const { data: conversationsData, refresh: refreshConversations } = await useAssistantConversations()
 const conversations = computed(() => conversationsData.value?.items ?? [])
@@ -128,7 +131,7 @@ async function onDeleted(id: string) {
       <USlideover
         v-model:open="isConversationsOpen"
         side="left"
-        title="Unterhaltungen"
+        :title="t('assistant.conversations.title')"
         class="lg:hidden"
       >
         <template #body>
@@ -149,7 +152,7 @@ async function onDeleted(id: string) {
                the chip is the visible title, so it isn't shown twice (#48). -->
           <div class="flex min-w-0 flex-1 flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-2">
             <h1 :class="isDefaultDeckTitle ? 'sr-only' : 'min-w-0 max-w-full truncate text-base font-semibold text-gray-900'">
-              {{ conversation?.title ?? 'Assistent' }}
+              {{ conversation?.title ?? t('assistant.title') }}
             </h1>
             <!-- The deck this conversation is about (ADR 0011); its current
                  state is what the assistant sees on every turn. -->
@@ -161,14 +164,14 @@ async function onDeleted(id: string) {
               color="neutral"
               variant="soft"
               class="min-w-0 max-w-full shrink sm:max-w-64"
-              :aria-label="`Deck ${conversation.deck.name} öffnen`"
+              :aria-label="t('assistant.thread.openDeck', { name: conversation.deck.name })"
             >
-              <span class="truncate">Deck: {{ conversation.deck.name }}</span>
+              <span class="truncate">{{ t('assistant.thread.deckChip', { name: conversation.deck.name }) }}</span>
             </UButton>
           </div>
           <UButton
             icon="i-lucide-menu"
-            label="Unterhaltungen"
+            :label="t('assistant.conversations.title')"
             color="neutral"
             variant="outline"
             size="xs"

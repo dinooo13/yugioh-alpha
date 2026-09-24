@@ -50,7 +50,16 @@
       "planned_rounds_reached": "Alle geplanten Runden wurden gespielt.",
       "bye_not_editable": "Ein Freilos hat kein Ergebnis.",
       "no_rounds": "Es wurde noch keine Runde gespielt.",
-      "section_not_allowed": "Diese Karte kann nicht in diesen Deckbereich."
+      "section_not_allowed": "Diese Karte kann nicht in diesen Deckbereich.",
+      "conversation_not_found": "Unterhaltung nicht gefunden.",
+      "action_not_found": "Vorschlag nicht gefunden.",
+      "action_already_resolved": "Dieser Vorschlag wurde bereits bearbeitet.",
+      "turn_in_progress": "Es läuft bereits eine Anfrage.",
+      "request_too_large": "Die Anfrage ist zu groß.",
+      "assistant_not_configured": "KI-Assistent ist nicht konfiguriert.",
+      "assistant_misconfigured": "KI-Assistent ist nicht korrekt konfiguriert.",
+      "assistant_busy": "Der KI-Assistent ist ausgelastet, bitte später erneut versuchen.",
+      "assistant_unreachable": "Der KI-Assistent ist derzeit nicht erreichbar."
     }
   }
 }

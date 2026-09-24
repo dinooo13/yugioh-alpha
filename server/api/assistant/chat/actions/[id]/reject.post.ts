@@ -7,7 +7,7 @@ import { requireUser } from '../../../../../utils/session'
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
   if (!id) {
-    throw createError({ statusCode: 404, statusMessage: 'Vorschlag nicht gefunden.' })
+    throw createError({ statusCode: 404, statusMessage: 'Action not found', data: { code: 'action_not_found' } })
   }
 
   const user = await requireUser(event)

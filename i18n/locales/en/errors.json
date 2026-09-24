@@ -50,7 +50,16 @@
       "planned_rounds_reached": "All planned rounds have been played.",
       "bye_not_editable": "A bye has no result.",
       "no_rounds": "No round has been played yet.",
-      "section_not_allowed": "This card can't go in that deck section."
+      "section_not_allowed": "This card can't go in that deck section.",
+      "conversation_not_found": "Conversation not found.",
+      "action_not_found": "Proposal not found.",
+      "action_already_resolved": "This proposal has already been handled.",
+      "turn_in_progress": "A request is already running.",
+      "request_too_large": "The request is too large.",
+      "assistant_not_configured": "The AI assistant is not configured.",
+      "assistant_misconfigured": "The AI assistant is not configured correctly.",
+      "assistant_busy": "The AI assistant is busy, please try again later.",
+      "assistant_unreachable": "The AI assistant is currently unreachable."
     }
   }
 }

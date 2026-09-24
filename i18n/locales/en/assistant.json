@@ -1,3 +1,149 @@
 {
-  "assistant": {}
+  "assistant": {
+    "title": "Assistant",
+    "index": {
+      "intro": "Ask the assistant about your inventory or your decks, or let it recognize a card from a photo — it proposes changes that you confirm first.",
+      "preparing": "Preparing the conversation …",
+      "examples": {
+        "inventory": "Which Blue-Eyes cards do I have?",
+        "deck": "Build me a GOAT deck from my cards",
+        "photo": "Add a card from a photo"
+      }
+    },
+    "intent": {
+      "new-deck": "Build me a new deck from my cards. Format and play style: ",
+      "edit-deck": "How can I improve this deck with cards from my inventory?"
+    },
+    "unavailable": {
+      "title": "Assistant unavailable",
+      "description": "The AI assistant isn't set up on this server right now. Please contact the person who runs the app."
+    },
+    "conversations": {
+      "title": "Conversations",
+      "new": "New conversation",
+      "empty": "No conversations yet.",
+      "deleteLabel": "Delete \"{title}\"",
+      "confirmDelete": {
+        "title": "Delete conversation",
+        "description": "Delete \"{title}\"? This can't be undone."
+      },
+      "errors": {
+        "create": "The conversation couldn't be created.",
+        "delete": "The conversation couldn't be deleted."
+      }
+    },
+    "thread": {
+      "deckChip": "Deck: {name}",
+      "openDeck": "Open deck {name}",
+      "empty": "No messages yet — tell the assistant what it should do for you.",
+      "photo": "Photo {index}",
+      "errors": {
+        "load": "The conversation couldn't be loaded.",
+        "refresh": "The conversation couldn't be updated.",
+        "connectionLost": "The connection was interrupted. Please try again.",
+        "unexpected": "An unexpected error occurred."
+      }
+    },
+    "composer": {
+      "placeholder": "Message the assistant…",
+      "label": "Message",
+      "takePhoto": "Take a photo",
+      "fromGallery": "Add from gallery",
+      "addPhoto": "Add a photo",
+      "removeImage": "Remove image {index}",
+      "send": "Send",
+      "cancelling": "Cancelling…",
+      "errors": {
+        "tooManyImages": "At most {max} images are allowed per message.",
+        "imagesTooLarge": "The images are too large in total (max. {max} MB). Remove one or use a smaller photo.",
+        "imageFailed": "The image couldn't be processed.",
+        "textTooLong": "Please write at most {max} characters."
+      }
+    },
+    "tool": {
+      "label": {
+        "search_catalog": "Searching the catalog",
+        "get_card": "Reading card details",
+        "search_inventory": "Searching your inventory",
+        "list_collections": "Listing your collections",
+        "list_decks": "Listing your decks",
+        "get_deck": "Reading a deck",
+        "list_formats": "Listing formats",
+        "validate_deck": "Checking a deck",
+        "add_to_inventory": "Proposing cards for your inventory",
+        "create_deck": "Proposing a new deck",
+        "update_deck_cards": "Proposing deck changes",
+        "set_deck_format": "Proposing a format change"
+      },
+      "withDetail": "{label}: {detail}",
+      "outcome": {
+        "results": "{count} result | {count} results",
+        "atLeast": "at least {count} result | at least {count} results",
+        "pending": "Proposal created",
+        "done": "OK"
+      },
+      "failed": "Failed"
+    },
+    "action": {
+      "kind": {
+        "add_to_inventory": "Add cards to the inventory",
+        "create_deck": "Create a new deck",
+        "update_deck_cards": "Change deck cards",
+        "set_deck_format": "Change the deck format"
+      },
+      "status": {
+        "pending": "Waiting for confirmation",
+        "applied": "Applied",
+        "rejected": "Rejected",
+        "failed": "Failed"
+      },
+      "summary": {
+        "add_to_inventory": "Add {count} card to the inventory: {cards} | Add {count} cards to the inventory: {cards}",
+        "create_deck": "Create the new deck \"{name}\" with {count} card | Create the new deck \"{name}\" with {count} cards",
+        "update_deck_cards": "{count} card change to the deck \"{deck}\" | {count} card changes to the deck \"{deck}\"",
+        "set_deck_format": "Change the format of the deck \"{deck}\": {from} → {to}",
+        "cardQuantity": "{name} x{quantity}",
+        "noFormat": "no format"
+      },
+      "field": {
+        "name": "Card",
+        "catalogCardId": "Card (ID)",
+        "quantity": "Quantity",
+        "newQuantity": "New quantity",
+        "section": "Section",
+        "collectionId": "Collection",
+        "language": "Printing language",
+        "condition": "Condition",
+        "edition": "Edition",
+        "printingId": "Printing"
+      },
+      "meta": {
+        "name": "Name",
+        "deck": "Deck",
+        "format": "Format",
+        "previousFormat": "Previous format",
+        "newFormat": "New format",
+        "noFormat": "No format"
+      },
+      "preview": {
+        "noFormat": "No format",
+        "legal": "Legal",
+        "notLegal": "Not legal – {count} issue | Not legal – {count} issues",
+        "counts": "Main {main} · Extra {extra} · Side {side}",
+        "moreIssues": "… and {count} more",
+        "missingTitle": "Missing cards (not or not enough in the inventory)",
+        "missingCard": "{name}: {needed} needed, {owned} owned",
+        "snapshot": "As of the proposal"
+      },
+      "showDetails": "Show details",
+      "hideDetails": "Hide details",
+      "apply": "Apply",
+      "reject": "Reject",
+      "openDeck": "Open deck",
+      "errors": {
+        "apply": "The proposal couldn't be applied.",
+        "reject": "The proposal couldn't be rejected."
+      }
+    }
+  }
 }

@@ -103,12 +103,15 @@ describe('readSse', () => {
     expect(events).toEqual([{ event: 'text_delta', data: { text: 'x' } }])
   })
 
-  it('throws a request error carrying the response status and body for a non-ok response', async () => {
-    stubFetch(new Response(JSON.stringify({ statusMessage: 'Es läuft bereits eine Anfrage.' }), { status: 409 }))
+  it('throws a request error carrying the response status, body and error code for a non-ok response', async () => {
+    const body = { statusCode: 409, statusMessage: 'A turn is already in progress', data: { code: 'turn_in_progress' } }
+    stubFetch(new Response(JSON.stringify(body), { status: 409 }))
 
     await expect(collect(readSse('/x'))).rejects.toMatchObject({
       statusCode: 409,
-      message: 'Es läuft bereits eine Anfrage.',
+      code: 'turn_in_progress',
+      message: 'A turn is already in progress',
+      data: body,
     })
   })
 

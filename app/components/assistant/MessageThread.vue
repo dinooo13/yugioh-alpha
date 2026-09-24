@@ -10,6 +10,8 @@ const emit = defineEmits<{
   actionUpdated: [action: AssistantActionView]
 }>()
 
+const { t } = useI18n()
+
 const container = ref<HTMLElement | null>(null)
 const content = ref<HTMLElement | null>(null)
 
@@ -103,7 +105,7 @@ defineExpose({ stickToBottom })
         v-if="timeline.length === 0"
         class="text-sm text-gray-500"
       >
-        Noch keine Nachrichten — schreib dem Assistenten, was er für dich tun soll.
+        {{ t('assistant.thread.empty') }}
       </p>
 
       <template
@@ -118,9 +120,9 @@ defineExpose({ stickToBottom })
         />
         <AssistantToolActivity
           v-else-if="item.type === 'activity'"
-          :label="item.label"
+          :call="item.call"
           :status="item.status"
-          :summary="item.summary"
+          :outcome="item.outcome"
         />
         <AssistantActionCard
           v-else

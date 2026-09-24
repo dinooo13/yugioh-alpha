@@ -23,6 +23,8 @@ const emit = defineEmits<{
   cancel: []
 }>()
 
+const { t } = useI18n()
+
 const text = ref(props.initialText)
 const images = ref<string[]>([])
 const errorMessage = ref('')
@@ -36,6 +38,7 @@ const galleryInput = ref<HTMLInputElement | null>(null)
 // mouse/trackpad device has no camera to jump to in the first place, so
 // both inputs would just open the same file picker — show only one there.
 const isTouchDevice = ref(import.meta.client && navigator.maxTouchPoints > 0)
+const galleryLabel = computed(() => isTouchDevice.value ? t('assistant.composer.fromGallery') : t('assistant.composer.addPhoto'))
 
 const totalImageBytes = computed(() => images.value.reduce((sum, image) => sum + image.length, 0))
 const canSend = computed(() =>
@@ -120,7 +123,7 @@ async function onFilesSelected(event: Event) {
   errorMessage.value = ''
   const free = ASSISTANT_MESSAGE_IMAGES_MAX - images.value.length
   if (free <= 0) {
-    errorMessage.value = `Es sind höchstens ${ASSISTANT_MESSAGE_IMAGES_MAX} Bilder pro Nachricht erlaubt.`
+    errorMessage.value = t('assistant.composer.errors.tooManyImages', { max: ASSISTANT_MESSAGE_IMAGES_MAX })
     return
   }
 
@@ -129,14 +132,14 @@ async function onFilesSelected(event: Event) {
     for (const file of files.slice(0, free)) {
       const dataUrl = await resizeImageToDataUrl(file)
       if (totalImageBytes.value + dataUrl.length > ASSISTANT_MESSAGE_TOTAL_BYTES_MAX) {
-        errorMessage.value = 'Die Bilder sind zusammen zu groß (max. 12 MB). Entferne eins oder nutze ein kleineres Foto.'
+        errorMessage.value = t('assistant.composer.errors.imagesTooLarge', { max: ASSISTANT_MESSAGE_TOTAL_BYTES_MAX / (1024 * 1024) })
         break
       }
       images.value = [...images.value, dataUrl]
     }
   }
   catch {
-    errorMessage.value = 'Das Bild konnte nicht verarbeitet werden.'
+    errorMessage.value = t('assistant.composer.errors.imageFailed')
   }
   finally {
     isProcessingImage.value = false
@@ -155,7 +158,7 @@ function onSend() {
   }
   const trimmed = text.value.trim()
   if (trimmed.length > ASSISTANT_MESSAGE_TEXT_MAX) {
-    errorMessage.value = `Bitte höchstens ${ASSISTANT_MESSAGE_TEXT_MAX} Zeichen schreiben.`
+    errorMessage.value = t('assistant.composer.errors.textTooLong', { max: ASSISTANT_MESSAGE_TEXT_MAX })
     return
   }
 
@@ -195,7 +198,7 @@ function onKeydown(event: KeyboardEvent) {
           color="neutral"
           variant="solid"
           class="absolute -top-1.5 -right-1.5 rounded-full"
-          :aria-label="`Bild ${index + 1} entfernen`"
+          :aria-label="t('assistant.composer.removeImage', { index: index + 1 })"
           @click="removeImage(index)"
         />
       </div>
@@ -214,8 +217,8 @@ function onKeydown(event: KeyboardEvent) {
         :rows="2"
         autoresize
         class="w-full flex-1"
-        placeholder="Nachricht an den Assistenten…"
-        aria-label="Nachricht"
+        :placeholder="t('assistant.composer.placeholder')"
+        :aria-label="t('assistant.composer.label')"
         :disabled="disabled || streaming"
         @keydown="onKeydown"
       />
@@ -228,7 +231,7 @@ function onKeydown(event: KeyboardEvent) {
         capture="environment"
         multiple
         class="hidden"
-        aria-label="Foto aufnehmen"
+        :aria-label="t('assistant.composer.takePhoto')"
         @change="onFilesSelected"
       >
       <UButton
@@ -236,7 +239,7 @@ function onKeydown(event: KeyboardEvent) {
         icon="i-lucide-camera"
         color="neutral"
         variant="outline"
-        aria-label="Foto aufnehmen"
+        :aria-label="t('assistant.composer.takePhoto')"
         :loading="isProcessingImage"
         :disabled="disabled || streaming || images.length >= ASSISTANT_MESSAGE_IMAGES_MAX"
         class="tap-target"
@@ -249,14 +252,14 @@ function onKeydown(event: KeyboardEvent) {
         accept="image/*"
         multiple
         class="hidden"
-        :aria-label="isTouchDevice ? 'Aus Galerie hinzufügen' : 'Foto hinzufügen'"
+        :aria-label="galleryLabel"
         @change="onFilesSelected"
       >
       <UButton
         :icon="isTouchDevice ? 'i-lucide-images' : 'i-lucide-image'"
         color="neutral"
         variant="outline"
-        :aria-label="isTouchDevice ? 'Aus Galerie hinzufügen' : 'Foto hinzufügen'"
+        :aria-label="galleryLabel"
         :loading="isProcessingImage"
         :disabled="disabled || streaming || images.length >= ASSISTANT_MESSAGE_IMAGES_MAX"
         class="tap-target"
@@ -266,7 +269,7 @@ function onKeydown(event: KeyboardEvent) {
       <UButton
         v-if="!streaming"
         icon="i-lucide-send"
-        label="Senden"
+        :label="t('assistant.composer.send')"
         :disabled="!canSend"
         @click="onSend"
       />
@@ -275,7 +278,7 @@ function onKeydown(event: KeyboardEvent) {
         icon="i-lucide-square"
         color="neutral"
         variant="outline"
-        :label="cancelling ? 'Wird abgebrochen…' : 'Abbrechen'"
+        :label="cancelling ? t('assistant.composer.cancelling') : t('common.cancel')"
         :disabled="cancelling"
         @click="emit('cancel')"
       />

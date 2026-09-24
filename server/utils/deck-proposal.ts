@@ -124,7 +124,12 @@ export function previewDeckProposal(db: Db, userId: string, input: DeckProposalI
     formatName,
     counts,
     validation: validation
-      ? { legal: validation.legal, issues: validation.issues.map(issue => issue.message) }
+      ? {
+          legal: validation.legal,
+          issues: validation.issues.map(issue => issue.message),
+          // Code + params for the action card (ADR 0014); the model reads `issues`.
+          issueDetails: validation.issues,
+        }
       : null,
     missing,
   }
