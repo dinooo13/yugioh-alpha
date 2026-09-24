@@ -15,7 +15,7 @@ test.describe('auth happy path', () => {
     // (desktop) viewport. The sidebar shows the registered name, not the
     // e-mail address (#17).
     const sidebar = page.getByRole('complementary')
-    await expect(sidebar.getByText('yugioh alpha', { exact: true })).toBeVisible()
+    await expect(sidebar.getByText('YGO Alpha', { exact: true })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Abmelden' })).toBeVisible()
     await expect(sidebar.getByText('E2E Test User')).toBeVisible()
 

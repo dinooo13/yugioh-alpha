@@ -246,7 +246,7 @@ describe('chat()', () => {
     await model.chat(chatBaseInput, collectHandlers().handlers)
 
     expect(calls[0]!.init.headers['x-opencode-session']).toBe('conversation-42')
-    expect(calls[0]!.init.headers['user-agent']).toMatch(/^yugioh-alpha\//)
+    expect(calls[0]!.init.headers['user-agent']).toMatch(/^ygo-alpha\//)
     expect(calls[0]!.init.headers.accept).toBe('text/event-stream')
     expect(calls[0]!.init.headers.authorization).toBe('Bearer go-key')
   })
@@ -553,7 +553,7 @@ describe('fake model chat()', () => {
 
   describe('with a linked deck in the system prompt', () => {
     const deckSystem = [
-      'You are a Yu-Gi-Oh! assistant.',
+      'You are the assistant in YGO Alpha.',
       'Deck ID: deck-1',
       'Deck name: Blue-Eyes Test',
       'Counts: Main 40 · Extra 5 · Side 2',

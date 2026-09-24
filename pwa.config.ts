@@ -12,9 +12,9 @@ import type { ModuleOptions } from '@vite-pwa/nuxt'
 export const pwaOptions: ModuleOptions = {
   registerType: 'autoUpdate',
   manifest: {
-    name: 'yugioh alpha',
-    short_name: 'yugioh alpha',
-    description: 'Verwaltung für Yu-Gi-Oh!-Sammlungen, Decks, Formate und Turniere',
+    name: 'YGO Alpha',
+    short_name: 'YGO Alpha',
+    description: 'Inoffizielles Fan-Tool für Sammlung, Decks, Formate und Turniere im Yu-Gi-Oh!-Sammelkartenspiel',
     lang: 'de',
     display: 'standalone',
     start_url: '/',

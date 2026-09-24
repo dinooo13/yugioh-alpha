@@ -53,7 +53,7 @@ export default withNuxt(
         },
         // `*`, not `+`: an empty `alt=""` (a decorative image) is not copy.
         ignorePattern: '^[-–—·…/:()#%+×→•|0-9\\s]*$',
-        ignoreText: ['yugioh alpha', 'yugioh', 'alpha', 'Y', 'Main', 'Extra', 'Side', 'TCG', 'OCG', 'GOAT', 'ATK', 'DEF'],
+        ignoreText: ['YGO Alpha', 'YGO', 'Alpha', 'Y', 'Main', 'Extra', 'Side', 'TCG', 'OCG', 'GOAT', 'ATK', 'DEF'],
       }],
     },
   },

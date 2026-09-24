@@ -1,6 +1,8 @@
-# yugioh alpha
+# YGO Alpha
 
-Management for Yu-Gi-Oh! collections, decks, formats, and tournaments. Built with [Nuxt 4](https://nuxt.com) and [Nuxt UI](https://ui.nuxt.com).
+YGO Alpha manages your card collection, decks, formats and tournaments for the Yu-Gi-Oh! trading card game. Built with [Nuxt 4](https://nuxt.com) and [Nuxt UI](https://ui.nuxt.com).
+
+> **Disclaimer:** YGO Alpha is an unofficial fan project and is not affiliated with or endorsed by Konami. Yu-Gi-Oh! is a trademark of Konami.
 
 ## Requirements
 

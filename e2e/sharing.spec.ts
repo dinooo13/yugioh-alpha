@@ -142,7 +142,7 @@ test.describe('sharing', () => {
     // The shared inventory names its owner in both the H1 and the <title>
     // (UX review #24) — "Alle Karten" told a visitor nothing.
     await expect(anonPage.getByRole('heading', { name: 'Inventar von E2E Test User' })).toBeVisible()
-    await expect(anonPage).toHaveTitle('Inventar von E2E Test User – yugioh alpha')
+    await expect(anonPage).toHaveTitle('Inventar von E2E Test User – YGO Alpha')
 
     await expect(anonPage.getByText(CARD.darkMagician)).toBeVisible()
     await expect(anonPage.getByText('2×')).toBeVisible()

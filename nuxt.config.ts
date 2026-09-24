@@ -94,7 +94,7 @@ export default defineNuxtConfig({
   },
   app: {
     head: {
-      title: 'yugioh alpha',
+      title: 'YGO Alpha',
       // <html lang>, the color-mode class and `theme-color` follow the UI
       // language and color mode: app/app.vue sets them.
       link: [{ rel: 'icon', type: 'image/svg+xml', href: '/icon.svg' }],

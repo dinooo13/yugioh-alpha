@@ -1,6 +1,7 @@
 {
   "app": {
-    "pageTitle": "{page} – yugioh alpha",
+    "pageTitle": "{page} – YGO Alpha",
+    "disclaimer": "YGO Alpha ist ein inoffizielles Fanprojekt, nicht mit Konami verbunden und nicht von Konami unterstützt. Yu-Gi-Oh! ist eine Marke von Konami.",
     "skipLink": "Zum Inhalt springen",
     "nav": {
       "dashboard": "Dashboard",

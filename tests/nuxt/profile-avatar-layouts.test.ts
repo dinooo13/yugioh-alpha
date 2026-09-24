@@ -173,3 +173,34 @@ describe('public layout header avatar (#50)', () => {
     expect(component.find('header').text()).toContain('Sign in')
   })
 })
+
+describe('public layout disclaimer (ADR 0018)', () => {
+  const slots = { default: () => h('p', 'Seiteninhalt') }
+
+  it('shows the unofficial-fan-project notice in German by default', async () => {
+    state.session = null
+    state.profile = null
+    state.execute = vi.fn()
+
+    const component = await mountSuspended(PublicLayout, { slots })
+    await flushPromises()
+
+    expect(component.find('footer').text()).toBe(
+      'YGO Alpha ist ein inoffizielles Fanprojekt, nicht mit Konami verbunden und nicht von Konami unterstützt. Yu-Gi-Oh! ist eine Marke von Konami.',
+    )
+  })
+
+  it('shows it in English', async () => {
+    await setTestLocale('en')
+    state.session = signedIn()
+    state.profile = profile()
+    state.execute = vi.fn()
+
+    const component = await mountSuspended(PublicLayout, { slots })
+    await flushPromises()
+
+    expect(component.find('footer').text()).toBe(
+      'YGO Alpha is an unofficial fan project and is not affiliated with or endorsed by Konami. Yu-Gi-Oh! is a trademark of Konami.',
+    )
+  })
+})

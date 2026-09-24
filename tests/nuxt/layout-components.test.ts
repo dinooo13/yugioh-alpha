@@ -5,6 +5,7 @@ import PageHeader from '~/components/layout/PageHeader.vue'
 import BackLink from '~/components/layout/BackLink.vue'
 import EmptyState from '~/components/layout/EmptyState.vue'
 import SkipLink from '~/components/layout/SkipLink.vue'
+import BrandMark from '~/components/layout/BrandMark.vue'
 import { setTestLocale } from './fixtures/locale'
 
 afterEach(() => setTestLocale('de'))
@@ -135,5 +136,15 @@ describe('LayoutSkipLink', () => {
 
     expect(document.activeElement).toBe(target)
     target.remove()
+  })
+})
+
+describe('LayoutBrandMark', () => {
+  it('shows the product name "YGO Alpha" next to a decorative mark (ADR 0018)', async () => {
+    const component = await mountSuspended(BrandMark)
+
+    expect(component.text()).toBe('YGO Alpha')
+    expect(component.find('svg').attributes('aria-hidden')).toBe('true')
+    expect(component.text()).not.toMatch(/yugioh/i)
   })
 })

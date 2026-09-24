@@ -553,7 +553,8 @@ describe('runChatTurn: interface language (ADR 0014)', () => {
     expect(calls[2]!.system).toContain('search_catalog`, and ask if you are unsure.')
     expect(calls[2]!.system.endsWith(`${REPLY_LANGUAGE_INSTRUCTION.de}\n\n${CARD_NAME_INSTRUCTION.de}`)).toBe(true)
     // The model-facing prompt itself is English in every locale.
-    expect(calls[0]!.system.startsWith('You are a Yu-Gi-Oh! assistant')).toBe(true)
+    expect(calls[0]!.system.startsWith('You are the assistant in YGO Alpha')).toBe(true)
+    expect(calls[0]!.system).toContain('the Yu-Gi-Oh! trading card game')
   })
 
   it('names cards in the card language, independent of the reply language (ADR 0015)', async () => {

@@ -19,7 +19,7 @@ import type { AppLocale } from '../../shared/locale'
 
 // --- System prompt ---------------------------------------------------------------
 
-export const SYSTEM_PROMPT = `You are a Yu-Gi-Oh! assistant for this user's card collection (catalog, inventory, decks).
+export const SYSTEM_PROMPT = `You are the assistant in YGO Alpha, an app for the Yu-Gi-Oh! trading card game. You help this user with their card collection (catalog, inventory, decks).
 
 Rules:
 - Use a tool for every factual statement about the catalog, the inventory or decks; never make up a catalog ID.

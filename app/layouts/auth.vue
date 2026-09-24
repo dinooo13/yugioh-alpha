@@ -72,6 +72,13 @@ const POINTS = ['inventory', 'decks', 'tournaments'] as const
           <slot />
         </div>
       </main>
+
+      <!-- Trademark notice (ADR 0018): shown on /login and /register. -->
+      <footer class="px-4 pb-6 text-center text-xs leading-5 text-muted sm:px-6">
+        <p class="mx-auto max-w-sm">
+          {{ t('app.disclaimer') }}
+        </p>
+      </footer>
     </div>
   </div>
 </template>

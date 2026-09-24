@@ -1,8 +1,8 @@
-# Yu-Gi-Oh Card App Roadmap
+# YGO Alpha Roadmap
 
 ## Product Vision
 
-Build a personal Yu-Gi-Oh card app that helps players catalog their cards, organize collections, build decks from cards they actually own, validate decks against flexible rule formats, and later share collections or run tournaments.
+Build YGO Alpha, a personal card app for the Yu-Gi-Oh! trading card game that helps players catalog their cards, organize collections, build decks from cards they actually own, validate decks against flexible rule formats, and later share collections or run tournaments.
 
 The product should start as a reliable personal inventory and deckbuilding tool. More advanced features such as AI deck assistance, social sharing, and tournament tracking should build on that foundation rather than shape the first release.
 

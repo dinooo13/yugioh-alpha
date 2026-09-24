@@ -1,7 +1,7 @@
 {
   "dashboard": {
     "title": "Dashboard",
-    "description": "Welcome to yugioh alpha — see your collection, your decks and upcoming tournaments at a glance.",
+    "description": "Welcome to YGO Alpha — see your collection, your decks and upcoming tournaments at a glance.",
     "firstRun": {
       "title": "Let's go: add your first cards",
       "description": "Your inventory is still empty. Add a few cards, then build your first deck and play tournaments.",
