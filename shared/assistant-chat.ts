@@ -13,7 +13,12 @@ import type { ValidationIssue } from './rule-formats'
 export interface AssistantStatus {
   enabled: boolean
   provider: 'openai' | 'fake' | null
+  /** The default model (same as `defaultModel`). */
   model: string | null
+  /** The models the user may pick from (`NUXT_ASSISTANT_MODELS`); just the default when no list is configured, empty when disabled. */
+  models: string[]
+  /** The model a turn uses when none is picked. */
+  defaultModel: string | null
   /** For provider 'openai': the endpoint's host (never a key). */
   baseUrl?: string | null
   /** Whether the chat assistant (`/assistant`) is usable — same as `enabled`. */
@@ -281,6 +286,7 @@ export const ASSISTANT_ERROR_CODES = [
   'assistant_busy',
   'assistant_unreachable',
   'regenerate_not_allowed',
+  'assistant_model_not_allowed',
   'unexpected',
 ] as const
 

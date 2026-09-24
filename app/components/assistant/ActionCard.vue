@@ -160,9 +160,17 @@ function columnLabel(column: Field): string {
 }
 
 function displayValue(column: Field, value: unknown): string {
+  if (value === null || value === undefined) {
+    return '—'
+  }
   if (typeof value === 'string') {
     if (column === 'section' && (DECK_SECTIONS as readonly string[]).includes(value)) {
       return t(`decks.section.${value}`)
+    }
+    // A collection by its current name (#69), never its id; unknown when it
+    // is gone or the server couldn't resolve it.
+    if (column === 'collectionId') {
+      return props.action.display?.collectionNames?.[value] ?? t('assistant.action.unknownCollection')
     }
   }
   return String(value)
@@ -251,8 +259,13 @@ const metaEntries = computed(() => {
   if (typeof payload.name === 'string') {
     add('name', payload.name)
   }
-  if (typeof payload.deckName === 'string' || typeof payload.deckId === 'string') {
-    add('deck', String(payload.deckName ?? payload.deckId))
+  // The deck by name — stored with the proposal, else its current name
+  // (#69, for proposals stored without one); never its id.
+  if (typeof payload.deckName === 'string') {
+    add('deck', payload.deckName)
+  }
+  else if (typeof payload.deckId === 'string') {
+    add('deck', props.action.display?.deckName ?? t('assistant.action.meta.unknownDeck'))
   }
   if (props.action.kind === 'set_deck_format') {
     add('previousFormat', formatLabel(payload.previousFormatId, payload.previousFormatName, 'assistant.action.meta.noFormat'))
@@ -310,201 +323,199 @@ async function reject() {
 </script>
 
 <template>
-  <div class="flex justify-start ps-[2.375rem]">
-    <!-- An "activated spell" (ADR 0016): a spell-colored stripe on top, a
-         gold glow while it waits for a decision. -->
-    <div
-      class="panel relative w-full max-w-md overflow-hidden p-3 pt-4 text-sm transition-[box-shadow,opacity] duration-200"
-      :class="cardStateClass"
-      data-frame="spell"
-    >
-      <span
-        class="frame-stripe absolute inset-x-0 top-0 h-[3px]"
-        aria-hidden="true"
-      />
-      <div class="flex items-center justify-between gap-2">
-        <span class="inline-flex min-w-0 items-center gap-2 font-semibold text-highlighted">
-          <UIcon
-            name="i-lucide-scroll-text"
-            class="size-4 shrink-0 text-secondary"
-            aria-hidden="true"
-          />
-          <span class="truncate">{{ t(`assistant.action.kind.${action.kind}`) }}</span>
-        </span>
-        <UBadge
-          :color="statusColor"
-          variant="subtle"
-          :label="t(`assistant.action.status.${action.status}`)"
+  <!-- An "activated spell" (ADR 0016): a spell-colored stripe on top, a
+       gold glow while it waits for a decision. -->
+  <div
+    class="panel relative w-full max-w-md overflow-hidden p-3 pt-4 text-sm transition-[box-shadow,opacity] duration-200"
+    :class="cardStateClass"
+    data-frame="spell"
+  >
+    <span
+      class="frame-stripe absolute inset-x-0 top-0 h-[3px]"
+      aria-hidden="true"
+    />
+    <div class="flex items-center justify-between gap-2">
+      <span class="inline-flex min-w-0 items-center gap-2 font-semibold text-highlighted">
+        <UIcon
+          name="i-lucide-scroll-text"
+          class="size-4 shrink-0 text-secondary"
+          aria-hidden="true"
         />
+        <span class="truncate">{{ t(`assistant.action.kind.${action.kind}`) }}</span>
+      </span>
+      <UBadge
+        :color="statusColor"
+        variant="subtle"
+        :label="t(`assistant.action.status.${action.status}`)"
+      />
+    </div>
+
+    <p class="mt-1 text-toned">
+      {{ summary }}
+    </p>
+
+    <div
+      v-if="preview"
+      class="mt-2 space-y-2 rounded-lg bg-elevated/60 p-2.5 text-xs ring-1 ring-default"
+      data-testid="action-preview"
+    >
+      <div class="flex flex-wrap items-center gap-2">
+        <UBadge
+          :color="legalityBadge.color"
+          variant="subtle"
+          size="sm"
+          :label="legalityBadge.label"
+        />
+        <span class="text-toned">
+          {{ previewCounts }}
+        </span>
       </div>
 
-      <p class="mt-1 text-toned">
-        {{ summary }}
-      </p>
-
-      <div
-        v-if="preview"
-        class="mt-2 space-y-2 rounded-lg bg-elevated/60 p-2.5 text-xs ring-1 ring-default"
-        data-testid="action-preview"
+      <ul
+        v-if="previewIssues.length > 0"
+        class="list-inside list-disc space-y-0.5 text-error"
       >
-        <div class="flex flex-wrap items-center gap-2">
-          <UBadge
-            :color="legalityBadge.color"
-            variant="subtle"
-            size="sm"
-            :label="legalityBadge.label"
-          />
-          <span class="text-toned">
-            {{ previewCounts }}
-          </span>
-        </div>
-
-        <ul
-          v-if="previewIssues.length > 0"
-          class="list-inside list-disc space-y-0.5 text-error"
+        <li
+          v-for="(issue, index) in previewIssues"
+          :key="index"
         >
+          {{ issue }}
+        </li>
+        <li
+          v-if="hiddenIssueCount > 0"
+          class="list-none text-muted"
+        >
+          {{ t('assistant.action.preview.moreIssues', { count: integer(hiddenIssueCount) }, hiddenIssueCount) }}
+        </li>
+      </ul>
+
+      <div v-if="preview.missing.length > 0">
+        <p class="font-medium text-highlighted">
+          {{ t('assistant.action.preview.missingTitle') }}
+        </p>
+        <ul class="mt-0.5 space-y-0.5 text-warning">
           <li
-            v-for="(issue, index) in previewIssues"
-            :key="index"
+            v-for="card in preview.missing"
+            :key="card.catalogCardId"
           >
-            {{ issue }}
-          </li>
-          <li
-            v-if="hiddenIssueCount > 0"
-            class="list-none text-muted"
-          >
-            {{ t('assistant.action.preview.moreIssues', { count: integer(hiddenIssueCount) }, hiddenIssueCount) }}
+            {{ t('assistant.action.preview.missingCard', { name: card.name, needed: integer(card.needed), owned: integer(card.owned) }) }}
           </li>
         </ul>
-
-        <div v-if="preview.missing.length > 0">
-          <p class="font-medium text-highlighted">
-            {{ t('assistant.action.preview.missingTitle') }}
-          </p>
-          <ul class="mt-0.5 space-y-0.5 text-warning">
-            <li
-              v-for="card in preview.missing"
-              :key="card.catalogCardId"
-            >
-              {{ t('assistant.action.preview.missingCard', { name: card.name, needed: integer(card.needed), owned: integer(card.owned) }) }}
-            </li>
-          </ul>
-        </div>
-
-        <p class="text-muted">
-          {{ t('assistant.action.preview.snapshot') }}
-        </p>
       </div>
 
-      <UButton
-        v-if="hasDetails"
-        color="neutral"
-        variant="link"
-        size="xs"
-        class="tap-target mt-1 px-0"
-        :label="isExpanded ? t('assistant.action.hideDetails') : t('assistant.action.showDetails')"
-        :trailing-icon="isExpanded ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'"
-        @click="() => { isExpanded = !isExpanded }"
-      />
-
-      <div
-        v-if="isExpanded"
-        class="mt-2 space-y-2"
-      >
-        <dl
-          v-if="metaEntries.length > 0"
-          class="space-y-0.5 text-xs text-muted"
-        >
-          <div
-            v-for="entry in metaEntries"
-            :key="entry.key"
-            class="flex gap-1"
-          >
-            <dt class="font-medium">
-              {{ entry.label }}:
-            </dt>
-            <dd>{{ entry.value }}</dd>
-          </div>
-        </dl>
-
-        <div
-          v-if="rows.length > 0"
-          class="overflow-x-auto"
-        >
-          <table class="w-full text-left text-xs">
-            <thead>
-              <tr class="text-[0.6875rem] tracking-wider text-muted uppercase">
-                <th
-                  v-for="column in columns"
-                  :key="column"
-                  class="pr-3 pb-1 font-medium"
-                >
-                  {{ columnLabel(column) }}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                v-for="(row, rowIndex) in rows"
-                :key="rowIndex"
-                class="border-t border-muted"
-              >
-                <td
-                  v-for="column in columns"
-                  :key="column"
-                  class="py-1 pr-3"
-                >
-                  {{ displayValue(column, row[column]) }}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <p
-        v-if="errorMessage"
-        class="mt-2 text-xs text-error"
-      >
-        {{ errorMessage }}
+      <p class="text-muted">
+        {{ t('assistant.action.preview.snapshot') }}
       </p>
+    </div>
+
+    <UButton
+      v-if="hasDetails"
+      color="neutral"
+      variant="link"
+      size="xs"
+      class="tap-target mt-1 px-0"
+      :label="isExpanded ? t('assistant.action.hideDetails') : t('assistant.action.showDetails')"
+      :trailing-icon="isExpanded ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'"
+      @click="() => { isExpanded = !isExpanded }"
+    />
+
+    <div
+      v-if="isExpanded"
+      class="mt-2 space-y-2"
+    >
+      <dl
+        v-if="metaEntries.length > 0"
+        class="space-y-0.5 text-xs text-muted"
+      >
+        <div
+          v-for="entry in metaEntries"
+          :key="entry.key"
+          class="flex gap-1"
+        >
+          <dt class="font-medium">
+            {{ entry.label }}:
+          </dt>
+          <dd>{{ entry.value }}</dd>
+        </div>
+      </dl>
 
       <div
-        v-if="action.status === 'pending'"
-        class="mt-3 flex gap-2"
+        v-if="rows.length > 0"
+        class="overflow-x-auto"
       >
-        <UButton
-          size="xs"
-          icon="i-lucide-check"
-          :label="t('assistant.action.apply')"
-          :loading="isApplying"
-          :disabled="isRejecting"
-          class="tap-target"
-          @click="apply"
-        />
-        <UButton
-          size="xs"
-          color="neutral"
-          variant="outline"
-          icon="i-lucide-x"
-          :label="t('assistant.action.reject')"
-          :loading="isRejecting"
-          :disabled="isApplying"
-          class="tap-target"
-          @click="reject"
-        />
+        <table class="w-full text-left text-xs">
+          <thead>
+            <tr class="text-[0.6875rem] tracking-wider text-muted uppercase">
+              <th
+                v-for="column in columns"
+                :key="column"
+                class="pr-3 pb-1 font-medium"
+              >
+                {{ columnLabel(column) }}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="(row, rowIndex) in rows"
+              :key="rowIndex"
+              class="border-t border-muted"
+            >
+              <td
+                v-for="column in columns"
+                :key="column"
+                class="py-1 pr-3"
+              >
+                {{ displayValue(column, row[column]) }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
+    </div>
 
+    <p
+      v-if="errorMessage"
+      class="mt-2 text-xs text-error"
+    >
+      {{ errorMessage }}
+    </p>
+
+    <div
+      v-if="action.status === 'pending'"
+      class="mt-3 flex gap-2"
+    >
       <UButton
-        v-if="openDeckId"
-        :to="`/decks/${openDeckId}`"
+        size="xs"
+        icon="i-lucide-check"
+        :label="t('assistant.action.apply')"
+        :loading="isApplying"
+        :disabled="isRejecting"
+        class="tap-target"
+        @click="apply"
+      />
+      <UButton
         size="xs"
         color="neutral"
         variant="outline"
-        icon="i-lucide-layers"
-        :label="t('assistant.action.openDeck')"
-        class="tap-target mt-3"
+        icon="i-lucide-x"
+        :label="t('assistant.action.reject')"
+        :loading="isRejecting"
+        :disabled="isApplying"
+        class="tap-target"
+        @click="reject"
       />
     </div>
+
+    <UButton
+      v-if="openDeckId"
+      :to="`/decks/${openDeckId}`"
+      size="xs"
+      color="neutral"
+      variant="outline"
+      icon="i-lucide-layers"
+      :label="t('assistant.action.openDeck')"
+      class="tap-target mt-3"
+    />
   </div>
 </template>

@@ -104,15 +104,62 @@ describe('AssistantComposer', () => {
     expect(component.emitted('send')).toBeUndefined()
 
     await textarea.trigger('keydown', { key: 'Enter' })
-    expect(component.emitted('send')).toEqual([[{ text: 'Hallo Assistent', images: [] }]])
+    expect(component.emitted('send')).toEqual([[{ text: 'Hallo Assistent', files: [] }]])
+  })
+
+  it('sends a message of photos only with the button, as JPEG file parts', async () => {
+    stubCanvas()
+    vi.stubGlobal('createImageBitmap', vi.fn(() => Promise.resolve(fakeBitmap())))
+    const component = await mountSuspended(AssistantComposer)
+
+    await selectFiles(component, [pngFile('a.png')])
+    await flushPromises()
+    await sendButton(component)!.trigger('click')
+
+    expect(component.emitted('send')).toEqual([[{ text: '', files: [{ mediaType: 'image/jpeg', url: 'data:image/jpeg;base64,AAA' }] }]])
+    expect(component.findAll('img')).toHaveLength(0)
+  })
+
+  it('turns the button into "Abbrechen" while a turn runs, and keeps the field usable but unsendable', async () => {
+    const component = await mountSuspended(AssistantComposer, { props: { status: 'streaming' } })
+    const textarea = component.find('textarea')
+    expect(textarea.attributes('disabled')).toBeUndefined()
+
+    await textarea.setValue('Nächste Frage')
+    await textarea.trigger('keydown', { key: 'Enter' })
+    expect(component.emitted('send')).toBeUndefined()
+
+    await findButton(component, 'Abbrechen')!.trigger('click')
+    expect(component.emitted('stop')).toHaveLength(1)
   })
 
   it('shows "Wird abgebrochen…" and disables the button while cancelling', async () => {
-    const component = await mountSuspended(AssistantComposer, { props: { streaming: true, cancelling: true } })
+    const component = await mountSuspended(AssistantComposer, { props: { status: 'ready', cancelling: true } })
 
     const cancelButton = findButton(component, 'Wird abgebrochen')
     expect(cancelButton).toBeTruthy()
     expect(cancelButton!.attributes('disabled')).toBeDefined()
+  })
+
+  it('offers "Erneut versuchen" after an error, and "Senden" again once something is typed', async () => {
+    const component = await mountSuspended(AssistantComposer, { props: { status: 'error' } })
+
+    await findButton(component, 'Erneut versuchen')!.trigger('click')
+    expect(component.emitted('retry')).toHaveLength(1)
+
+    await component.find('textarea').setValue('Neue Nachricht')
+    expect(findButton(component, 'Erneut versuchen')).toBeUndefined()
+    expect(sendButton(component)).toBeTruthy()
+  })
+
+  it('offers the model picker only with more than one model', async () => {
+    const single = await mountSuspended(AssistantComposer, { props: { models: ['mimo-v2.6-pro'], model: 'mimo-v2.6-pro' } })
+    expect(single.find('[data-testid="assistant-model-select"]').exists()).toBe(false)
+
+    const multiple = await mountSuspended(AssistantComposer, { props: { models: ['mimo-v2.6-pro', 'deepseek-v4.1-flash', 'some-new-model'], model: 'deepseek-v4.1-flash' } })
+    const select = multiple.find('[data-testid="assistant-model-select"]')
+    expect(select.attributes('aria-label')).toBe('Modell')
+    expect(select.text()).toContain('DeepSeek v4.1 Flash')
   })
 
   it('offers no dictation even when the browser supports Web Speech', async () => {

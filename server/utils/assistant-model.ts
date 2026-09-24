@@ -13,6 +13,7 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
+import { createError } from 'h3'
 import { AISDKError, APICallError, InvalidToolInputError, NoSuchToolError, RetryError, simulateReadableStream } from 'ai'
 import type { LanguageModel, streamText } from 'ai'
 import { MockLanguageModelV4 } from 'ai/test'
@@ -29,6 +30,8 @@ export interface DeckAssistantRuntimeConfig {
   reasoningEffort: string
   /** NUXT_ASSISTANT_VISION_MODEL — used for chat turns with images; '' = use `model`. */
   visionModel: string
+  /** NUXT_ASSISTANT_MODELS — comma-separated model ids the user may pick from; '' = only `model`. */
+  models?: string
 }
 
 export type AssistantProvider = 'openai' | 'fake' | null
@@ -75,6 +78,22 @@ export function resolveVisionModel(config: DeckAssistantRuntimeConfig): string {
   return (config.visionModel ?? '').trim()
 }
 
+/**
+ * The models the user may pick from (the owner's allowlist, `NUXT_ASSISTANT_MODELS`,
+ * comma-separated, passed to the provider as they are) and the default one:
+ * `NUXT_ASSISTANT_MODEL` when it is on the list, else the list's first entry.
+ * Without a list, only the configured model. `fallback` is the model id when
+ * nothing is configured at all.
+ */
+export function resolveModelChoice(config: DeckAssistantRuntimeConfig, fallback = resolveModelId(config)): { models: string[], defaultModel: string } {
+  const listed = [...new Set((config.models ?? '').split(',').map(id => id.trim()).filter(id => id !== ''))]
+  if (listed.length === 0) {
+    return { models: [fallback], defaultModel: fallback }
+  }
+  const configured = (config.model ?? '').trim()
+  return { models: listed, defaultModel: listed.includes(configured) ? configured : listed[0]! }
+}
+
 export function resolveProvider(config: DeckAssistantRuntimeConfig): AssistantProvider {
   const raw = (config.provider ?? '').trim().toLowerCase()
   if (raw === 'fake') {
@@ -104,7 +123,9 @@ export function getAssistantStatus(): AssistantStatus {
   const provider = resolveProvider(config)
 
   if (provider === 'fake') {
-    return { enabled: true, provider: 'fake', model: FAKE_MODEL_ID, baseUrl: null, chat: true, vision: true, visionModel: null }
+    // The fake answers the same whichever id is picked; a list makes the picker testable.
+    const { models, defaultModel } = resolveModelChoice(config, FAKE_MODEL_ID)
+    return { enabled: true, provider: 'fake', model: defaultModel, models, defaultModel, baseUrl: null, chat: true, vision: true, visionModel: null }
   }
   if (provider === 'openai') {
     const baseUrl = resolveBaseUrl(config)
@@ -117,10 +138,13 @@ export function getAssistantStatus(): AssistantStatus {
       // somehow isn't a parseable URL — still never a secret.
     }
     const visionModel = resolveVisionModel(config)
+    const { models, defaultModel } = resolveModelChoice(config)
     return {
       enabled: true,
       provider: 'openai',
-      model: resolveModelId(config),
+      model: defaultModel,
+      models,
+      defaultModel,
       baseUrl: host,
       chat: true,
       // Every provider reachable here (a real OpenAI-compatible endpoint, or
@@ -129,7 +153,7 @@ export function getAssistantStatus(): AssistantStatus {
       visionModel: visionModel !== '' ? visionModel : null,
     }
   }
-  return { enabled: false, provider: null, model: null, baseUrl: null, chat: false, vision: false, visionModel: null }
+  return { enabled: false, provider: null, model: null, models: [], defaultModel: null, baseUrl: null, chat: false, vision: false, visionModel: null }
 }
 
 // --- Request identity (User-Agent) --------------------------------------------
@@ -158,10 +182,12 @@ type ProviderOptions = NonNullable<Parameters<typeof streamText>[0]['providerOpt
 export const ASSISTANT_PROVIDER_NAME = 'assistant'
 
 export interface AssistantLanguageModel {
-  /** The configured model id (`fake` for the fake). */
+  /** The model id picked for the turn (`fake` for the fake, unless a list is configured). */
   readonly id: string
   /** The model for one turn: the vision model for a turn with images, when one is configured. */
   modelFor: (hasImages: boolean) => LanguageModel
+  /** The id of `modelFor(hasImages)` — stored with the answer (`metadata.model`). Defaults to `id`. */
+  modelIdFor?: (hasImages: boolean) => string
   /** Per-call provider options (`reasoning_effort`), when configured. */
   readonly providerOptions?: ProviderOptions
 }
@@ -191,31 +217,49 @@ export function createOpenAiCompatibleLanguageModel(options: CreateOpenAiCompati
     ...(options.fetch ? { fetch: options.fetch } : {}),
   })
 
+  const modelIdFor = (hasImages: boolean) => hasImages && visionModel !== '' ? visionModel : options.model
   return {
     id: options.model,
-    modelFor: hasImages => provider.chatModel(hasImages && visionModel !== '' ? visionModel : options.model),
+    modelFor: hasImages => provider.chatModel(modelIdFor(hasImages)),
+    modelIdFor,
     ...(reasoningEffort !== '' ? { providerOptions: { [ASSISTANT_PROVIDER_NAME]: { reasoningEffort } } } : {}),
   }
 }
 
-/** The configured model, or null when the assistant isn't configured (503 `assistant_not_configured`). */
-export function useAssistantLanguageModel(): AssistantLanguageModel | null {
+/**
+ * The model the user picked (`modelId`, one of the configured models) or the
+ * default one; null when the assistant isn't configured (503
+ * `assistant_not_configured`). Throws 400 `assistant_model_not_allowed` for
+ * a model that isn't on the list.
+ */
+export function useAssistantLanguageModel(modelId?: string): AssistantLanguageModel | null {
   const config = useAssistantRuntimeConfig()
   const provider = resolveProvider(config)
 
   if (provider === 'fake') {
-    return createFakeLanguageModel()
+    return createFakeLanguageModel(pickModel(resolveModelChoice(config, FAKE_MODEL_ID), modelId))
   }
   if (provider === 'openai') {
     return createOpenAiCompatibleLanguageModel({
       baseUrl: resolveBaseUrl(config),
       apiKey: resolveApiKey(config),
-      model: resolveModelId(config),
+      model: pickModel(resolveModelChoice(config), modelId),
       reasoningEffort: resolveReasoningEffort(config),
       visionModel: resolveVisionModel(config) || undefined,
     })
   }
   return null
+}
+
+/** `requested` when it is one of `choice.models`, the default when nothing was requested; else 400 `assistant_model_not_allowed`. */
+export function pickModel(choice: { models: string[], defaultModel: string }, requested: string | undefined): string {
+  if (requested === undefined) {
+    return choice.defaultModel
+  }
+  if (!choice.models.includes(requested)) {
+    throw createError({ statusCode: 400, statusMessage: 'This model is not available', data: { code: 'assistant_model_not_allowed' } })
+  }
+  return requested
 }
 
 // --- Errors ---------------------------------------------------------------------
@@ -378,7 +422,12 @@ type FakePromptMessage = FakeCallOptions['prompt'][number]
 type FakeStreamPart = Awaited<ReturnType<MockLanguageModelV4['doStream']>>['stream'] extends ReadableStream<infer PART> ? PART : never
 
 interface FakeToolCall { toolName: string, input: Record<string, unknown> | string }
-interface FakeTurn { text: string, toolCalls: FakeToolCall[] }
+interface FakeTurn {
+  text: string
+  toolCalls: FakeToolCall[]
+  /** Streams the text word by word with a delay (the cancel test needs an answer that takes a while). */
+  slow?: boolean
+}
 
 let fakeToolCallCounter = 0
 
@@ -491,6 +540,11 @@ const FAKE_ADD_INTENT_PATTERN_EN = /\badd\b/i
 const FAKE_EMPTY_ARGUMENTS_TRIGGER = 'leere argumente'
 /** Test trigger (#54): writes the tool call into the answer text; makes the real call once the corrective hint is in the system prompt. */
 const FAKE_TEXT_TOOL_CALL_TRIGGER = 'text-werkzeug'
+/** Test trigger: a long answer streamed slowly, so "Abbrechen" can stop it midway. */
+const FAKE_SLOW_TRIGGER = 'langsame antwort'
+/** Per word of the slow answer. */
+const FAKE_SLOW_CHUNK_DELAY_MS = 250
+const FAKE_SLOW_TEXT = Array.from({ length: 60 }, (_, index) => `Wort${index + 1}`).join(' ')
 
 /**
  * Proves the linked deck's context block (assistant-chat.ts
@@ -528,6 +582,9 @@ export function fakeTurn(options: Pick<FakeCallOptions, 'prompt' | 'toolChoice'>
     return options.toolChoice?.type === 'none'
       ? fakeText('Ich kann das Werkzeug gerade nicht nutzen.')
       : fakeToolCall('search_catalog', '')
+  }
+  if (lower.includes(FAKE_SLOW_TRIGGER)) {
+    return { text: FAKE_SLOW_TEXT, toolCalls: [], slow: true }
   }
   if (lower.includes(FAKE_TEXT_TOOL_CALL_TRIGGER)) {
     if (alreadyRanToolThisTurn) {
@@ -579,9 +636,10 @@ const FAKE_USAGE = {
 export function fakeStreamParts(turn: FakeTurn): FakeStreamPart[] {
   const parts: FakeStreamPart[] = [{ type: 'stream-start', warnings: [] }]
   if (turn.text !== '') {
+    const deltas = turn.slow ? turn.text.split(/(?<= )/) : [turn.text]
     parts.push(
       { type: 'text-start', id: 'fake-text' },
-      { type: 'text-delta', id: 'fake-text', delta: turn.text },
+      ...deltas.map(delta => ({ type: 'text-delta' as const, id: 'fake-text', delta })),
       { type: 'text-end', id: 'fake-text' },
     )
   }
@@ -602,13 +660,21 @@ export function fakeStreamParts(turn: FakeTurn): FakeStreamPart[] {
   return parts
 }
 
-export function createFakeLanguageModel(): AssistantLanguageModel {
+/** `id`: the model id the fake reports (and the answer stores) — its script is the same for every id. */
+export function createFakeLanguageModel(id: string = FAKE_MODEL_ID): AssistantLanguageModel {
   const model = new MockLanguageModelV4({
     provider: 'fake',
     modelId: FAKE_MODEL_ID,
-    doStream: async options => ({
-      stream: simulateReadableStream({ chunks: fakeStreamParts(fakeTurn(options)), initialDelayInMs: null, chunkDelayInMs: null }),
-    }),
+    doStream: async (options) => {
+      const turn = fakeTurn(options)
+      return {
+        stream: simulateReadableStream({
+          chunks: fakeStreamParts(turn),
+          initialDelayInMs: null,
+          chunkDelayInMs: turn.slow ? FAKE_SLOW_CHUNK_DELAY_MS : null,
+        }),
+      }
+    },
   })
-  return { id: FAKE_MODEL_ID, modelFor: () => model }
+  return { id, modelFor: () => model }
 }

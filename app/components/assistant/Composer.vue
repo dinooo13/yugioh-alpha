@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { ChatStatus } from 'ai'
+import { assistantModelLabel } from '~/utils/assistant-models'
 import {
   ASSISTANT_MESSAGE_IMAGES_MAX,
   ASSISTANT_MESSAGE_TEXT_MAX,
@@ -6,22 +8,29 @@ import {
 } from '~~/shared/assistant-chat'
 
 const props = withDefaults(defineProps<{
-  disabled?: boolean
-  streaming?: boolean
+  /** The chat's status (AI SDK): 'ready', 'submitted', 'streaming' or 'error'. */
+  status?: ChatStatus
+  /** "Abbrechen" was pressed and the stopped turn is being fetched again. */
   cancelling?: boolean
   /** Pre-fills the message field once, when the composer is created (e.g. a deck entry point's draft) — never sent on its own. */
   initialText?: string
+  /** The models the user may pick from; the picker only shows with more than one. */
+  models?: string[]
 }>(), {
-  disabled: false,
-  streaming: false,
+  status: 'ready',
   cancelling: false,
   initialText: '',
+  models: () => [],
 })
 
 const emit = defineEmits<{
-  send: [payload: { text: string, images: string[] }]
-  cancel: []
+  send: [payload: { text: string, files: Array<{ mediaType: string, url: string }> }]
+  stop: []
+  retry: []
 }>()
+
+/** The picked model id (the picker's `v-model`). */
+const model = defineModel<string | null>('model', { default: null })
 
 const { t } = useI18n()
 
@@ -32,6 +41,8 @@ const isProcessingImage = ref(false)
 const cameraInput = ref<HTMLInputElement | null>(null)
 const galleryInput = ref<HTMLInputElement | null>(null)
 
+const isBusy = computed(() => props.cancelling || props.status === 'submitted' || props.status === 'streaming')
+
 // A touch device (phone/tablet) gets a dedicated camera button *and* a
 // gallery one — `capture` on the camera input opens the camera directly,
 // which would otherwise make an already-taken photo unreachable (#11). A
@@ -41,8 +52,32 @@ const isTouchDevice = ref(import.meta.client && navigator.maxTouchPoints > 0)
 const galleryLabel = computed(() => isTouchDevice.value ? t('assistant.composer.fromGallery') : t('assistant.composer.addPhoto'))
 
 const totalImageBytes = computed(() => images.value.reduce((sum, image) => sum + image.length, 0))
-const canSend = computed(() =>
-  !props.disabled && !props.streaming && !isProcessingImage.value && (text.value.trim() !== '' || images.value.length > 0))
+const hasDraft = computed(() => text.value.trim() !== '' || images.value.length > 0)
+const canSend = computed(() => !isBusy.value && !isProcessingImage.value && hasDraft.value)
+const canAddImage = computed(() => !isBusy.value && images.value.length < ASSISTANT_MESSAGE_IMAGES_MAX)
+
+// After an error the button retries — unless there's a new message in the
+// field, which it then sends.
+const submitStatus = computed<ChatStatus>(() => {
+  if (props.cancelling) {
+    return 'streaming'
+  }
+  return props.status === 'error' && hasDraft.value ? 'ready' : props.status
+})
+
+const submitLabel = computed(() => {
+  switch (submitStatus.value) {
+    case 'submitted':
+    case 'streaming':
+      return props.cancelling ? t('assistant.composer.cancelling') : t('common.cancel')
+    case 'error':
+      return t('assistant.composer.retry')
+    default:
+      return t('assistant.composer.send')
+  }
+})
+
+const modelItems = computed(() => props.models.map(id => ({ label: assistantModelLabel(id), value: id })))
 
 // --- Images: max 6, resized client-side to ≤1280px JPEG q0.85 -------------
 
@@ -162,126 +197,151 @@ function onSend() {
     return
   }
 
-  emit('send', { text: trimmed, images: images.value })
+  // Resized photos are always JPEG (`resizeImageToDataUrl`).
+  emit('send', { text: trimmed, files: images.value.map(url => ({ mediaType: 'image/jpeg', url })) })
   text.value = ''
   images.value = []
   errorMessage.value = ''
 }
 
-function onKeydown(event: KeyboardEvent) {
-  if (event.key === 'Enter' && !event.shiftKey) {
-    event.preventDefault()
-    onSend()
-  }
+/** The button in its "Senden" state: sends even a message of photos only (Enter needs text). */
+function onSubmitClick(event: MouseEvent) {
+  event.preventDefault()
+  onSend()
 }
 </script>
 
 <template>
   <div class="border-t border-default p-3">
-    <div
-      v-if="images.length > 0"
-      class="mb-2 flex flex-wrap gap-2"
+    <!-- Enter sends, Shift+Enter adds a line (UChatPrompt). The field stays
+         usable while an answer streams, so the next message can be written;
+         sending waits until the turn is over. -->
+    <UChatPrompt
+      v-model="text"
+      :placeholder="t('assistant.composer.placeholder')"
+      :aria-label="t('assistant.composer.label')"
+      :rows="2"
+      :maxrows="8"
+      autoresize
+      :autofocus="false"
+      @submit="onSend"
     >
-      <div
-        v-for="(image, index) in images"
-        :key="index"
-        class="relative"
+      <template
+        v-if="images.length > 0 || errorMessage"
+        #header
       >
-        <img
-          :src="image"
-          alt=""
-          class="size-16 rounded-md object-cover"
-        >
-        <UButton
-          icon="i-lucide-x"
-          size="xs"
-          color="neutral"
-          variant="solid"
-          class="absolute -top-1.5 -right-1.5 rounded-full"
-          :aria-label="t('assistant.composer.removeImage', { index: index + 1 })"
-          @click="removeImage(index)"
+        <div class="flex w-full flex-col gap-2">
+          <div
+            v-if="images.length > 0"
+            class="flex flex-wrap gap-2"
+          >
+            <div
+              v-for="(image, index) in images"
+              :key="index"
+              class="relative"
+            >
+              <img
+                :src="image"
+                alt=""
+                class="size-16 rounded-md object-cover"
+              >
+              <UButton
+                icon="i-lucide-x"
+                size="xs"
+                color="neutral"
+                variant="solid"
+                class="absolute -top-1.5 -right-1.5 rounded-full"
+                :aria-label="t('assistant.composer.removeImage', { index: index + 1 })"
+                @click="removeImage(index)"
+              />
+            </div>
+          </div>
+
+          <p
+            v-if="errorMessage"
+            class="text-xs text-error"
+          >
+            {{ errorMessage }}
+          </p>
+        </div>
+      </template>
+
+      <template #footer>
+        <div class="flex min-w-0 items-center gap-1.5">
+          <input
+            v-if="isTouchDevice"
+            ref="cameraInput"
+            type="file"
+            accept="image/*"
+            capture="environment"
+            multiple
+            class="hidden"
+            :aria-label="t('assistant.composer.takePhoto')"
+            @change="onFilesSelected"
+          >
+          <UButton
+            v-if="isTouchDevice"
+            icon="i-lucide-camera"
+            color="neutral"
+            variant="ghost"
+            :aria-label="t('assistant.composer.takePhoto')"
+            :loading="isProcessingImage"
+            :disabled="!canAddImage"
+            class="tap-target"
+            @click="cameraInput?.click()"
+          />
+
+          <input
+            ref="galleryInput"
+            type="file"
+            accept="image/*"
+            multiple
+            class="hidden"
+            :aria-label="galleryLabel"
+            @change="onFilesSelected"
+          >
+          <UButton
+            :icon="isTouchDevice ? 'i-lucide-images' : 'i-lucide-image'"
+            color="neutral"
+            variant="ghost"
+            :aria-label="galleryLabel"
+            :loading="isProcessingImage"
+            :disabled="!canAddImage"
+            class="tap-target"
+            @click="galleryInput?.click()"
+          />
+
+          <!-- Only when the server offers more than one model; the choice
+               is remembered on this device (see ChatThread.vue). -->
+          <USelect
+            v-if="models.length > 1"
+            :model-value="model ?? undefined"
+            :items="modelItems"
+            :aria-label="t('assistant.composer.model')"
+            icon="i-lucide-cpu"
+            color="neutral"
+            variant="ghost"
+            size="sm"
+            :disabled="isBusy"
+            class="max-w-48 min-w-0"
+            data-testid="assistant-model-select"
+            @update:model-value="(id: string) => { model = id }"
+          />
+        </div>
+
+        <UChatPromptSubmit
+          :status="submitStatus"
+          icon="i-lucide-send"
+          :label="submitLabel"
+          :aria-label="submitLabel"
+          :disabled="!canSend"
+          :loading="cancelling"
+          class="shrink-0"
+          @click="onSubmitClick"
+          @stop="emit('stop')"
+          @reload="emit('retry')"
         />
-      </div>
-    </div>
-
-    <p
-      v-if="errorMessage"
-      class="mb-2 text-xs text-error"
-    >
-      {{ errorMessage }}
-    </p>
-
-    <div class="flex items-end gap-2">
-      <UTextarea
-        v-model="text"
-        :rows="2"
-        autoresize
-        class="w-full flex-1"
-        :placeholder="t('assistant.composer.placeholder')"
-        :aria-label="t('assistant.composer.label')"
-        :disabled="disabled || streaming"
-        @keydown="onKeydown"
-      />
-
-      <input
-        v-if="isTouchDevice"
-        ref="cameraInput"
-        type="file"
-        accept="image/*"
-        capture="environment"
-        multiple
-        class="hidden"
-        :aria-label="t('assistant.composer.takePhoto')"
-        @change="onFilesSelected"
-      >
-      <UButton
-        v-if="isTouchDevice"
-        icon="i-lucide-camera"
-        color="neutral"
-        variant="outline"
-        :aria-label="t('assistant.composer.takePhoto')"
-        :loading="isProcessingImage"
-        :disabled="disabled || streaming || images.length >= ASSISTANT_MESSAGE_IMAGES_MAX"
-        class="tap-target"
-        @click="cameraInput?.click()"
-      />
-
-      <input
-        ref="galleryInput"
-        type="file"
-        accept="image/*"
-        multiple
-        class="hidden"
-        :aria-label="galleryLabel"
-        @change="onFilesSelected"
-      >
-      <UButton
-        :icon="isTouchDevice ? 'i-lucide-images' : 'i-lucide-image'"
-        color="neutral"
-        variant="outline"
-        :aria-label="galleryLabel"
-        :loading="isProcessingImage"
-        :disabled="disabled || streaming || images.length >= ASSISTANT_MESSAGE_IMAGES_MAX"
-        class="tap-target"
-        @click="galleryInput?.click()"
-      />
-
-      <UButton
-        v-if="!streaming"
-        icon="i-lucide-send"
-        :label="t('assistant.composer.send')"
-        :disabled="!canSend"
-        @click="onSend"
-      />
-      <UButton
-        v-else
-        icon="i-lucide-square"
-        color="neutral"
-        variant="outline"
-        :label="cancelling ? t('assistant.composer.cancelling') : t('common.cancel')"
-        :disabled="cancelling"
-        @click="emit('cancel')"
-      />
-    </div>
+      </template>
+    </UChatPrompt>
   </div>
 </template>

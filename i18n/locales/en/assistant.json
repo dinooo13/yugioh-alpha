@@ -37,6 +37,8 @@
       "openDeck": "Open deck {name}",
       "empty": "No messages yet — tell the assistant what it should do for you.",
       "photo": "Photo {index}",
+      "scrollToBottom": "Jump to the end",
+      "regenerate": "Regenerate the answer",
       "errors": {
         "load": "The conversation couldn't be loaded.",
         "refresh": "The conversation couldn't be updated.",
@@ -52,6 +54,8 @@
       "addPhoto": "Add a photo",
       "removeImage": "Remove image {index}",
       "send": "Send",
+      "retry": "Try again",
+      "model": "Model",
       "cancelling": "Cancelling…",
       "errors": {
         "tooManyImages": "At most {max} images are allowed per message.",
@@ -113,13 +117,15 @@
         "section": "Section",
         "collectionId": "Collection"
       },
+      "unknownCollection": "Unknown collection",
       "meta": {
         "name": "Name",
         "deck": "Deck",
         "format": "Format",
         "previousFormat": "Previous format",
         "newFormat": "New format",
-        "noFormat": "No format"
+        "noFormat": "No format",
+        "unknownDeck": "Deleted deck"
       },
       "preview": {
         "noFormat": "No format",

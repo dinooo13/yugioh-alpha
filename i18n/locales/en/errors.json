@@ -61,7 +61,8 @@
       "assistant_misconfigured": "The AI assistant is not configured correctly.",
       "assistant_busy": "The AI assistant is busy, please try again later.",
       "assistant_unreachable": "The AI assistant is currently unreachable.",
-      "regenerate_not_allowed": "This answer can't be regenerated because one of its proposals was already resolved."
+      "regenerate_not_allowed": "This answer can't be regenerated because one of its proposals was already resolved.",
+      "assistant_model_not_allowed": "This model isn't available."
     }
   }
 }

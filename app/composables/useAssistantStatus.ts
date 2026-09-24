@@ -10,6 +10,6 @@ export function useAssistantStatus() {
   return useFetch<AssistantStatus>('/api/assistant/status', {
     key: 'assistant-status',
     headers: import.meta.server ? useRequestHeaders(['cookie']) : undefined,
-    default: () => ({ enabled: false, provider: null, model: null, chat: false, vision: false, visionModel: null }),
+    default: (): AssistantStatus => ({ enabled: false, provider: null, model: null, models: [], defaultModel: null, chat: false, vision: false, visionModel: null }),
   })
 }

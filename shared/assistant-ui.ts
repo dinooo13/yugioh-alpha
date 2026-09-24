@@ -14,6 +14,8 @@ import type { AssistantActionView, AssistantConversationSummary, AssistantToolNa
 /** Per-message metadata. Room for later additions (e.g. a per-turn context snapshot, #85). */
 export interface AssistantMessageMetadata {
   createdAt?: string
+  /** An answer's model id (the one the user picked, or the vision model for a turn with photos). */
+  model?: string
 }
 
 /**

@@ -70,5 +70,78 @@ export default defineAppConfig({
         base: 'placeholder:text-muted',
       },
     },
+    // The assistant's thread (docs/adr/0020-assistant-on-the-ai-sdk.md), in
+    // the Duel Arena look of the former hand-made thread: the user's
+    // messages in an arcane-violet bubble on the right, the assistant's on
+    // the left behind its sparkle avatar. An answer holds text, chips and
+    // proposal cards in turn, so its text bubbles are drawn per text part
+    // (ChatThread.vue), not around the whole message.
+    chatMessages: {
+      slots: {
+        root: 'gap-4 px-0',
+        indicator: '*:bg-primary/50',
+        viewport: 'sticky top-auto bottom-2 h-0 z-10',
+        autoScroll: 'bottom-2 bg-default shadow-lift',
+      },
+    },
+    chatMessage: {
+      slots: {
+        leading: 'size-7 shrink-0 rounded-full bg-primary/10 text-primary ring-1 ring-secondary/60',
+        content: 'text-sm leading-6',
+        files: 'flex-wrap justify-end',
+      },
+      variants: {
+        compact: {
+          false: {
+            container: 'gap-2.5 pb-0',
+            content: 'space-y-2',
+            leadingIcon: 'size-3.5',
+          },
+        },
+      },
+      compoundVariants: [
+        {
+          variant: ['solid', 'outline', 'soft', 'subtle'],
+          compact: false,
+          class: {
+            content: 'px-3.5 py-2.5 rounded-2xl min-h-0',
+            leading: 'mt-0',
+          },
+        },
+        {
+          // The user's messages (ChatThread.vue: `variant: 'solid'`, right).
+          variant: 'solid',
+          side: 'right',
+          class: {
+            content: 'bg-primary bg-linear-to-br from-primary-500 to-primary-600 text-on-primary rounded-br-md shadow-sm',
+          },
+        },
+        {
+          variant: 'naked',
+          side: 'left',
+          class: {
+            content: 'min-w-0',
+          },
+        },
+      ],
+    },
+    chatPrompt: {
+      slots: {
+        root: 'bg-elevated/50 ring ring-default rounded-xl focus-within:ring-primary/60 transition-shadow',
+      },
+    },
+    chatTool: {
+      slots: {
+        trigger: 'text-toned text-xs',
+        suffix: 'text-muted',
+        body: 'text-muted text-xs',
+      },
+    },
+    chatReasoning: {
+      slots: {
+        trigger: 'text-xs',
+        body: 'text-muted text-xs',
+      },
+    },
   },
 })

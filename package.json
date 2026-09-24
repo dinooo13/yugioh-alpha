@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^3.0.54",
+    "@ai-sdk/vue": "^4.0.112",
     "@nuxt/ui": "^4.9.0",
     "@nuxtjs/i18n": "~10.4.1",
     "@vite-pwa/nuxt": "^1.1.1",

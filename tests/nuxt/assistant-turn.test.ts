@@ -627,6 +627,26 @@ describe('the fake model end-to-end (NUXT_ASSISTANT_PROVIDER=fake)', () => {
     expect(storedMessages(conversationId).at(-1)!.content).toBe('Ich kann das Werkzeug gerade nicht nutzen.')
   })
 
+  it('notes the picked model in the answer\'s metadata: streamed with the start, stored, and read back', async () => {
+    const conversationId = newConversation()
+    const { chunks } = await runTurn(conversationId, createFakeLanguageModel('glm-5.3-flash'), { body: userText('Hallo') })
+    expect(chunks.find(chunk => chunk.type === 'start')).toMatchObject({ messageMetadata: { model: 'glm-5.3-flash' } })
+    const stored = storedMessages(conversationId).at(-1)!
+    expect(stored.metadata).toEqual({ model: 'glm-5.3-flash' })
+    expect(loadUiMessages(db, 'user-a', conversationId).at(-1)!.metadata).toMatchObject({ model: 'glm-5.3-flash' })
+  })
+
+  it('streams a slow "langsame antwort" word by word, so a cancel can stop it midway', async () => {
+    const conversationId = newConversation()
+    const controller = new AbortController()
+    const turn = runTurn(conversationId, createFakeLanguageModel(), { body: userText('langsame antwort'), signal: controller.signal })
+    setTimeout(() => controller.abort(), 1500)
+    await turn
+    const content = storedMessages(conversationId).at(-1)!.content
+    expect(content).toMatch(/^Wort1 Wort2 .*\(abgebrochen\)$/)
+    expect(content).not.toContain('Wort60')
+  })
+
   it('recovers from a "text-werkzeug" answer with one continuation (#54)', async () => {
     const conversationId = newConversation()
     await runTurn(conversationId, createFakeLanguageModel(), { body: userText('text-werkzeug') })

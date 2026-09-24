@@ -33,6 +33,7 @@ See [`.env.example`](./.env.example) for all available variables:
 - `NUXT_ASSISTANT_API_KEY` - API key for the chat assistant (optional; falls back to `OPENAI_API_KEY`). Without a key or a custom base URL the feature is disabled and the UI shows a notice instead.
 - `NUXT_ASSISTANT_PROVIDER` / `NUXT_ASSISTANT_BASE_URL` / `NUXT_ASSISTANT_MODEL` / `NUXT_ASSISTANT_REASONING_EFFORT` - override the assistant's provider (`openai` / `fake`), the OpenAI-compatible endpoint's base URL, the model id, and an optional `reasoning_effort` some gateways (e.g. OpenCode Go) require; see [`.env.example`](./.env.example)
 - `NUXT_ASSISTANT_VISION_MODEL` - optional override model for chat turns that include an image (the chat assistant at `/assistant`, see below); leave empty to use `NUXT_ASSISTANT_MODEL` for those turns too
+- `NUXT_ASSISTANT_MODELS` - optional comma-separated list of model ids the user may pick from in the chat (e.g. `mimo-v2.6-pro,glm-5.3-flash,deepseek-v4.1-flash`); `NUXT_ASSISTANT_MODEL` is the default when it's on the list. Empty = only `NUXT_ASSISTANT_MODEL`, no picker
 
 ## Development
 
@@ -304,9 +305,12 @@ is stored as AI SDK `UIMessage` parts (conversations of the former engine are
 converted when read), and `POST /api/assistant/chat/:id/stream` streams a turn
 with the SDK's UI message protocol. Guards against looping tool calls switch
 tools off after two identical failures and stop after three; a tool call
-written as text gets one corrective retry. The current thread UI still uses
-the former endpoint until it moves to the SDK's chat client; see
+written as text gets one corrective retry. The thread UI uses the SDK's chat
+client (`@ai-sdk/vue`) with Nuxt UI's chat components; see
 [`docs/adr/0020-assistant-on-the-ai-sdk.md`](./docs/adr/0020-assistant-on-the-ai-sdk.md).
+With `NUXT_ASSISTANT_MODELS` set, the composer offers a model picker (the
+choice is remembered per device, and each answer notes the model that wrote
+it) — e.g. MiMo for careful answers, a flash model for speed.
 The chat's operational limits (tool-calling rounds per turn,
 tool result size, history window, model call timeout) are configurable via
 `NUXT_ASSISTANT_LIMITS_*`; see [`.env.example`](./.env.example) and
