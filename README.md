@@ -71,6 +71,32 @@ curl -X POST http://localhost:3000/api/admin/catalog/sync \
 
 The sync is idempotent (upsert-based) and safe to re-run at any time to pick up new or updated cards. Card images are currently stored as remote YGOPRODeck URLs; a local image proxy/cache is planned as follow-up work (see the ADR).
 
+### German card data
+
+Official German card names and texts come from a second source, the
+[ygoresources card-history repo](https://github.com/db-ygoresources-com/yugioh-card-history)
+(one JSON file per card and language, keyed by Konami id). They are stored in
+`catalog_card_translation` and joined through `catalog_card.konami_id`, which the
+YGOPRODeck sync fills. YGOPRODeck stays the source for everything else, images
+included. See [`docs/adr/0015-german-card-data.md`](./docs/adr/0015-german-card-data.md).
+
+- `catalog:sync` (and `POST /api/admin/catalog/sync`) runs the German sync right
+  after the card sync. That part is best effort: if it fails, the card result
+  still stands and the response reports the error under `translations`.
+- The German sync on its own: `pnpm nuxt task run catalog:sync-translations` or
+  `POST /api/admin/catalog/translations/sync` (same session check). It asks GitHub
+  for the head commit once and is `skipped` when nothing changed since the last
+  successful run; otherwise it streams the repo tarball (~15 MB) and reads only `de/`.
+- **After deploying this change, run `catalog:sync` once.** Until then no card has
+  a Konami id, and the standalone German sync fails with
+  "catalog has no konami ids; run catalog:sync first". Neither sync is scheduled.
+- Cards without a Konami id or without a German file (OCG-only cards, tokens,
+  skills, …) have no German data and fall back to English.
+
+German card texts: [ygoresources.com](https://db.ygoresources.com/) — card-history
+repo. The texts are Konami's; the repo has no licence. Turning the sync off
+leaves the app on English card data.
+
 ### Local Card Images
 
 YGO Omega card assets copied into `public/assets/ygo-omega/de` are Unity bundle
