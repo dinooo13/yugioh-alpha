@@ -439,6 +439,33 @@ Phase 9 (#34) is done.
 
 See [`docs/adr/0015-german-card-data.md`](adr/0015-german-card-data.md).
 
+### Phase 10: Visual design system — "Duel Arena" (proposal)
+
+Goal: Give the app its own look — modern and calm, but unmistakably about
+dueling with cards — and a dark mode, without giving up accessibility.
+
+Scope:
+
+- semantic color tokens instead of raw Tailwind palette classes in `app/`,
+  enforced by a test gate
+- a dark-first color mode with a toggle, stored in a cookie so the server
+  renders the right theme; the PWA and `theme-color` follow it
+- self-hosted typography: a display face for page titles, a numeric face for
+  counters and scores, Inter for everything else
+- card-frame accents (type colors as stripes and dots, never as the only
+  signal), an original card back for missing images and a foil highlight
+- a new app shell, auth hero, dashboard "duelist card", fanned deck tiles,
+  chat bubbles and "activated spell" action cards
+- automated axe checks (both color modes) and a color-mode E2E spec
+
+Product outcome:
+
+The app feels like a duel arena at night, with the card scans as the
+brightest thing on screen, and it reads well in both light and dark mode.
+
+Status: proposed on `feat/redesign-duel-arena` for the owner's review. See
+[`docs/adr/0016-visual-design-system.md`](adr/0016-visual-design-system.md).
+
 ## Recommended Build Order
 
 1. Card catalog and personal inventory
@@ -452,6 +479,7 @@ See [`docs/adr/0015-german-card-data.md`](adr/0015-german-card-data.md).
 9. Tournament mode
 10. Chat assistant with tools
 11. German and English
+12. Visual design system (Duel Arena)
 
 ## Key Product Principle
 
