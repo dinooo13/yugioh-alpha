@@ -1,4 +1,7 @@
+import { fileURLToPath } from 'node:url'
 import { expect, test } from '@playwright/test'
+import type { Page } from '@playwright/test'
+import Database from 'better-sqlite3'
 import { registerAndLogin, waitForHydration } from './helpers/auth'
 import { acceptConfirm } from './helpers/confirm'
 import { CARD } from './helpers/cards'
@@ -8,6 +11,10 @@ import { CARD } from './helpers/cards'
 // card whose name contains "Dark Magician", so every count/name assertion
 // below is unambiguous.
 const DARK_MAGICIAN = 46986414
+
+// The E2E server's database (playwright.config.ts), for seeding rows the UI
+// can't create any more (conversations of the former engine).
+const E2E_DB_FILE = fileURLToPath(new URL('../e2e-data/e2e.db', import.meta.url))
 
 // A minimal, genuinely decodable 1x1 transparent PNG — the composer resizes
 // whatever is picked via `createImageBitmap` before sending it, so a fake
@@ -230,3 +237,111 @@ test.describe('Chat assistant', () => {
   })
 })
 
+
+// --- #84: the thread on the AI SDK's chat client ----------------------------
+
+test.describe('Chat assistant on the AI SDK (#84)', () => {
+  async function openNewConversation(page: Page): Promise<string> {
+    const createResponse = await page.request.post('/api/assistant/chat')
+    expect(createResponse.ok()).toBe(true)
+    const { id } = await createResponse.json() as { id: string }
+    await page.goto(`/assistant/${id}`)
+    await waitForHydration(page)
+    return id
+  }
+
+  test('a reload keeps the chips, the proposal and its applied state', async ({ page }) => {
+    await registerAndLogin(page)
+    await openNewConversation(page)
+    const nachricht = page.getByLabel('Nachricht', { exact: true })
+    const senden = page.getByRole('button', { name: 'Senden', exact: true })
+
+    await nachricht.fill('suche Dark Magician')
+    await senden.click()
+    await expect(page.getByText('Ich habe 1 Karte gefunden: Dark Magician')).toBeVisible()
+    await nachricht.fill('füge 2 hinzu')
+    await senden.click()
+    await page.getByRole('button', { name: 'Übernehmen', exact: true }).click()
+    await expect(page.getByText('Übernommen')).toBeVisible()
+
+    await page.reload()
+    await waitForHydration(page)
+    await expect(page.getByText('Sucht im Katalog: Dark Magician')).toBeVisible()
+    await expect(page.getByText('1 Ergebnis', { exact: false }).first()).toBeVisible()
+    await expect(page.getByText('Schlägt vor, Karten ins Inventar aufzunehmen')).toBeVisible()
+    await expect(page.getByText(`1 Karte zum Inventar hinzufügen: ${CARD.darkMagician} x2`)).toBeVisible()
+    await expect(page.getByText('Übernommen')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Übernehmen', exact: true })).toHaveCount(0)
+    await expect(page.getByText('Ich habe einen Vorschlag angelegt.')).toBeVisible()
+  })
+
+  test('a conversation of the former engine opens and goes on', async ({ page }) => {
+    await registerAndLogin(page)
+    const createResponse = await page.request.post('/api/assistant/chat')
+    const { id } = await createResponse.json() as { id: string }
+
+    // Rows as the former engine stored them: one row per model round, a
+    // 'tool' row per result, the proposal attached to its round.
+    const db = new Database(E2E_DB_FILE)
+    try {
+      const { user_id: userId } = db.prepare('SELECT user_id FROM assistant_conversation WHERE id = ?').get(id) as { user_id: string }
+      const t = Date.now() - 60_000
+      const insert = db.prepare(`INSERT INTO assistant_message (id, conversation_id, role, content, tool_calls, tool_call_id, tool_name, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+      insert.run(`${id}-u1`, id, 'user', 'suche Dark Magician', null, null, null, t)
+      insert.run(`${id}-a1`, id, 'assistant', '', JSON.stringify([{ id: 'legacy-call-1', name: 'search_catalog', arguments: { query: 'Dark Magician' } }]), null, null, t + 1)
+      insert.run(`${id}-t1`, id, 'tool', JSON.stringify([{ id: DARK_MAGICIAN, name: 'Dark Magician' }]), null, 'legacy-call-1', 'search_catalog', t + 2)
+      insert.run(`${id}-a2`, id, 'assistant', 'Alte Antwort: 1 Karte gefunden.', null, null, null, t + 3)
+      db.prepare(`INSERT INTO assistant_action (id, conversation_id, message_id, user_id, kind, payload, summary, status, created_at)
+        VALUES (?, ?, ?, ?, 'add_to_inventory', ?, '1 Karte(n) zum Inventar hinzufügen: Dark Magician x1', 'rejected', ?)`)
+        .run(`${id}-act`, id, `${id}-a1`, userId, JSON.stringify({ items: [{ catalogCardId: DARK_MAGICIAN, name: 'Dark Magician', quantity: 1 }] }), t + 1)
+    }
+    finally {
+      db.close()
+    }
+
+    await page.goto(`/assistant/${id}`)
+    await waitForHydration(page)
+    const thread = page.getByTestId('assistant-thread')
+    await expect(thread.getByText('suche Dark Magician')).toBeVisible()
+    await expect(thread.getByText('Sucht im Katalog: Dark Magician')).toBeVisible()
+    await expect(thread.getByText('Alte Antwort: 1 Karte gefunden.')).toBeVisible()
+    await expect(thread.getByText('Verworfen', { exact: true })).toBeVisible()
+
+    // The follow-up reads the old search result from the converted history.
+    await page.getByLabel('Nachricht', { exact: true }).fill('füge 2 hinzu')
+    await page.getByRole('button', { name: 'Senden', exact: true }).click()
+    await expect(page.getByText('Wartet auf Bestätigung')).toBeVisible()
+    await expect(page.getByText(`1 Karte zum Inventar hinzufügen: ${CARD.darkMagician} x2`)).toBeVisible()
+  })
+
+  test('"Abbrechen" stops the answer and keeps what came, marked "(abgebrochen)"', async ({ page }) => {
+    await registerAndLogin(page)
+    await openNewConversation(page)
+
+    await page.getByLabel('Nachricht', { exact: true }).fill('langsame antwort bitte')
+    await page.getByRole('button', { name: 'Senden', exact: true }).click()
+    await expect(page.getByText(/Wort3/)).toBeVisible()
+    await page.getByRole('button', { name: 'Abbrechen', exact: true }).click()
+
+    await expect(page.getByText(/\(abgebrochen\)/)).toBeVisible()
+    await expect(page.getByText(/Wort60/)).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Senden', exact: true })).toBeVisible()
+
+    await page.reload()
+    await waitForHydration(page)
+    await expect(page.getByText(/\(abgebrochen\)/)).toBeVisible()
+  })
+
+  test('empty tool arguments end in a text answer instead of a loop (#54)', async ({ page }) => {
+    await registerAndLogin(page)
+    await openNewConversation(page)
+
+    await page.getByLabel('Nachricht', { exact: true }).fill('leere argumente')
+    await page.getByRole('button', { name: 'Senden', exact: true }).click()
+    await expect(page.getByText('Ich kann das Werkzeug gerade nicht nutzen.')).toBeVisible()
+    // Two identical failures, then tools were switched off.
+    await expect(page.locator('[data-testid="assistant-tool"][data-outcome="error"]')).toHaveCount(2)
+    await expect(page.getByLabel('Nachricht', { exact: true })).toBeEnabled()
+  })
+})

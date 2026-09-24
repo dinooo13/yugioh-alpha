@@ -2,7 +2,7 @@ import { createError, getRequestHeader, getRouterParam, readBody } from 'h3'
 import { createUIMessageStreamResponse } from 'ai'
 import { useDb } from '../../../../db'
 import { requireOwnConversation } from '../../../../utils/assistant-chat'
-import { useAssistantLanguageModel } from '../../../../utils/assistant-model'
+import { getAssistantStatus, useAssistantLanguageModel } from '../../../../utils/assistant-model'
 import { startAssistantTurn } from '../../../../utils/assistant-turn'
 import { validateAssistantTurnRequest } from '../../../../utils/assistant-ui-messages'
 import { claimTurnLock, isTurnInFlight, releaseTurnLock } from '../../../../utils/assistant-turn-lock'
@@ -20,7 +20,8 @@ const MAX_REQUEST_BODY_BYTES = ASSISTANT_MESSAGE_TOTAL_BYTES_MAX + 8192
  * (docs/adr/0020-assistant-on-the-ai-sdk.md). The body is what the AI SDK's
  * chat transport sends — only the newest message plus `trigger`; the history
  * comes from the database. Errors before the stream opens are HTTP errors
- * with `data.code` (404, 503, 409, 413, 400); errors during the turn arrive
+ * with `data.code` (404, 503, 409, 413, 400 — also `assistant_model_not_allowed`
+ * for an optional `model` that isn't on the configured list); errors during the turn arrive
  * as the stream's `error` chunk carrying the code.
  */
 export default defineEventHandler(async (event) => {
@@ -33,8 +34,7 @@ export default defineEventHandler(async (event) => {
   const db = useDb()
   requireOwnConversation(db, user.id, id)
 
-  const model = useAssistantLanguageModel()
-  if (!model) {
+  if (!getAssistantStatus().chat) {
     throw createError({ statusCode: 503, statusMessage: 'The assistant is not configured', data: { code: 'assistant_not_configured' } })
   }
 
@@ -63,6 +63,12 @@ export default defineEventHandler(async (event) => {
       throw createError({ statusCode: 413, statusMessage: 'Request too large', data: { code: 'request_too_large' } })
     }
     const request = validateAssistantTurnRequest(await readBody(event))
+    // The model the user picked (400 `assistant_model_not_allowed` when it
+    // isn't on the configured list), else the default one.
+    const model = useAssistantLanguageModel(request.model)
+    if (!model) {
+      throw createError({ statusCode: 503, statusMessage: 'The assistant is not configured', data: { code: 'assistant_not_configured' } })
+    }
 
     // A disconnect before the answer is complete means "Abbrechen": the turn
     // stops and saves what it has. `close` also fires after a normal end,

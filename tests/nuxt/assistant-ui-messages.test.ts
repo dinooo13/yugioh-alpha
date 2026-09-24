@@ -291,6 +291,15 @@ describe('validateAssistantTurnRequest', () => {
     expect(validateAssistantTurnRequest({ trigger: 'regenerate-message', messageId: 'x' })).toEqual({ trigger: 'regenerate-message', text: '', images: [] })
   })
 
+  it('passes the picked model on, for a submit and a regenerate (the endpoint checks it against the list)', () => {
+    expect(validateAssistantTurnRequest({ ...submit([{ type: 'text', text: 'x' }]), model: ' glm-5.3-flash ' }))
+      .toEqual({ trigger: 'submit-message', text: 'x', images: [], model: 'glm-5.3-flash' })
+    expect(validateAssistantTurnRequest({ trigger: 'regenerate-message', model: 'mimo-v2.6-pro' }))
+      .toEqual({ trigger: 'regenerate-message', text: '', images: [], model: 'mimo-v2.6-pro' })
+    expect(validateAssistantTurnRequest({ ...submit([{ type: 'text', text: 'x' }]), model: null }))
+      .toEqual({ trigger: 'submit-message', text: 'x', images: [] })
+  })
+
   it.each([
     ['a non-object body', 'nope'],
     ['an unknown trigger', { trigger: 'resume' }],
@@ -303,6 +312,8 @@ describe('validateAssistantTurnRequest', () => {
     ['a disallowed MIME type', submit([{ type: 'file', mediaType: 'application/pdf', url: 'data:application/pdf;base64,abc' }])],
     ['text over the limit', submit([{ type: 'text', text: 'x'.repeat(20_001) }])],
     ['more than 6 images', submit(Array.from({ length: 7 }, () => ({ type: 'file', mediaType: 'image/png', url: 'data:image/png;base64,abc' })))],
+    ['a non-string model', { ...submit([{ type: 'text', text: 'x' }]), model: 42 }],
+    ['an empty model', { ...submit([{ type: 'text', text: 'x' }]), model: '  ' }],
     ['images over 12 MB decoded', submit([{ type: 'file', mediaType: 'image/png', url: `data:image/png;base64,${'A'.repeat(17 * 1024 * 1024)}` }])],
   ])('rejects %s (400)', (_label, body) => {
     expect(() => validateAssistantTurnRequest(body)).toThrowError(expect.objectContaining({ statusCode: 400 }))

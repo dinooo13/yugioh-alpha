@@ -330,7 +330,8 @@ export function startAssistantTurn(options: AssistantTurnOptions): AssistantTurn
       : message)
 
   const assistantId = randomUUID()
-  const placeholder = insertAssistantPlaceholder(db, { conversationId, id: assistantId, after: userRow.createdAt })
+  const modelId = model.modelIdFor?.(hasImages) ?? model.id
+  const placeholder = insertAssistantPlaceholder(db, { conversationId, id: assistantId, after: userRow.createdAt, model: modelId })
   const createdAt = placeholder.createdAt.toISOString()
 
   const deckContext = conversation.deckId ? buildDeckContextBlock(db, userId, conversation.deckId, cardLocale) : null
@@ -404,7 +405,7 @@ export function startAssistantTurn(options: AssistantTurnOptions): AssistantTurn
       sendStart: fields.sendStart,
       sendFinish: false,
       generateMessageId: () => assistantId,
-      messageMetadata: ({ part }) => part.type === 'start' ? { createdAt } : undefined,
+      messageMetadata: ({ part }) => part.type === 'start' ? { createdAt, model: modelId } : undefined,
       onError: assistantStreamErrorText,
     })
     for await (const chunk of uiStream) {

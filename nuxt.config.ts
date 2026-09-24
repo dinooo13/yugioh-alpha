@@ -67,6 +67,10 @@ export default defineNuxtConfig({
       // keyless local servers (e.g. Ollama) alongside a custom baseUrl.
       apiKey: '',
       model: 'gpt-4o-mini',
+      // Optional comma-separated list of model ids the user may pick from in
+      // the chat (e.g. 'mimo-v2.6-pro,glm-5.3-flash'). Empty = only `model`;
+      // `model` is the default when it's on the list, else the list's first.
+      models: '',
       // Optional `reasoning_effort` (low | medium | high); some gateways such
       // as OpenCode Go require it for certain models. Empty = not sent.
       reasoningEffort: '',

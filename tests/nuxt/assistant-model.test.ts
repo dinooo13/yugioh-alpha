@@ -19,6 +19,7 @@ import {
   fakeStreamParts,
   fakeTurn,
   getAssistantStatus,
+  resolveModelChoice,
   toolErrorText,
   useAssistantLanguageModel,
 } from '../../server/utils/assistant-model'
@@ -47,6 +48,8 @@ describe('assistant status/config resolution', () => {
         enabled: true,
         provider: 'fake',
         model: 'fake',
+        models: ['fake'],
+        defaultModel: 'fake',
         baseUrl: null,
         chat: true,
         vision: true,
@@ -62,6 +65,8 @@ describe('assistant status/config resolution', () => {
         enabled: true,
         provider: 'openai',
         model: 'gpt-4o-mini',
+        models: ['gpt-4o-mini'],
+        defaultModel: 'gpt-4o-mini',
         baseUrl: 'api.openai.com',
         chat: true,
         vision: true,
@@ -82,6 +87,8 @@ describe('assistant status/config resolution', () => {
         enabled: true,
         provider: 'openai',
         model: 'gpt-4o-mini',
+        models: ['gpt-4o-mini'],
+        defaultModel: 'gpt-4o-mini',
         baseUrl: 'localhost:11434',
         chat: true,
         vision: true,
@@ -93,6 +100,8 @@ describe('assistant status/config resolution', () => {
         enabled: false,
         provider: null,
         model: null,
+        models: [],
+        defaultModel: null,
         baseUrl: null,
         chat: false,
         vision: false,
@@ -103,6 +112,77 @@ describe('assistant status/config resolution', () => {
     finally {
       Object.assign(config, original)
     }
+  })
+})
+
+describe('model picker (NUXT_ASSISTANT_MODELS)', () => {
+  type Config = { provider: string, baseUrl: string, apiKey: string, model: string, models: string }
+
+  function withConfig(overrides: Partial<Config>, run: () => void) {
+    const config = useRuntimeConfig().assistant as Config
+    const original = { ...config }
+    try {
+      Object.assign(config, overrides)
+      run()
+    }
+    finally {
+      Object.assign(config, original)
+    }
+  }
+
+  it('resolves the list and its default: the configured model when listed, else the first entry', () => {
+    const base = { model: 'mimo-v2.6-pro', visionModel: '', provider: 'openai', baseUrl: '', apiKey: '', reasoningEffort: '' }
+    expect(resolveModelChoice({ ...base, models: ' glm-5.3-flash, mimo-v2.6-pro ,,glm-5.3-flash' }))
+      .toEqual({ models: ['glm-5.3-flash', 'mimo-v2.6-pro'], defaultModel: 'mimo-v2.6-pro' })
+    expect(resolveModelChoice({ ...base, model: 'other', models: 'glm-5.3-flash,deepseek-v4.1-flash' }))
+      .toEqual({ models: ['glm-5.3-flash', 'deepseek-v4.1-flash'], defaultModel: 'glm-5.3-flash' })
+    expect(resolveModelChoice({ ...base, models: '' })).toEqual({ models: ['mimo-v2.6-pro'], defaultModel: 'mimo-v2.6-pro' })
+  })
+
+  it('reports the models in the status and runs a turn on the picked one', () => {
+    withConfig({ provider: 'openai', apiKey: 'sk-test', model: 'mimo-v2.6-pro', models: 'mimo-v2.6-pro,glm-5.3-flash,deepseek-v4.1-flash' }, () => {
+      const status = getAssistantStatus()
+      expect(status.models).toEqual(['mimo-v2.6-pro', 'glm-5.3-flash', 'deepseek-v4.1-flash'])
+      expect(status.defaultModel).toBe('mimo-v2.6-pro')
+      expect(status.model).toBe('mimo-v2.6-pro')
+
+      expect(useAssistantLanguageModel()?.id).toBe('mimo-v2.6-pro')
+      expect(useAssistantLanguageModel('glm-5.3-flash')?.id).toBe('glm-5.3-flash')
+      expect(() => useAssistantLanguageModel('gpt-4o')).toThrowError(expect.objectContaining({ statusCode: 400, data: { code: 'assistant_model_not_allowed' } }))
+    })
+  })
+
+  it('without a list, only the configured model is allowed', () => {
+    withConfig({ provider: 'openai', apiKey: 'sk-test', model: 'mimo-v2.6-pro', models: '' }, () => {
+      expect(getAssistantStatus().models).toEqual(['mimo-v2.6-pro'])
+      expect(useAssistantLanguageModel('mimo-v2.6-pro')?.id).toBe('mimo-v2.6-pro')
+      expect(() => useAssistantLanguageModel('glm-5.3-flash')).toThrowError(expect.objectContaining({ statusCode: 400 }))
+    })
+  })
+
+  it('lets the fake report a configured list (the picker in E2E/dev), answering the same', () => {
+    withConfig({ provider: 'fake', models: 'a,b' }, () => {
+      expect(getAssistantStatus().models).toEqual(['a', 'b'])
+      expect(useAssistantLanguageModel('b')?.id).toBe('b')
+    })
+  })
+
+  it('names the model that answers: the vision model for a turn with photos', () => {
+    const model = createOpenAiCompatibleLanguageModel({ baseUrl: 'https://g.test/v1', model: 'glm-5.3-flash', visionModel: 'vision-x' })
+    expect(model.modelIdFor?.(false)).toBe('glm-5.3-flash')
+    expect(model.modelIdFor?.(true)).toBe('vision-x')
+  })
+
+  it('passes the picked model id to the provider as is', async () => {
+    const bodies: string[] = []
+    const fetchImpl = (async (_url: string, init: { body: string }) => {
+      bodies.push(init.body)
+      return new Response('data: {"id":"1","choices":[{"index":0,"delta":{"content":"ok"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n', { status: 200, headers: { 'content-type': 'text/event-stream' } })
+    }) as unknown as typeof fetch
+    const model = createOpenAiCompatibleLanguageModel({ baseUrl: 'https://g.test/v1', model: 'deepseek-v4.1-flash', fetch: fetchImpl })
+    const result = streamText({ model: model.modelFor(false), prompt: 'hi' })
+    await result.consumeStream()
+    expect(JSON.parse(bodies[0]!).model).toBe('deepseek-v4.1-flash')
   })
 })
 

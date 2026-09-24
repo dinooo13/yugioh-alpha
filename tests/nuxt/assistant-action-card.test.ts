@@ -77,6 +77,41 @@ describe('AssistantActionCard', () => {
     expect(text).not.toContain('55144522')
   })
 
+  it('shows the deck of a proposal stored without its name by its current name, never its id (#69)', async () => {
+    const payload = { deckId: 'deck-1', changes: [{ catalogCardId: 46986414, section: 'main', quantity: 3, name: 'Dark Magician' }] }
+    const named = await mountSuspended(ActionCard, { props: { action: deckAction({ payload, display: { deckName: 'Magier (neu)' } }) } })
+    await named.findAll('button').find(button => button.text().includes('Details anzeigen'))!.trigger('click')
+    expect(named.text()).toContain('Deck: Magier (neu)')
+    expect(named.text()).not.toContain('deck-1')
+
+    const gone = await mountSuspended(ActionCard, { props: { action: deckAction({ payload, display: { deckName: null } }) } })
+    await gone.findAll('button').find(button => button.text().includes('Details anzeigen'))!.trigger('click')
+    expect(gone.text()).toContain('Deck: Gelöschtes Deck')
+    expect(gone.text()).not.toContain('deck-1')
+  })
+
+  it('shows collections by name, "Unbekannte Sammlung" for a gone one, never their ids (#69)', async () => {
+    const action = deckAction({
+      kind: 'add_to_inventory',
+      payload: {
+        items: [
+          { catalogCardId: 1, name: 'Dark Magician', quantity: 1, collectionId: 'col-1' },
+          { catalogCardId: 2, name: 'Pot of Greed', quantity: 1, collectionId: 'col-gone' },
+          { catalogCardId: 3, name: 'Kuriboh', quantity: 1, collectionId: null },
+        ],
+      },
+      display: { collectionNames: { 'col-1': 'Box 1', 'col-gone': null } },
+    })
+    const component = await mountSuspended(ActionCard, { props: { action } })
+    await component.findAll('button').find(button => button.text().includes('Details anzeigen'))!.trigger('click')
+    const text = component.text()
+    expect(text).toContain('Box 1')
+    expect(text).toContain('Unbekannte Sammlung')
+    expect(text).not.toContain('col-1')
+    expect(text).not.toContain('col-gone')
+    expect(text).not.toContain('null')
+  })
+
   it('renders an older action without preview or names as before', async () => {
     const component = await mountSuspended(ActionCard, {
       props: {
@@ -217,7 +252,7 @@ describe('AssistantActionCard', () => {
   describe('in German', () => {
     it('renders an add_to_inventory summary and rows from the payload, without collector details', async () => {
       const component = await mountSuspended(ActionCard, { props: { action: inventoryAction() } })
-      expect(component.text()).toContain('2 Karte(n) zum Inventar hinzufügen: Dark Magician x2, Pot of Greed x1')
+      expect(component.text()).toContain('2 Karten zum Inventar hinzufügen: Dark Magician x2, Pot of Greed x1')
       expect(component.text()).not.toContain('Add 2 card(s)')
 
       const toggle = component.findAll('button').find(button => button.text().includes('Details anzeigen'))

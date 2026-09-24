@@ -37,6 +37,8 @@
       "openDeck": "Deck {name} öffnen",
       "empty": "Noch keine Nachrichten — schreib dem Assistenten, was er für dich tun soll.",
       "photo": "Foto {index}",
+      "scrollToBottom": "Zum Ende springen",
+      "regenerate": "Antwort neu erzeugen",
       "errors": {
         "load": "Die Unterhaltung konnte nicht geladen werden.",
         "refresh": "Die Unterhaltung konnte nicht aktualisiert werden.",
@@ -52,6 +54,8 @@
       "addPhoto": "Foto hinzufügen",
       "removeImage": "Bild {index} entfernen",
       "send": "Senden",
+      "retry": "Erneut versuchen",
+      "model": "Modell",
       "cancelling": "Wird abgebrochen…",
       "errors": {
         "tooManyImages": "Es sind höchstens {max} Bilder pro Nachricht erlaubt.",
@@ -77,8 +81,8 @@
       },
       "withDetail": "{label}: {detail}",
       "outcome": {
-        "results": "{count} Ergebnis(se) | {count} Ergebnis(se)",
-        "atLeast": "mindestens {count} Ergebnis(se) | mindestens {count} Ergebnis(se)",
+        "results": "{count} Ergebnis | {count} Ergebnisse",
+        "atLeast": "mindestens {count} Ergebnis | mindestens {count} Ergebnisse",
         "pending": "Vorschlag angelegt",
         "done": "OK"
       },
@@ -98,9 +102,9 @@
         "failed": "Fehlgeschlagen"
       },
       "summary": {
-        "add_to_inventory": "{count} Karte(n) zum Inventar hinzufügen: {cards} | {count} Karte(n) zum Inventar hinzufügen: {cards}",
-        "create_deck": "Neues Deck \"{name}\" mit {count} Karte(n) anlegen | Neues Deck \"{name}\" mit {count} Karte(n) anlegen",
-        "update_deck_cards": "{count} Kartenänderung(en) an Deck \"{deck}\" | {count} Kartenänderung(en) an Deck \"{deck}\"",
+        "add_to_inventory": "{count} Karte zum Inventar hinzufügen: {cards} | {count} Karten zum Inventar hinzufügen: {cards}",
+        "create_deck": "Neues Deck \"{name}\" mit {count} Karte anlegen | Neues Deck \"{name}\" mit {count} Karten anlegen",
+        "update_deck_cards": "{count} Kartenänderung an Deck \"{deck}\" | {count} Kartenänderungen an Deck \"{deck}\"",
         "set_deck_format": "Format von Deck \"{deck}\" ändern: {from} → {to}",
         "cardQuantity": "{name} x{quantity}",
         "noFormat": "kein Format"
@@ -113,13 +117,15 @@
         "section": "Sektion",
         "collectionId": "Sammlung"
       },
+      "unknownCollection": "Unbekannte Sammlung",
       "meta": {
         "name": "Name",
         "deck": "Deck",
         "format": "Format",
         "previousFormat": "Bisheriges Format",
         "newFormat": "Neues Format",
-        "noFormat": "Kein Format"
+        "noFormat": "Kein Format",
+        "unknownDeck": "Gelöschtes Deck"
       },
       "preview": {
         "noFormat": "Kein Format",

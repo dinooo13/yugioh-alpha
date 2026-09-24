@@ -298,13 +298,22 @@ export function persistUserMessage(
  * Inserts the (still empty) assistant message a turn streams into, before
  * the model runs: its id is the UIMessage id the client sees, and a write
  * tool's `assistant_action.message_id` references it (the FK is enforced).
- * Timestamped after `after` so the thread order is unambiguous.
+ * Timestamped after `after` so the thread order is unambiguous. `model`
+ * (the model id that answers) is kept in the message's metadata.
  */
-export function insertAssistantPlaceholder(db: Db, fields: { conversationId: string, id: string, after: Date }): MessageRow {
+export function insertAssistantPlaceholder(db: Db, fields: { conversationId: string, id: string, after: Date, model?: string }): MessageRow {
   const createdAt = new Date(Math.max(Date.now(), fields.after.getTime() + 1))
   const [row] = db
     .insert(assistantMessage)
-    .values({ id: fields.id, conversationId: fields.conversationId, role: 'assistant', content: '', parts: [], createdAt })
+    .values({
+      id: fields.id,
+      conversationId: fields.conversationId,
+      role: 'assistant',
+      content: '',
+      parts: [],
+      metadata: fields.model ? { model: fields.model } : null,
+      createdAt,
+    })
     .returning()
     .all()
   return row!
@@ -385,6 +394,8 @@ export interface AssistantTurnRequest {
   text: string
   /** submit: the photos, sent to the model in this turn only. */
   images: AssistantTurnImage[]
+  /** The model the user picked; checked against the configured list by the endpoint. Missing = the default model. */
+  model?: string
 }
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -407,8 +418,12 @@ export function validateAssistantTurnRequest(body: unknown): AssistantTurnReques
   if (trigger !== 'submit-message' && trigger !== 'regenerate-message') {
     badRequest('trigger must be "submit-message" or "regenerate-message"')
   }
+  if (body.model !== undefined && body.model !== null && (typeof body.model !== 'string' || body.model.trim() === '')) {
+    badRequest('model must be a non-empty string')
+  }
+  const model = typeof body.model === 'string' ? { model: body.model.trim() } : {}
   if (trigger === 'regenerate-message') {
-    return { trigger, text: '', images: [] }
+    return { trigger, text: '', images: [], ...model }
   }
 
   const message = body.message
@@ -464,7 +479,7 @@ export function validateAssistantTurnRequest(body: unknown): AssistantTurnReques
   }
 
   const clientMessageId = typeof message.id === 'string' && UUID_PATTERN.test(message.id) ? message.id : undefined
-  return { trigger, ...(clientMessageId ? { clientMessageId } : {}), text, images }
+  return { trigger, ...(clientMessageId ? { clientMessageId } : {}), text, images, ...model }
 }
 
 /** A new message id: the client's when it is a free UUID, else a server one. */

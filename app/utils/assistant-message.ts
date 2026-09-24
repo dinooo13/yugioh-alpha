@@ -1,5 +1,5 @@
 // Turns an assistant message's plain-text content into a small block/inline
-// structure `MessageBubble.vue` can render with plain Vue interpolation
+// structure `MessageText.vue` (and the former `MessageBubble.vue`) can render with plain Vue interpolation
 // (`{{ }}`, always HTML-escaped) — never `v-html`. Only three constructs are
 // recognized, matching what the system prompt asks the model to produce:
 // paragraphs (blank-line separated), `- ` bullet lists, and `**bold**`

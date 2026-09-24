@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { deckConversationTitle } from '~~/shared/assistant-chat'
+import type { AssistantConversationSummary } from '~~/shared/assistant-chat'
 import { assistantIntentDraftKey } from '~/utils/assistant-intents'
 
 usePageTitle('assistant.title')
@@ -22,19 +23,18 @@ const composerDraft = ref(draftKey ? t(draftKey) : '')
 const { data: conversationsData, refresh: refreshConversations } = await useAssistantConversations()
 const conversations = computed(() => conversationsData.value?.items ?? [])
 
-const {
-  conversation,
-  timeline,
-  isLoading,
-  loadError,
-  isStreaming,
-  isCancelling,
-  sendError,
-  load,
-  send,
-  cancel,
-  updateAction,
-} = useAssistantThread(conversationId)
+// The open conversation's summary (title, linked deck), from the thread once
+// it has loaded it. The title follows the list, which is refreshed after
+// every turn (the first message names a new conversation).
+const loadedConversation = ref<AssistantConversationSummary | null>(null)
+const conversation = computed<AssistantConversationSummary | null>(() => {
+  const current = loadedConversation.value
+  if (!current || current.id !== conversationId.value) {
+    return null
+  }
+  const listed = conversations.value.find(item => item.id === current.id)
+  return listed ? { ...current, title: listed.title } : current
+})
 
 // A deck conversation's title starts out as "Deck: <name>" — exactly the
 // deck chip's text. While it still is, the chip alone is the visible title
@@ -50,50 +50,28 @@ const isDefaultDeckTitle = computed(() => {
 // thread header (mirrors app/layouts/default.vue's mobile nav drawer).
 const isConversationsOpen = ref(false)
 
+// Coming from the /assistant empty state's example prompts: the thread sends
+// the chosen prompt once it has loaded the conversation (see `onMounted`,
+// which drops it from the URL so a reload doesn't resend it).
+const initialPrompt = ref(typeof route.query.prompt === 'string' ? route.query.prompt : '')
+
 watch(conversationId, () => {
   isConversationsOpen.value = false
   composerDraft.value = ''
-  load()
+  initialPrompt.value = ''
 })
 
-const thread = ref<{ stickToBottom: () => void } | null>(null)
-
-async function sendMessage(payload: { text: string, images: string[] }) {
-  // Sending always brings the thread back to its end (and keeps following
-  // the reply), even if the user had scrolled up to reread something.
-  thread.value?.stickToBottom()
-  await send(payload)
-  // The conversation's title (derived from its first message) and its
-  // position in the list (most-recently-updated first) can both change
-  // after any turn — cheap enough to just always refresh rather than
-  // tracking "was this the first message".
-  await refreshConversations()
-}
-
 onMounted(async () => {
-  // Awaited so the optimistic echo `send()` below adds to `messages` isn't
-  // immediately wiped out by this request's own response landing after it
-  // (see useAssistantThread.load(), which replaces `messages` wholesale).
-  await load()
-
   // The conversation list on this page is fetched independently from the
   // one on /assistant — refresh so a conversation just created there (or by
   // this page's own "Neue Unterhaltung") shows up right away.
   await refreshConversations()
 
   // A deck entry point's draft is already in the composer (see
-  // `composerDraft`) — drop `?intent=` so a reload doesn't bring it back.
-  if (route.query.intent !== undefined) {
+  // `composerDraft`), an example prompt is being sent — drop `?intent=` /
+  // `?prompt=` so a reload brings neither back.
+  if (route.query.intent !== undefined || route.query.prompt !== undefined) {
     await router.replace({ query: {} })
-  }
-
-  // Coming from the /assistant empty state's example prompts: send the
-  // chosen prompt once, then drop it from the URL so a reload doesn't
-  // resend it.
-  const promptQuery = route.query.prompt
-  if (typeof promptQuery === 'string' && promptQuery !== '') {
-    await router.replace({ query: {} })
-    await sendMessage({ text: promptQuery, images: [] })
   }
 })
 
@@ -195,35 +173,16 @@ async function onDeleted(id: string) {
       </USlideover>
 
       <section class="panel flex min-w-0 flex-1 flex-col overflow-hidden">
-        <p
-          v-if="loadError"
-          class="p-4 text-sm text-error"
-        >
-          {{ loadError }}
-        </p>
-
-        <template v-else-if="!isLoading">
-          <AssistantMessageThread
-            ref="thread"
-            :timeline="timeline"
-            @action-updated="updateAction"
-          />
-
-          <p
-            v-if="sendError"
-            class="px-4 pb-2 text-sm text-error"
-          >
-            {{ sendError }}
-          </p>
-
-          <AssistantComposer
-            :initial-text="composerDraft"
-            :streaming="isStreaming"
-            :cancelling="isCancelling"
-            @send="sendMessage"
-            @cancel="cancel"
-          />
-        </template>
+        <AssistantChatThread
+          :key="conversationId"
+          :conversation-id="conversationId"
+          :initial-text="composerDraft"
+          :initial-prompt="initialPrompt"
+          :models="status?.models ?? []"
+          :default-model="status?.defaultModel ?? null"
+          @loaded="(summary) => { loadedConversation = summary }"
+          @turn-end="refreshConversations"
+        />
       </section>
     </div>
   </div>
