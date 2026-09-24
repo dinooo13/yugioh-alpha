@@ -95,6 +95,11 @@ included. See [`docs/adr/0015-german-card-data.md`](./docs/adr/0015-german-card-
 - Card search is bilingual everywhere: a search matches the English or the German
   name, ignoring case, umlauts, `ß`, spaces and punctuation
   (`server/utils/card-name-search.ts`).
+- Cards are shown in the **card language**: by default the interface language,
+  or German / English as picked under "Kartensprache / Card language" in the
+  profile settings. API responses always carry the English `name` (and `desc`)
+  plus the German `nameDe` (and `descDe` in the card detail); the client picks.
+  Card images stay English.
 
 German card texts: [ygoresources.com](https://db.ygoresources.com/) — card-history
 repo. The texts are Konami's; the repo has no licence. Turning the sync off
