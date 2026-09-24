@@ -48,5 +48,27 @@ export default defineAppConfig({
         base: 'font-medium',
       },
     },
+    // Placeholders are text: `text-muted` (4.5:1+) instead of `text-dimmed`
+    // (3:1, meant for icons), in both modes.
+    select: {
+      slots: {
+        placeholder: 'truncate text-muted',
+      },
+    },
+    selectMenu: {
+      slots: {
+        placeholder: 'truncate text-muted',
+      },
+    },
+    input: {
+      slots: {
+        base: 'placeholder:text-muted',
+      },
+    },
+    textarea: {
+      slots: {
+        base: 'placeholder:text-muted',
+      },
+    },
   },
 })

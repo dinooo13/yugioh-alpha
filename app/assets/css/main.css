@@ -123,8 +123,8 @@
   --ui-secondary: var(--ui-color-secondary-700);
   --ui-success: var(--ui-color-success-700);
   --ui-info: var(--ui-color-info-700);
-  --ui-warning: var(--ui-color-warning-700);
-  --ui-error: var(--ui-color-error-600);
+  --ui-warning: var(--ui-color-warning-800);
+  --ui-error: var(--ui-color-error-700);
   --ui-text-muted: var(--ui-color-neutral-500);
   --ui-border-muted: var(--ui-color-neutral-100);
   --app-canvas: #f3f2f8;

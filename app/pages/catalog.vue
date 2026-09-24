@@ -451,18 +451,17 @@ async function onAddedToInventory() {
       v-else
       class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6"
     >
-      <div
+      <!-- The card name is the tile's button; its overlay makes the whole tile
+           clickable, while the action buttons sit above it. Not a
+           `role="button"` wrapper: that would nest the action buttons inside
+           another control. -->
+      <article
         v-for="card in cards.items"
         :key="card.id"
-        role="button"
-        tabindex="0"
         :aria-label="cardName(card)"
-        class="group panel flex min-w-0 cursor-pointer flex-col text-left transition-[translate,box-shadow,border-color] duration-200 ease-out-expo hover:border-primary/40 hover:shadow-lift focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus motion-safe:hover:-translate-y-0.5"
-        @click="openCard(card.id)"
-        @keydown.enter="openCard(card.id)"
-        @keydown.space.prevent="openCard(card.id)"
+        class="group panel relative flex min-w-0 cursor-pointer flex-col text-left transition-[translate,box-shadow,border-color] duration-200 ease-out-expo hover:border-primary/40 hover:shadow-lift motion-safe:hover:-translate-y-0.5"
       >
-        <!-- Plain thumbnail: the whole tile is already the button. -->
+        <!-- Plain thumbnail: the tile already opens the card. -->
         <CardThumb
           :src="card.imageSmall"
           :alt="cardName(card)"
@@ -474,7 +473,13 @@ async function onAddedToInventory() {
         />
         <div class="flex flex-1 flex-col gap-2 p-3">
           <h2 class="line-clamp-2 min-h-10 text-sm font-semibold leading-5 text-highlighted transition-colors group-hover:text-primary">
-            {{ cardName(card) }}
+            <button
+              type="button"
+              class="text-left after:absolute after:inset-0 after:rounded-xl focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-focus"
+              @click="openCard(card.id)"
+            >
+              {{ cardName(card) }}
+            </button>
           </h2>
           <div class="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1.5">
             <CardTypeChip
@@ -499,26 +504,23 @@ async function onAddedToInventory() {
               {{ t('card.levelShort', { level: card.level }) }}
             </span>
           </div>
-          <div class="mt-auto flex flex-wrap gap-1 pt-1">
+          <div class="relative z-10 mt-auto flex flex-wrap gap-1 pt-1">
             <UButton
               icon="i-lucide-archive-restore"
               color="primary"
               size="xs"
               :label="t('catalog.addToInventory')"
               class="tap-target"
-              @click.stop="openAddToInventory(card)"
-              @keydown.stop
+              @click="openAddToInventory(card)"
             />
             <WishlistAddToWishlistButton
               :catalog-card-id="card.id"
               :in-wishlist="isWishlisted(card.id)"
-              @click.stop
-              @keydown.stop
               @changed="value => onWishlistChanged(card.id, value)"
             />
           </div>
         </div>
-      </div>
+      </article>
     </section>
 
     <div

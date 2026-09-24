@@ -100,6 +100,7 @@ function resetFilters() {
           value-key="value"
           :items="typeItems"
           :placeholder="t('inventory.search.type')"
+          :aria-label="t('inventory.search.type')"
           class="w-36"
         />
         <USelectMenu
@@ -108,6 +109,7 @@ function resetFilters() {
           value-key="value"
           :items="attributeItems"
           :placeholder="t('inventory.search.attribute')"
+          :aria-label="t('inventory.search.attribute')"
           class="w-36"
         />
         <USelectMenu
@@ -116,6 +118,7 @@ function resetFilters() {
           value-key="value"
           :items="raceItems"
           :placeholder="t('inventory.search.race')"
+          :aria-label="t('inventory.search.race')"
           class="w-36"
         />
         <USelectMenu
@@ -124,12 +127,14 @@ function resetFilters() {
           value-key="value"
           :items="levelItems"
           :placeholder="t('inventory.search.level')"
+          :aria-label="t('inventory.search.level')"
           class="w-32"
         />
         <USelect
           v-model="setSelection"
           :items="setItems"
           :placeholder="t('inventory.search.set')"
+          :aria-label="t('inventory.search.set')"
           class="w-40"
         />
       </div>
@@ -144,6 +149,7 @@ function resetFilters() {
           value-key="value"
           :items="languageItems"
           :placeholder="t('card.field.printingLanguage')"
+          :aria-label="t('card.field.printingLanguage')"
           class="w-44"
         />
         <USelectMenu
@@ -152,6 +158,7 @@ function resetFilters() {
           value-key="value"
           :items="conditionItems"
           :placeholder="t('card.field.condition')"
+          :aria-label="t('card.field.condition')"
           class="w-36"
         />
         <USelectMenu
@@ -160,6 +167,7 @@ function resetFilters() {
           value-key="value"
           :items="editionItems"
           :placeholder="t('card.field.edition')"
+          :aria-label="t('card.field.edition')"
           class="w-36"
         />
         <UButton
@@ -180,6 +188,7 @@ function resetFilters() {
         <USelect
           v-model="filters.sort"
           :items="sortItems"
+          :aria-label="t('inventory.search.sortLabel')"
           class="w-40"
         />
       </UFormField>
