@@ -25,3 +25,4 @@ mark the old as superseded.
 | [0015](0015-german-card-data.md) | German card data and card display language | Accepted (implemented: F3a–F3c); UI credit superseded by [0017](0017-inventory-without-collector-details.md) |
 | [0016](0016-visual-design-system.md) | Visual design system and theming (Duel Arena) | Accepted |
 | [0017](0017-inventory-without-collector-details.md) | Inventory without collector details | Accepted |
+| [0018](0018-product-name-ygo-alpha.md) | Product name "YGO Alpha" | Accepted |

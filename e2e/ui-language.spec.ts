@@ -25,11 +25,13 @@ test.describe('interface language', () => {
     await page.waitForLoadState('networkidle')
     await expect(page.getByRole('heading', { name: 'Anmelden' })).toBeVisible()
     await expect(page.locator('html')).toHaveAttribute('lang', 'de')
+    await expect(page.getByText(/YGO Alpha ist ein inoffizielles Fanprojekt/)).toBeVisible()
 
     await pickLanguage(page, 'Anzeigesprache', 'English')
     await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible()
     await expect(page.locator('html')).toHaveAttribute('lang', 'en')
-    await expect(page).toHaveTitle('Sign in – yugioh alpha')
+    await expect(page).toHaveTitle('Sign in – YGO Alpha')
+    await expect(page.getByText(/YGO Alpha is an unofficial fan project/)).toBeVisible()
     expect(await uiLocaleCookie(page)).toBe('en')
 
     // The server renders the cookie's language on the next page load.
@@ -121,7 +123,7 @@ test.describe('interface language', () => {
     await page.waitForLoadState('networkidle')
     await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible()
     await expect(page.locator('html')).toHaveAttribute('lang', 'en')
-    await expect(page).toHaveTitle('Sign in – yugioh alpha')
+    await expect(page).toHaveTitle('Sign in – YGO Alpha')
     // Detection alone sets no cookie; only picking a language does.
     expect((await context.cookies()).some(cookie => cookie.name === 'ui_locale')).toBe(false)
 

@@ -1,5 +1,5 @@
 /**
- * Sets the document title to "<page> – yugioh alpha" in the active
+ * Sets the document title to "<page> – YGO Alpha" in the active
  * interface language (`app.pageTitle`). Pass a message key; the title
  * follows a language switch.
  */

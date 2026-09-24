@@ -122,7 +122,7 @@ function resolvePackageVersion(): string {
 }
 
 const PACKAGE_VERSION = resolvePackageVersion()
-const USER_AGENT = `yugioh-alpha/${PACKAGE_VERSION}`
+const USER_AGENT = `ygo-alpha/${PACKAGE_VERSION}`
 
 function buildRequestHeaders(apiKey: string, sessionId: string): Record<string, string> {
   return {

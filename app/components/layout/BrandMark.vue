@@ -87,6 +87,6 @@ const size = computed(() => SIZES[props.size])
     <span
       class="truncate font-display font-semibold leading-none tracking-[0.04em]"
       :class="[size.text, { 'max-sm:sr-only': collapse }]"
-    ><span class="text-highlighted">yugioh</span> <span class="text-secondary">alpha</span></span>
+    ><span class="text-highlighted">YGO</span> <span class="text-secondary">Alpha</span></span>
   </component>
 </template>

@@ -33,6 +33,13 @@ describe('PWA service worker options', () => {
 })
 
 describe('PWA manifest', () => {
+  it('is named "YGO Alpha" and describes the game without claiming its name (ADR 0018)', () => {
+    const manifest = pwaOptions.manifest || {}
+    expect(manifest.name).toBe('YGO Alpha')
+    expect(manifest.short_name).toBe('YGO Alpha')
+    expect(manifest.description).toContain('Inoffizielles Fan-Tool')
+  })
+
   it('uses the dark arena canvas for the splash and title bar', () => {
     const manifest = pwaOptions.manifest || {}
     expect(manifest.theme_color).toBe('#0a0a1a')

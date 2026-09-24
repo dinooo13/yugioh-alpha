@@ -77,7 +77,7 @@ describe('dashboard page', () => {
 
     const text = (await mountSuspended(DashboardPage)).text()
 
-    expect(text).toContain('Welcome to yugioh alpha')
+    expect(text).toContain('Welcome to YGO Alpha')
     expect(text).toContain('1 card in stock')
     expect(text).toContain('3 decks created')
     expect(text).toContain('0 tournaments')

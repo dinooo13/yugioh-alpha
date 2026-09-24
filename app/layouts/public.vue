@@ -97,5 +97,10 @@ const loginTarget = computed(() => ({ path: '/login', query: { redirect: route.f
     >
       <slot />
     </main>
+
+    <!-- Trademark notice (ADR 0018) for anonymous visitors of shared views. -->
+    <footer class="mx-auto max-w-5xl px-4 pb-8 text-center text-xs leading-5 text-muted sm:px-6">
+      <p>{{ t('app.disclaimer') }}</p>
+    </footer>
   </div>
 </template>
