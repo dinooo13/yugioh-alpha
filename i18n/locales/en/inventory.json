@@ -21,10 +21,6 @@
       "label": "Search inventory",
       "inText": "Also search card text",
       "facetsOverviewOnly": "These filters only apply to \"Overview\". \"List\" filters by search text and collection.",
-      "type": "Type",
-      "attribute": "Attribute",
-      "race": "Monster type",
-      "level": "Level",
       "reset": "Reset",
       "sortLabel": "Sort by",
       "sort": {

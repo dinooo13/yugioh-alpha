@@ -23,7 +23,11 @@
     "field": {
       "quantity": "Quantity",
       "collection": "Collection",
-      "note": "Note"
+      "note": "Note",
+      "type": "Type",
+      "attribute": "Attribute",
+      "race": "Monster type",
+      "level": "Level"
     },
     "value": {
       "type": {

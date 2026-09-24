@@ -23,7 +23,11 @@
     "field": {
       "quantity": "Anzahl",
       "collection": "Sammlung",
-      "note": "Notiz"
+      "note": "Notiz",
+      "type": "Typ",
+      "attribute": "Attribut",
+      "race": "Monsterart",
+      "level": "Level"
     },
     "value": {
       "type": {
