@@ -472,13 +472,13 @@ async function onAddedToInventory() {
           class="p-2 pb-0"
         />
         <div class="flex flex-1 flex-col gap-2 p-3">
-          <h2 class="line-clamp-2 min-h-10 text-sm font-semibold leading-5 text-highlighted transition-colors group-hover:text-primary">
+          <h2 class="min-h-10 text-sm font-semibold leading-5 text-highlighted transition-colors group-hover:text-primary">
             <button
               type="button"
-              class="text-left after:absolute after:inset-0 after:rounded-xl focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-focus"
+              class="block w-full text-left after:absolute after:inset-0 after:rounded-xl focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-focus"
               @click="openCard(card.id)"
             >
-              {{ cardName(card) }}
+              <span class="line-clamp-2">{{ cardName(card) }}</span>
             </button>
           </h2>
           <div class="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1.5">
