@@ -137,7 +137,8 @@ describe('removeWishlistItem / removeWishlistItemByCard', () => {
     const item = addWishlistItem(db, 'user-a', validateWishlistInput({ catalogCardId: CARD.darkMagician }))
 
     expect(() => removeWishlistItem(db, 'user-b', item.id)).toThrow(expect.objectContaining({ statusCode: 404 }))
-    expect(() => removeWishlistItem(db, 'user-a', 'nonexistent')).toThrow(expect.objectContaining({ statusCode: 404 }))
+    expect(() => removeWishlistItem(db, 'user-a', 'nonexistent'))
+      .toThrow(expect.objectContaining({ statusCode: 404, data: { code: 'wishlist_item_not_found' } }))
     expect(() => removeWishlistItemByCard(db, 'user-b', CARD.darkMagician)).toThrow(expect.objectContaining({ statusCode: 404 }))
     expect(() => removeWishlistItemByCard(db, 'user-a', CARD.potOfGreed)).toThrow(expect.objectContaining({ statusCode: 404 }))
   })

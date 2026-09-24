@@ -102,6 +102,13 @@ describe('inventory validation', () => {
     expect(() => validateInventoryInput({ catalog_card_id: 46986414, language: 'xx' })).toThrow()
   })
 
+  it('gives the user-typed quantity errors a translatable code', () => {
+    expect(() => validateInventoryInput({ catalog_card_id: 46986414, quantity: 0 }))
+      .toThrow(expect.objectContaining({ statusCode: 400, data: expect.objectContaining({ code: 'quantity_invalid' }) }))
+    expect(() => validateInventoryInput({ catalog_card_id: 46986414, quantity: 1000 }))
+      .toThrow(expect.objectContaining({ statusCode: 400, data: { code: 'quantity_too_large', params: { max: 999 } } }))
+  })
+
   it('parses the list query, ignoring a catalogCardId that is not a positive integer', () => {
     expect(parseInventoryListQuery({ q: 'dark', page: '2', pageSize: '10', collectionId: '__none__', catalogCardId: '46986414' })).toEqual({
       q: 'dark',
@@ -240,8 +247,10 @@ describe('inventory persistence helpers', () => {
       quantity: 1,
     }))
 
-    await expect(updateOwnedCard(db, 'user-b', owned.id, { quantity: 2 })).rejects.toMatchObject({ statusCode: 404 })
-    await expect(deleteOwnedCard(db, 'user-b', owned.id)).rejects.toMatchObject({ statusCode: 404 })
+    await expect(updateOwnedCard(db, 'user-b', owned.id, { quantity: 2 }))
+      .rejects.toMatchObject({ statusCode: 404, data: { code: 'owned_card_not_found' } })
+    await expect(deleteOwnedCard(db, 'user-b', owned.id))
+      .rejects.toMatchObject({ statusCode: 404, data: { code: 'owned_card_not_found' } })
 
     await deleteOwnedCard(db, 'user-a', owned.id)
     expect(db.select().from(schema.ownedCard).all()).toHaveLength(0)

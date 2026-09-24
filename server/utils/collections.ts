@@ -15,16 +15,18 @@ export interface CollectionInput {
   description: string | null
 }
 
-function badRequest(message: string): never {
-  throw createError({ statusCode: 400, statusMessage: message })
+// `code` is what the UI translates (`errors.api.<code>`, ADR 0014); the
+// English statusMessage stays technical.
+function badRequest(message: string, code?: string): never {
+  throw createError({ statusCode: 400, statusMessage: message, data: code ? { code } : undefined })
 }
 
-function conflict(message: string): never {
-  throw createError({ statusCode: 409, statusMessage: message })
+function conflict(message: string, code: string): never {
+  throw createError({ statusCode: 409, statusMessage: message, data: { code } })
 }
 
 function notFound(message = 'Collection not found'): never {
-  throw createError({ statusCode: 404, statusMessage: message })
+  throw createError({ statusCode: 404, statusMessage: message, data: { code: 'collection_not_found' } })
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -96,7 +98,7 @@ function nameCollisionWhere(userId: string, name: string, exceptId?: string) {
 export function assertNoNameCollision(db: Db, userId: string, name: string, exceptId?: string) {
   const existing = db.select({ id: collection.id }).from(collection).where(nameCollisionWhere(userId, name, exceptId)).get()
   if (existing) {
-    conflict('A collection with this name already exists')
+    conflict('A collection with this name already exists', 'collection_name_taken')
   }
 }
 
@@ -108,7 +110,7 @@ export function assertCollectionOwnedByUser(db: Db, userId: string, collectionId
     .get()
 
   if (!owned) {
-    badRequest('collection_id does not reference a collection you own')
+    badRequest('collection_id does not reference a collection you own', 'collection_not_found')
   }
 }
 

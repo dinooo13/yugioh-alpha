@@ -25,8 +25,9 @@ function badRequest(message: string): never {
   throw createError({ statusCode: 400, statusMessage: message })
 }
 
+// `data.code` is what the UI translates (`errors.api.<code>`, ADR 0014).
 function notFound(message = 'Wishlist item not found'): never {
-  throw createError({ statusCode: 404, statusMessage: message })
+  throw createError({ statusCode: 404, statusMessage: message, data: { code: 'wishlist_item_not_found' } })
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

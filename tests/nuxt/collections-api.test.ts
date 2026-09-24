@@ -110,7 +110,7 @@ describe('collection persistence', () => {
     await createCollection(db, 'user-a', { name: 'Box 1', description: null })
 
     await expect(createCollection(db, 'user-a', { name: 'box 1', description: null }))
-      .rejects.toMatchObject({ statusCode: 409 })
+      .rejects.toMatchObject({ statusCode: 409, data: { code: 'collection_name_taken' } })
 
     // Same name is fine for a different user.
     await expect(createCollection(db, 'user-b', { name: 'Box 1', description: null })).resolves.toBeTruthy()
