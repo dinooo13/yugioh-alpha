@@ -482,6 +482,14 @@ owned quantity per collection with notes (#87: no source credit in the UI,
 ADR 0017). #63: the catalog filters use the inventory's multi-select menus.
 #134: whole cards are click targets (`stretched-link`), clickable things show
 the pointer, `?` ATK/DEF, select menus as wide as their options.
+#135: the inventory's "Übersicht" is "Galerie" (`?view=gallery`; the old
+`view=overview` still works). A gallery tile and a list row open the same
+detail panel, where the copies are edited in place: per collection the
+collection, the quantity (− / input / +), removal and the note, plus "Zu
+Sammlung hinzufügen"; every change is saved at once. The list rows are for
+reading (type, attribute, the start of the card text, quantity, collection,
+note); the edit dialog, the row controls and "In Liste bearbeiten" are gone.
+Moving copies into a collection that already holds the card keeps both notes.
 
 ## Recommended Build Order
 

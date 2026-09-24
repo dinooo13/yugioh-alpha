@@ -8,9 +8,11 @@
  *   when a card has no German text (ADR 0015).
  * - `variant="catalog"` adds the English-name subtitle, the printings and
  *   the TCG/OCG release dates; `variant="inventory"` shows only the card.
- * - The caller adds its own sections through the `context` slot (after the
- *   card text) and its buttons through the `actions` slot (the footer; it
- *   gets the card as `{ id, name, nameDe, type }`).
+ * - The caller adds its own sections through the `context` slot (before the
+ *   card text: the inventory's editor is the overlay's main job there, and
+ *   on phones it shouldn't sit below the whole text) and its buttons through
+ *   the `actions` slot (the footer; it gets the card as
+ *   `{ id, name, nameDe, type }`).
  * - The data comes from `GET /api/catalog/cards/:id`
  *   (`useCatalogCardDetail`), loaded only while the overlay is open;
  *   `preview` shows what the caller already knows while it loads.
@@ -156,10 +158,9 @@ const hasDates = computed(() => Boolean(detail.value?.card.tcgDate || detail.val
           </dl>
         </div>
 
-        <div
-          class="min-w-0 space-y-6"
-          :aria-busy="pending"
-        >
+        <div class="min-w-0 space-y-6">
+          <slot name="context" />
+
           <UAlert
             v-if="error"
             color="error"
@@ -167,7 +168,11 @@ const hasDates = computed(() => Boolean(detail.value?.card.tcgDate || detail.val
             :title="t('card.detail.notFound')"
             :description="t('card.detail.notFoundDescription')"
           />
-          <section v-else>
+          <!-- Busy while the catalog detail loads; the context above is not. -->
+          <section
+            v-else
+            :aria-busy="pending"
+          >
             <h3 class="text-sm font-semibold text-highlighted">
               {{ t('card.detail.cardText') }}
             </h3>
@@ -192,8 +197,6 @@ const hasDates = computed(() => Boolean(detail.value?.card.tcgDate || detail.val
               <USkeleton class="h-4 w-2/3" />
             </div>
           </section>
-
-          <slot name="context" />
 
           <template v-if="variant === 'catalog' && detail">
             <section v-if="detail.printings.length > 0">

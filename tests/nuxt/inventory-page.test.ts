@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { DOMWrapper } from '@vue/test-utils'
 import { nextTick, type Component } from 'vue'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
 import CollectionActions from '~/components/collections/CollectionActions.vue'
@@ -9,7 +10,16 @@ import { UApp } from '#components'
 import InventoryPage from '~/pages/inventory/index.vue'
 import { setTestLocale } from './fixtures/locale'
 
-afterEach(() => setTestLocale('de'))
+afterEach(() => {
+  vi.unstubAllGlobals()
+  document.body.innerHTML = ''
+  return setTestLocale('de')
+})
+
+// UModal teleports its content to <body>.
+function body() {
+  return new DOMWrapper(document.body)
+}
 
 const inventoryState = vi.hoisted(() => ({
   response: {
@@ -38,20 +48,30 @@ describe('inventory page', () => {
     expect(component.text()).toContain('Karte hinzufügen')
   })
 
-  it('renders owned cards from the inventory API', async () => {
+  it('renders owned cards from the inventory API as info rows (#135)', async () => {
     inventoryState.pending = false
     inventoryState.response = ownedDarkMagician()
 
     const component = await mountSuspended(InventoryPage)
 
-    expect(component.text()).toContain('Dark Magician')
-    expect(component.text()).toContain('Normales Monster')
-    expect(component.text()).toContain('×3')
+    // The card name is the row's one button; it opens the detail panel.
+    const nameButton = component.findAll('li button').filter(button => button.text() === 'Dark Magician')
+    expect(nameButton).toHaveLength(1)
+    expect(nameButton[0]!.attributes('aria-haspopup')).toBe('dialog')
 
-    // One responsive markup for every width — each control exists once.
-    expect(component.findAll('[aria-label="Sammlung für Dark Magician"]')).toHaveLength(1)
-    expect(component.findAll('[aria-label="Karte bearbeiten"]')).toHaveLength(1)
-    expect(component.findAll('[aria-label="Karte entfernen"]')).toHaveLength(1)
+    const text = component.text()
+    expect(text).toContain('Normales Monster')
+    // Attribute and card text in the card language (ADR 0015).
+    expect(text).toContain('FINSTERNIS')
+    expect(component.find('[data-testid="card-text-excerpt"]').text()).toBe('Kartentext: Der ultimative Hexer in Bezug auf Angriff und Verteidigung.')
+    expect(text).toContain('×3')
+    expect(text).toContain('(keine Sammlung)')
+    expect(text).toContain('Binder 2')
+
+    // Reading only: no collection select, no edit or delete buttons.
+    expect(component.find('li [role="combobox"]').exists()).toBe(false)
+    expect(component.find('[aria-label="Karte bearbeiten"]').exists()).toBe(false)
+    expect(component.find('[aria-label="Karte entfernen"]').exists()).toBe(false)
     // No collector details since ADR 0017.
     expect(component.text()).not.toMatch(/Drucksprache|Zustand|Auflage|Legend of Blue Eyes|Ultra Rare/)
 
@@ -60,6 +80,65 @@ describe('inventory page', () => {
     expect(thumbnail.exists()).toBe(true)
     expect(thumbnail.classes()).toContain('object-contain')
     expect(thumbnail.classes()).not.toContain('object-cover')
+  })
+
+  it('shows the collection name, and hides it when the page is scoped to one', async () => {
+    inventoryState.pending = false
+    inventoryState.response = ownedDarkMagician({ collectionId: 'box-1' })
+
+    const component = await mountSuspended(InventoryPage)
+    // The collections come from the same mocked `useFetch` here: an unknown
+    // id falls back to the "unnamed" label.
+    expect(component.text()).toContain('Sammlung: Unbenannte Sammlung')
+
+    const item = ownedDarkMagician().items[0] as never
+    const scoped = await mountSuspended(InventoryListRow, { props: { item, collectionLabel: 'Box 1', showCollection: false } })
+    expect(scoped.text()).not.toContain('Box 1')
+    const shown = await mountSuspended(InventoryListRow, { props: { item, collectionLabel: 'Box 1', showCollection: true } })
+    expect(shown.text()).toContain('Sammlung: Box 1')
+  })
+
+  it('falls back to the English card text and cuts a long one with "…"', async () => {
+    inventoryState.pending = false
+    const long = 'A'.repeat(240)
+    inventoryState.response = {
+      total: 2,
+      items: [
+        ownedDarkMagician({ cardTextExcerptDe: null }).items[0]!,
+        ownedDarkMagician({ id: 'owned-2', cardTextExcerpt: long, cardTextExcerptDe: null }).items[0]!,
+      ],
+    }
+
+    const component = await mountSuspended(InventoryPage)
+
+    const excerpts = component.findAll('[data-testid="card-text-excerpt"]').map(p => p.text())
+    expect(excerpts[0]).toBe('Kartentext: The ultimate wizard in terms of attack and defense.')
+    expect(excerpts[1]).toBe(`Kartentext: ${long}…`)
+  })
+
+  it('opens the detail panel with the editor from a row (#135)', async () => {
+    inventoryState.pending = false
+    inventoryState.response = ownedDarkMagician()
+
+    const component = await mountSuspended(InventoryPage)
+    vi.stubGlobal('$fetch', vi.fn((url: string) => {
+      if (url === '/api/inventory') {
+        return Promise.resolve({ items: [{ id: 'owned-1', collectionId: null, quantity: 3, note: 'Binder 2' }], total: 1 })
+      }
+      // The catalog detail stays loading; the preview stands in.
+      return new Promise(() => {})
+    }))
+    await component.findAll('li button').find(button => button.text() === 'Dark Magician')!.trigger('click')
+
+    await vi.waitFor(() => {
+      expect(body().find('[aria-label="Anzahl in (keine Sammlung)"]').exists()).toBe(true)
+    })
+    const dialog = body().find('[role="dialog"]')
+    expect(dialog.text()).toContain('Im Inventar')
+    expect(dialog.text()).toContain('Im Katalog öffnen')
+    // Opened from this row: it is the highlighted one.
+    expect(dialog.find('[data-row-id="owned-1"]').attributes('data-focused')).toBe('')
+    expect(dialog.find<HTMLInputElement>('[aria-label="Anzahl in (keine Sammlung)"]').element.value).toBe('3')
   })
 
   it('renders in English', async () => {
@@ -75,16 +154,18 @@ describe('inventory page', () => {
     expect(text).toContain('Quick entry')
     expect(text).toContain('Add card')
     expect(text).toContain('List')
-    expect(text).toContain('Overview')
+    expect(text).toContain('Gallery')
+    expect(text).not.toContain('Overview')
     expect(text).toContain('Also search card text')
     expect(text).toContain('New collection')
     expect(component.find('input[aria-label="Search inventory"]').exists()).toBe(true)
-    expect(component.findAll('[aria-label="Collection for Dark Magician"]')).toHaveLength(1)
-    expect(component.findAll('[aria-label="Edit card"]')).toHaveLength(1)
-    expect(component.findAll('[aria-label="Remove card"]')).toHaveLength(1)
     expect(text).toContain('Note: Binder 2')
+    expect(text).toContain('Quantity: ×3')
+    expect(text).toContain('Collection: (no collection)')
+    expect(text).toContain('DARK')
+    expect(text).toContain('Card text: The ultimate wizard')
     expect(text).not.toMatch(/Printing language|Condition|Near Mint/)
-    expect(text).not.toMatch(/Karte|Sammlung|Übersicht|Liste/)
+    expect(text).not.toMatch(/Karte|Sammlung|Übersicht|Galerie|Liste|FINSTERNIS|Hexer/)
   })
 
   it('shows the note of a row', async () => {
@@ -134,6 +215,9 @@ function ownedDarkMagician(overrides: Record<string, unknown> = {}) {
         note: 'Binder 2',
         cardName: 'Dark Magician',
         cardType: 'Normal Monster',
+        cardAttribute: 'DARK',
+        cardTextExcerpt: 'The ultimate wizard in terms of attack and defense.',
+        cardTextExcerptDe: 'Der ultimative Hexer in Bezug auf Angriff und Verteidigung.',
         imageUrlSmall: 'https://images.example/dm-small.jpg',
         ...overrides,
       },
@@ -176,6 +260,30 @@ describe('add to inventory modal', () => {
     expect(component.text()).toContain('Alle Sammlungen (1.234)')
   })
 
+  it('only adds: its own title, and a quantity stepper (#135)', async () => {
+    const component = await mountSuspended(AddToInventoryModal, {
+      props: {
+        open: true,
+        card: { id: 46986414, name: 'Dark Magician', type: 'Normal Monster' },
+      },
+    })
+    await nextTick()
+
+    const dialog = body().find('[role="dialog"]')
+    expect(dialog.find('h2').text()).toBe('Karte hinzufügen')
+    expect(dialog.find('[aria-label="Eine weniger"]').attributes('disabled')).toBeDefined()
+    expect(dialog.find('[aria-label="Eine mehr"]').exists()).toBe(true)
+    expect(dialog.find<HTMLInputElement>('input[name="quantity"]').element.value).toBe('1')
+    expect(dialog.findAll('button').map(button => button.text())).toContain('Hinzufügen')
+    expect(dialog.text()).not.toContain('Karte bearbeiten')
+
+    await dialog.find('[aria-label="Eine mehr"]').trigger('click')
+    await nextTick()
+    expect(dialog.find<HTMLInputElement>('input[name="quantity"]').element.value).toBe('2')
+
+    component.unmount()
+  })
+
   it('asks only for quantity, collection and note (ADR 0017)', async () => {
     const component = await mountSuspended(AddToInventoryModal, {
       props: {
@@ -204,7 +312,7 @@ describe('retired card badge (ADR 0019)', () => {
   }
 
   const listItem = ownedDarkMagician().items[0]!
-  const listProps = { assignItems: [], noAssignmentValue: '__none__' }
+  const listProps = { collectionLabel: '(keine Sammlung)', showCollection: true }
   const tileItem = {
     catalogCardId: 46986414,
     name: 'Dark Magician',
@@ -227,7 +335,7 @@ describe('retired card badge (ADR 0019)', () => {
     expect(active.find('[data-testid="card-retired-badge"]').exists()).toBe(false)
   })
 
-  it('shows on an overview tile only when the card is retired', async () => {
+  it('shows on a gallery tile only when the card is retired', async () => {
     const retired = await inApp(InventoryCardTile, { item: { ...tileItem, retired: true } })
     expect(retired.find('[data-testid="card-retired-badge"]').text()).toBe('Nicht mehr im Katalog')
 

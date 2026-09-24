@@ -71,7 +71,7 @@ test.describe('Chat assistant', () => {
     // --- applied for real: 1 seeded + 2 proposed = 3 -----------------------
     await page.goto('/inventory')
     await waitForHydration(page)
-    await page.getByRole('button', { name: 'Übersicht', exact: true }).click()
+    await page.getByRole('button', { name: 'Galerie', exact: true }).click()
     await expect(page.getByText(CARD.darkMagician).first()).toBeVisible()
     await expect(page.getByText('×3 ges.')).toBeVisible()
 

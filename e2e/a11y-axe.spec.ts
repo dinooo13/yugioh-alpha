@@ -63,7 +63,7 @@ test.describe('axe: no WCAG A/AA violations', () => {
       for (const path of [
         '/',
         '/inventory',
-        '/inventory?view=overview',
+        '/inventory?view=gallery',
         '/catalog',
         `/catalog?card=${DARK_MAGICIAN}`,
         '/decks',
@@ -75,18 +75,22 @@ test.describe('axe: no WCAG A/AA violations', () => {
         violations.push(...await axeViolations(page, path))
       }
 
-      // The card detail overlay in the inventory (#88); the catalog one is
+      // The card detail overlay in the inventory (#88) with its editor
+      // (#135), from a gallery tile and from a list row; the catalog one is
       // `/catalog?card=` above.
-      await page.goto('/inventory?view=overview')
-      await page.waitForLoadState('networkidle')
-      await page.getByRole('button', { name: `${CARD.darkMagician} vergrößern` }).click()
-      const overlay = page.getByRole('dialog', { name: CARD.darkMagician })
-      await expect(overlay.getByRole('heading', { name: 'Im Inventar' })).toBeVisible()
-      await page.waitForLoadState('networkidle')
-      // The open animation (fade/scale) runs even under reduced motion;
-      // mid-way its colors would fail the contrast check.
-      await page.evaluate(() => Promise.all(document.getAnimations().map(animation => animation.finished)))
-      violations.push(...await axeCurrent(page, 'inventory card overlay'))
+      for (const [path, label] of [['/inventory?view=gallery', 'gallery'], ['/inventory', 'list']] as const) {
+        await page.goto(path)
+        await page.waitForLoadState('networkidle')
+        await page.getByRole('button', { name: CARD.darkMagician, exact: true }).click()
+        const overlay = page.getByRole('dialog', { name: CARD.darkMagician })
+        await expect(overlay.getByRole('heading', { name: 'Im Inventar' })).toBeVisible()
+        await expect(overlay.getByRole('spinbutton', { name: 'Anzahl in (keine Sammlung)' })).toBeVisible()
+        await page.waitForLoadState('networkidle')
+        // The open animation (fade/scale) runs even under reduced motion;
+        // mid-way its colors would fail the contrast check.
+        await page.evaluate(() => Promise.all(document.getAnimations().map(animation => animation.finished)))
+        violations.push(...await axeCurrent(page, `inventory card overlay (${label})`))
+      }
 
       // "Zum Inventar" stacks the add dialog on top of the catalog overlay.
       await page.goto(`/catalog?card=${DARK_MAGICIAN}`)

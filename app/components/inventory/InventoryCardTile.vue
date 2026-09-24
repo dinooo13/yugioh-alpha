@@ -8,7 +8,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  preview: []
+  open: []
 }>()
 
 const breakdown = computed(() => props.item.collectionBreakdown ?? [])
@@ -20,31 +20,39 @@ const frame = computed(() => cardFrame(props.item))
 </script>
 
 <template>
-  <article class="group panel flex min-w-0 flex-col transition-[translate,box-shadow,border-color] duration-200 ease-out-expo hover:border-primary/40 hover:shadow-lift motion-safe:hover:-translate-y-0.5">
-    <button
-      type="button"
-      :aria-label="t('card.enlarge', { name: cardName(item) })"
-      class="block w-full cursor-zoom-in rounded-t-xl p-2 pb-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
-      @click="emit('preview')"
-    >
-      <!-- Not `enlargeable`: the tile's own preview modal shows more than the scan. -->
-      <CardThumb
-        :src="item.imageSmall"
-        :src-large="item.imageLarge"
-        :alt="cardName(item)"
-        :frame="frame?.frame"
-        :pendulum="frame?.pendulum"
-        size="full"
-        foil
-        sizes="(min-width: 1280px) 270px, (min-width: 640px) 30vw, 48vw"
-      />
-    </button>
+  <!-- The card name is the tile's button; `stretched-link` makes the whole
+       tile open the detail panel (#135, like the catalog tiles). The
+       breakdown and the retired badge sit above it, so their own popover and
+       tooltip stay usable. -->
+  <article class="group panel relative flex min-w-0 flex-col transition-[translate,box-shadow,border-color] duration-200 ease-out-expo hover:border-primary/40 hover:shadow-lift motion-safe:hover:-translate-y-0.5">
+    <!-- Plain thumbnail, not `enlargeable`: the tile already opens the card. -->
+    <CardThumb
+      :src="item.imageSmall"
+      :src-large="item.imageLarge"
+      :alt="cardName(item)"
+      :frame="frame?.frame"
+      :pendulum="frame?.pendulum"
+      size="full"
+      foil
+      sizes="(min-width: 1280px) 270px, (min-width: 640px) 30vw, 48vw"
+      class="p-2 pb-0"
+    />
 
     <div class="flex flex-1 flex-col gap-2 p-3">
-      <h2 class="line-clamp-2 text-sm font-semibold leading-5 text-highlighted transition-colors group-hover:text-primary sm:text-base">
-        {{ cardName(item) }}
+      <h2 class="text-sm font-semibold leading-5 text-highlighted transition-colors group-hover:text-primary sm:text-base">
+        <button
+          type="button"
+          aria-haspopup="dialog"
+          class="stretched-link block w-full text-left"
+          @click="emit('open')"
+        >
+          <span class="line-clamp-2">{{ cardName(item) }}</span>
+        </button>
       </h2>
-      <div v-if="item.retired">
+      <div
+        v-if="item.retired"
+        class="relative z-10 w-fit"
+      >
         <CardRetiredBadge />
       </div>
       <div class="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1.5">
@@ -67,7 +75,7 @@ const frame = computed(() => cardFrame(props.item))
         {{ t('card.totalQuantity', { count: n(item.totalQuantity, 'integer') }) }}
       </p>
 
-      <div class="flex min-w-0 flex-wrap items-center gap-1">
+      <div class="relative z-10 flex min-w-0 flex-wrap items-center gap-1">
         <template v-if="showInline">
           <UBadge
             v-for="entry in breakdown"

@@ -97,24 +97,24 @@ test.describe('card detail overlay', () => {
     expect(owned.items).toHaveLength(1)
   })
 
-  test('inventory: the owned copies with their note, and a way to the catalog', async ({ page }) => {
+  test('inventory: the owned copies (editable, #135) with their note, and a way to the catalog', async ({ page }) => {
     await registerAndLogin(page)
     const created = await page.request.post('/api/inventory', {
       data: { catalog_card_id: DARK_MAGICIAN, quantity: 2, note: 'Binder vorne' },
     })
     expect(created.ok()).toBe(true)
 
-    await page.goto('/inventory?view=overview')
+    await page.goto('/inventory?view=gallery')
     await waitForHydration(page)
-    await page.getByRole('button', { name: `${CARD.darkMagician} vergrößern` }).click()
+    await page.getByRole('button', { name: CARD.darkMagician, exact: true }).click()
 
     const detail = page.getByRole('dialog', { name: CARD.darkMagician })
     await expect(detail).toBeVisible()
     await expect(detail.getByRole('heading', { name: 'Kartentext', level: 3 })).toBeVisible()
     await expect(detail.getByRole('heading', { name: 'Im Inventar', level: 3 })).toBeVisible()
-    await expect(detail.getByText('(keine Sammlung)')).toBeVisible()
-    await expect(detail.getByText('×2', { exact: true })).toBeVisible()
+    await expect(detail.getByRole('spinbutton', { name: 'Anzahl in (keine Sammlung)' })).toHaveValue('2')
     await expect(detail.getByText('Binder vorne')).toBeVisible()
+    await expect(detail.getByRole('button', { name: 'In Liste bearbeiten' })).toHaveCount(0)
     await expect(detail.getByText('SDY-006')).toHaveCount(0)
     await expect(detail.getByText('Printings')).toHaveCount(0)
     await expect(detail.getByRole('button', { name: 'Zum Inventar' })).toHaveCount(0)

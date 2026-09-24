@@ -12,7 +12,7 @@ const DARK_MAGICIAN = 46986414
 const REDIRECTS: ReadonlyArray<readonly [string, string]> = [
   ['/inventar', '/inventory'],
   ['/inventar/erfassen', '/inventory/quick-entry'],
-  ['/inventar?view=uebersicht&collectionId=x', '/inventory?view=overview&collectionId=x'],
+  ['/inventar?view=uebersicht&collectionId=x', '/inventory?view=gallery&collectionId=x'],
   ['/katalog', '/catalog'],
   ['/katalog?card=46986414', '/catalog?card=46986414'],
   ['/assistent', '/assistant'],

@@ -20,8 +20,8 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-// The card detail overlay (#88) loads the card from the catalog and the
-// per-collection notes from the inventory.
+// The card detail overlay (#88) loads the card from the catalog and its
+// editor (#135) the card's rows from the inventory.
 function stubOverlayFetch() {
   vi.stubGlobal('$fetch', vi.fn((url: string) => {
     if (url === '/api/catalog/cards/89631139') {
@@ -54,7 +54,7 @@ function stubOverlayFetch() {
       })
     }
     if (url === '/api/inventory') {
-      return Promise.resolve({ items: [{ collectionId: 'box-1', quantity: 3, note: 'Oben links' }], total: 1 })
+      return Promise.resolve({ items: [{ id: 'row-1', collectionId: 'box-1', quantity: 3, note: 'Oben links' }], total: 1 })
     }
     return Promise.reject(new Error(`unexpected ${url}`))
   }))
@@ -92,6 +92,11 @@ const emptyFacets = {
   levels: [] as number[],
 }
 
+const collections = {
+  items: [{ id: 'box-1', name: 'Box 1', description: null, cardCount: 3, visibility: 'private' }],
+  allCount: 5,
+}
+
 const state = vi.hoisted(() => ({
   inventory: { items: [] as Array<Record<string, unknown>>, total: 0 },
   search: { items: [] as SearchResultItem[], total: 0, page: 1, pageSize: 24 },
@@ -115,6 +120,9 @@ mockNuxtImport('useFetch', () => {
     if (url === '/api/inventory/search/facets') {
       return { data: ref(state.facets), pending: ref(false), refresh: vi.fn() }
     }
+    if (url === '/api/collections') {
+      return { data: ref(collections), pending: ref(false), status: ref('success'), refresh: vi.fn() }
+    }
     return { data: ref(state.inventory), pending: ref(false), refresh: vi.fn() }
   }
 })
@@ -124,18 +132,25 @@ function lastQuery(url: string): Record<string, unknown> {
   return toValue(call?.opts?.query as Record<string, unknown>)
 }
 
-async function openUebersicht(component: Awaited<ReturnType<typeof mountSuspended>>) {
-  const toggle = component.findAll('button').find((btn: { text: () => string }) => btn.text().includes('Übersicht'))
+async function openGalerie(component: Awaited<ReturnType<typeof mountSuspended>>) {
+  const toggle = component.findAll('button').find((btn: { text: () => string }) => btn.text().includes('Galerie'))
   expect(toggle).toBeTruthy()
   await toggle!.trigger('click')
   const route = useRouter().currentRoute
   await vi.waitFor(() => {
-    expect(route.value.query.view).toBe('overview')
+    expect(route.value.query.view).toBe('gallery')
   })
   await nextTick()
 }
 
-describe('inventory search panel (Übersicht)', () => {
+// A gallery tile opens through its name button (the whole tile is its target).
+function tileButton(component: Awaited<ReturnType<typeof mountSuspended>>, name: string) {
+  const button = component.findAll('article button').find((btn: { text: () => string }) => btn.text() === name)
+  expect(button).toBeTruthy()
+  return button!
+}
+
+describe('inventory search panel (Galerie)', () => {
   it('renders filter controls, total quantity, and the per-collection breakdown', async () => {
     state.inventory = { items: [], total: 0 }
     state.facets = {
@@ -170,7 +185,7 @@ describe('inventory search panel (Übersicht)', () => {
     }
 
     const component = await mountSuspended(InventoryPage, { route: '/inventory' })
-    await openUebersicht(component)
+    await openGalerie(component)
 
     const text = component.text()
 
@@ -198,23 +213,28 @@ describe('inventory search panel (Übersicht)', () => {
     expect(image.attributes('srcset')).toContain('https://images.example/bewd-small.jpg')
     expect(image.classes()).toContain('object-contain')
 
-    // Clicking the artwork opens the card detail overlay (#88): the card
-    // text, what the user owns per collection with the notes, and a
-    // catalog link — but none of the catalog-only sections.
+    // Clicking the tile opens the card detail overlay (#88) with the
+    // editor for the user's copies (#135), the card text and a catalog
+    // link — but none of the catalog-only sections.
     stubOverlayFetch()
-    await component.find('[aria-label="Blue-Eyes White Dragon vergrößern"]').trigger('click')
+    await tileButton(component, 'Blue-Eyes White Dragon').trigger('click')
     await nextTick()
     await vi.waitFor(() => {
       expect(body().find('a[href="/catalog?card=89631139"]').exists()).toBe(true)
       expect(body().text()).toContain('Dieser legendäre Drache')
       expect(body().text()).toContain('Oben links')
     })
-    const overlay = body().find('[role="dialog"]').text()
+    const dialog = body().find('[role="dialog"]')
+    const overlay = dialog.text()
     expect(overlay).toContain('Im Katalog öffnen')
     expect(overlay).toContain('Kartentext')
     expect(overlay).toContain('Im Inventar')
-    expect(overlay).toContain('Box 1')
-    expect(overlay).toContain('×3')
+    expect(overlay).toContain('×3 ges.')
+    expect(dialog.find<HTMLInputElement>('[aria-label="Anzahl in Box 1"]').element.value).toBe('3')
+    expect(dialog.find('[aria-label="Sammlung ändern (jetzt: Box 1)"]').exists()).toBe(true)
+    // From the gallery no row is singled out.
+    expect(dialog.find('[data-focused]').exists()).toBe(false)
+    expect(overlay).not.toContain('In Liste bearbeiten')
     expect(overlay).not.toContain('Printings')
     expect(overlay).not.toContain('LOB-001')
   })
@@ -226,7 +246,7 @@ describe('inventory search panel (Übersicht)', () => {
     state.searchPending = true
 
     const component = await mountSuspended(InventoryPage, { route: '/inventory' })
-    await openUebersicht(component)
+    await openGalerie(component)
 
     expect(component.findAll('.aspect-\\[59\\/86\\].rounded-lg')).toHaveLength(12)
     expect(component.text()).not.toContain('Inventar ist leer')
@@ -240,7 +260,7 @@ describe('inventory search panel (Übersicht)', () => {
     state.search = { items: [], total: 0, page: 1, pageSize: 24 }
 
     const component = await mountSuspended(InventoryPage, { route: '/inventory' })
-    await openUebersicht(component)
+    await openGalerie(component)
 
     expect(component.text()).toContain('Inventar ist leer')
     expect(component.text()).not.toContain('Keine Treffer für diese Filter')
@@ -254,7 +274,7 @@ describe('inventory search panel (Übersicht)', () => {
     state.search = { items: [], total: 0, page: 1, pageSize: 24 }
 
     const component = await mountSuspended(InventoryPage, { route: '/inventory?collectionId=box-1' })
-    await openUebersicht(component)
+    await openGalerie(component)
 
     expect(component.text()).toContain('Keine Treffer für diese Filter')
     expect(component.text()).not.toContain('Inventar ist leer')
@@ -282,94 +302,64 @@ function toggleButton(component: Awaited<ReturnType<typeof mountSuspended>>, lab
   return button!
 }
 
-describe('view and card filter in the URL', () => {
-  it('renders "Übersicht" directly from ?view=overview', async () => {
+describe('view in the URL', () => {
+  it('renders "Galerie" directly from ?view=gallery', async () => {
     state.inventory = { items: [], total: 0 }
     state.facets = { ...emptyFacets }
     state.search = { items: [blueEyes], total: 1, page: 1, pageSize: 24 }
 
-    const component = await mountSuspended(InventoryPage, { route: '/inventory?view=overview' })
+    const component = await mountSuspended(InventoryPage, { route: '/inventory?view=gallery' })
 
-    expect(component.find('[aria-label="Blue-Eyes White Dragon vergrößern"]').exists()).toBe(true)
-    expect(toggleButton(component, 'Übersicht').attributes('aria-pressed')).toBe('true')
+    tileButton(component, 'Blue-Eyes White Dragon')
+    expect(toggleButton(component, 'Galerie').attributes('aria-pressed')).toBe('true')
     expect(toggleButton(component, 'Liste').attributes('aria-pressed')).toBe('false')
   })
 
-  it('"In Liste bearbeiten" shows the card\'s rows in "Liste" and stays there (#32)', async () => {
+  it('still accepts the former ?view=overview and rewrites it to gallery', async () => {
     state.inventory = { items: [], total: 0 }
     state.facets = { ...emptyFacets }
     state.search = { items: [blueEyes], total: 1, page: 1, pageSize: 24 }
-    state.calls = []
 
-    const component = await mountSuspended(InventoryPage, { route: '/inventory?collectionId=box-1' })
+    const component = await mountSuspended(InventoryPage, { route: '/inventory?view=overview&collectionId=box-1' })
     const route = useRouter().currentRoute
 
-    // Typing a search flips to "Übersicht" — the watcher that used to flip
-    // straight back after "In Liste bearbeiten".
-    await component.find('input[aria-label="Inventar durchsuchen"]').setValue('Blue')
+    tileButton(component, 'Blue-Eyes White Dragon')
+    expect(toggleButton(component, 'Galerie').attributes('aria-pressed')).toBe('true')
     await vi.waitFor(() => {
-      expect(route.value.query.view).toBe('overview')
+      expect(route.value.query).toEqual({ view: 'gallery', collectionId: 'box-1' })
     })
-    await nextTick()
-
-    stubOverlayFetch()
-    await component.find('[aria-label="Blue-Eyes White Dragon vergrößern"]').trigger('click')
-    await vi.waitFor(() => {
-      expect(body().text()).toContain('In Liste bearbeiten')
-    })
-    const editButton = body().findAll('button').find(btn => btn.text().includes('In Liste bearbeiten'))
-    await editButton!.trigger('click')
-
-    // Collection scope and view dropped: the breakdown spans all collections.
-    await vi.waitFor(() => {
-      expect(route.value.query).toEqual({ card: '89631139' })
-    })
-    await vi.waitFor(() => {
-      expect(body().text()).not.toContain('In Liste bearbeiten')
-    })
-
-    expect(lastQuery('/api/inventory')).toMatchObject({ catalogCardId: 89631139, collectionId: undefined, q: undefined })
-    expect(component.text()).toContain('Nur: Blue-Eyes White Dragon')
-    expect(component.find<HTMLInputElement>('input[aria-label="Inventar durchsuchen"]').element.value).toBe('')
-
-    // Past the search debounce, nothing flips the view back.
-    await new Promise(resolve => setTimeout(resolve, 400))
-    expect(route.value.query.view).toBeUndefined()
-    expect(route.value.query.card).toBe('89631139')
-    expect(toggleButton(component, 'Liste').attributes('aria-pressed')).toBe('true')
   })
 
-  it('drops the card filter from the chip and when switching to "Übersicht"', async () => {
+  it('switches between "Liste" and "Galerie" without writing the default', async () => {
     state.inventory = { items: [], total: 0 }
     state.facets = { ...emptyFacets }
     state.search = { items: [blueEyes], total: 1, page: 1, pageSize: 24 }
-    state.calls = []
 
-    const component = await mountSuspended(InventoryPage, { route: '/inventory?card=89631139' })
+    const component = await mountSuspended(InventoryPage, { route: '/inventory' })
     const route = useRouter().currentRoute
 
-    expect(lastQuery('/api/inventory')).toMatchObject({ catalogCardId: 89631139 })
-    expect(component.text()).toContain('Nur: Karte')
-    expect(component.text()).toContain('Keine Treffer')
-
-    await toggleButton(component, 'Übersicht').trigger('click')
+    await toggleButton(component, 'Galerie').trigger('click')
     await vi.waitFor(() => {
-      expect(route.value.query).toEqual({ view: 'overview' })
+      expect(route.value.query).toEqual({ view: 'gallery' })
     })
-
     await toggleButton(component, 'Liste').trigger('click')
     await vi.waitFor(() => {
       expect(route.value.query).toEqual({})
     })
-    expect(lastQuery('/api/inventory').catalogCardId).toBeUndefined()
+  })
 
-    await useRouter().replace('/inventory?card=89631139')
+  it('drops a stale ?card= (the former list filter) and lists every card', async () => {
+    state.inventory = { items: [], total: 0 }
+    state.facets = { ...emptyFacets }
+    state.search = { items: [blueEyes], total: 1, page: 1, pageSize: 24 }
+    state.calls = []
+
+    await mountSuspended(InventoryPage, { route: '/inventory?card=89631139' })
+    const route = useRouter().currentRoute
+
     await vi.waitFor(() => {
-      expect(component.find('[aria-label="Kartenfilter entfernen"]').exists()).toBe(true)
+      expect(route.value.query).toEqual({})
     })
-    await component.find('[aria-label="Kartenfilter entfernen"]').trigger('click')
-    await vi.waitFor(() => {
-      expect(route.value.query.card).toBeUndefined()
-    })
+    expect(lastQuery('/api/inventory')).not.toHaveProperty('catalogCardId')
   })
 })

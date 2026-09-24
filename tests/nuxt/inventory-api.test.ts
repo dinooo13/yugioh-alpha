@@ -4,9 +4,11 @@ import { eq } from 'drizzle-orm'
 import Database from 'better-sqlite3'
 import { beforeEach, describe, expect, it } from 'vitest'
 import * as schema from '../../server/db/schema'
+import { CARD_TEXT_EXCERPT_LENGTH } from '../../shared/inventory'
 import {
   addOwnedCard,
   deleteOwnedCard,
+  joinNotes,
   listOwnedCards,
   parseInventoryListQuery,
   searchCatalogCards,
@@ -54,6 +56,7 @@ function seedCatalog(db: TestDb) {
       id: 46986414,
       name: 'Dark Magician',
       type: 'Normal Monster',
+      attribute: 'DARK',
       desc: 'The ultimate wizard.',
       syncedAt: now,
     },
@@ -217,6 +220,26 @@ describe('inventory persistence helpers', () => {
     expect(result.items[0]).not.toHaveProperty('cardRetiredAt')
   })
 
+  it('lists the attribute and the start of the card text for the "Liste" rows (#135)', async () => {
+    const long = `${'Draw two cards. '.repeat(20)}End.`
+    db.update(schema.catalogCard).set({ desc: long }).where(eq(schema.catalogCard.id, 55144522)).run()
+    await addOwnedCard(db, 'user-a', validateInventoryInput({ catalog_card_id: 46986414, quantity: 1 }))
+    await addOwnedCard(db, 'user-a', validateInventoryInput({ catalog_card_id: 55144522, quantity: 1 }))
+
+    const byCard = new Map(listOwnedCards(db, 'user-a').items.map(item => [item.catalogCardId, item]))
+
+    expect(byCard.get(46986414)).toMatchObject({
+      cardAttribute: 'DARK',
+      cardTextExcerpt: 'The ultimate wizard.',
+      cardTextExcerptDe: null,
+    })
+    // A spell has no attribute; a long text is cut to exactly the excerpt length.
+    const pot = byCard.get(55144522)!
+    expect(pot.cardAttribute).toBeNull()
+    expect(long.length).toBeGreaterThan(CARD_TEXT_EXCERPT_LENGTH)
+    expect(pot.cardTextExcerpt).toBe(long.slice(0, CARD_TEXT_EXCERPT_LENGTH))
+  })
+
   it('keeps an owned retired card in the list, flagged (ADR 0019)', async () => {
     await addOwnedCard(db, 'user-a', validateInventoryInput({ catalog_card_id: 46986414, quantity: 1 }))
     db.update(schema.catalogCard).set({ retiredAt: new Date() }).where(eq(schema.catalogCard.id, 46986414)).run()
@@ -322,6 +345,38 @@ describe('inventory persistence helpers', () => {
     expect(merged.id).toBe(second.id)
     expect(merged.quantity).toBe(3)
     expect(db.select().from(schema.ownedCard).where(eq(schema.ownedCard.userId, 'user-a')).all()).toHaveLength(1)
+  })
+
+  describe('merging notes when a move collides (#135, like migration 0014)', () => {
+    async function moveOnto(targetNote: string | null, movedNote: string | null) {
+      const now = new Date()
+      db.insert(schema.collection).values({ id: 'col-1', userId: 'user-a', name: 'Box 1', createdAt: now, updatedAt: now }).run()
+      const target = await addOwnedCard(db, 'user-a', validateInventoryInput({ catalog_card_id: 46986414, quantity: 2, note: targetNote }))
+      const moved = await addOwnedCard(db, 'user-a', validateInventoryInput({ catalog_card_id: 46986414, collection_id: 'col-1', quantity: 1, note: movedNote }))
+      const merged = await updateOwnedCard(db, 'user-a', moved.id, validateInventoryUpdateInput({ collectionId: null }))
+      expect(merged.id).toBe(target.id)
+      return merged.note
+    }
+
+    it('keeps both notes, the target\'s first', async () => {
+      expect(await moveOnto('A', 'B')).toBe('A\nB')
+    })
+
+    it('does not repeat an equal note', async () => {
+      expect(await moveOnto('Binder', ' Binder ')).toBe('Binder')
+    })
+
+    it('keeps the one note there is', async () => {
+      expect(await moveOnto(null, 'B')).toBe('B')
+      db.delete(schema.ownedCard).run()
+      db.delete(schema.collection).run()
+      expect(await moveOnto('A', null)).toBe('A')
+    })
+
+    it('joins distinct, trimmed, non-blank notes', () => {
+      expect(joinNotes('A', '  ', null, undefined, 'B', 'A')).toBe('A\nB')
+      expect(joinNotes(null, ' ')).toBeNull()
+    })
   })
 
   it('returns 404 when patching or deleting another user row', async () => {

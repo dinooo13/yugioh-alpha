@@ -194,6 +194,13 @@ describe('CardDetailModal', () => {
     expect(text).not.toContain('Printings')
     expect(text).not.toContain('LOB-001')
     expect(text).not.toContain('2002-03-08')
+
+    // The caller's context comes before the card text (#135): the
+    // inventory's editor is the overlay's main job there.
+    expect(text.indexOf('Kontextbereich')).toBeLessThan(text.indexOf('Kartentext'))
+    // Only the card text waits for the catalog detail, not the context.
+    const context = dialog().findAll('p').find(p => p.text() === 'Kontextbereich')!
+    expect(context.element.closest('[aria-busy]')).toBeNull()
   })
 
   it('shows the preview at once and the text once it has loaded', async () => {
