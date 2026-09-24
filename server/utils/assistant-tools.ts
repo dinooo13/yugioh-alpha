@@ -19,7 +19,7 @@ import { createError } from 'h3'
 import type { useDb } from '../db'
 import { assistantAction, catalogCard, catalogCardImage, collection, ownedCard } from '../db/schema'
 import type { ToolDefinition } from './deck-assistant-model'
-import { cardNameMatches } from './card-name-search'
+import { activeCatalogCard, cardNameMatches } from './card-name-search'
 import { getCatalogCardDetail } from './catalog-search'
 import { requireCollectionOwnedByUser, listCollections } from './collections'
 import {
@@ -213,7 +213,8 @@ function toolSearchCatalog(db: Db, cardLocale: AppLocale, args: unknown) {
       archetype: catalogCard.archetype,
     })
     .from(catalogCard)
-    .where(where)
+    // Catalog-wide: retired cards are not offered (ADR 0019).
+    .where(and(activeCatalogCard(), where))
     .orderBy(asc(catalogCard.name))
     .limit(limit + 1)
     .all()
@@ -283,6 +284,8 @@ async function toolGetCard(db: Db, cardLocale: AppLocale, args: unknown) {
     banlistInfo: detail.card.banlistInfo,
     printings: capItems(detail.printings, GET_CARD_PRINTINGS_MAX),
     printingsTruncated: detail.printings.length > GET_CARD_PRINTINGS_MAX,
+    // Only for a retired card (ADR 0019), so an active card's output is unchanged.
+    ...(detail.card.retired ? { retired: true, replacedById: detail.card.replacedById } : {}),
   }
 }
 

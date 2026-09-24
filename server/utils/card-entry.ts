@@ -1,10 +1,10 @@
-import { and, eq, inArray, or, sql } from 'drizzle-orm'
+import { and, eq, inArray, isNotNull, or, sql } from 'drizzle-orm'
 import type { SQL } from 'drizzle-orm'
 import { createError } from 'h3'
 import { foldCardName } from '../../shared/card-name-fold'
 import type { useDb } from '../db'
 import { catalogCard, catalogCardImage, catalogCardTranslation, catalogPrinting } from '../db/schema'
-import { escapedLike, escapeLikeTerm } from './card-name-search'
+import { activeCatalogCard, escapedLike, escapeLikeTerm } from './card-name-search'
 
 type Db = ReturnType<typeof useDb>
 
@@ -207,6 +207,7 @@ interface CandidateRow {
  * Prefilter query: no joins, no grouping, and only a bounded sort, so a
  * 14k-card catalog scan stays in the single-digit millisecond range. Display
  * data (images, German names) is fetched for the final ranked ids only.
+ * Active cards only: quick entry never suggests a retired card (ADR 0019).
  */
 function selectCards(db: Db, where: SQL, limit: number, orderBy?: SQL): CandidateRow[] {
   const query = db
@@ -217,7 +218,7 @@ function selectCards(db: Db, where: SQL, limit: number, orderBy?: SQL): Candidat
       frameType: catalogCard.frameType,
     })
     .from(catalogCard)
-    .where(where)
+    .where(and(where, activeCatalogCard()))
 
   return (orderBy ? query.orderBy(orderBy) : query).limit(limit).all()
 }
@@ -254,7 +255,7 @@ function selectGermanCards(db: Db, foldedQuery: string, foldedTokens: string[], 
     })
     .from(catalogCardTranslation)
     .innerJoin(catalogCard, eq(catalogCard.id, catalogCardTranslation.cardId))
-    .where(and(eq(catalogCardTranslation.locale, 'de'), or(...patterns)))
+    .where(and(eq(catalogCardTranslation.locale, 'de'), activeCatalogCard(), or(...patterns)))
     .orderBy(sql`
       case
         when ${nameSearch} = ${foldedQuery} then 0
@@ -370,6 +371,16 @@ function normalizeLimit(limit: number | undefined): number {
   return Math.min(MAX_SUGGEST_LIMIT, Math.max(1, limit ?? DEFAULT_SUGGEST_LIMIT))
 }
 
+/** The replacement of a retired card with this id, if it has one. */
+function replacementForRetiredPasscode(db: Db, passcode: number): number | null {
+  const row = db
+    .select({ replacedById: catalogCard.replacedById })
+    .from(catalogCard)
+    .where(and(eq(catalogCard.id, passcode), isNotNull(catalogCard.retiredAt)))
+    .get()
+  return row?.replacedById ?? null
+}
+
 function collectScoredCandidates(db: Db, parsed: ParsedEntryLine, limit: number): Map<number, ScoredCandidate> {
   const byCardId = new Map<number, ScoredCandidate>()
 
@@ -379,7 +390,10 @@ function collectScoredCandidates(db: Db, parsed: ParsedEntryLine, limit: number)
   }
 
   if (parsed.passcode !== undefined) {
-    for (const row of selectCards(db, eq(catalogCard.id, parsed.passcode), 1)) {
+    // A retired passcode printed on a real card (a renumbered card, ADR 0019)
+    // resolves to its replacement.
+    const passcode = replacementForRetiredPasscode(db, parsed.passcode) ?? parsed.passcode
+    for (const row of selectCards(db, eq(catalogCard.id, passcode), 1)) {
       remember({ ...row, score: 1, matchedBy: 'passcode' })
     }
   }

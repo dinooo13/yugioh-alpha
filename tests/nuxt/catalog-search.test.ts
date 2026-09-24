@@ -218,6 +218,70 @@ describe('catalog search utilities', () => {
   })
 })
 
+describe('retired cards (ADR 0019)', () => {
+  let db: ReturnType<typeof createTestDb>
+
+  beforeEach(() => {
+    db = createTestDb()
+    seedCatalog(db)
+    // A renumbered copy of Blue-Eyes (id 1) and a dropped card with facet
+    // values no active card has.
+    db.insert(schema.catalogCard).values([
+      {
+        id: 101,
+        name: 'Blue-Eyes White Dragon',
+        type: 'Normal Monster',
+        desc: 'Placeholder.',
+        syncedAt: new Date('2025-01-01T00:00:00Z'),
+        retiredAt: new Date('2026-01-01T00:00:00Z'),
+        replacedById: 1,
+      },
+      {
+        id: 102,
+        name: 'Retired Wind Fairy',
+        type: 'Ritual Monster',
+        desc: 'Gone.',
+        race: 'Fairy',
+        attribute: 'WIND',
+        level: 12,
+        syncedAt: new Date('2025-01-01T00:00:00Z'),
+        retiredAt: new Date('2026-01-01T00:00:00Z'),
+      },
+    ]).run()
+  })
+
+  it('hides retired cards from the search, with and without a query', async () => {
+    const all = await searchCatalog(db, parseCardListQuery({ pageSize: '60' }))
+    expect(all.total).toBe(7)
+    expect(all.items.map(card => card.id)).not.toContain(101)
+    expect(all.items.map(card => card.id)).not.toContain(102)
+
+    const byName = await searchCatalog(db, parseCardListQuery({ q: 'Blue-Eyes' }))
+    expect(byName.items.map(card => card.id)).toEqual([1])
+  })
+
+  it('hides retired cards from the facets', async () => {
+    const facets = await getCatalogFacets(db)
+
+    expect(facets.types).not.toContain('Ritual Monster')
+    expect(facets.attributes).not.toContain('WIND')
+    expect(facets.races).not.toContain('Fairy')
+    expect(facets.levels).not.toContain(12)
+  })
+
+  it('still returns a retired card by id, flagged, with its replacement', async () => {
+    const detail = await getCatalogCardDetail(db, 101)
+    expect(detail?.card).toMatchObject({ id: 101, retired: true, replacedById: 1 })
+    expect(detail?.card).not.toHaveProperty('retiredAt')
+
+    const dropped = await getCatalogCardDetail(db, 102)
+    expect(dropped?.card).toMatchObject({ retired: true, replacedById: null })
+
+    const active = await getCatalogCardDetail(db, 1)
+    expect(active?.card).toMatchObject({ retired: false, replacedById: null })
+  })
+})
+
 describe('bilingual catalog search (ADR 0015)', () => {
   let db: ReturnType<typeof createTestDb>
 

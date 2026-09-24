@@ -17,11 +17,26 @@
 //
 // The SQL references `catalog_card` by its table name, so the outer query
 // must select from or join `catalog_card` unaliased.
+//
+// Retired cards (ADR 0019): searches over the **whole catalog** (the catalog
+// page, pickers, quick entry, the assistant's `search_catalog`) combine
+// `cardNameMatches` with `activeCatalogCard()`. Searches over a user's own
+// references (inventory, wishlist, decks, shared views) do **not**, so the
+// retired cards they still reference stay findable.
 
-import { or, sql, type SQL } from 'drizzle-orm'
+import { isNull, or, sql, type SQL } from 'drizzle-orm'
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core'
 import { foldCardName } from '../../shared/card-name-fold'
 import { catalogCard, catalogCardTranslation } from '../db/schema'
+
+/**
+ * Only cards the latest YGOPRODeck sync listed (ADR 0019). Every
+ * catalog-wide search and picker adds it; lookups by id and searches over a
+ * user's own references don't.
+ */
+export function activeCatalogCard(): SQL {
+  return isNull(catalogCard.retiredAt)
+}
 
 /** Escapes SQLite `LIKE` wildcards so a user's search term matches literally. */
 export function escapeLikeTerm(term: string): string {

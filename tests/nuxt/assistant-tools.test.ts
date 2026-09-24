@@ -189,6 +189,22 @@ describe('search_catalog', () => {
     expect(wildcard.result).toMatchObject({ items: [] })
   })
 
+  it('leaves retired cards out (ADR 0019)', async () => {
+    db.insert(schema.catalogCard).values({
+      id: 101402024,
+      name: 'Dark Magician',
+      type: 'Normal Monster',
+      desc: 'Placeholder.',
+      syncedAt: new Date(),
+      retiredAt: new Date(),
+      replacedById: CARD.darkMagician,
+    }).run()
+
+    const outcome = await tool('search_catalog').run({ db, userId: 'user-a', cardLocale: 'en' }, { query: 'Dark Mag' })
+    const result = outcome.result as { items: Array<{ id: number }> }
+    expect(result.items.map(item => item.id)).toEqual([CARD.darkMagician])
+  })
+
   it('rejects non-object arguments', async () => {
     expect(await statusOf(() => tool('search_catalog').run({ db, userId: 'user-a', cardLocale: 'en' }, 'nope'))).toBe(400)
   })
@@ -222,6 +238,25 @@ describe('get_card', () => {
     const outcome = await tool('get_card').run({ db, userId: 'user-a', cardLocale: 'en' }, { id: CARD.darkMagician })
     expect(outcome.result).toMatchObject({ id: CARD.darkMagician, name: 'Dark Magician', desc: 'The ultimate wizard.' })
     expect((outcome.result as { printings: unknown[] }).printings).toEqual([])
+  })
+
+  it('flags a retired card with its replacement, and only a retired one (ADR 0019)', async () => {
+    db.insert(schema.catalogCard).values({
+      id: 101402024,
+      name: 'Dark Magician',
+      type: 'Normal Monster',
+      desc: 'Placeholder.',
+      syncedAt: new Date(),
+      retiredAt: new Date(),
+      replacedById: CARD.darkMagician,
+    }).run()
+
+    const retired = await tool('get_card').run({ db, userId: 'user-a', cardLocale: 'en' }, { id: 101402024 })
+    expect(retired.result).toMatchObject({ id: 101402024, retired: true, replacedById: CARD.darkMagician })
+
+    const active = await tool('get_card').run({ db, userId: 'user-a', cardLocale: 'en' }, { id: CARD.darkMagician })
+    expect(active.result).not.toHaveProperty('retired')
+    expect(active.result).not.toHaveProperty('replacedById')
   })
 
   it('404s for an unknown card id', async () => {

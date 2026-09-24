@@ -115,8 +115,8 @@ describe('catalog payloads with German names (fixture)', () => {
     expect(detail?.card.descDe).toContain('Hexer')
     expect(Object.keys(detail!.card).sort()).toEqual([
       'archetype', 'atk', 'attribute', 'banlistInfo', 'cardPrices', 'def', 'desc', 'descDe', 'frameType', 'id',
-      'level', 'linkMarkers', 'linkval', 'name', 'nameDe', 'ocgDate', 'race', 'scale', 'syncedAt', 'tcgDate',
-      'type', 'ygoprodeckUrl',
+      'level', 'linkMarkers', 'linkval', 'name', 'nameDe', 'ocgDate', 'race', 'replacedById', 'retired', 'scale',
+      'syncedAt', 'tcgDate', 'type', 'ygoprodeckUrl',
     ])
 
     const raigeki = await getCatalogCardDetail(db, ID.raigeki)

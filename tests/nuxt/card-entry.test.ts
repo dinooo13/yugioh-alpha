@@ -306,6 +306,73 @@ describe('suggestCatalogMatches with German names (ADR 0015)', () => {
   })
 })
 
+describe('suggestCatalogMatches with retired cards (ADR 0019)', () => {
+  const RETIRED_RENUMBERED = 12345678
+  const RETIRED_DROPPED = 87654321
+  let db: TestDb
+
+  beforeAll(() => {
+    db = createTestDb()
+    seedCatalogFixture(db)
+    const retiredAt = new Date('2026-01-01T00:00:00.000Z')
+    db.insert(schema.catalogCard).values([
+      {
+        id: RETIRED_RENUMBERED,
+        name: 'Dark Magician',
+        nameSearch: 'darkmagician',
+        type: 'Normal Monster',
+        desc: 'Old passcode.',
+        syncedAt: SYNCED_AT,
+        retiredAt,
+        replacedById: CATALOG_FIXTURE_IDS.darkMagician,
+      },
+      { id: RETIRED_DROPPED, name: 'Retired Nobody', nameSearch: 'retirednobody', type: 'Normal Monster', desc: 'Gone.', syncedAt: SYNCED_AT, retiredAt },
+    ]).run()
+    db.insert(schema.catalogPrinting).values({
+      id: 'RET-001', cardId: RETIRED_DROPPED, setId: 'starter-deck-yugi', setCode: 'RET-001',
+    }).run()
+    db.insert(schema.catalogCardTranslation).values({
+      cardId: RETIRED_RENUMBERED,
+      locale: 'de',
+      name: 'Dunkler Magier',
+      nameSearch: 'dunklermagier',
+      source: 'ygoresources-git',
+      syncedAt: SYNCED_AT,
+    }).run()
+  })
+
+  function ids(line: string) {
+    return suggestCatalogMatches(db, parseEntryLine(line), { limit: 20 }).map(candidate => candidate.cardId)
+  }
+
+  it('leaves retired cards out of the English and German name pools', () => {
+    expect(ids('Dark Magician')).toContain(CATALOG_FIXTURE_IDS.darkMagician)
+    expect(ids('Dark Magician')).not.toContain(RETIRED_RENUMBERED)
+    expect(ids('Dunkler Magier')).toContain(CATALOG_FIXTURE_IDS.darkMagician)
+    expect(ids('Dunkler Magier')).not.toContain(RETIRED_RENUMBERED)
+    expect(ids('Retired Nobody')).not.toContain(RETIRED_DROPPED)
+  })
+
+  it('leaves retired cards out of set code matches', () => {
+    expect(ids('RET-001')).toEqual([])
+  })
+
+  it('resolves the passcode of a renumbered card to its replacement', () => {
+    const candidates = suggestCatalogMatches(db, parseEntryLine(String(RETIRED_RENUMBERED)))
+
+    expect(candidates).toHaveLength(1)
+    expect(candidates[0]).toMatchObject({
+      cardId: CATALOG_FIXTURE_IDS.darkMagician,
+      matchedBy: 'passcode',
+      score: 1,
+    })
+  })
+
+  it('gives no candidate for the passcode of a retired card without a replacement', () => {
+    expect(ids(String(RETIRED_DROPPED))).toEqual([])
+  })
+})
+
 describe('suggestCatalogMatches candidate pool', () => {
   it('still surfaces the exact match when a token floods the catalog', () => {
     const db = createTestDb()

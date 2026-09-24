@@ -39,4 +39,8 @@ describe('buildCardListWhere', () => {
 
     expect(condition).toBeDefined()
   })
+
+  it('always returns a condition: retired cards are hidden even without filters (ADR 0019)', () => {
+    expect(buildCardListWhere(parseCardListQuery({}))).toBeDefined()
+  })
 })

@@ -1,6 +1,6 @@
 import { and, eq, inArray, or, sql, type SQL } from 'drizzle-orm'
 import { catalogCard, catalogPrinting } from '../db/schema'
-import { cardNameMatches, cardTextMatches } from './card-name-search'
+import { activeCatalogCard, cardNameMatches, cardTextMatches } from './card-name-search'
 
 export type CatalogSort = 'name' | '-name' | 'newest'
 
@@ -63,8 +63,9 @@ export function parseCardListQuery(rawQuery: RawCardListQuery): CardListQuery {
   }
 }
 
-export function buildCardListWhere(filters: CardListQuery): SQL | undefined {
-  const conditions: SQL[] = []
+export function buildCardListWhere(filters: CardListQuery): SQL {
+  // Catalog-wide: retired cards never show up (ADR 0019).
+  const conditions: SQL[] = [activeCatalogCard()]
 
   if (filters.q) {
     // Bilingual: English and German names (and texts with `inText`), ADR 0015.
@@ -100,5 +101,5 @@ export function buildCardListWhere(filters: CardListQuery): SQL | undefined {
     )`)
   }
 
-  return conditions.length > 0 ? and(...conditions) : undefined
+  return and(...conditions)!
 }

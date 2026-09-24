@@ -5,7 +5,7 @@ import type { useDb } from '../db'
 import { catalogCard, catalogCardImage, ownedCard } from '../db/schema'
 import { UNASSIGNED_COLLECTION_ID } from '../../shared/inventory'
 import type { AppLocale } from '../../shared/locale'
-import { cardNameMatches, escapedLike, escapeLikeTerm } from './card-name-search'
+import { activeCatalogCard, cardNameMatches, escapedLike, escapeLikeTerm } from './card-name-search'
 import { cardNameDeSql, cardSortKey } from './card-translation-sql'
 import { assertCollectionOwnedByUser } from './collections'
 
@@ -540,9 +540,11 @@ export function ownedQuantitiesByCard(db: Db, userId: string, catalogCardIds: nu
  */
 export function searchCatalogCards(db: Db, q = '', cardLocale: AppLocale = 'en') {
   const term = q.trim()
-  const where = term
-    ? or(cardNameMatches(term), escapedLike(sql`${catalogCard.id}`, `%${escapeLikeTerm(term)}%`))
-    : undefined
+  // Catalog-wide: retired cards are not offered (ADR 0019).
+  const where = and(
+    activeCatalogCard(),
+    term ? or(cardNameMatches(term), escapedLike(sql`${catalogCard.id}`, `%${escapeLikeTerm(term)}%`)) : undefined,
+  )
 
   return db
     .select({
