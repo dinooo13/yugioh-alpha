@@ -420,7 +420,8 @@ F3 is implemented, as four stacked PRs:
   setting on the profile (follow the interface language, German, English;
   anonymous visitors follow the interface), and German card names across the
   app — catalog tiles and detail (German text, the English name as a
-  subtitle, a source credit), inventory list and overview, quick entry,
+  subtitle, a source credit (removed from the UI again in round 4, #87)),
+  inventory list and overview, quick entry,
   deck editor, player pages, wishlist, validation messages, the format
   editor and the assistant's action cards. Cards without German data (OCG-only
   cards, tokens, …) stay English. Lists sorted by name sort by the German name
@@ -467,6 +468,12 @@ Status: implemented and merged (PR #79), approved by the owner. After a first lo
 follows the color mode (no always-dark sidebar) and for the assistant pages
 to get the same page header as every other page; both are in. See
 [`docs/adr/0016-visual-design-system.md`](adr/0016-visual-design-system.md).
+
+Round 4 (#88): one card detail overlay for the catalog and the inventory —
+the floating tilt/foil card with the card text in the card language; the
+catalog adds the English name, printings and actions, the inventory the
+owned quantity per collection with notes (#87: no source credit in the UI,
+ADR 0017).
 
 ## Recommended Build Order
 
