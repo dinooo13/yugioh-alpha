@@ -413,9 +413,13 @@ export function deleteRuleFormat(db: Db, userId: string, formatId: string) {
   db.delete(ruleFormat).where(and(eq(ruleFormat.id, formatId), eq(ruleFormat.userId, userId))).run()
 }
 
-/** Truncates the base name (not the suffix) so the copy stays within 80 chars. */
+/**
+ * The fallback name of a clone without a name from the UI: an English
+ * `<name> (copy)` (ADR 0014: server text is technical English). Truncates the
+ * base name (not the suffix) so the copy stays within 80 chars.
+ */
 export function cloneNameFor(name: string): string {
-  const suffix = ' (Kopie)'
+  const suffix = ' (copy)'
   return `${name.slice(0, RULE_FORMAT_NAME_MAX_LENGTH - suffix.length).trimEnd()}${suffix}`
 }
 
