@@ -25,6 +25,6 @@ const color = computed(() => avatarColorClasses(props.handle))
     :text="initials"
     :size="size"
     aria-hidden="true"
-    :ui="{ root: color.bg, fallback: `${color.text} font-semibold` }"
+    :ui="{ root: `${color.bg} ${color.darkBg}`, fallback: `${color.text} ${color.darkText} font-semibold` }"
   />
 </template>

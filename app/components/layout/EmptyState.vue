@@ -25,11 +25,11 @@ withDefaults(defineProps<{
 <template>
   <div
     class="flex flex-col items-center px-6 py-12 text-center"
-    :class="{ 'rounded-md border border-gray-200 bg-white': bordered }"
+    :class="{ 'rounded-md border border-default bg-default': bordered }"
   >
     <div
       v-if="icon"
-      class="mb-4 flex size-12 items-center justify-center rounded-full bg-gray-100 text-gray-500"
+      class="mb-4 flex size-12 items-center justify-center rounded-full bg-elevated text-muted"
     >
       <UIcon
         :name="icon"
@@ -39,13 +39,13 @@ withDefaults(defineProps<{
     </div>
     <component
       :is="`h${headingLevel}`"
-      class="text-base font-semibold text-gray-900"
+      class="text-base font-semibold text-highlighted"
     >
       {{ title }}
     </component>
     <p
       v-if="description || $slots.description"
-      class="mt-1 max-w-sm text-sm text-gray-500"
+      class="mt-1 max-w-sm text-sm text-muted"
     >
       <slot name="description">
         {{ description }}

@@ -29,11 +29,11 @@ const loginTarget = computed(() => ({ path: '/login', query: { redirect: route.f
 </script>
 
 <template>
-  <div class="rounded-md border border-gray-200 bg-white px-6 py-12 text-center">
-    <h1 class="text-lg font-semibold text-gray-900">
+  <div class="rounded-md border border-default bg-default px-6 py-12 text-center">
+    <h1 class="text-lg font-semibold text-highlighted">
       {{ t('sharing.notFound.title') }}
     </h1>
-    <p class="mt-2 text-sm text-gray-500">
+    <p class="mt-2 text-sm text-muted">
       {{ t('sharing.notFound.description') }}
     </p>
     <i18n-t
@@ -41,7 +41,7 @@ const loginTarget = computed(() => ({ path: '/login', query: { redirect: route.f
       keypath="sharing.notFound.loginHint"
       tag="p"
       scope="global"
-      class="mt-4 text-sm text-gray-500"
+      class="mt-4 text-sm text-muted"
     >
       <template #link>
         <NuxtLink

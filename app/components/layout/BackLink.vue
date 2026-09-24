@@ -14,7 +14,7 @@ defineProps<{
 <template>
   <NuxtLink
     :to="to"
-    class="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900 max-lg:min-h-11"
+    class="inline-flex items-center gap-1 text-sm text-muted hover:text-highlighted max-lg:min-h-11"
   >
     <UIcon
       name="i-lucide-arrow-left"

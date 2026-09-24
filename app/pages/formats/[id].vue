@@ -123,7 +123,7 @@ async function cloneFormat() {
 
       <p
         v-if="errorMessage"
-        class="text-sm text-red-600"
+        class="text-sm text-error"
       >
         {{ errorMessage }}
       </p>

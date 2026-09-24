@@ -85,7 +85,7 @@ function removeCard(id: number) {
       <span
         v-for="id in modelValue"
         :key="id"
-        class="inline-flex items-center gap-1 rounded-full bg-gray-100 py-0.5 pl-2.5 pr-1 text-xs text-gray-700"
+        class="inline-flex items-center gap-1 rounded-full bg-elevated py-0.5 pl-2.5 pr-1 text-xs text-default"
       >
         {{ nameFor(id) }}
         <UButton
@@ -102,7 +102,7 @@ function removeCard(id: number) {
     </div>
     <p
       v-else
-      class="text-xs text-gray-500"
+      class="text-xs text-muted"
     >
       {{ t('formats.cardPicker.none') }}
     </p>
@@ -117,7 +117,7 @@ function removeCard(id: number) {
 
     <ul
       v-if="results.length > 0"
-      class="max-h-48 divide-y divide-gray-100 overflow-y-auto rounded-md border border-gray-200"
+      class="max-h-48 divide-y divide-default overflow-y-auto rounded-md border border-default"
     >
       <li
         v-for="card in results"
@@ -125,19 +125,19 @@ function removeCard(id: number) {
       >
         <button
           type="button"
-          class="flex w-full flex-col items-start px-3 py-1.5 text-left hover:bg-gray-50"
+          class="flex w-full flex-col items-start px-3 py-1.5 text-left hover:bg-elevated/50"
           :disabled="disabled"
           @click="addCard(card)"
         >
-          <span class="text-sm text-gray-900">{{ cardName(card) }}</span>
-          <span class="text-xs text-gray-500">{{ cardValue('type', card.type) }}</span>
+          <span class="text-sm text-highlighted">{{ cardName(card) }}</span>
+          <span class="text-xs text-muted">{{ cardValue('type', card.type) }}</span>
         </button>
       </li>
     </ul>
 
     <p
       v-else-if="isSearching"
-      class="text-xs text-gray-500"
+      class="text-xs text-muted"
     >
       {{ t('formats.cardPicker.searching') }}
     </p>

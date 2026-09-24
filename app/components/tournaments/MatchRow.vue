@@ -101,9 +101,12 @@ function onChipClick(slot: 'a' | 'b') {
 </script>
 
 <template>
-  <div class="flex flex-col gap-2 rounded-md border border-gray-200 p-3 sm:flex-row sm:items-center sm:justify-between">
+  <div
+    data-testid="match-row"
+    class="flex flex-col gap-2 rounded-md border border-default p-3 sm:flex-row sm:items-center sm:justify-between"
+  >
     <div class="flex flex-wrap items-center gap-2">
-      <span class="text-xs font-semibold text-gray-500">{{ t('tournaments.match.table', { number: match.tableNumber }) }}</span>
+      <span class="text-xs font-semibold text-muted">{{ t('tournaments.match.table', { number: match.tableNumber }) }}</span>
 
       <!-- Names are only interactive in swap mode (#35): outside of it a
            `<button>` announced no affordance and did nothing on click. -->
@@ -111,14 +114,14 @@ function onChipClick(slot: 'a' | 'b') {
         v-if="swapMode"
         type="button"
         class="tap-target inline-flex cursor-pointer items-center rounded px-1 text-sm font-medium hover:bg-primary/10"
-        :class="selectedA ? 'bg-primary/20 text-primary' : 'text-gray-900'"
+        :class="selectedA ? 'bg-primary/20 text-primary' : 'text-highlighted'"
         @click="onChipClick('a')"
       >
         {{ match.participantAName }}
       </button>
       <span
         v-else
-        class="rounded px-1 text-sm font-medium text-gray-900"
+        class="rounded px-1 text-sm font-medium text-highlighted"
       >
         {{ match.participantAName }}
       </span>
@@ -129,22 +132,22 @@ function onChipClick(slot: 'a' | 'b') {
           variant="subtle"
           :label="t('tournaments.match.bye')"
         />
-        <span class="text-xs text-gray-500">{{ byeScore }}</span>
+        <span class="text-xs text-muted">{{ byeScore }}</span>
       </template>
       <template v-else>
-        <span class="text-xs text-gray-400">{{ t('tournaments.match.versus') }}</span>
+        <span class="text-xs text-muted">{{ t('tournaments.match.versus') }}</span>
         <button
           v-if="swapMode"
           type="button"
           class="tap-target inline-flex cursor-pointer items-center rounded px-1 text-sm font-medium hover:bg-primary/10"
-          :class="selectedB ? 'bg-primary/20 text-primary' : 'text-gray-900'"
+          :class="selectedB ? 'bg-primary/20 text-primary' : 'text-highlighted'"
           @click="onChipClick('b')"
         >
           {{ match.participantBName }}
         </button>
         <span
           v-else
-          class="rounded px-1 text-sm font-medium text-gray-900"
+          class="rounded px-1 text-sm font-medium text-highlighted"
         >
           {{ match.participantBName }}
         </span>
@@ -156,7 +159,7 @@ function onChipClick(slot: 'a' | 'b') {
       class="flex flex-wrap items-center gap-2"
     >
       <template v-if="match.reported && !isEditing">
-        <span class="font-semibold tabular-nums text-gray-900">{{ match.gamesA }}:{{ match.gamesB }}</span>
+        <span class="font-semibold tabular-nums text-highlighted">{{ match.gamesA }}:{{ match.gamesB }}</span>
         <UBadge
           variant="subtle"
           :color="match.isDraw ? 'neutral' : 'success'"
@@ -214,7 +217,7 @@ function onChipClick(slot: 'a' | 'b') {
             :ui="{ base: 'tap-target' }"
             :aria-label="t('tournaments.match.gamesOf', { name: match.participantAName })"
           />
-          <span class="text-gray-400">:</span>
+          <span class="text-muted">:</span>
           <UInput
             v-model.number="gamesB"
             type="number"
@@ -242,7 +245,7 @@ function onChipClick(slot: 'a' | 'b') {
 
     <p
       v-if="errorMessage"
-      class="text-sm text-red-600"
+      class="text-sm text-error"
     >
       {{ errorMessage }}
     </p>

@@ -142,13 +142,13 @@ const wishlistPublic = computed({
     </div>
 
     <template v-else-if="profile">
-      <section class="rounded-md border border-gray-200 bg-white p-4">
+      <section class="rounded-md border border-default bg-default p-4">
         <ProfileForm
           :profile="profile"
           @saved="onSaved"
         />
 
-        <div class="mt-4 border-t border-gray-100 pt-4">
+        <div class="mt-4 border-t border-muted pt-4">
           <NuxtLink
             :to="`/players/${profile.handle}`"
             class="text-sm font-medium text-primary hover:underline"
@@ -158,12 +158,12 @@ const wishlistPublic = computed({
         </div>
       </section>
 
-      <section class="flex items-center justify-between gap-4 rounded-md border border-gray-200 bg-white p-4">
+      <section class="flex items-center justify-between gap-4 rounded-md border border-default bg-default p-4">
         <div>
-          <h2 class="text-base font-semibold text-gray-900">
+          <h2 class="text-base font-semibold text-highlighted">
             {{ t('profile.inventoryShare.title') }}
           </h2>
-          <p class="mt-1 text-sm text-gray-500">
+          <p class="mt-1 text-sm text-muted">
             {{ t('profile.inventoryShare.description') }}
           </p>
         </div>
@@ -184,18 +184,18 @@ const wishlistPublic = computed({
 
       <section
         id="wishlist"
-        class="flex items-center justify-between gap-4 rounded-md border border-gray-200 bg-white p-4"
+        class="flex items-center justify-between gap-4 rounded-md border border-default bg-default p-4"
       >
         <div>
-          <h2 class="text-base font-semibold text-gray-900">
+          <h2 class="text-base font-semibold text-highlighted">
             {{ t('profile.wishlistVisibility.title') }}
           </h2>
-          <p class="mt-1 text-sm text-gray-500">
+          <p class="mt-1 text-sm text-muted">
             {{ t('profile.wishlistVisibility.description') }}
           </p>
           <p
             v-if="wishlistVisibilitySaved"
-            class="mt-1 text-sm text-emerald-600"
+            class="mt-1 text-sm text-success"
           >
             {{ t('common.saved') }}
           </p>
@@ -209,25 +209,25 @@ const wishlistPublic = computed({
 
       <section
         id="settings"
-        class="rounded-md border border-gray-200 bg-white p-4"
+        class="rounded-md border border-default bg-default p-4"
       >
-        <h2 class="text-base font-semibold text-gray-900">
+        <h2 class="text-base font-semibold text-highlighted">
           {{ t('profile.settings.title') }}
         </h2>
         <div class="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
           <div>
             <label
               for="profile-locale"
-              class="text-sm font-medium text-gray-900"
+              class="text-sm font-medium text-highlighted"
             >
               {{ t('app.localeSwitch.label') }}
             </label>
-            <p class="mt-1 text-sm text-gray-500">
+            <p class="mt-1 text-sm text-muted">
               {{ t('profile.settings.languageDescription') }}
             </p>
             <p
               v-if="localeSaved"
-              class="mt-1 text-sm text-emerald-600"
+              class="mt-1 text-sm text-success"
             >
               {{ t('common.saved') }}
             </p>
@@ -238,20 +238,20 @@ const wishlistPublic = computed({
             @saved="onLocaleSaved"
           />
         </div>
-        <div class="mt-4 flex flex-col gap-3 border-t border-gray-100 pt-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+        <div class="mt-4 flex flex-col gap-3 border-t border-muted pt-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
           <div>
             <label
               for="profile-card-locale"
-              class="text-sm font-medium text-gray-900"
+              class="text-sm font-medium text-highlighted"
             >
               {{ t('profile.settings.cardLanguage') }}
             </label>
-            <p class="mt-1 text-sm text-gray-500">
+            <p class="mt-1 text-sm text-muted">
               {{ t('profile.settings.cardLanguageDescription') }}
             </p>
             <p
               v-if="cardLocaleSaved"
-              class="mt-1 text-sm text-emerald-600"
+              class="mt-1 text-sm text-success"
             >
               {{ t('common.saved') }}
             </p>

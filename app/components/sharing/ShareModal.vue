@@ -193,7 +193,7 @@ async function removeGrant(userId: string) {
   >
     <template #body>
       <div class="space-y-5">
-        <p class="text-sm text-gray-500">
+        <p class="text-sm text-muted">
           {{ resourceName }}
         </p>
 
@@ -245,13 +245,13 @@ async function removeGrant(userId: string) {
             class="space-y-2"
             :class="{ 'pointer-events-none opacity-50': state.visibility === 'public' }"
           >
-            <h3 class="text-sm font-semibold text-gray-900">
+            <h3 class="text-sm font-semibold text-highlighted">
               {{ t('sharing.shareModal.grantsTitle') }}
             </h3>
 
             <p
               v-if="state.visibility === 'public'"
-              class="text-sm text-gray-500"
+              class="text-sm text-muted"
             >
               {{ publicHint }}
             </p>
@@ -260,13 +260,13 @@ async function removeGrant(userId: string) {
 
             <p
               v-if="state.grants.length === 0"
-              class="text-sm text-gray-500"
+              class="text-sm text-muted"
             >
               {{ t('sharing.shareModal.noGrants') }}
             </p>
             <ul
               v-else
-              class="divide-y divide-gray-100 rounded-md border border-gray-200 bg-white"
+              class="divide-y divide-default rounded-md border border-default bg-default"
             >
               <li
                 v-for="grant in state.grants"
@@ -274,10 +274,10 @@ async function removeGrant(userId: string) {
                 class="flex items-center justify-between gap-2 px-3 py-2"
               >
                 <div class="min-w-0">
-                  <p class="truncate text-sm font-medium text-gray-900">
+                  <p class="truncate text-sm font-medium text-highlighted">
                     {{ grant.displayName }}
                   </p>
-                  <p class="truncate text-xs text-gray-500">
+                  <p class="truncate text-xs text-muted">
                     {{ t('sharing.handle', { handle: grant.handle }) }}
                   </p>
                 </div>
@@ -295,7 +295,7 @@ async function removeGrant(userId: string) {
 
           <p
             v-if="errorMessage"
-            class="text-sm text-red-600"
+            class="text-sm text-error"
           >
             {{ errorMessage }}
           </p>

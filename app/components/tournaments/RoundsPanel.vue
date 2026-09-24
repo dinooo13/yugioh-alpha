@@ -154,9 +154,9 @@ async function onSelectSlot(matchId: string, slot: 'a' | 'b') {
 </script>
 
 <template>
-  <section class="rounded-md border border-gray-200 bg-white p-4">
+  <section class="rounded-md border border-default bg-default p-4">
     <div class="flex flex-wrap items-center justify-between gap-2">
-      <h2 class="text-base font-semibold text-gray-900">
+      <h2 class="text-base font-semibold text-highlighted">
         {{ t('tournaments.rounds.title') }}
       </h2>
       <UButton
@@ -172,20 +172,20 @@ async function onSelectSlot(matchId: string, slot: 'a' | 'b') {
 
     <p
       v-if="swapMode"
-      class="mt-2 text-xs text-gray-500"
+      class="mt-2 text-xs text-muted"
     >
       {{ t('tournaments.rounds.swapHint') }}
     </p>
     <p
       v-if="swapError"
-      class="mt-2 text-sm text-red-600"
+      class="mt-2 text-sm text-error"
     >
       {{ swapError }}
     </p>
 
     <p
       v-if="orderedRounds.length === 0"
-      class="mt-4 text-sm text-gray-500"
+      class="mt-4 text-sm text-muted"
     >
       {{ t('tournaments.rounds.empty') }}
     </p>
@@ -200,7 +200,7 @@ async function onSelectSlot(matchId: string, slot: 'a' | 'b') {
           class="space-y-2"
         >
           <div class="flex items-center gap-2">
-            <h3 class="text-sm font-semibold text-gray-900">
+            <h3 class="text-sm font-semibold text-highlighted">
               {{ t('tournaments.rounds.round', { number: round.number }) }}
             </h3>
             <UBadge
@@ -236,7 +236,7 @@ async function onSelectSlot(matchId: string, slot: 'a' | 'b') {
             trailing-icon="i-lucide-chevron-down"
           >
             <span class="flex items-center gap-2">
-              <span class="text-sm font-semibold text-gray-900">{{ t('tournaments.rounds.round', { number: round.number }) }}</span>
+              <span class="text-sm font-semibold text-highlighted">{{ t('tournaments.rounds.round', { number: round.number }) }}</span>
               <UBadge
                 size="sm"
                 variant="subtle"

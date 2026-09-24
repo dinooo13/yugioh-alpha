@@ -119,7 +119,7 @@ async function onDeleted(id: string) {
       v-else
       class="flex h-[calc(100dvh-8rem)] gap-4"
     >
-      <aside class="hidden w-64 shrink-0 rounded-md border border-gray-200 bg-white lg:block">
+      <aside class="hidden w-64 shrink-0 rounded-md border border-default bg-default lg:block">
         <AssistantConversationList
           :items="conversations"
           :active-id="conversationId"
@@ -144,14 +144,14 @@ async function onDeleted(id: string) {
         </template>
       </USlideover>
 
-      <section class="flex min-w-0 flex-1 flex-col rounded-md border border-gray-200 bg-white">
-        <header class="flex items-center justify-between gap-2 border-b border-gray-200 px-4 py-3">
+      <section class="flex min-w-0 flex-1 flex-col rounded-md border border-default bg-default">
+        <header class="flex items-center justify-between gap-2 border-b border-default px-4 py-3">
           <!-- Below `sm` the deck chip gets its own line, so neither it nor
                the title is squeezed down to a few characters. While the title
                is still the default "Deck: <name>", the <h1> is sr-only and
                the chip is the visible title, so it isn't shown twice (#48). -->
           <div class="flex min-w-0 flex-1 flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-2">
-            <h1 :class="isDefaultDeckTitle ? 'sr-only' : 'min-w-0 max-w-full truncate text-base font-semibold text-gray-900'">
+            <h1 :class="isDefaultDeckTitle ? 'sr-only' : 'min-w-0 max-w-full truncate text-base font-semibold text-highlighted'">
               {{ conversation?.title ?? t('assistant.title') }}
             </h1>
             <!-- The deck this conversation is about (ADR 0011); its current
@@ -182,7 +182,7 @@ async function onDeleted(id: string) {
 
         <p
           v-if="loadError"
-          class="p-4 text-sm text-red-600"
+          class="p-4 text-sm text-error"
         >
           {{ loadError }}
         </p>
@@ -196,7 +196,7 @@ async function onDeleted(id: string) {
 
           <p
             v-if="sendError"
-            class="px-4 pb-2 text-sm text-red-600"
+            class="px-4 pb-2 text-sm text-error"
           >
             {{ sendError }}
           </p>

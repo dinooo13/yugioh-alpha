@@ -130,7 +130,7 @@ async function save() {
           scope="global"
         >
           <template #url>
-            <span class="font-medium text-gray-700">{{ handlePreview }}</span>
+            <span class="font-medium text-default">{{ handlePreview }}</span>
           </template>
         </i18n-t>
       </template>
@@ -149,19 +149,19 @@ async function save() {
     <p
       v-if="errorMessage"
       role="alert"
-      class="text-sm text-red-600"
+      class="text-sm text-error"
     >
       {{ errorMessage }}
     </p>
     <p
       v-if="saved"
-      class="text-sm text-emerald-600"
+      class="text-sm text-success"
     >
       {{ t('common.saved') }}
     </p>
     <p
       v-if="handleChangedNotice"
-      class="text-sm text-amber-600"
+      class="text-sm text-warning"
     >
       {{ t('profile.form.handleChanged') }}
     </p>

@@ -54,11 +54,11 @@ useHead({
         </template>
         <p
           v-if="data.deck.description"
-          class="mt-1 max-w-prose text-sm text-gray-500"
+          class="mt-1 max-w-prose text-sm text-muted"
         >
           {{ data.deck.description }}
         </p>
-        <p class="mt-1 text-sm text-gray-500">
+        <p class="mt-1 text-sm text-muted">
           {{ count('players.deck.summary', data.counts.total) }}
         </p>
 
@@ -76,10 +76,10 @@ useHead({
 
       <section
         v-if="data.format"
-        class="rounded-md border border-gray-200 bg-white p-4"
+        class="rounded-md border border-default bg-default p-4"
       >
         <div class="flex flex-wrap items-center justify-between gap-2">
-          <h2 class="text-base font-semibold text-gray-900">
+          <h2 class="text-base font-semibold text-highlighted">
             {{ formatName(data.format) }}
           </h2>
           <UBadge
@@ -113,7 +113,7 @@ useHead({
             />
           </template>
           <template #content>
-            <ul class="mt-2 list-inside list-disc space-y-0.5 text-sm text-red-700">
+            <ul class="mt-2 list-inside list-disc space-y-0.5 text-sm text-error">
               <li
                 v-for="(issue, index) in data.validation.issues"
                 :key="`${issue.code}-${issue.cardId ?? issue.section ?? index}`"

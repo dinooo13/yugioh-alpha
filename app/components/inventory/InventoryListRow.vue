@@ -50,10 +50,10 @@ const languageLabel = computed(() => props.item.language.toUpperCase())
 
     <div class="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
       <div class="min-w-0 flex-1 space-y-1">
-        <div class="line-clamp-2 text-sm font-medium text-gray-900 sm:truncate">
+        <div class="line-clamp-2 text-sm font-medium text-highlighted sm:truncate">
           {{ displayName }}
         </div>
-        <div class="truncate text-xs text-gray-500">
+        <div class="truncate text-xs text-muted">
           {{ cardValue('type', item.cardType) }}<span v-if="item.setName"> · {{ item.setName }}</span><span v-if="item.rarity"> · {{ item.rarity }}</span>
         </div>
         <div class="flex flex-wrap gap-1">
@@ -85,7 +85,7 @@ const languageLabel = computed(() => props.item.language.toUpperCase())
       </div>
 
       <div class="flex min-w-0 items-center gap-2">
-        <span class="w-10 shrink-0 text-right text-sm font-semibold tabular-nums text-gray-900">
+        <span class="w-10 shrink-0 text-right text-sm font-semibold tabular-nums text-highlighted">
           ×{{ item.quantity }}
         </span>
         <USelect

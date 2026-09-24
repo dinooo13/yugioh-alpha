@@ -33,25 +33,25 @@ const isMonster = computed(() => props.item ? props.item.atk !== null || props.i
         class="flex justify-center gap-6 text-sm"
       >
         <div class="flex gap-1">
-          <dt class="text-gray-500">
+          <dt class="text-muted">
             ATK
           </dt>
-          <dd class="font-semibold tabular-nums text-gray-900">
+          <dd class="font-semibold tabular-nums text-highlighted">
             {{ item.atk ?? '?' }}
           </dd>
         </div>
         <div class="flex gap-1">
-          <dt class="text-gray-500">
+          <dt class="text-muted">
             DEF
           </dt>
-          <dd class="font-semibold tabular-nums text-gray-900">
+          <dd class="font-semibold tabular-nums text-highlighted">
             {{ item.def ?? '?' }}
           </dd>
         </div>
       </dl>
 
-      <div class="space-y-1 rounded-md border border-gray-200 p-3">
-        <p class="text-sm font-semibold tabular-nums text-gray-900">
+      <div class="space-y-1 rounded-md border border-default p-3">
+        <p class="text-sm font-semibold tabular-nums text-highlighted">
           {{ t('card.totalQuantity', { count: item.totalQuantity }) }}
         </p>
         <div
@@ -59,8 +59,8 @@ const isMonster = computed(() => props.item ? props.item.atk !== null || props.i
           :key="breakdownKey(entry)"
           class="flex items-center justify-between gap-4 text-sm"
         >
-          <span class="min-w-0 truncate text-gray-700">{{ breakdownLabel(entry, t) }}</span>
-          <span class="font-medium tabular-nums text-gray-900">×{{ entry.quantity }}</span>
+          <span class="min-w-0 truncate text-default">{{ breakdownLabel(entry, t) }}</span>
+          <span class="font-medium tabular-nums text-highlighted">×{{ entry.quantity }}</span>
         </div>
       </div>
 

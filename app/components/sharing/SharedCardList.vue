@@ -84,14 +84,14 @@ function cardMetaLine(card: SharedCardListItem): string {
 
     <p
       v-else-if="items.length === 0"
-      class="text-sm text-gray-500"
+      class="text-sm text-muted"
     >
       {{ t('sharing.cardList.empty') }}
     </p>
 
     <ul
       v-else
-      class="divide-y divide-gray-100 rounded-md border border-gray-200 bg-white"
+      class="divide-y divide-default rounded-md border border-default bg-default"
     >
       <li
         v-for="card in items"
@@ -107,15 +107,15 @@ function cardMetaLine(card: SharedCardListItem): string {
         />
 
         <div class="min-w-0 flex-1">
-          <p class="truncate text-sm font-medium text-gray-900">
+          <p class="truncate text-sm font-medium text-highlighted">
             {{ cardName(card) }}
           </p>
-          <p class="truncate text-xs text-gray-500">
+          <p class="truncate text-xs text-muted">
             {{ cardMetaLine(card) }}
           </p>
         </div>
 
-        <span class="shrink-0 text-sm font-semibold tabular-nums text-gray-700">
+        <span class="shrink-0 text-sm font-semibold tabular-nums text-default">
           {{ card.quantity }}×
         </span>
       </li>
@@ -133,7 +133,7 @@ function cardMetaLine(card: SharedCardListItem): string {
         :aria-label="t('common.pagination.previous')"
         @click="previousPage"
       />
-      <span class="min-w-28 text-center text-sm text-gray-600">
+      <span class="min-w-28 text-center text-sm text-toned">
         {{ t('common.pagination.pageOf', { page, total: totalPages }) }}
       </span>
       <UButton

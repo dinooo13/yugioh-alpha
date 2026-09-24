@@ -285,7 +285,7 @@ async function onAddedToInventory() {
         :description="t('catalog.description')"
       />
 
-      <section class="space-y-3 border-y border-gray-200 py-4">
+      <section class="space-y-3 border-y border-default py-4">
         <div class="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_repeat(3,minmax(10rem,12rem))]">
           <UInput
             v-model="searchInput"
@@ -298,7 +298,7 @@ async function onAddedToInventory() {
           <select
             v-model="type"
             :aria-label="t('catalog.filters.type')"
-            class="h-10 min-w-0 w-full rounded-md border border-gray-200 bg-white px-3 text-sm text-gray-700 shadow-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+            class="h-10 min-w-0 w-full rounded-md border border-default bg-default px-3 text-sm text-default shadow-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
           >
             <option value="">
               {{ t('catalog.filters.type') }}
@@ -315,7 +315,7 @@ async function onAddedToInventory() {
           <select
             v-model="attribute"
             :aria-label="t('catalog.filters.attribute')"
-            class="h-10 min-w-0 w-full rounded-md border border-gray-200 bg-white px-3 text-sm text-gray-700 shadow-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+            class="h-10 min-w-0 w-full rounded-md border border-default bg-default px-3 text-sm text-default shadow-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
           >
             <option value="">
               {{ t('catalog.filters.attribute') }}
@@ -332,7 +332,7 @@ async function onAddedToInventory() {
           <select
             v-model="level"
             :aria-label="t('catalog.filters.level')"
-            class="h-10 min-w-0 w-full rounded-md border border-gray-200 bg-white px-3 text-sm text-gray-700 shadow-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+            class="h-10 min-w-0 w-full rounded-md border border-default bg-default px-3 text-sm text-default shadow-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
           >
             <option value="">
               {{ t('catalog.filters.level') }}
@@ -351,7 +351,7 @@ async function onAddedToInventory() {
           <select
             v-model="race"
             :aria-label="t('catalog.filters.race')"
-            class="h-10 min-w-0 w-full rounded-md border border-gray-200 bg-white px-3 text-sm text-gray-700 shadow-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+            class="h-10 min-w-0 w-full rounded-md border border-default bg-default px-3 text-sm text-default shadow-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
           >
             <option value="">
               {{ t('catalog.filters.race') }}
@@ -387,15 +387,15 @@ async function onAddedToInventory() {
     </div>
 
     <div class="flex flex-wrap items-center justify-between gap-3">
-      <p class="text-sm font-medium text-gray-700">
+      <p class="text-sm font-medium text-default">
         {{ cardsTotalLabel }}
       </p>
 
-      <label class="flex items-center gap-2 text-sm text-gray-600">
+      <label class="flex items-center gap-2 text-sm text-toned">
         {{ t('catalog.sort.label') }}
         <select
           v-model="sort"
-          class="h-9 rounded-md border border-gray-200 bg-white px-2 text-sm text-gray-700 shadow-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+          class="h-9 rounded-md border border-default bg-default px-2 text-sm text-default shadow-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
         >
           <option value="name">
             {{ t('catalog.sort.nameAsc') }}
@@ -456,7 +456,7 @@ async function onAddedToInventory() {
         role="button"
         tabindex="0"
         :aria-label="cardName(card)"
-        class="group min-w-0 cursor-pointer overflow-hidden rounded-md border border-gray-200 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
+        class="group min-w-0 cursor-pointer overflow-hidden rounded-md border border-default bg-default text-left shadow-sm transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
         @click="openCard(card.id)"
         @keydown.enter="openCard(card.id)"
         @keydown.space.prevent="openCard(card.id)"
@@ -468,10 +468,10 @@ async function onAddedToInventory() {
           size="full"
         />
         <div class="space-y-1 p-3">
-          <h2 class="line-clamp-2 min-h-10 text-sm font-semibold leading-5 text-gray-900 group-hover:text-primary">
+          <h2 class="line-clamp-2 min-h-10 text-sm font-semibold leading-5 text-highlighted group-hover:text-primary">
             {{ cardName(card) }}
           </h2>
-          <p class="truncate text-xs text-gray-500">
+          <p class="truncate text-xs text-muted">
             {{ cardValue('type', card.type) }}
           </p>
           <div class="flex flex-wrap gap-1">
@@ -527,7 +527,7 @@ async function onAddedToInventory() {
         class="tap-target"
         @click="previousPage"
       />
-      <span class="min-w-28 text-center text-sm text-gray-600">
+      <span class="min-w-28 text-center text-sm text-toned">
         {{ t('common.pagination.pageOf', { page, total: totalPages }) }}
       </span>
       <UButton
@@ -548,7 +548,7 @@ async function onAddedToInventory() {
       <template #content>
         <div class="h-full overflow-y-auto p-6">
           <div class="mb-5 flex items-center justify-between gap-3">
-            <h2 class="truncate text-lg font-semibold text-gray-900">
+            <h2 class="truncate text-lg font-semibold text-highlighted">
               {{ detail ? cardName(detail.card) : t('catalog.detail.fallbackTitle') }}
             </h2>
             <UButton
@@ -593,16 +593,16 @@ async function onAddedToInventory() {
             />
 
             <div class="space-y-2">
-              <h3 class="text-xl font-semibold text-gray-900">
+              <h3 class="text-xl font-semibold text-highlighted">
                 {{ cardName(detail.card) }}
               </h3>
               <p
                 v-if="englishName(detail.card)"
-                class="text-sm text-gray-500"
+                class="text-sm text-muted"
               >
                 {{ t('card.englishName', { name: englishName(detail.card) }) }}
               </p>
-              <p class="text-sm text-gray-600">
+              <p class="text-sm text-toned">
                 {{ cardValue('type', detail.card.type) }}
                 <template v-if="detail.card.attribute">
                   · {{ cardValue('attribute', detail.card.attribute) }}
@@ -613,23 +613,23 @@ async function onAddedToInventory() {
               </p>
               <p
                 v-if="detail.card.atk !== null || detail.card.def !== null"
-                class="text-sm text-gray-600"
+                class="text-sm text-toned"
               >
                 {{ t('card.atkDef', { atk: detail.card.atk ?? '-', def: detail.card.def ?? '-' }) }}
               </p>
             </div>
 
             <section>
-              <h4 class="text-sm font-semibold text-gray-900">
+              <h4 class="text-sm font-semibold text-highlighted">
                 {{ t('catalog.detail.cardText') }}
               </h4>
               <p
                 v-if="cardLocale === 'de' && !hasGermanText(detail.card)"
-                class="mt-2 text-xs text-gray-500"
+                class="mt-2 text-xs text-muted"
               >
                 {{ t('card.germanTextMissing') }}
               </p>
-              <p class="mt-2 whitespace-pre-line text-sm leading-6 text-gray-700">
+              <p class="mt-2 whitespace-pre-line text-sm leading-6 text-default">
                 {{ cardDesc(detail.card) }}
               </p>
               <i18n-t
@@ -637,7 +637,7 @@ async function onAddedToInventory() {
                 keypath="card.translationSource"
                 tag="p"
                 scope="global"
-                class="mt-2 text-xs text-gray-500"
+                class="mt-2 text-xs text-muted"
               >
                 <template #source>
                   <a
@@ -651,19 +651,19 @@ async function onAddedToInventory() {
             </section>
 
             <section v-if="detail.printings.length > 0">
-              <h4 class="text-sm font-semibold text-gray-900">
+              <h4 class="text-sm font-semibold text-highlighted">
                 {{ t('catalog.detail.printings') }}
               </h4>
-              <ul class="mt-2 divide-y divide-gray-200 rounded-md border border-gray-200">
+              <ul class="mt-2 divide-y divide-default rounded-md border border-default">
                 <li
                   v-for="printing in detail.printings"
                   :key="printing.setCode"
                   class="p-3 text-sm"
                 >
-                  <p class="font-medium text-gray-800">
+                  <p class="font-medium text-highlighted">
                     {{ printing.setName }}
                   </p>
-                  <p class="mt-1 text-gray-500">
+                  <p class="mt-1 text-muted">
                     {{ printing.setCode }}
                     <template v-if="printing.rarity">
                       · {{ printing.rarity }}
@@ -673,13 +673,13 @@ async function onAddedToInventory() {
               </ul>
             </section>
 
-            <section class="grid grid-cols-2 gap-3 text-sm text-gray-600">
+            <section class="grid grid-cols-2 gap-3 text-sm text-toned">
               <div v-if="detail.card.tcgDate">
-                <span class="font-medium text-gray-900">TCG</span>
+                <span class="font-medium text-highlighted">TCG</span>
                 <p>{{ detail.card.tcgDate }}</p>
               </div>
               <div v-if="detail.card.ocgDate">
-                <span class="font-medium text-gray-900">OCG</span>
+                <span class="font-medium text-highlighted">OCG</span>
                 <p>{{ detail.card.ocgDate }}</p>
               </div>
             </section>

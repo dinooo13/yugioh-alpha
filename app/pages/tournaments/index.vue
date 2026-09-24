@@ -185,7 +185,7 @@ const emptyState = computed(() => {
     >
       <p
         v-if="showParticipantHint"
-        class="mt-1 max-w-sm text-sm text-gray-500"
+        class="mt-1 max-w-sm text-sm text-muted"
       >
         {{ count('tournaments.list.participationHint', otherRoleTotal) }}
       </p>
@@ -216,16 +216,16 @@ const emptyState = computed(() => {
       <li
         v-for="item in tournaments"
         :key="item.id"
-        class="flex flex-col rounded-md border border-gray-200 bg-white p-4"
+        class="flex flex-col rounded-md border border-default bg-default p-4"
       >
         <NuxtLink :to="`/tournaments/${item.id}`">
-          <h2 class="truncate text-base font-semibold text-gray-900 hover:text-primary">
+          <h2 class="truncate text-base font-semibold text-highlighted hover:text-primary">
             {{ item.name }}
           </h2>
         </NuxtLink>
         <p
           v-if="item.description"
-          class="mt-0.5 line-clamp-2 text-sm text-gray-500"
+          class="mt-0.5 line-clamp-2 text-sm text-muted"
         >
           {{ item.description }}
         </p>
@@ -245,7 +245,7 @@ const emptyState = computed(() => {
           />
         </div>
 
-        <dl class="mt-3 space-y-0.5 text-sm text-gray-500">
+        <dl class="mt-3 space-y-0.5 text-sm text-muted">
           <div>{{ count('tournaments.list.participantCount', item.participantCount) }}</div>
           <div>{{ roundLabel(item) }}</div>
           <div>{{ t(`tournaments.pairingSystem.${item.pairingSystem}.label`) }}</div>

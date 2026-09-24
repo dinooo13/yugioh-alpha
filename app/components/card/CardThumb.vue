@@ -78,7 +78,7 @@ const resolvedNoImageLabel = computed(() => props.noImageLabel ?? t('card.noImag
 const rootClasses = computed(() => [WIDTH_CLASSES[props.size], !isFull.value && 'shrink-0'])
 
 const frameClasses = computed(() => [
-  'block aspect-[59/86] w-full overflow-hidden bg-gray-100',
+  'block aspect-[59/86] w-full overflow-hidden bg-elevated',
   isFull.value ? 'rounded-md' : 'rounded',
   canEnlarge.value && 'cursor-zoom-in focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
 ])
@@ -121,7 +121,7 @@ function onClick() {
         v-else
         role="img"
         :aria-label="t('card.noImageFor', { name: alt, label: resolvedNoImageLabel })"
-        class="flex h-full w-full flex-col items-center justify-center gap-1 px-1 text-center text-xs text-gray-400"
+        class="flex h-full w-full flex-col items-center justify-center gap-1 px-1 text-center text-xs text-muted"
       >
         <UIcon
           name="i-lucide-image-off"

@@ -140,7 +140,7 @@ function onSaved(result: { created: number, merged: number }) {
       </template>
     </UAlert>
 
-    <div class="rounded-md border border-gray-200 bg-white p-4">
+    <div class="rounded-md border border-default bg-default p-4">
       <div class="space-y-3">
         <UFormField
           :label="t('quickEntry.list.label')"
@@ -155,7 +155,7 @@ function onSaved(result: { created: number, merged: number }) {
           />
         </UFormField>
 
-        <p class="text-xs text-gray-500">
+        <p class="text-xs text-muted">
           {{ t('quickEntry.list.examples') }}
           <template
             v-for="example in LIST_EXAMPLES"
@@ -167,7 +167,7 @@ function onSaved(result: { created: number, merged: number }) {
 
         <p
           v-if="tooManyLines"
-          class="text-xs text-amber-700"
+          class="text-xs text-warning"
         >
           {{ t('quickEntry.list.tooManyLines', { count: listLineCount, max: MAX_ENTRY_LINES }) }}
         </p>
@@ -202,7 +202,7 @@ function onSaved(result: { created: number, merged: number }) {
       v-if="rows.length > 0"
       class="space-y-4"
     >
-      <h2 class="text-lg font-semibold text-gray-900">
+      <h2 class="text-lg font-semibold text-highlighted">
         {{ t('quickEntry.review.title') }}
       </h2>
       <EntryReviewTable
@@ -214,7 +214,7 @@ function onSaved(result: { created: number, merged: number }) {
     </div>
     <p
       v-else-if="!isSuggesting"
-      class="text-sm text-gray-500"
+      class="text-sm text-muted"
     >
       {{ t('quickEntry.review.nothingYet') }}
     </p>

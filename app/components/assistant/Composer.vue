@@ -177,7 +177,7 @@ function onKeydown(event: KeyboardEvent) {
 </script>
 
 <template>
-  <div class="border-t border-gray-200 p-3">
+  <div class="border-t border-default p-3">
     <div
       v-if="images.length > 0"
       class="mb-2 flex flex-wrap gap-2"
@@ -206,7 +206,7 @@ function onKeydown(event: KeyboardEvent) {
 
     <p
       v-if="errorMessage"
-      class="mb-2 text-xs text-red-600"
+      class="mb-2 text-xs text-error"
     >
       {{ errorMessage }}
     </p>

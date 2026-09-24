@@ -28,8 +28,8 @@ const errorDetail = computed(() => props.status === 'error' ? props.outcome?.err
     <div
       class="inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs"
       :class="status === 'error'
-        ? 'border-red-200 bg-red-50 text-red-700'
-        : 'border-gray-200 bg-gray-50 text-gray-600'"
+        ? 'border-error/30 bg-error/10 text-error'
+        : 'border-default bg-muted text-toned'"
       :title="errorDetail"
     >
       <UIcon
@@ -50,7 +50,7 @@ const errorDetail = computed(() => props.status === 'error' ? props.outcome?.err
       <span class="truncate">{{ label }}</span>
       <span
         v-if="summary"
-        class="truncate text-gray-400"
+        class="truncate text-muted"
       >— {{ summary }}</span>
     </div>
   </div>

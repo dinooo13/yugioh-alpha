@@ -54,7 +54,7 @@ async function toggle() {
     />
     <p
       v-if="errorMessage"
-      class="text-xs text-red-600"
+      class="text-xs text-error"
     >
       {{ errorMessage }}
     </p>

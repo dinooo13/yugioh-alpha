@@ -459,17 +459,34 @@ function sectionLimitLabel(section: DeckSection): string {
   return `${counts.value[section]}/${max}`
 }
 
-function sectionCountClass(section: DeckSection): string {
+/**
+ * Where a section's card count stands against the deck limits: `under` (only
+ * the Main Deck has a minimum), `over`, `ok` (a legal Main Deck size) or
+ * `none` (a size-less Extra/Side Deck within its maximum). Rendered as
+ * `data-state`, so tests don't depend on color classes.
+ */
+function sectionCountState(section: DeckSection): 'under' | 'over' | 'ok' | 'none' {
   const count = counts.value[section]
   if (section === 'main') {
     if (count > limits.value.mainMax) {
-      return 'text-red-600'
+      return 'over'
     }
-    return count < limits.value.mainMin ? 'text-amber-600' : 'text-emerald-600'
+    return count < limits.value.mainMin ? 'under' : 'ok'
   }
 
   const max = section === 'extra' ? limits.value.extraMax : limits.value.sideMax
-  return count > max ? 'text-red-600' : 'text-gray-500'
+  return count > max ? 'over' : 'none'
+}
+
+const SECTION_COUNT_CLASS = {
+  under: 'text-warning',
+  over: 'text-error',
+  ok: 'text-success',
+  none: 'text-muted',
+} as const
+
+function sectionCountClass(section: DeckSection): string {
+  return SECTION_COUNT_CLASS[sectionCountState(section)]
 }
 
 function cardMetaLine(card: { type: string, level: number | null, attribute: string | null }): string {
@@ -710,7 +727,7 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
         :title="deck.name"
         :description="deck.description ?? undefined"
       >
-        <p class="mt-1 text-sm text-gray-500">
+        <p class="mt-1 text-sm text-muted">
           {{ count('decks.editor.totalCards', counts.total) }}
         </p>
 
@@ -763,9 +780,9 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
         </div>
       </LayoutPageHeader>
 
-      <section class="rounded-md border border-gray-200 bg-white p-4">
+      <section class="rounded-md border border-default bg-default p-4">
         <div class="flex flex-wrap items-center justify-between gap-2">
-          <h2 class="text-base font-semibold text-gray-900">
+          <h2 class="text-base font-semibold text-highlighted">
             {{ t('decks.editor.validation.title') }}
           </h2>
           <UBadge
@@ -778,19 +795,19 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
 
         <p
           v-if="!deck.format"
-          class="mt-2 text-sm text-gray-500"
+          class="mt-2 text-sm text-muted"
         >
           {{ t('decks.editor.validation.chooseFormat') }}
         </p>
         <p
           v-else-if="validation?.legal"
-          class="mt-2 text-sm text-gray-500"
+          class="mt-2 text-sm text-muted"
         >
           {{ t('decks.editor.validation.legal', { format: formatName(deck.format) }) }}
         </p>
         <ul
           v-else
-          class="mt-2 list-inside list-disc space-y-0.5 text-sm text-red-700"
+          class="mt-2 list-inside list-disc space-y-0.5 text-sm text-error"
         >
           <li
             v-for="(issue, index) in validation?.issues ?? []"
@@ -822,7 +839,7 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
 
       <p
         v-if="errorMessage"
-        class="text-sm text-red-600"
+        class="text-sm text-error"
       >
         {{ errorMessage }}
       </p>
@@ -835,15 +852,16 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
           <section
             v-for="section in DECK_SECTIONS"
             :key="section"
-            class="rounded-md border border-gray-200 bg-white"
+            class="rounded-md border border-default bg-default"
           >
-            <header class="flex items-center justify-between border-b border-gray-200 px-4 py-3">
-              <h2 class="text-base font-semibold text-gray-900">
+            <header class="flex items-center justify-between border-b border-default px-4 py-3">
+              <h2 class="text-base font-semibold text-highlighted">
                 {{ sectionName(section) }}
               </h2>
               <span
                 class="text-sm font-semibold tabular-nums"
                 :class="sectionCountClass(section)"
+                :data-state="sectionCountState(section)"
                 :aria-label="t('decks.editor.countIn', { section: sectionName(section) })"
               >
                 {{ sectionLimitLabel(section) }}
@@ -852,14 +870,14 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
 
             <p
               v-if="sections[section].length === 0"
-              class="px-4 py-6 text-sm text-gray-500"
+              class="px-4 py-6 text-sm text-muted"
             >
               {{ t('decks.editor.emptySection', { section: sectionName(section) }) }}
             </p>
 
             <ul
               v-else
-              class="divide-y divide-gray-100"
+              class="divide-y divide-default"
             >
               <!-- One line from a 32rem-wide column (`@lg`); narrower, the
                    controls drop to a second line under the name (#40). -->
@@ -867,7 +885,8 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
                 v-for="row in sections[section]"
                 :key="`${section}-${row.catalogCardId}`"
                 class="grid grid-cols-[2.5rem_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 px-4 py-2 @lg:grid-cols-[2.5rem_minmax(0,1fr)_auto_auto]"
-                :class="issueCardIds.has(row.catalogCardId) ? 'bg-red-50' : undefined"
+                :class="issueCardIds.has(row.catalogCardId) ? 'bg-error/10' : undefined"
+                :data-issue="issueCardIds.has(row.catalogCardId) ? '' : undefined"
               >
                 <CardThumb
                   :src="row.imageSmall"
@@ -878,12 +897,12 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
 
                 <div class="min-w-0">
                   <p
-                    class="line-clamp-2 text-sm font-medium break-words text-gray-900"
+                    class="line-clamp-2 text-sm font-medium break-words text-highlighted"
                     :title="cardName(row)"
                   >
                     {{ cardName(row) }}
                   </p>
-                  <p class="truncate text-xs text-gray-500">
+                  <p class="truncate text-xs text-muted">
                     {{ cardMetaLine(row) }}
                   </p>
                   <div
@@ -911,7 +930,8 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
 
                 <span
                   class="self-start text-xs tabular-nums @lg:self-center"
-                  :class="row.shortfall > 0 ? 'font-semibold text-red-600' : 'text-gray-500'"
+                  :class="row.shortfall > 0 ? 'font-semibold text-error' : 'text-muted'"
+                  :data-shortfall="row.shortfall > 0 ? '' : undefined"
                   :title="row.shortfall > 0 ? t('decks.editor.row.ownedOnly', { owned: row.owned }) : undefined"
                 >
                   {{ row.usedInDeck }}/{{ row.owned }}
@@ -987,11 +1007,11 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
         >
           <!-- On lg the panel sticks beside the deck and only the result list
                scrolls; below lg it sits under the deck and can be collapsed. -->
-          <div class="flex flex-col rounded-md border border-gray-200 bg-white p-4 lg:max-h-[calc(100dvh-4rem)]">
+          <div class="flex flex-col rounded-md border border-default bg-default p-4 lg:max-h-[calc(100dvh-4rem)]">
             <div class="flex items-center justify-between gap-2">
               <h2
                 id="deck-add-panel-title"
-                class="text-base font-semibold text-gray-900"
+                class="text-base font-semibold text-highlighted"
               >
                 {{ t('decks.editor.addPanel.title') }}
               </h2>
@@ -1041,7 +1061,7 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
                 />
               </div>
 
-              <p class="mt-3 shrink-0 text-xs text-gray-500">
+              <p class="mt-3 shrink-0 text-xs text-muted">
                 <template v-if="hasMoreSource">
                   {{ t('decks.editor.addPanel.shownOf', { shown: n(sourceCards.length, 'integer'), total: n(sourceTotal, 'integer') }) }}
                 </template>
@@ -1064,7 +1084,7 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
 
                 <p
                   v-else-if="sourceCards.length === 0"
-                  class="text-sm text-gray-500"
+                  class="text-sm text-muted"
                 >
                   <i18n-t
                     keypath="decks.editor.addPanel.empty"
@@ -1083,7 +1103,7 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
 
                 <ul
                   v-else
-                  class="divide-y divide-gray-100"
+                  class="divide-y divide-default"
                 >
                   <li
                     v-for="card in sourceCards"
@@ -1097,10 +1117,10 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
                     />
 
                     <div class="min-w-0 flex-1">
-                      <p class="truncate text-sm font-medium text-gray-900">
+                      <p class="truncate text-sm font-medium text-highlighted">
                         {{ cardName(card) }}
                       </p>
-                      <p class="truncate text-xs text-gray-500">
+                      <p class="truncate text-xs text-muted">
                         {{ cardMetaLine(card) }}
                       </p>
                       <!-- Only cards already in the deck have a known status: the
@@ -1113,7 +1133,7 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
                         :color="statusColorFor(card.catalogCardId)"
                         :label="statusLabelFor(card.catalogCardId) ?? ''"
                       />
-                      <p class="mt-0.5 text-xs text-gray-500">
+                      <p class="mt-0.5 text-xs text-muted">
                         <i18n-t
                           keypath="decks.editor.addPanel.ownedInDeck"
                           scope="global"
@@ -1149,7 +1169,7 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
                            see (UX review #13) — spell the reason out. -->
                       <p
                         v-if="allSectionsDisallowedReason(card)"
-                        class="mt-1 text-xs text-red-600"
+                        class="mt-1 text-xs text-error"
                       >
                         {{ allSectionsDisallowedReason(card) }}
                       </p>
@@ -1169,7 +1189,7 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
                 />
                 <p
                   v-if="loadMoreError && !sourcePending"
-                  class="mt-2 text-xs text-red-600"
+                  class="mt-2 text-xs text-error"
                 >
                   {{ loadMoreError }}
                 </p>

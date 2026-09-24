@@ -321,8 +321,8 @@ function capturedAtLabel(participant: TournamentParticipantDto): string | null {
 </script>
 
 <template>
-  <section class="rounded-md border border-gray-200 bg-white p-4">
-    <h2 class="text-base font-semibold text-gray-900">
+  <section class="rounded-md border border-default bg-default p-4">
+    <h2 class="text-base font-semibold text-highlighted">
       {{ t('tournaments.participants.title', { count: n(tournament.participants.length, 'integer') }) }}
     </h2>
 
@@ -396,7 +396,7 @@ function capturedAtLabel(participant: TournamentParticipantDto): string | null {
       v-if="addError"
       class="mt-2 flex flex-wrap items-center gap-2"
     >
-      <p class="text-sm text-red-600">
+      <p class="text-sm text-error">
         {{ addError }}
       </p>
       <UButton
@@ -411,7 +411,7 @@ function capturedAtLabel(participant: TournamentParticipantDto): string | null {
 
     <p
       v-if="rowError"
-      class="mt-2 text-sm text-red-600"
+      class="mt-2 text-sm text-error"
     >
       {{ rowError }}
     </p>
@@ -432,7 +432,7 @@ function capturedAtLabel(participant: TournamentParticipantDto): string | null {
         >
           <tr
             role="row"
-            class="border-b border-gray-200 text-xs uppercase tracking-wide text-gray-500"
+            class="border-b border-default text-xs uppercase tracking-wide text-muted"
           >
             <th
               role="columnheader"
@@ -463,23 +463,23 @@ function capturedAtLabel(participant: TournamentParticipantDto): string | null {
         </thead>
         <tbody
           role="rowgroup"
-          class="block space-y-2 sm:table-row-group sm:space-y-0 sm:divide-y sm:divide-gray-100"
+          class="block space-y-2 sm:table-row-group sm:space-y-0 sm:divide-y sm:divide-default"
         >
           <tr
             v-for="participant in tournament.participants"
             :key="participant.id"
             role="row"
-            class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 rounded-md border border-gray-200 p-3 sm:table-row sm:rounded-none sm:border-0 sm:p-0"
+            class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 rounded-md border border-default p-3 sm:table-row sm:rounded-none sm:border-0 sm:p-0"
           >
             <td
               role="cell"
-              class="tabular-nums text-gray-500 sm:py-2 sm:pr-2"
+              class="tabular-nums text-muted sm:py-2 sm:pr-2"
             >
               <span class="sm:hidden">#</span>{{ participant.seed }}
             </td>
             <td
               role="cell"
-              class="font-medium text-gray-900 sm:px-2 sm:py-2"
+              class="font-medium text-highlighted sm:px-2 sm:py-2"
             >
               <div class="flex flex-wrap items-center gap-1.5">
                 <span>{{ participant.name }}</span>
@@ -506,14 +506,14 @@ function capturedAtLabel(participant: TournamentParticipantDto): string | null {
               class="col-start-2 sm:px-2 sm:py-2"
             >
               <template v-if="participant.deckName">
-                <div class="text-gray-900">
+                <div class="text-highlighted">
                   {{ participant.deckName }}
                 </div>
                 <div class="mt-0.5 flex flex-wrap items-center gap-1">
                   <UPopover v-if="deckBadge(participant) && participant.deckIssueCount">
                     <button
                       type="button"
-                      class="tap-target inline-flex items-center gap-1 rounded hover:bg-gray-50"
+                      class="tap-target inline-flex items-center gap-1 rounded hover:bg-elevated/50"
                       :aria-label="t('tournaments.participants.showIssues', { name: participant.name })"
                     >
                       <UBadge
@@ -522,15 +522,15 @@ function capturedAtLabel(participant: TournamentParticipantDto): string | null {
                         :color="deckBadge(participant)!.color"
                         :label="deckBadge(participant)!.label"
                       />
-                      <span class="text-xs text-gray-500">{{ issueCountLabel(participant) }}</span>
+                      <span class="text-xs text-muted">{{ issueCountLabel(participant) }}</span>
                     </button>
 
                     <template #content>
                       <div class="max-w-xs space-y-1 p-3">
-                        <p class="text-xs font-semibold text-gray-900">
+                        <p class="text-xs font-semibold text-highlighted">
                           {{ t('tournaments.participants.issuesTitle') }}
                         </p>
-                        <ul class="list-inside list-disc space-y-0.5 text-xs text-gray-600">
+                        <ul class="list-inside list-disc space-y-0.5 text-xs text-toned">
                           <li
                             v-for="(issue, index) in issueMessages(participant)"
                             :key="index"
@@ -551,20 +551,20 @@ function capturedAtLabel(participant: TournamentParticipantDto): string | null {
                 </div>
                 <div
                   v-if="capturedAtLabel(participant)"
-                  class="mt-0.5 text-xs text-gray-400"
+                  class="mt-0.5 text-xs text-muted"
                 >
                   {{ capturedAtLabel(participant) }}
                 </div>
               </template>
               <span
                 v-else
-                class="text-gray-400"
+                class="text-muted"
               >{{ t('tournaments.noDeck') }}</span>
             </td>
             <td
               v-if="hasRowActions"
               role="cell"
-              class="col-span-full border-t border-gray-100 pt-2 sm:border-0 sm:px-2 sm:py-2"
+              class="col-span-full border-t border-muted pt-2 sm:border-0 sm:px-2 sm:py-2"
               :class="rowHasActions(participant) ? undefined : 'max-sm:hidden'"
             >
               <div class="flex items-center justify-start gap-2 sm:justify-end">
@@ -579,7 +579,7 @@ function capturedAtLabel(participant: TournamentParticipantDto): string | null {
                 />
                 <span
                   v-else-if="managesOwnDeck(participant)"
-                  class="text-xs text-gray-400"
+                  class="text-xs text-muted"
                 >{{ t('tournaments.participants.managesOwnDeck') }}</span>
                 <UDropdownMenu
                   v-if="menuItemsFor(participant).length > 0"
@@ -604,7 +604,7 @@ function capturedAtLabel(participant: TournamentParticipantDto): string | null {
 
     <p
       v-if="tournament.participants.some(participant => participant.linked)"
-      class="mt-3 flex items-start gap-1.5 text-xs text-gray-500"
+      class="mt-3 flex items-start gap-1.5 text-xs text-muted"
     >
       <UIcon
         name="i-lucide-user-check"
@@ -628,7 +628,7 @@ function capturedAtLabel(participant: TournamentParticipantDto): string | null {
           </UFormField>
           <p
             v-if="renameError"
-            class="text-sm text-red-600"
+            class="text-sm text-error"
           >
             {{ renameError }}
           </p>

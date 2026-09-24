@@ -191,7 +191,7 @@ describe('deck editor', () => {
     expect(text).toContain('Zurück zu den Decks')
   })
 
-  it('marks an undersized section amber and an oversized one red', async () => {
+  it('marks an undersized and an oversized section', async () => {
     state.source = { items: [], total: 0 }
     state.deck = deckDetail({
       main: [row({ name: 'Pot of Greed', section: 'main', catalogCardId: 55144522, type: 'Spell Card', quantity: 3, owned: 3, usedInDeck: 3 })],
@@ -202,11 +202,11 @@ describe('deck editor', () => {
 
     const mainCount = component.find('[aria-label="Anzahl im Main Deck"]')
     expect(mainCount.text()).toBe('3/40–60')
-    expect(mainCount.classes()).toContain('text-amber-600')
+    expect(mainCount.attributes('data-state')).toBe('under')
 
     const extraCount = component.find('[aria-label="Anzahl im Extra Deck"]')
     expect(extraCount.text()).toBe('16/15')
-    expect(extraCount.classes()).toContain('text-red-600')
+    expect(extraCount.attributes('data-state')).toBe('over')
   })
 
   it('highlights a shortfall on the owned indicator', async () => {
@@ -223,12 +223,12 @@ describe('deck editor', () => {
     const indicators = component.findAll('span[title], span.tabular-nums')
     const shortfallIndicator = indicators.find(element => element.text() === '3/2')
     expect(shortfallIndicator).toBeTruthy()
-    expect(shortfallIndicator!.classes()).toContain('text-red-600')
+    expect(shortfallIndicator!.attributes('data-shortfall')).toBeDefined()
     expect(shortfallIndicator!.attributes('title')).toBe('Du besitzt nur 2')
 
     const okIndicator = indicators.find(element => element.text() === '1/4')
     expect(okIndicator).toBeTruthy()
-    expect(okIndicator!.classes()).not.toContain('text-red-600')
+    expect(okIndicator!.attributes('data-shortfall')).toBeUndefined()
     expect(okIndicator!.attributes('title')).toBeUndefined()
   })
 
@@ -648,7 +648,7 @@ describe('deck editor rule validation', () => {
     // The forbidden card is badged (in the deck list *and* the card picker)
     // and its row is highlighted; the legal card is not.
     expect(text).toContain('Verboten')
-    const forbiddenRows = component.findAll('li').filter(item => item.classes().includes('bg-red-50'))
+    const forbiddenRows = component.findAll('li').filter(item => item.attributes('data-issue') !== undefined)
     expect(forbiddenRows).toHaveLength(1)
     expect(forbiddenRows[0]!.text()).toContain('Pot of Greed')
   })

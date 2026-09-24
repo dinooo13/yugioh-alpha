@@ -37,12 +37,11 @@ const MIRROR_FORCE = 44095762
 const STARDUST_DRAGON = 44508094 // extra deck
 
 /**
- * A match row is the only bordered `.p-3` block on the tournament detail page
- * (the surrounding sections all use `.p-4`). Scoping to it lets the same
+ * A match row (`data-testid="match-row"`). Scoping to it lets the same
  * "2:0" / "Tisch N" labels be reused unambiguously across every round.
  */
 function matchRow(page: import('@playwright/test').Page, tableNumber: number) {
-  return page.locator('div.rounded-md.border.border-gray-200.p-3').filter({ hasText: `Tisch ${tableNumber}` })
+  return page.getByTestId('match-row').filter({ hasText: `Tisch ${tableNumber}` })
 }
 
 /**

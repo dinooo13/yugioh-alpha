@@ -103,7 +103,7 @@ defineExpose({ stickToBottom })
     >
       <p
         v-if="timeline.length === 0"
-        class="text-sm text-gray-500"
+        class="text-sm text-muted"
       >
         {{ t('assistant.thread.empty') }}
       </p>

@@ -188,7 +188,7 @@ function onPicked(card: PickedCatalogCard) {
             variant="subtle"
             :label="statusMeta.label"
           />
-          <span class="truncate font-mono text-xs text-gray-500">{{ row.raw }}</span>
+          <span class="truncate font-mono text-xs text-muted">{{ row.raw }}</span>
           <UBadge
             v-if="row.setCode"
             color="neutral"
@@ -196,15 +196,15 @@ function onPicked(card: PickedCatalogCard) {
             :label="row.setCode"
           />
         </div>
-        <p class="mt-1 truncate text-sm font-medium text-gray-900">
+        <p class="mt-1 truncate text-sm font-medium text-highlighted">
           {{ selected ? cardName(selected) : t('quickEntry.status.ohne_treffer') }}
         </p>
-        <p class="truncate text-xs text-gray-500">
+        <p class="truncate text-xs text-muted">
           <span v-if="selected">{{ cardValue('type', selected.type) }} · </span>{{ valuesLabel }}
         </p>
         <p
           v-if="row.conflict"
-          class="mt-1 text-xs text-amber-700"
+          class="mt-1 text-xs text-warning"
         >
           {{ t('quickEntry.row.conflict') }}
         </p>
@@ -254,7 +254,7 @@ function onPicked(card: PickedCatalogCard) {
       />
       <p
         v-else
-        class="self-center text-xs text-gray-500"
+        class="self-center text-xs text-muted"
       >
         {{ t('quickEntry.row.noSuggestions') }}
       </p>
@@ -277,7 +277,7 @@ function onPicked(card: PickedCatalogCard) {
 
     <div
       v-if="showOverrides"
-      class="grid gap-3 rounded-md bg-gray-50 p-3 sm:grid-cols-4"
+      class="grid gap-3 rounded-md bg-muted p-3 sm:grid-cols-4"
     >
       <UFormField :label="t('card.field.printingLanguage')">
         <USelect

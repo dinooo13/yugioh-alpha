@@ -13,18 +13,18 @@ watch(() => route.fullPath, () => {
 </script>
 
 <template>
-  <div class="flex min-h-dvh flex-col bg-gray-50 lg:flex-row">
+  <div class="flex min-h-dvh flex-col bg-muted lg:flex-row">
     <LayoutSkipLink />
 
-    <header class="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3 lg:hidden">
+    <header class="flex items-center justify-between border-b border-default bg-default px-4 py-3 lg:hidden">
       <NuxtLink
         to="/"
         class="flex items-center gap-2.5"
       >
-        <div class="flex size-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-white">
+        <div class="flex size-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-inverted">
           Y
         </div>
-        <span class="text-base font-semibold text-gray-900">yugioh alpha</span>
+        <span class="text-base font-semibold text-highlighted">yugioh alpha</span>
       </NuxtLink>
       <UButton
         icon="i-lucide-menu"
@@ -36,15 +36,15 @@ watch(() => route.fullPath, () => {
       />
     </header>
 
-    <aside class="hidden w-64 shrink-0 flex-col border-r border-gray-200 bg-white lg:flex">
+    <aside class="hidden w-64 shrink-0 flex-col border-r border-default bg-default lg:flex">
       <NuxtLink
         to="/"
         class="flex items-center gap-2.5 px-5 py-5"
       >
-        <div class="flex size-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-white">
+        <div class="flex size-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-inverted">
           Y
         </div>
-        <span class="text-base font-semibold text-gray-900">yugioh alpha</span>
+        <span class="text-base font-semibold text-highlighted">yugioh alpha</span>
       </NuxtLink>
 
       <LayoutSidebarContent />

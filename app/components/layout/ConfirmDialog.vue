@@ -25,7 +25,7 @@ function resolve(result: boolean) {
     :title="request?.title ?? t('common.confirm')"
   >
     <template #body>
-      <p class="text-sm text-gray-600">
+      <p class="text-sm text-toned">
         {{ request?.description }}
       </p>
 

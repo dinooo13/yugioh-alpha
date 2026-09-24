@@ -527,7 +527,7 @@ async function onSaved() {
 
     <p
       v-if="errorMessage"
-      class="text-sm text-red-600"
+      class="text-sm text-error"
     >
       {{ errorMessage }}
     </p>
@@ -540,7 +540,7 @@ async function onSaved() {
     />
     <p
       v-if="mode === 'list' && hasActiveFacets"
-      class="text-xs text-gray-500"
+      class="text-xs text-muted"
     >
       {{ t('inventory.search.facetsOverviewOnly') }}
     </p>
@@ -550,7 +550,7 @@ async function onSaved() {
       v-if="mode === 'overview'"
       class="space-y-4"
     >
-      <p class="text-sm text-gray-500">
+      <p class="text-sm text-muted">
         {{ count('inventory.cardCount', searchTotal) }}
       </p>
 
@@ -567,7 +567,7 @@ async function onSaved() {
 
       <div
         v-else-if="searchError || searchItems.length === 0"
-        class="overflow-hidden rounded-md border border-gray-200 bg-white"
+        class="overflow-hidden rounded-md border border-default bg-default"
       >
         <UAlert
           v-if="searchError"
@@ -666,10 +666,10 @@ async function onSaved() {
         />
       </div>
 
-      <div class="overflow-hidden rounded-md border border-gray-200 bg-white">
+      <div class="overflow-hidden rounded-md border border-default bg-default">
         <ul
           v-if="pending"
-          class="divide-y divide-gray-100"
+          class="divide-y divide-default"
           aria-busy="true"
           :aria-label="t('inventory.list.loading')"
         >
@@ -720,7 +720,7 @@ async function onSaved() {
 
         <ul
           v-else
-          class="divide-y divide-gray-100"
+          class="divide-y divide-default"
         >
           <InventoryListRow
             v-for="item in items"

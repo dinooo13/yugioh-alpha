@@ -77,15 +77,15 @@ async function remove() {
       />
 
       <div class="min-w-0 flex-1">
-        <p class="truncate text-sm font-medium text-gray-900">
+        <p class="truncate text-sm font-medium text-highlighted">
           {{ cardName(item) }}
         </p>
-        <p class="text-xs text-gray-500">
+        <p class="text-xs text-muted">
           {{ cardValue('type', item.type) }}
         </p>
         <p
           v-if="item.owned !== undefined"
-          class="mt-0.5 text-xs text-gray-500"
+          class="mt-0.5 text-xs text-muted"
         >
           <i18n-t
             keypath="wishlist.row.owned"
@@ -148,7 +148,7 @@ async function remove() {
 
     <p
       v-if="errorMessage"
-      class="text-sm text-red-600"
+      class="text-sm text-error"
     >
       {{ errorMessage }}
     </p>
