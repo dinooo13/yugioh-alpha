@@ -3,6 +3,13 @@ import type { CardDescFields, CardNameFields } from '~~/shared/card-text'
 import { cardValueKey } from '~/utils/card-values'
 import type { CardValueKind } from '~/utils/card-values'
 
+/** The fields `cardMetaLine` reads; deck rows, search results and shared rows all have them. */
+export interface CardMetaFields {
+  type: string
+  level: number | null
+  attribute: string | null
+}
+
 /**
  * Card names, texts and data labels in the card language (ADR 0015).
  * Payloads carry the English `name` / `desc` and the German `nameDe` /
@@ -59,5 +66,12 @@ export function useCardText() {
       .sort((a, b) => a.label.localeCompare(b.label, cardLocale.value))
   }
 
-  return { cardLocale, cardName, cardDesc, englishName, hasGermanText, cardValue, cardValueOptions }
+  /** "Effektmonster · Stufe 7 · FINSTERNIS": type and attribute in the card language, the level in the interface language; missing parts are left out. */
+  function cardMetaLine(card: CardMetaFields): string {
+    return [cardValue('type', card.type), card.level !== null ? t('card.stars', { level: card.level }) : null, card.attribute ? cardValue('attribute', card.attribute) : null]
+      .filter(Boolean)
+      .join(' · ')
+  }
+
+  return { cardLocale, cardName, cardDesc, englishName, hasGermanText, cardValue, cardValueOptions, cardMetaLine }
 }
