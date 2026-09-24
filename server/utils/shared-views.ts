@@ -5,13 +5,13 @@
 // see docs/adr/0007-sharing-and-profile-model.md.
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm'
 import type { SQL } from 'drizzle-orm'
-import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core'
 import type { useDb } from '../db'
 import { catalogCard, catalogCardImage, collection, deck, deckCard, ownedCard, ruleFormat } from '../db/schema'
 import { buildWarnings, cardCategoryRank, DECK_LIMITS, loadDeckCovers } from './decks'
 import { loadCardDataForValidation } from './deck-validation'
 import { ruleFormatsById } from './rule-formats'
 import { grantedResourceIds } from './sharing'
+import { cardNameMatches } from './card-name-search'
 import { evaluateDeck } from '../../shared/rule-formats'
 import type { DeckSection } from '../../shared/deck-sections'
 import type {
@@ -27,15 +27,6 @@ type Db = ReturnType<typeof useDb>
 
 const DEFAULT_PAGE_SIZE = 24
 const MAX_PAGE_SIZE = 100
-
-// Escapes SQLite LIKE wildcards so a user's search term matches literally.
-function escapeLikeTerm(term: string): string {
-  return term.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_')
-}
-
-function likeCondition(column: AnySQLiteColumn, pattern: string): SQL {
-  return sql`${column} like ${pattern} escape '\\'`
-}
 
 function loadSharedDeckCardRows(db: Db, deckId: string): SharedDeckCardRow[] {
   const rows = db
@@ -260,7 +251,7 @@ export function listSharedInventory(db: Db, ownerUserId: string, options: Shared
   const clauses: SQL[] = [eq(ownedCard.userId, ownerUserId)]
   const q = options.q?.trim()
   if (q) {
-    clauses.push(likeCondition(catalogCard.name, `%${escapeLikeTerm(q)}%`))
+    clauses.push(cardNameMatches(q))
   }
 
   return listAggregatedCards(db, and(...clauses) as SQL, options)
@@ -286,7 +277,7 @@ export function listSharedCollection(
   const clauses: SQL[] = [eq(ownedCard.userId, ownerUserId), eq(ownedCard.collectionId, collectionId)]
   const q = options.q?.trim()
   if (q) {
-    clauses.push(likeCondition(catalogCard.name, `%${escapeLikeTerm(q)}%`))
+    clauses.push(cardNameMatches(q))
   }
 
   return listAggregatedCards(db, and(...clauses) as SQL, options)

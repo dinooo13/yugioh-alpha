@@ -14,6 +14,7 @@ import {
   UNASSIGNED_COLLECTION_ID,
 } from '../../server/utils/inventory-search'
 import type { InventorySearchSort } from '../../server/utils/inventory-search'
+import { seedGermanNames } from './fixtures/german-names'
 
 function createTestDb() {
   const sqlite = new Database(':memory:')
@@ -417,6 +418,29 @@ describe('inventory search aggregation (in-memory db)', () => {
 
     expect(result.items).toHaveLength(1)
     expect(result.items[0]).toMatchObject({ catalogCardId: 89631139 })
+  })
+
+  it('matches German names folded, and German text with inText (ADR 0015)', async () => {
+    seedCards(db, [
+      { id: 89631139, name: 'Blue-Eyes White Dragon', type: 'Normal Monster' },
+      { id: 46986414, name: 'Dark Magician', type: 'Normal Monster' },
+    ])
+    seedGermanNames(db, { 89631139: 'Blauäugiger w. Drache', 46986414: 'Dunkler Magier' })
+    db.update(schema.catalogCardTranslation)
+      .set({ desc: 'Der ultimative Hexer.' })
+      .where(eq(schema.catalogCardTranslation.cardId, 46986414))
+      .run()
+    await addOwnedCard(db, 'user-a', validateInventoryInput({ catalog_card_id: 89631139 }))
+    await addOwnedCard(db, 'user-a', validateInventoryInput({ catalog_card_id: 46986414 }))
+
+    function ids(query: Record<string, unknown>) {
+      return runInventorySearch(db, 'user-a', query).items.map(item => item.catalogCardId)
+    }
+
+    expect(ids({ q: 'BLAUÄUGIGER' })).toEqual([89631139])
+    expect(ids({ q: 'blauaugiger w drache' })).toEqual([89631139])
+    expect(ids({ q: 'Hexer' })).toEqual([])
+    expect(ids({ q: 'Hexer', inText: '1' })).toEqual([46986414])
   })
 
   it('sorts by quantity desc and by newest (tcgDate) desc', async () => {

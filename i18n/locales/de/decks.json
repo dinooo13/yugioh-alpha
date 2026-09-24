@@ -122,7 +122,7 @@
         "title": "Aus Inventar hinzufügen",
         "hide": "Ausblenden",
         "show": "Anzeigen",
-        "searchPlaceholder": "Karte suchen...",
+        "searchPlaceholder": "Kartenname (deutsch oder englisch)...",
         "searchLabel": "Karten für das Deck suchen",
         "type": "Typ",
         "attribute": "Attribut",

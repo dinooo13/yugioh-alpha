@@ -2,8 +2,9 @@ import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
 import { drizzle } from 'drizzle-orm/better-sqlite3'
 import Database from 'better-sqlite3'
 import { beforeEach, describe, expect, it } from 'vitest'
+import { seedCatalogFixture } from '../../server/db/fixtures/catalog-fixture'
 import * as schema from '../../server/db/schema'
-import { parseCardListQuery } from '../../server/utils/catalog-query'
+import { buildCardListWhere, parseCardListQuery } from '../../server/utils/catalog-query'
 import { getCatalogCardDetail, getCatalogFacets, searchCatalog } from '../../server/utils/catalog-search'
 
 function createTestDb() {
@@ -206,5 +207,65 @@ describe('catalog search utilities', () => {
       { id: 'legend-of-blue-eyes', name: 'Legend of Blue Eyes' },
       { id: 'structure-deck-kaiba', name: 'Structure Deck: Kaiba' },
     ])
+  })
+
+  it('still finds rows without a name_search through the raw English name', async () => {
+    // The seed above inserts no `name_search` (it stays ''), like a database
+    // before the startup backfill.
+    const result = await searchCatalog(db, parseCardListQuery({ q: 'Dark Mag' }))
+
+    expect(result.items.map(card => card.name)).toEqual(['Dark Magician'])
+  })
+})
+
+describe('bilingual catalog search (ADR 0015)', () => {
+  let db: ReturnType<typeof createTestDb>
+
+  beforeEach(() => {
+    db = createTestDb()
+    seedCatalogFixture(db)
+  })
+
+  async function names(query: Record<string, string>) {
+    const result = await searchCatalog(db, parseCardListQuery({ pageSize: '60', ...query }))
+    return result.items.map(card => card.name)
+  }
+
+  it('finds a card by its German name, case- and space-insensitively', async () => {
+    expect(await names({ q: 'Dunkler' })).toEqual(['Dark Magician'])
+    expect(await names({ q: 'dunkler magier' })).toEqual(['Dark Magician'])
+    expect(await names({ q: 'Topf der Gier' })).toEqual(['Pot of Greed'])
+  })
+
+  it('folds umlauts and case on both sides', async () => {
+    for (const q of ['blauäugiger w', 'BLAUÄUGIGER W', 'Blauaugiger w', 'w drache']) {
+      expect(await names({ q }), q).toEqual(['Blue-Eyes White Dragon'])
+    }
+    expect(await names({ q: 'BLAUÄUGIGER' })).toEqual(['Blue-Eyes Ultimate Dragon', 'Blue-Eyes White Dragon'])
+  })
+
+  it('finds English names through the folded form too', async () => {
+    expect(await names({ q: 'blue eyes white' })).toEqual(['Blue-Eyes White Dragon'])
+    expect(await names({ q: 'number 39 utopia' })).toEqual(['Number 39: Utopia'])
+  })
+
+  it('searches the German card text with inText', async () => {
+    expect(await names({ q: 'Hexer' })).toEqual([])
+    expect(await names({ q: 'Hexer', inText: '1' })).toEqual(['Dark Magician'])
+  })
+
+  it('treats LIKE wildcards as literal characters', async () => {
+    expect(await names({ q: '%' })).toEqual([])
+    expect(await names({ q: '_' })).toEqual([])
+  })
+
+  it('reads the German names from the covering index', () => {
+    const where = buildCardListWhere(parseCardListQuery({ q: 'dunkler' }))
+    const query = db.select({ id: schema.catalogCard.id }).from(schema.catalogCard).where(where).toSQL()
+    const plan = db.$client.prepare(`EXPLAIN QUERY PLAN ${query.sql}`).all(...query.params) as Array<{ detail: string }>
+
+    expect(plan.map(row => row.detail)).toContainEqual(
+      expect.stringContaining('USING COVERING INDEX idx_catalog_card_translation_search'),
+    )
   })
 })

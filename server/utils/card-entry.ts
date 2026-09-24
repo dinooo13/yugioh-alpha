@@ -1,9 +1,10 @@
-import { eq, inArray, or, sql } from 'drizzle-orm'
+import { and, eq, inArray, or, sql } from 'drizzle-orm'
 import type { SQL } from 'drizzle-orm'
-import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core'
 import { createError } from 'h3'
+import { foldCardName } from '../../shared/card-name-fold'
 import type { useDb } from '../db'
-import { catalogCard, catalogCardImage, catalogPrinting, catalogSet } from '../db/schema'
+import { catalogCard, catalogCardImage, catalogCardTranslation, catalogPrinting, catalogSet } from '../db/schema'
+import { escapedLike, escapeLikeTerm } from './card-name-search'
 
 type Db = ReturnType<typeof useDb>
 
@@ -51,6 +52,8 @@ export interface EntryCandidatePrinting {
 export interface EntryCandidate {
   cardId: number
   name: string
+  /** The German card name (ADR 0015), `null` without German data. */
+  nameDe: string | null
   type: string
   frameType: string | null
   imageSmall: string | null
@@ -66,22 +69,20 @@ export interface EntrySuggestResult {
 }
 
 /**
- * Lowercases and strips everything that is not a letter or digit, so
- * "Number 39: Utopia", "number 39 utopia" and "NUMBER39UTOPIA" compare equal
- * and bigram similarity is not dominated by punctuation/whitespace noise.
+ * The shared name folding (`foldCardName`, ADR 0015): lowercase, no accents,
+ * `ß` → `ss`, no spaces or punctuation, so "Number 39: Utopia",
+ * "number 39 utopia" and "NUMBER39UTOPIA" compare equal and bigram
+ * similarity is not dominated by punctuation/whitespace noise. The same
+ * form is stored in `name_search`, so the German pool can compare in SQL.
  */
 export function normalizeCardName(value: string): string {
-  return value
-    .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '')
+  return foldCardName(value)
 }
 
 /**
  * Comparison key for scoring. Falls back to a plain lowercased/trimmed form
- * when the strict normalization empties the string, so non-ASCII input
- * (CJK, "ß"-only, …) is still compared instead of silently matching nothing.
+ * when the folding empties the string (a name of only punctuation), so such
+ * input is still compared instead of silently matching nothing.
  */
 function fold(value: string): string {
   const normalized = normalizeCardName(value)
@@ -203,14 +204,6 @@ export function parseEntryText(text: string): ParsedEntryLine[] {
     .filter(parsed => parsed.query !== '')
 }
 
-function escapeLikeTerm(term: string): string {
-  return term.replace(/[\\%_]/g, match => `\\${match}`)
-}
-
-function likeCondition(column: AnySQLiteColumn, pattern: string): SQL {
-  return sql`${column} LIKE ${pattern} ESCAPE '\\'`
-}
-
 interface CandidateRow {
   cardId: number
   name: string
@@ -235,6 +228,69 @@ function selectCards(db: Db, where: SQL, limit: number, orderBy?: SQL): Candidat
     .where(where)
 
   return (orderBy ? query.orderBy(orderBy) : query).limit(limit).all()
+}
+
+interface GermanCandidateRow extends CandidateRow {
+  /** The folded German name (`catalog_card_translation.name_search`). */
+  nameDeSearch: string
+}
+
+/**
+ * The German pool (ADR 0015): the same whole-query and token patterns as the
+ * English prefilter, on the folded `catalog_card_translation.name_search`,
+ * ordered by match level and then by the length closest to the query.
+ * `foldedQuery` must be non-empty; folded values need no `LIKE` escaping.
+ */
+function selectGermanCards(db: Db, foldedQuery: string, foldedTokens: string[], limit: number): GermanCandidateRow[] {
+  const nameSearch = catalogCardTranslation.nameSearch
+  const prefixPattern = `${foldedQuery}%`
+  const containsPattern = `%${foldedQuery}%`
+  const patterns: SQL[] = [
+    sql`${nameSearch} = ${foldedQuery}`,
+    sql`${nameSearch} LIKE ${prefixPattern}`,
+    sql`${nameSearch} LIKE ${containsPattern}`,
+    ...foldedTokens.map(token => sql`${nameSearch} LIKE ${`%${token}%`}`),
+  ]
+
+  return db
+    .select({
+      cardId: catalogCard.id,
+      name: catalogCard.name,
+      type: catalogCard.type,
+      frameType: catalogCard.frameType,
+      nameDeSearch: nameSearch,
+    })
+    .from(catalogCardTranslation)
+    .innerJoin(catalogCard, eq(catalogCard.id, catalogCardTranslation.cardId))
+    .where(and(eq(catalogCardTranslation.locale, 'de'), or(...patterns)))
+    .orderBy(sql`
+      case
+        when ${nameSearch} = ${foldedQuery} then 0
+        when ${nameSearch} LIKE ${prefixPattern} then 1
+        when ${nameSearch} LIKE ${containsPattern} then 2
+        else 3
+      end, abs(length(${nameSearch}) - ${foldedQuery.length})`)
+    .limit(limit)
+    .all()
+}
+
+function germanNamesByCardId(db: Db, cardIds: number[]): Map<number, string> {
+  const byCardId = new Map<number, string>()
+  if (cardIds.length === 0) {
+    return byCardId
+  }
+
+  const rows = db
+    .select({ cardId: catalogCardTranslation.cardId, name: catalogCardTranslation.name })
+    .from(catalogCardTranslation)
+    .where(and(eq(catalogCardTranslation.locale, 'de'), inArray(catalogCardTranslation.cardId, cardIds)))
+    .all()
+
+  for (const row of rows) {
+    byCardId.set(row.cardId, row.name)
+  }
+
+  return byCardId
 }
 
 function imagesByCardId(db: Db, cardIds: number[]): Map<number, string | null> {
@@ -334,10 +390,12 @@ function withDisplayData(db: Db, ranked: ScoredCandidate[]): EntryCandidate[] {
   const cardIds = ranked.map(candidate => candidate.cardId)
   const images = imagesByCardId(db, cardIds)
   const printings = printingsByCardId(db, cardIds)
+  const germanNames = germanNamesByCardId(db, cardIds)
 
   return ranked.map(candidate => ({
     cardId: candidate.cardId,
     name: candidate.name,
+    nameDe: germanNames.get(candidate.cardId) ?? null,
     type: candidate.type,
     frameType: candidate.frameType,
     imageSmall: images.get(candidate.cardId) ?? null,
@@ -401,9 +459,9 @@ function collectScoredCandidates(db: Db, parsed: ParsedEntryLine, limit: number)
   // a plain table scan; display data is fetched for the ranked ids only.
   const patterns: SQL[] = [
     sql`lower(${catalogCard.name}) = ${lowerQuery}`,
-    likeCondition(catalogCard.name, prefixPattern),
-    likeCondition(catalogCard.name, containsPattern),
-    ...tokenize(query).map(token => likeCondition(catalogCard.name, `%${escapeLikeTerm(token)}%`)),
+    escapedLike(catalogCard.name, prefixPattern),
+    escapedLike(catalogCard.name, containsPattern),
+    ...tokenize(query).map(token => escapedLike(catalogCard.name, `%${escapeLikeTerm(token)}%`)),
   ]
 
   const pool = selectCards(
@@ -424,24 +482,46 @@ function collectScoredCandidates(db: Db, parsed: ParsedEntryLine, limit: number)
       continue
     }
 
-    const foldedName = fold(row.name)
-    const sim = similarity(foldedQuery, foldedName)
+    const scored = scoreName(row, foldedQuery, fold(row.name))
+    if (scored) {
+      remember(scored)
+    }
+  }
 
-    if (foldedName === foldedQuery) {
-      remember({ ...row, score: 1, matchedBy: 'exact' })
-    }
-    else if (foldedName.startsWith(foldedQuery)) {
-      remember({ ...row, score: Math.max(0.8, sim), matchedBy: 'prefix' })
-    }
-    else if (foldedName.includes(foldedQuery)) {
-      remember({ ...row, score: Math.max(0.6, sim), matchedBy: 'contains' })
-    }
-    else if (sim >= MIN_FUZZY_SCORE) {
-      remember({ ...row, score: sim, matchedBy: 'fuzzy' })
+  // The German pool: scored against the German name with the same match
+  // levels; `remember` keeps whichever language matched better.
+  const germanQuery = normalizeCardName(query)
+  if (germanQuery !== '') {
+    const germanTokens = [...new Set(tokenize(query).map(normalizeCardName).filter(token => token.length >= 3))]
+    for (const row of selectGermanCards(db, germanQuery, germanTokens, CANDIDATE_POOL_LIMIT)) {
+      const { nameDeSearch, ...candidate } = row
+      const scored = scoreName(candidate, germanQuery, nameDeSearch)
+      if (scored) {
+        remember(scored)
+      }
     }
   }
 
   return byCardId
+}
+
+/** Match level and score of one name (already folded) against the folded query. */
+function scoreName(row: CandidateRow, foldedQuery: string, foldedName: string): ScoredCandidate | null {
+  const sim = similarity(foldedQuery, foldedName)
+
+  if (foldedName === foldedQuery) {
+    return { ...row, score: 1, matchedBy: 'exact' }
+  }
+  if (foldedName.startsWith(foldedQuery)) {
+    return { ...row, score: Math.max(0.8, sim), matchedBy: 'prefix' }
+  }
+  if (foldedName.includes(foldedQuery)) {
+    return { ...row, score: Math.max(0.6, sim), matchedBy: 'contains' }
+  }
+  if (sim >= MIN_FUZZY_SCORE) {
+    return { ...row, score: sim, matchedBy: 'fuzzy' }
+  }
+  return null
 }
 
 /**
@@ -480,7 +560,18 @@ export function resolveEntryLine(db: Db, parsed: ParsedEntryLine): ParsedEntryLi
     .limit(1)
     .get()
 
-  return exact ? { raw: parsed.raw, quantity: 1, query: rawLine } : parsed
+  // A German card name can start with a number too.
+  const foldedLine = normalizeCardName(rawLine)
+  const exactGerman = !exact && foldedLine !== ''
+    ? db
+        .select({ id: catalogCardTranslation.cardId })
+        .from(catalogCardTranslation)
+        .where(and(eq(catalogCardTranslation.locale, 'de'), eq(catalogCardTranslation.nameSearch, foldedLine)))
+        .limit(1)
+        .get()
+    : undefined
+
+  return exact || exactGerman ? { raw: parsed.raw, quantity: 1, query: rawLine } : parsed
 }
 
 function badRequest(message: string): never {

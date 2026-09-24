@@ -14,11 +14,12 @@
 // own rows, and a referenced deck/collection/action that belongs to someone
 // else is reported as missing (404), never as forbidden.
 
-import { and, asc, eq, inArray, like } from 'drizzle-orm'
+import { and, asc, eq, inArray } from 'drizzle-orm'
 import { createError } from 'h3'
 import type { useDb } from '../db'
 import { assistantAction, catalogCard, catalogCardImage, collection, ownedCard } from '../db/schema'
 import type { ToolDefinition } from './deck-assistant-model'
+import { cardNameMatches } from './card-name-search'
 import { getCatalogCardDetail } from './catalog-search'
 import { requireCollectionOwnedByUser, listCollections } from './collections'
 import {
@@ -223,11 +224,10 @@ function toolSearchCatalog(db: Db, args: unknown) {
   return { items: capped.map(row => ({ ...row, imageSmall: imageByCard.get(row.id) ?? null })), truncated }
 }
 
-// A plain (unescaped) substring match is enough for a model-driven lookup
-// tool — unlike a raw user search box, the query here always comes from a
-// tool-call argument the model itself chose.
+// The same bilingual name search as the catalog (ADR 0015): English or German
+// name, a literal substring (wildcards escaped), folded for case and accents.
 function sqlLikeName(query: string) {
-  return like(catalogCard.name, `%${query}%`)
+  return cardNameMatches(query)
 }
 
 async function toolGetCard(db: Db, args: unknown) {

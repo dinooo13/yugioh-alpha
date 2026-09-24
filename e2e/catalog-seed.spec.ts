@@ -10,4 +10,15 @@ test.describe('catalog seed', () => {
 
     await expect(page.getByRole('heading', { name: 'Dark Magician' })).toBeVisible()
   })
+
+  test('search finds a card by its German name (ADR 0015)', async ({ page }) => {
+    await registerAndLogin(page)
+
+    await page.goto('/catalog')
+    await page.getByLabel('Karten suchen').fill('Dunkler Magier')
+
+    // Still displayed in English until the card language arrives (F3c).
+    await expect(page.getByRole('heading', { name: 'Dark Magician' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Pot of Greed' })).toHaveCount(0)
+  })
 })

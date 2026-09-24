@@ -1,6 +1,6 @@
 import { and, eq, inArray, or, sql, type SQL } from 'drizzle-orm'
-import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core'
 import { catalogCard, catalogPrinting } from '../db/schema'
+import { cardNameMatches, cardTextMatches } from './card-name-search'
 
 export type CatalogSort = 'name' | '-name' | 'newest'
 
@@ -42,14 +42,6 @@ function parsePositiveInt(value: RawQueryValue, fallback: number): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
 }
 
-export function escapeLikeTerm(term: string): string {
-  return term.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_')
-}
-
-function escapedLike(column: AnySQLiteColumn, pattern: string): SQL {
-  return sql`${column} like ${pattern} escape '\\'`
-}
-
 export function parseCardListQuery(rawQuery: RawCardListQuery): CardListQuery {
   const page = parsePositiveInt(rawQuery.page, 1)
   const requestedPageSize = parsePositiveInt(rawQuery.pageSize, DEFAULT_PAGE_SIZE)
@@ -75,11 +67,11 @@ export function buildCardListWhere(filters: CardListQuery): SQL | undefined {
   const conditions: SQL[] = []
 
   if (filters.q) {
-    const pattern = `%${escapeLikeTerm(filters.q)}%`
-    const nameCondition = escapedLike(catalogCard.name, pattern)
+    // Bilingual: English and German names (and texts with `inText`), ADR 0015.
+    const nameCondition = cardNameMatches(filters.q)
     conditions.push(
       filters.inText
-        ? or(nameCondition, escapedLike(catalogCard.desc, pattern))!
+        ? or(nameCondition, cardTextMatches(filters.q))!
         : nameCondition,
     )
   }

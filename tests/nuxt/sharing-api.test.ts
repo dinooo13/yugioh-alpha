@@ -23,6 +23,7 @@ import {
 import type { ShareAccessVia, ShareTarget } from '../../server/utils/sharing'
 import { buildSharedDeckView, listSharedCollection, listSharedInventory, listVisibleDecks } from '../../server/utils/shared-views'
 import type { ShareResourceType, Visibility } from '../../shared/sharing'
+import { seedGermanNames } from './fixtures/german-names'
 
 const CARD = {
   darkMagician: 46986414,
@@ -533,5 +534,19 @@ describe('listSharedInventory', () => {
 
     const clamped = listSharedInventory(db, 'user-a', { pageSize: 1000 })
     expect(clamped.pageSize).toBe(100)
+  })
+
+  it('filters by German name too, in the inventory and in a collection (ADR 0015)', async () => {
+    const db = createTestDb()
+    seedUsersAndCatalog(db)
+    seedGermanNames(db, { [CARD.darkMagician]: 'Dunkler Magier', [CARD.potOfGreed]: 'Topf der Gier' })
+    const box = await createCollection(db, 'user-a', { name: 'Box', description: null })
+    await addOwnedCard(db, 'user-a', validateInventoryInput({ catalog_card_id: CARD.darkMagician, collection_id: box.id }))
+    await addOwnedCard(db, 'user-a', validateInventoryInput({ catalog_card_id: CARD.potOfGreed, collection_id: box.id }))
+
+    expect(listSharedInventory(db, 'user-a', { q: 'topf der' }).items.map(item => item.catalogCardId))
+      .toEqual([CARD.potOfGreed])
+    expect(listSharedCollection(db, 'user-a', box.id, { q: 'DUNKLER' }).items.map(item => item.catalogCardId))
+      .toEqual([CARD.darkMagician])
   })
 })

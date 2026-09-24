@@ -4,7 +4,7 @@
     "description": "Search the global card catalog by name, type, attribute, monster type, level and set.",
     "resultCount": "{count} card | {count} cards",
     "search": {
-      "placeholder": "Search cards...",
+      "placeholder": "Card name (English or German)...",
       "label": "Search cards"
     },
     "filters": {

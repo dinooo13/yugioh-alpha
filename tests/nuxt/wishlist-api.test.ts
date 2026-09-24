@@ -15,6 +15,7 @@ import {
   validateWishlistInput,
   wishlistCardIds,
 } from '../../server/utils/wishlist'
+import { seedGermanNames } from './fixtures/german-names'
 
 const CARD = {
   darkMagician: 46986414,
@@ -116,6 +117,14 @@ describe('listWishlist / listPublicWishlist', () => {
   it('listWishlist includes owned copies from the inventory', () => {
     const page = listWishlist(db, 'user-a')
     expect(page.items[0]).toMatchObject({ catalogCardId: CARD.darkMagician, quantity: 3, owned: 1 })
+  })
+
+  it('listWishlist finds items by their German name (ADR 0015)', () => {
+    seedGermanNames(db, { [CARD.darkMagician]: 'Dunkler Magier' })
+
+    expect(listWishlist(db, 'user-a', { q: 'dunkler mag' }).items.map(item => item.catalogCardId))
+      .toEqual([CARD.darkMagician])
+    expect(listWishlist(db, 'user-a', { q: 'Topf' }).items).toEqual([])
   })
 
   it('listPublicWishlist omits owned but keeps note', () => {

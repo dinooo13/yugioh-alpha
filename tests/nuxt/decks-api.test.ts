@@ -33,6 +33,7 @@ import type { DeckCoverCandidate } from '../../server/utils/decks'
 import { createCollection } from '../../server/utils/collections'
 import { addOwnedCard, validateInventoryInput } from '../../server/utils/inventory'
 import { setShareState } from '../../server/utils/sharing'
+import { seedGermanNames } from './fixtures/german-names'
 
 const CARD = {
   darkMagician: 46986414,
@@ -676,6 +677,15 @@ describe('deck list', () => {
     expect(listDecks(db, 'user-a', { q: 'nichts' }).items).toEqual([])
     // LIKE wildcards in the term are matched literally.
     expect(listDecks(db, 'user-a', { q: '%' }).items).toEqual([])
+  })
+
+  it('finds a deck by the German name of a contained card (ADR 0015)', () => {
+    seedGermanNames(db, { [CARD.stardustDragon]: 'Sternenstaubdrache' })
+    const dragons = createDeck(db, 'user-a', { name: 'Synchro', description: null })
+    upsertDeckCard(db, 'user-a', dragons.id, { catalogCardId: CARD.stardustDragon, section: 'extra', quantity: 1 })
+    createDeck(db, 'user-a', { name: 'Leer', description: null })
+
+    expect(listDecks(db, 'user-a', { q: 'STERNENSTAUB' }).items.map(item => item.name)).toEqual(['Synchro'])
   })
 
   it('never matches a card that is only in another user deck', () => {

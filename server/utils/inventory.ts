@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { and, desc, eq, inArray, isNull, like, ne, or, sql } from 'drizzle-orm'
+import { and, desc, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm'
 import { createError } from 'h3'
 import type { useDb } from '../db'
 import {
@@ -11,6 +11,7 @@ import {
 } from '../db/schema'
 import { CARD_CONDITIONS, CARD_EDITIONS, PRINTING_LANGUAGES, UNASSIGNED_COLLECTION_ID } from '../../shared/inventory'
 import type { CardCondition, CardEdition, PrintingLanguage } from '../../shared/inventory'
+import { cardNameMatches, escapedLike, escapeLikeTerm } from './card-name-search'
 import { assertCollectionOwnedByUser } from './collections'
 
 type Db = ReturnType<typeof useDb>
@@ -509,7 +510,7 @@ export function listOwnedCards(db: Db, userId: string, options: InventoryListOpt
   const q = options.q?.trim()
   const clauses = [eq(ownedCard.userId, userId)]
   if (q) {
-    clauses.push(like(catalogCard.name, `%${q}%`))
+    clauses.push(cardNameMatches(q))
   }
   // Row-level filters: unlike the aggregated search (inventory-search.ts),
   // which keeps every copy of a card that has at least one copy in the
@@ -593,7 +594,7 @@ export function ownedQuantitiesByCard(db: Db, userId: string, catalogCardIds: nu
 export function searchCatalogCards(db: Db, q = '') {
   const term = q.trim()
   const where = term
-    ? or(like(catalogCard.name, `%${term}%`), like(sql`${catalogCard.id}`, `%${term}%`))
+    ? or(cardNameMatches(term), escapedLike(sql`${catalogCard.id}`, `%${escapeLikeTerm(term)}%`))
     : undefined
 
   const cards = db

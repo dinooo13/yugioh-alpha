@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { buildCardListWhere, escapeLikeTerm, parseCardListQuery } from '../../server/utils/catalog-query'
+import { escapeLikeTerm } from '../../server/utils/card-name-search'
+import { buildCardListWhere, parseCardListQuery } from '../../server/utils/catalog-query'
 
 describe('parseCardListQuery', () => {
   it('clamps paging and drops invalid levels', () => {

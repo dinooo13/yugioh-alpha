@@ -4,7 +4,7 @@
     "description": "Durchsuche den globalen Kartenkatalog nach Name, Typ, Attribut, Monsterart, Level und Set.",
     "resultCount": "{count} Karte | {count} Karten",
     "search": {
-      "placeholder": "Karten suchen...",
+      "placeholder": "Kartenname (deutsch oder englisch)...",
       "label": "Karten suchen"
     },
     "filters": {

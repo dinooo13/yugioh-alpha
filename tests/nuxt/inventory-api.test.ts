@@ -9,9 +9,11 @@ import {
   deleteOwnedCard,
   listOwnedCards,
   parseInventoryListQuery,
+  searchCatalogCards,
   updateOwnedCard,
   validateInventoryInput,
 } from '../../server/utils/inventory'
+import { seedGermanNames } from './fixtures/german-names'
 
 function createTestDb() {
   const sqlite = new Database(':memory:')
@@ -200,6 +202,22 @@ describe('inventory persistence helpers', () => {
     function rows(result: ReturnType<typeof listOwnedCards>) {
       return result.items.map(item => `${item.cardName}/${item.collectionId ?? '-'}`).sort()
     }
+
+    it('searches English and German names, wildcards literal (ADR 0015)', () => {
+      seedGermanNames(db, { 46986414: 'Dunkler Magier', 55144522: 'Topf der Gier' })
+
+      expect(rows(listOwnedCards(db, 'user-a', { q: 'dark' }))).toEqual(['Dark Magician/-', 'Dark Magician/col-1'])
+      expect(rows(listOwnedCards(db, 'user-a', { q: 'TOPF' }))).toEqual(['Pot of Greed/col-1'])
+      expect(listOwnedCards(db, 'user-a', { q: '%' }).total).toBe(0)
+    })
+
+    it('finds catalog cards for the picker by German name or passcode', () => {
+      seedGermanNames(db, { 46986414: 'Dunkler Magier' })
+
+      expect(searchCatalogCards(db, 'dunkler').map(card => card.name)).toEqual(['Dark Magician'])
+      expect(searchCatalogCards(db, '5514452').map(card => card.name)).toEqual(['Pot of Greed'])
+      expect(searchCatalogCards(db, '_')).toEqual([])
+    })
 
     it('lists only unassigned rows for "__none__"', () => {
       const result = listOwnedCards(db, 'user-a', { collectionId: '__none__' })
