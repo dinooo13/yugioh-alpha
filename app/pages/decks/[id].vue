@@ -8,6 +8,8 @@ import type { DeckCover } from '~~/shared/deck-cover'
 import type { DeckSection } from '~~/shared/deck-sections'
 import type { DeckValidation, DeckWarning } from '~~/shared/rule-formats'
 import type { Visibility } from '~~/shared/sharing'
+import { cardFrame } from '~/utils/card-frame'
+import { deckCountState, deckMeterFill } from '~/utils/deck-meter'
 
 interface DeckCardRow {
   catalogCardId: number
@@ -459,23 +461,12 @@ function sectionLimitLabel(section: DeckSection): string {
   return `${counts.value[section]}/${max}`
 }
 
-/**
- * Where a section's card count stands against the deck limits: `under` (only
- * the Main Deck has a minimum), `over`, `ok` (a legal Main Deck size) or
- * `none` (a size-less Extra/Side Deck within its maximum). Rendered as
- * `data-state`, so tests don't depend on color classes.
- */
-function sectionCountState(section: DeckSection): 'under' | 'over' | 'ok' | 'none' {
-  const count = counts.value[section]
-  if (section === 'main') {
-    if (count > limits.value.mainMax) {
-      return 'over'
-    }
-    return count < limits.value.mainMin ? 'under' : 'ok'
-  }
+function sectionCountState(section: DeckSection) {
+  return deckCountState(section, counts.value[section], limits.value)
+}
 
-  const max = section === 'extra' ? limits.value.extraMax : limits.value.sideMax
-  return count > max ? 'over' : 'none'
+function sectionMeterFill(section: DeckSection): string {
+  return `${deckMeterFill(section, counts.value[section], limits.value)}%`
 }
 
 const SECTION_COUNT_CLASS = {
@@ -780,7 +771,10 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
         </div>
       </LayoutPageHeader>
 
-      <section class="rounded-md border border-default bg-default p-4">
+      <section
+        class="panel p-4"
+        :class="deck.format && validation?.legal ? 'ring-1 ring-success/40' : undefined"
+      >
         <div class="flex flex-wrap items-center justify-between gap-2">
           <h2 class="text-base font-semibold text-highlighted">
             {{ t('decks.editor.validation.title') }}
@@ -852,20 +846,30 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
           <section
             v-for="section in DECK_SECTIONS"
             :key="section"
-            class="rounded-md border border-default bg-default"
+            class="panel overflow-hidden"
           >
-            <header class="flex items-center justify-between border-b border-default px-4 py-3">
+            <header
+              class="flex items-center justify-between gap-3 border-b border-default bg-linear-to-r to-transparent px-4 py-3"
+              :class="section === 'main' ? 'from-primary/8' : section === 'extra' ? 'from-attr-dark/12' : 'from-elevated/70'"
+            >
               <h2 class="text-base font-semibold text-highlighted">
                 {{ sectionName(section) }}
               </h2>
-              <span
-                class="text-sm font-semibold tabular-nums"
-                :class="sectionCountClass(section)"
+              <!-- The meter is decorative; the count is the information. -->
+              <div
+                class="deck-meter w-24 text-right sm:w-28"
                 :data-state="sectionCountState(section)"
-                :aria-label="t('decks.editor.countIn', { section: sectionName(section) })"
+                :style="{ '--fill': sectionMeterFill(section) }"
               >
-                {{ sectionLimitLabel(section) }}
-              </span>
+                <span
+                  class="font-numeric text-sm font-bold tracking-[0.04em] tabular-nums"
+                  :class="sectionCountClass(section)"
+                  :data-state="sectionCountState(section)"
+                  :aria-label="t('decks.editor.countIn', { section: sectionName(section) })"
+                >
+                  {{ sectionLimitLabel(section) }}
+                </span>
+              </div>
             </header>
 
             <p
@@ -884,10 +888,17 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
               <li
                 v-for="row in sections[section]"
                 :key="`${section}-${row.catalogCardId}`"
-                class="grid grid-cols-[2.5rem_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 px-4 py-2 @lg:grid-cols-[2.5rem_minmax(0,1fr)_auto_auto]"
+                class="relative grid grid-cols-[2.5rem_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 px-4 py-2 @lg:grid-cols-[2.5rem_minmax(0,1fr)_auto_auto]"
                 :class="issueCardIds.has(row.catalogCardId) ? 'bg-error/10' : undefined"
                 :data-issue="issueCardIds.has(row.catalogCardId) ? '' : undefined"
+                :data-frame="cardFrame(row)?.frame"
+                :data-pendulum="cardFrame(row)?.pendulum ? '' : undefined"
               >
+                <!-- The card's frame color as a stripe on the row's edge (decorative). -->
+                <span
+                  class="frame-stripe-y absolute inset-y-2 left-0 w-[3px] rounded-e-full"
+                  aria-hidden="true"
+                />
                 <CardThumb
                   :src="row.imageSmall"
                   :alt="cardName(row)"
@@ -1007,7 +1018,7 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
         >
           <!-- On lg the panel sticks beside the deck and only the result list
                scrolls; below lg it sits under the deck and can be collapsed. -->
-          <div class="flex flex-col rounded-md border border-default bg-default p-4 lg:max-h-[calc(100dvh-4rem)]">
+          <div class="panel flex flex-col p-4 lg:max-h-[calc(100dvh-4rem)]">
             <div class="flex items-center justify-between gap-2">
               <h2
                 id="deck-add-panel-title"
@@ -1120,8 +1131,12 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
                       <p class="truncate text-sm font-medium text-highlighted">
                         {{ cardName(card) }}
                       </p>
-                      <p class="truncate text-xs text-muted">
-                        {{ cardMetaLine(card) }}
+                      <p class="flex min-w-0 items-center gap-1.5 text-xs text-muted">
+                        <CardFrameDot
+                          :type="card.type"
+                          :frame-type="card.frameType"
+                        />
+                        <span class="truncate">{{ cardMetaLine(card) }}</span>
                       </p>
                       <!-- Only cards already in the deck have a known status: the
                            whole inventory is never validated. -->

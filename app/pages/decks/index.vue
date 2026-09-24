@@ -4,6 +4,7 @@ import { DECK_NAME_MAX_LENGTH, DECK_SECTIONS } from '~~/shared/deck-sections'
 import type { DeckSection } from '~~/shared/deck-sections'
 import type { Visibility } from '~~/shared/sharing'
 import { copyName } from '~/utils/copy-name'
+import { deckCountState, deckMeterFill } from '~/utils/deck-meter'
 
 interface DeckListItem {
   id: string
@@ -251,6 +252,11 @@ function sectionCount(deck: DeckListItem, section: DeckSection): number {
   return section === 'main' ? deck.mainCount : section === 'extra' ? deck.extraCount : deck.sideCount
 }
 
+function sectionMeter(deck: DeckListItem, section: DeckSection) {
+  const count = sectionCount(deck, section)
+  return { state: deckCountState(section, count), fill: `${deckMeterFill(section, count)}%` }
+}
+
 function deckFormatName(deck: DeckListItem): string | null {
   return deck.formatName ? formatName({ id: deck.formatId, name: deck.formatName }) : null
 }
@@ -279,6 +285,7 @@ function statusColor(deck: DeckListItem) {
         />
         <UButton
           icon="i-lucide-plus"
+          class="btn-summon"
           :label="t('decks.list.newDeck')"
           @click="openCreate"
         />
@@ -321,7 +328,7 @@ function statusColor(deck: DeckListItem) {
       <USkeleton
         v-for="n in 3"
         :key="n"
-        class="h-36 w-full"
+        class="h-40 w-full rounded-xl"
       />
     </div>
 
@@ -357,18 +364,22 @@ function statusColor(deck: DeckListItem) {
       <li
         v-for="deck in decks"
         :key="deck.id"
-        class="flex gap-3 rounded-md border border-default bg-default p-4"
+        class="group panel flex gap-4 overflow-hidden p-4 transition-[translate,box-shadow,border-color] duration-200 ease-out-expo hover:border-primary/40 hover:shadow-lift motion-safe:hover:-translate-y-0.5"
       >
         <!-- Cover card (#29): purely decorative next to the deck name link,
-             so it is kept out of the tab order and the accessibility tree. -->
+             so it is kept out of the tab order and the accessibility tree.
+             Two card backs fan out behind it (ADR 0016). -->
         <NuxtLink
           :to="`/decks/${deck.id}`"
           tabindex="-1"
           aria-hidden="true"
-          class="shrink-0 self-start"
+          class="deck-fan shrink-0 self-start"
         >
+          <span class="fan-card card-back" />
+          <span class="fan-card card-back" />
           <CardThumb
             size="lg"
+            class="fan-cover"
             :src="deck.cover?.imageSmall"
             :src-large="deck.cover?.imageLarge"
             :alt="deck.cover ? cardName(deck.cover) : deck.name"
@@ -382,7 +393,7 @@ function statusColor(deck: DeckListItem) {
               :to="`/decks/${deck.id}`"
               class="min-w-0 flex-1"
             >
-              <h2 class="truncate text-base font-semibold text-highlighted hover:text-primary">
+              <h2 class="truncate text-base font-semibold text-highlighted transition-colors group-hover:text-primary">
                 {{ deck.name }}
               </h2>
               <p
@@ -405,14 +416,18 @@ function statusColor(deck: DeckListItem) {
             </UDropdownMenu>
           </div>
 
-          <dl class="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-sm text-toned">
+          <!-- Each count with a meter against the deck limits (decorative;
+               the number is the information). -->
+          <dl class="mt-3 grid max-w-72 grid-cols-3 gap-3 text-xs text-muted">
             <div
               v-for="section in DECK_SECTIONS"
               :key="section"
-              class="flex gap-1"
+              class="deck-meter flex items-baseline gap-1.5"
+              :data-state="sectionMeter(deck, section).state"
+              :style="{ '--fill': sectionMeter(deck, section).fill }"
             >
               <dt>{{ sectionShortName(section) }}</dt>
-              <dd class="font-semibold tabular-nums text-highlighted">
+              <dd class="font-numeric text-base font-bold tracking-[0.04em] text-highlighted tabular-nums">
                 {{ sectionCount(deck, section) }}
               </dd>
             </div>
@@ -445,7 +460,7 @@ function statusColor(deck: DeckListItem) {
                 variant="subtle"
                 :label="deck.legal ? t('validation.badge.legal') : t('validation.badge.notLegal')"
               />
-              <span class="text-xs text-muted">{{ count('decks.list.cardCount', deck.cardCount) }}</span>
+              <span class="text-xs text-muted tabular-nums">{{ count('decks.list.cardCount', deck.cardCount) }}</span>
             </div>
           </div>
         </div>

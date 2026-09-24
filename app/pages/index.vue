@@ -92,7 +92,7 @@ const cards = computed<OnboardingCard[]>(() => [
           :name="ownProfile.displayName"
           :handle="ownProfile.handle"
           size="3xl"
-          class="shrink-0 ring-2 ring-secondary/70 ring-offset-4 ring-offset-bg"
+          class="size-16 shrink-0 text-[1.75rem] ring-2 ring-secondary/70 ring-offset-4 ring-offset-bg"
         />
         <div class="min-w-0">
           <h1 class="text-[0.6875rem] font-semibold tracking-[0.18em] text-secondary uppercase">

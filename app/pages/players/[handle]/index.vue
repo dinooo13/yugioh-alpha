@@ -52,25 +52,36 @@ const isEmpty = computed(() => {
     <SharingNotFoundNotice v-if="error" />
 
     <template v-else-if="data">
-      <div class="flex items-start gap-4 rounded-md border border-default bg-default p-6">
-        <ProfileAvatar
-          size="3xl"
-          :name="data.profile.displayName"
-          :handle="data.profile.handle"
-          class="shrink-0"
-        />
-        <LayoutPageHeader
-          :title="data.profile.displayName"
-          :description="t('sharing.handle', { handle: data.profile.handle })"
-          class="min-w-0 flex-1"
+      <!-- Profile header (ADR 0016): an arena banner, the avatar in a gold ring
+           overlapping it, the name in the display face. -->
+      <div class="panel overflow-hidden">
+        <div
+          class="arena-surface relative h-24 overflow-hidden border-b border-default sm:h-28"
+          aria-hidden="true"
         >
-          <p
-            v-if="data.profile.bio"
-            class="mt-3 max-w-prose text-sm text-default"
+          <LayoutArcaneRings class="absolute -top-32 -right-10 size-80 sm:right-10" />
+          <div class="gold-hairline absolute inset-x-0 -bottom-px" />
+        </div>
+        <div class="flex flex-col gap-4 px-5 pb-6 sm:flex-row sm:items-start sm:px-6">
+          <ProfileAvatar
+            size="3xl"
+            :name="data.profile.displayName"
+            :handle="data.profile.handle"
+            class="relative -mt-12 size-20 shrink-0 text-3xl shadow-[0_0_0_6px_color-mix(in_oklab,var(--ui-secondary)_70%,transparent)] ring-4 ring-bg"
+          />
+          <LayoutPageHeader
+            :title="data.profile.displayName"
+            :description="t('sharing.handle', { handle: data.profile.handle })"
+            class="min-w-0 flex-1 sm:pt-4"
           >
-            {{ data.profile.bio }}
-          </p>
-        </LayoutPageHeader>
+            <p
+              v-if="data.profile.bio"
+              class="mt-3 max-w-prose text-sm leading-6 text-default"
+            >
+              {{ data.profile.bio }}
+            </p>
+          </LayoutPageHeader>
+        </div>
       </div>
 
       <!-- The owner sees their own profile through the visitor's lens —
@@ -128,17 +139,21 @@ const isEmpty = computed(() => {
             <li
               v-for="deck in data.decks"
               :key="deck.id"
-              class="flex gap-3 rounded-md border border-default bg-default p-4"
+              class="group panel flex gap-4 overflow-hidden p-4 transition-[translate,box-shadow,border-color] duration-200 ease-out-expo hover:border-primary/40 hover:shadow-lift motion-safe:hover:-translate-y-0.5"
             >
-              <!-- Decorative cover (#29) next to the deck name link. -->
+              <!-- Decorative cover (#29) next to the deck name link, fanned
+                   out like the owner's deck list (ADR 0016). -->
               <NuxtLink
                 :to="`/players/${handle}/decks/${deck.id}`"
                 tabindex="-1"
                 aria-hidden="true"
-                class="shrink-0 self-start"
+                class="deck-fan shrink-0 self-start"
               >
+                <span class="fan-card card-back" />
+                <span class="fan-card card-back" />
                 <CardThumb
-                  size="md"
+                  size="lg"
+                  class="fan-cover"
                   :src="deck.cover?.imageSmall"
                   :src-large="deck.cover?.imageLarge"
                   :alt="deck.cover ? cardName(deck.cover) : deck.name"
@@ -150,7 +165,7 @@ const isEmpty = computed(() => {
                   :to="`/players/${handle}/decks/${deck.id}`"
                   class="block min-w-0"
                 >
-                  <h3 class="truncate text-base font-semibold text-highlighted hover:text-primary">
+                  <h3 class="truncate text-base font-semibold text-highlighted transition-colors group-hover:text-primary">
                     {{ deck.name }}
                   </h3>
                 </NuxtLink>
@@ -178,7 +193,7 @@ const isEmpty = computed(() => {
             <li
               v-for="collection in data.collections"
               :key="collection.id"
-              class="rounded-md border border-default bg-default p-4"
+              class="panel p-4 transition-[box-shadow,border-color] duration-200 hover:border-primary/40 hover:shadow-lift"
             >
               <NuxtLink
                 :to="`/players/${handle}/collections/${collection.id}`"
@@ -202,7 +217,7 @@ const isEmpty = computed(() => {
 
         <section
           v-if="data.inventory.visible"
-          class="rounded-md border border-default bg-default p-4"
+          class="panel p-4"
         >
           <h2 class="text-base font-semibold text-highlighted">
             {{ t('players.profile.inventory') }}
@@ -220,7 +235,7 @@ const isEmpty = computed(() => {
 
         <section
           v-if="data.wishlist.visible"
-          class="rounded-md border border-default bg-default p-4"
+          class="panel p-4"
         >
           <h2 class="text-base font-semibold text-highlighted">
             {{ t('players.profile.wishlist') }}
@@ -238,7 +253,7 @@ const isEmpty = computed(() => {
               class="flex items-center justify-between gap-3 py-2 text-sm"
             >
               <span class="truncate text-highlighted">{{ cardName(item) }}</span>
-              <span class="shrink-0 font-semibold tabular-nums text-default">{{ item.quantity }}×</span>
+              <span class="shrink-0 font-numeric font-semibold tracking-[0.04em] text-default tabular-nums">{{ item.quantity }}×</span>
             </li>
           </ul>
         </section>
