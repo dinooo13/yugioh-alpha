@@ -73,7 +73,7 @@ async function onDelete(item: AssistantConversationListItem) {
       />
       <p
         v-if="errorMessage"
-        class="mt-2 text-xs text-red-600"
+        class="mt-2 text-xs text-error"
       >
         {{ errorMessage }}
       </p>
@@ -87,8 +87,8 @@ async function onDelete(item: AssistantConversationListItem) {
       >
         <NuxtLink
           :to="`/assistant/${item.id}`"
-          class="min-w-0 flex-1 truncate rounded-md px-2.5 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
-          :class="{ 'bg-gray-100 font-medium text-gray-900': item.id === props.activeId }"
+          class="min-w-0 flex-1 truncate rounded-md px-2.5 py-1.5 text-sm text-default hover:bg-elevated"
+          :class="{ 'bg-elevated font-medium text-highlighted': item.id === props.activeId }"
         >
           {{ item.title }}
         </NuxtLink>
@@ -106,7 +106,7 @@ async function onDelete(item: AssistantConversationListItem) {
 
       <li
         v-if="props.items.length === 0"
-        class="px-2.5 py-1.5 text-sm text-gray-500"
+        class="px-2.5 py-1.5 text-sm text-muted"
       >
         {{ t('assistant.conversations.empty') }}
       </li>

@@ -19,7 +19,7 @@ const subtitle = computed(() => cardSubtitle(props.item, cardValue))
 </script>
 
 <template>
-  <article class="group flex min-w-0 flex-col overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md">
+  <article class="group flex min-w-0 flex-col overflow-hidden rounded-lg border border-default bg-default shadow-sm transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md">
     <button
       type="button"
       :aria-label="t('card.enlarge', { name: cardName(item) })"
@@ -38,15 +38,15 @@ const subtitle = computed(() => cardSubtitle(props.item, cardValue))
 
     <div class="space-y-2 p-3">
       <div class="space-y-0.5">
-        <h2 class="line-clamp-2 text-sm font-semibold leading-5 text-gray-900 group-hover:text-primary sm:text-base">
+        <h2 class="line-clamp-2 text-sm font-semibold leading-5 text-highlighted group-hover:text-primary sm:text-base">
           {{ cardName(item) }}
         </h2>
-        <p class="truncate text-xs text-gray-500">
+        <p class="truncate text-xs text-muted">
           {{ subtitle }}
         </p>
       </div>
 
-      <p class="text-sm font-semibold tabular-nums text-gray-900">
+      <p class="text-sm font-semibold tabular-nums text-highlighted">
         {{ t('card.totalQuantity', { count: item.totalQuantity }) }}
       </p>
 
@@ -78,8 +78,8 @@ const subtitle = computed(() => cardSubtitle(props.item, cardValue))
                 :key="breakdownKey(entry)"
                 class="flex items-center justify-between gap-4 text-sm"
               >
-                <span class="text-gray-700">{{ breakdownLabel(entry, t) }}</span>
-                <span class="font-medium tabular-nums text-gray-900">×{{ entry.quantity }}</span>
+                <span class="text-default">{{ breakdownLabel(entry, t) }}</span>
+                <span class="font-medium tabular-nums text-highlighted">×{{ entry.quantity }}</span>
               </div>
             </div>
           </template>

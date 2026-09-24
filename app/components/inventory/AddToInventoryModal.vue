@@ -166,10 +166,10 @@ async function save() {
         @submit.prevent="save"
       >
         <div v-if="card">
-          <p class="text-sm font-medium text-gray-900">
+          <p class="text-sm font-medium text-highlighted">
             {{ cardName(card) }}
           </p>
-          <p class="text-xs text-gray-500">
+          <p class="text-xs text-muted">
             {{ cardValue('type', card.type) }}
           </p>
         </div>
@@ -239,7 +239,7 @@ async function save() {
         <p
           v-if="errorMessage"
           role="alert"
-          class="text-sm text-red-600"
+          class="text-sm text-error"
         >
           {{ errorMessage }}
         </p>

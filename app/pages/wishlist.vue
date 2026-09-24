@@ -132,7 +132,7 @@ function nextPage() {
 
     <ul
       v-else
-      class="divide-y divide-gray-100 rounded-md border border-gray-200 bg-white"
+      class="divide-y divide-default rounded-md border border-default bg-default"
     >
       <WishlistRow
         v-for="item in items"
@@ -155,7 +155,7 @@ function nextPage() {
         :aria-label="t('common.pagination.previous')"
         @click="previousPage"
       />
-      <span class="min-w-28 text-center text-sm text-gray-600">
+      <span class="min-w-28 text-center text-sm text-toned">
         {{ t('common.pagination.pageOf', { page, total: totalPages }) }}
       </span>
       <UButton

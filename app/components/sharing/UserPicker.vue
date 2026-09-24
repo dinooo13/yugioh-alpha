@@ -72,7 +72,7 @@ function select(item: UserSearchItem) {
 
     <ul
       v-if="results.length > 0"
-      class="divide-y divide-gray-100 rounded-md border border-gray-200 bg-white"
+      class="divide-y divide-default rounded-md border border-default bg-default"
     >
       <li
         v-for="item in results"
@@ -80,10 +80,10 @@ function select(item: UserSearchItem) {
         class="flex items-center justify-between gap-2 px-3 py-2"
       >
         <div class="min-w-0">
-          <p class="truncate text-sm font-medium text-gray-900">
+          <p class="truncate text-sm font-medium text-highlighted">
             {{ item.displayName }}
           </p>
-          <p class="truncate text-xs text-gray-500">
+          <p class="truncate text-xs text-muted">
             {{ t('sharing.handle', { handle: item.handle }) }}
           </p>
         </div>
@@ -98,14 +98,14 @@ function select(item: UserSearchItem) {
 
     <p
       v-else-if="hasSearched && !isSearching && debouncedSearch.length >= 2"
-      class="text-sm text-gray-500"
+      class="text-sm text-muted"
     >
       {{ t('sharing.userPicker.noResults') }}
     </p>
 
     <p
       v-if="errorMessage"
-      class="text-sm text-red-600"
+      class="text-sm text-error"
     >
       {{ errorMessage }}
     </p>

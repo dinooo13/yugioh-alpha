@@ -23,14 +23,15 @@ export function avatarInitials(name: string): string {
 }
 
 // Literal class strings (not built from a color name) so Tailwind picks them
-// up. Every pair is -800 text on a -100 background for contrast.
+// up. Every pair is -800 text on a -100 background for contrast; in dark mode
+// (and in the always-dark sidebar) -200 text on a translucent -400 fill.
 const AVATAR_COLORS = [
-  { bg: 'bg-brand-100', text: 'text-brand-800' },
-  { bg: 'bg-emerald-100', text: 'text-emerald-800' },
-  { bg: 'bg-sky-100', text: 'text-sky-800' },
-  { bg: 'bg-amber-100', text: 'text-amber-800' },
-  { bg: 'bg-rose-100', text: 'text-rose-800' },
-  { bg: 'bg-teal-100', text: 'text-teal-800' },
+  { bg: 'bg-brand-100', text: 'text-brand-800', darkBg: 'dark:bg-brand-400/15', darkText: 'dark:text-brand-200' },
+  { bg: 'bg-emerald-100', text: 'text-emerald-800', darkBg: 'dark:bg-emerald-400/15', darkText: 'dark:text-emerald-200' },
+  { bg: 'bg-sky-100', text: 'text-sky-800', darkBg: 'dark:bg-sky-400/15', darkText: 'dark:text-sky-200' },
+  { bg: 'bg-amber-100', text: 'text-amber-800', darkBg: 'dark:bg-amber-400/15', darkText: 'dark:text-amber-200' },
+  { bg: 'bg-rose-100', text: 'text-rose-800', darkBg: 'dark:bg-rose-400/15', darkText: 'dark:text-rose-200' },
+  { bg: 'bg-teal-100', text: 'text-teal-800', darkBg: 'dark:bg-teal-400/15', darkText: 'dark:text-teal-200' },
 ] as const
 
 export type AvatarColorClasses = typeof AVATAR_COLORS[number]

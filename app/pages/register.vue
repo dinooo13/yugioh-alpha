@@ -49,10 +49,10 @@ async function onSubmit() {
 
 <template>
   <div>
-    <h1 class="text-xl font-semibold text-gray-900">
+    <h1 class="text-xl font-semibold text-highlighted">
       {{ t('auth.register.title') }}
     </h1>
-    <p class="mt-1 text-sm text-gray-500">
+    <p class="mt-1 text-sm text-muted">
       {{ t('auth.register.description') }}
     </p>
 
@@ -102,7 +102,7 @@ async function onSubmit() {
       <p
         v-if="errorKey"
         role="alert"
-        class="text-sm text-red-600"
+        class="text-sm text-error"
       >
         {{ t(errorKey) }}
       </p>
@@ -118,7 +118,7 @@ async function onSubmit() {
     <i18n-t
       keypath="auth.register.hasAccount"
       tag="p"
-      class="mt-6 text-center text-sm text-gray-500"
+      class="mt-6 text-center text-sm text-muted"
       scope="global"
     >
       <template #link>

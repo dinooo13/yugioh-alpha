@@ -27,7 +27,7 @@ withDefaults(defineProps<{
          the full width; the actions box stays pinned right. -->
     <div class="min-w-0 flex-1">
       <h1
-        class="text-2xl font-semibold text-gray-900"
+        class="text-2xl font-semibold text-highlighted"
         :class="truncate ? 'truncate' : 'break-words'"
       >
         <slot name="title">
@@ -36,7 +36,7 @@ withDefaults(defineProps<{
       </h1>
       <p
         v-if="description || $slots.description"
-        class="mt-1 text-sm text-gray-500"
+        class="mt-1 text-sm text-muted"
       >
         <slot name="description">
           {{ description }}

@@ -309,7 +309,7 @@ function statusColor(deck: DeckListItem) {
 
     <p
       v-if="errorMessage"
-      class="text-sm text-red-600"
+      class="text-sm text-error"
     >
       {{ errorMessage }}
     </p>
@@ -357,7 +357,7 @@ function statusColor(deck: DeckListItem) {
       <li
         v-for="deck in decks"
         :key="deck.id"
-        class="flex gap-3 rounded-md border border-gray-200 bg-white p-4"
+        class="flex gap-3 rounded-md border border-default bg-default p-4"
       >
         <!-- Cover card (#29): purely decorative next to the deck name link,
              so it is kept out of the tab order and the accessibility tree. -->
@@ -382,12 +382,12 @@ function statusColor(deck: DeckListItem) {
               :to="`/decks/${deck.id}`"
               class="min-w-0 flex-1"
             >
-              <h2 class="truncate text-base font-semibold text-gray-900 hover:text-primary">
+              <h2 class="truncate text-base font-semibold text-highlighted hover:text-primary">
                 {{ deck.name }}
               </h2>
               <p
                 v-if="deck.description"
-                class="mt-0.5 line-clamp-2 text-sm text-gray-500"
+                class="mt-0.5 line-clamp-2 text-sm text-muted"
               >
                 {{ deck.description }}
               </p>
@@ -405,14 +405,14 @@ function statusColor(deck: DeckListItem) {
             </UDropdownMenu>
           </div>
 
-          <dl class="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-600">
+          <dl class="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-sm text-toned">
             <div
               v-for="section in DECK_SECTIONS"
               :key="section"
               class="flex gap-1"
             >
               <dt>{{ sectionShortName(section) }}</dt>
-              <dd class="font-semibold tabular-nums text-gray-900">
+              <dd class="font-semibold tabular-nums text-highlighted">
                 {{ sectionCount(deck, section) }}
               </dd>
             </div>
@@ -445,7 +445,7 @@ function statusColor(deck: DeckListItem) {
                 variant="subtle"
                 :label="deck.legal ? t('validation.badge.legal') : t('validation.badge.notLegal')"
               />
-              <span class="text-xs text-gray-400">{{ count('decks.list.cardCount', deck.cardCount) }}</span>
+              <span class="text-xs text-muted">{{ count('decks.list.cardCount', deck.cardCount) }}</span>
             </div>
           </div>
         </div>

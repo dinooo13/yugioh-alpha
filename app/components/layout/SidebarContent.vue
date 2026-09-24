@@ -66,7 +66,7 @@ async function onLogout() {
 
     <div
       v-if="session"
-      class="border-t border-gray-200 p-3"
+      class="border-t border-default p-3"
     >
       <div class="flex items-center gap-2.5 px-1 py-1">
         <ProfileAvatar
@@ -75,7 +75,7 @@ async function onLogout() {
           size="md"
           class="shrink-0"
         />
-        <span class="truncate text-sm text-gray-700">{{ displayName }}</span>
+        <span class="truncate text-sm text-default">{{ displayName }}</span>
       </div>
       <UButton
         icon="i-lucide-user"

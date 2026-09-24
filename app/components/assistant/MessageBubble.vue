@@ -21,7 +21,7 @@ const isUser = computed(() => props.role === 'user')
   >
     <div
       class="max-w-[85%] rounded-lg px-3 py-2 text-sm sm:max-w-[75%]"
-      :class="isUser ? 'bg-primary text-white' : 'bg-gray-100 text-gray-900'"
+      :class="isUser ? 'bg-primary text-inverted' : 'bg-elevated text-highlighted'"
     >
       <ul
         v-if="attachments && attachments.length > 0"
@@ -31,7 +31,7 @@ const isUser = computed(() => props.role === 'user')
           v-for="index in attachments.length"
           :key="index"
           class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs"
-          :class="isUser ? 'bg-white/20' : 'bg-white'"
+          :class="isUser ? 'bg-inverted/15' : 'bg-default'"
         >
           <UIcon
             name="i-lucide-image"

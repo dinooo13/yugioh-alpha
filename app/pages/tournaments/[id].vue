@@ -254,11 +254,11 @@ const actionHint = computed(() => {
           />
           <span
             v-else
-            class="text-sm text-gray-500"
+            class="text-sm text-muted"
           >{{ t('tournaments.noFormat') }}</span>
         </div>
 
-        <dl class="mt-2 space-y-0.5 text-sm text-gray-500">
+        <dl class="mt-2 space-y-0.5 text-sm text-muted">
           <div>
             {{ t('tournaments.detail.pairingSystem', { name: t(`tournaments.pairingSystem.${tournament.pairingSystem}.label`) }) }}
           </div>
@@ -322,7 +322,7 @@ const actionHint = computed(() => {
             </div>
             <p
               v-if="actionHint"
-              class="text-xs text-gray-500"
+              class="text-xs text-muted"
             >
               {{ actionHint }}
             </p>
@@ -345,7 +345,7 @@ const actionHint = computed(() => {
 
       <p
         v-if="errorMessage"
-        class="text-sm text-red-600"
+        class="text-sm text-error"
       >
         {{ errorMessage }}
       </p>

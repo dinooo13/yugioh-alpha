@@ -92,7 +92,7 @@ function resetFilters() {
 <template>
   <div class="space-y-3">
     <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-      <span class="w-20 shrink-0 text-xs font-semibold uppercase text-gray-500">{{ t('inventory.search.catalogGroup') }}</span>
+      <span class="w-20 shrink-0 text-xs font-semibold uppercase text-muted">{{ t('inventory.search.catalogGroup') }}</span>
       <div class="flex flex-1 flex-wrap gap-2">
         <USelectMenu
           v-model="filters.type"
@@ -136,7 +136,7 @@ function resetFilters() {
     </div>
 
     <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-      <span class="w-20 shrink-0 text-xs font-semibold uppercase text-gray-500">{{ t('inventory.search.ownedGroup') }}</span>
+      <span class="w-20 shrink-0 text-xs font-semibold uppercase text-muted">{{ t('inventory.search.ownedGroup') }}</span>
       <div class="flex flex-1 flex-wrap items-center gap-2">
         <USelectMenu
           v-model="filters.language"

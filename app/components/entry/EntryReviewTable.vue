@@ -147,11 +147,11 @@ defineExpose({ defaults, summary, canSaveAll })
 
 <template>
   <div class="space-y-4">
-    <div class="rounded-md border border-gray-200 bg-white p-4">
-      <h2 class="text-sm font-semibold text-gray-900">
+    <div class="rounded-md border border-default bg-default p-4">
+      <h2 class="text-sm font-semibold text-highlighted">
         {{ t('quickEntry.defaults.title') }}
       </h2>
-      <p class="mt-1 text-xs text-gray-500">
+      <p class="mt-1 text-xs text-muted">
         {{ t('quickEntry.defaults.description') }}
       </p>
       <div class="mt-3 grid gap-3 sm:grid-cols-4">
@@ -186,7 +186,7 @@ defineExpose({ defaults, summary, canSaveAll })
       </div>
     </div>
 
-    <div class="flex flex-col gap-3 rounded-md border border-gray-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+    <div class="flex flex-col gap-3 rounded-md border border-default bg-default p-4 sm:flex-row sm:items-center sm:justify-between">
       <div class="flex flex-wrap items-center gap-2 text-sm">
         <UBadge
           color="neutral"
@@ -239,7 +239,7 @@ defineExpose({ defaults, summary, canSaveAll })
 
     <p
       v-if="hasUnresolved"
-      class="text-xs text-amber-700"
+      class="text-xs text-warning"
     >
       {{ t('quickEntry.review.unresolvedHint') }}
     </p>
@@ -253,7 +253,7 @@ defineExpose({ defaults, summary, canSaveAll })
     />
     <ul
       v-if="itemErrors.length > 0"
-      class="list-inside list-disc text-sm text-red-600"
+      class="list-inside list-disc text-sm text-error"
     >
       <li
         v-for="itemError in itemErrors"
@@ -263,7 +263,7 @@ defineExpose({ defaults, summary, canSaveAll })
       </li>
     </ul>
 
-    <div class="divide-y divide-gray-100 overflow-hidden rounded-md border border-gray-200 bg-white">
+    <div class="divide-y divide-default overflow-hidden rounded-md border border-default bg-default">
       <EntryReviewRow
         v-for="row in rows"
         :key="row.id"

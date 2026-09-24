@@ -100,10 +100,10 @@ async function startEmpty() {
 <template>
   <div class="space-y-6">
     <div>
-      <h1 class="text-2xl font-semibold text-gray-900">
+      <h1 class="text-2xl font-semibold text-highlighted">
         {{ t('assistant.title') }}
       </h1>
-      <p class="mt-1 max-w-prose text-sm text-gray-500">
+      <p class="mt-1 max-w-prose text-sm text-muted">
         {{ t('assistant.index.intro') }}
       </p>
     </div>
@@ -112,7 +112,7 @@ async function startEmpty() {
 
     <p
       v-else-if="isStarting"
-      class="text-sm text-gray-500"
+      class="text-sm text-muted"
       role="status"
     >
       {{ t('assistant.index.preparing') }}
@@ -121,7 +121,7 @@ async function startEmpty() {
     <template v-else>
       <p
         v-if="errorMessage"
-        class="text-sm text-red-600"
+        class="text-sm text-error"
       >
         {{ errorMessage }}
       </p>
@@ -139,7 +139,7 @@ async function startEmpty() {
           v-for="prompt in examplePrompts"
           :key="prompt"
           type="button"
-          class="rounded-md border border-gray-200 bg-white p-4 text-left text-sm text-gray-700 transition hover:border-primary hover:bg-primary/5 disabled:opacity-50"
+          class="rounded-md border border-default bg-default p-4 text-left text-sm text-default transition hover:border-primary hover:bg-primary/5 disabled:opacity-50"
           :disabled="isCreating"
           @click="startWithPrompt(prompt)"
         >

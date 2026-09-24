@@ -200,15 +200,15 @@ async function save() {
 
         <div
           v-if="selectedDeckId !== NO_DECK"
-          class="rounded-md border border-gray-200 bg-gray-50 p-3 text-sm"
+          class="rounded-md border border-default bg-muted p-3 text-sm"
         >
           <template v-if="previewPending">
-            <p class="text-gray-500">
+            <p class="text-muted">
               {{ t('tournaments.deckRegistration.checking') }}
             </p>
           </template>
           <template v-else-if="previewCounts">
-            <p class="text-gray-700">
+            <p class="text-default">
               {{ previewCountsLabel }}
             </p>
 
@@ -224,7 +224,7 @@ async function save() {
               />
               <ul
                 v-if="!previewValidation.legal"
-                class="mt-1 list-inside list-disc space-y-0.5 text-xs text-gray-600"
+                class="mt-1 list-inside list-disc space-y-0.5 text-xs text-toned"
               >
                 <li
                   v-for="(issue, index) in previewIssues"
@@ -236,32 +236,32 @@ async function save() {
             </div>
             <p
               v-else-if="format && previewUnavailable"
-              class="mt-2 text-xs text-gray-500"
+              class="mt-2 text-xs text-muted"
             >
               {{ t('tournaments.deckRegistration.checkedOnRegistration') }}
             </p>
             <p
               v-else-if="!format"
-              class="mt-2 text-xs text-gray-500"
+              class="mt-2 text-xs text-muted"
             >
               {{ t('tournaments.deckRegistration.noFormat') }}
             </p>
           </template>
           <p
             v-else-if="previewUnavailable"
-            class="text-xs text-gray-500"
+            class="text-xs text-muted"
           >
             {{ t('tournaments.deckRegistration.checkedOnRegistration') }}
           </p>
         </div>
 
-        <p class="text-xs text-gray-500">
+        <p class="text-xs text-muted">
           {{ t('tournaments.deckRegistration.copyHint') }}
         </p>
 
         <p
           v-if="errorMessage"
-          class="text-sm text-red-600"
+          class="text-sm text-error"
         >
           {{ errorMessage }}
         </p>

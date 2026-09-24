@@ -99,7 +99,7 @@ const cards = computed<OnboardingCard[]>(() => [
       <div
         v-for="card in cards"
         :key="card.to"
-        class="flex flex-col rounded-md border border-gray-200 bg-white p-5"
+        class="flex flex-col rounded-md border border-default bg-default p-5"
       >
         <div class="flex items-center gap-2.5">
           <div class="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -108,7 +108,7 @@ const cards = computed<OnboardingCard[]>(() => [
               class="size-5"
             />
           </div>
-          <h2 class="text-base font-semibold text-gray-900">
+          <h2 class="text-base font-semibold text-highlighted">
             <NuxtLink
               :to="card.listTo"
               class="hover:text-primary hover:underline"
@@ -118,10 +118,10 @@ const cards = computed<OnboardingCard[]>(() => [
           </h2>
         </div>
 
-        <p class="mt-4 text-3xl font-semibold tabular-nums text-gray-900">
+        <p class="mt-4 text-3xl font-semibold tabular-nums text-highlighted">
           {{ n(card.count, 'integer') }}
         </p>
-        <p class="mt-1 text-sm text-gray-500">
+        <p class="mt-1 text-sm text-muted">
           {{ card.description }}
         </p>
 

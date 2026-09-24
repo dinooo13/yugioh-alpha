@@ -410,7 +410,7 @@ describe('assistant empty-state page', () => {
     expect(navigateToMock).not.toHaveBeenCalled()
     expect(component.text()).not.toContain('Unterhaltung wird vorbereitet')
     expect(findButton(component, 'Neue Unterhaltung')).toBeTruthy()
-    expect(component.find('.text-red-600').exists()).toBe(true)
+    expect(component.find('.text-error').exists()).toBe(true)
   })
 
   // --- #34 F2d: interface language and deck names in tool chips (#53) ---

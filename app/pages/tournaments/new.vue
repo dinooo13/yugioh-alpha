@@ -107,7 +107,7 @@ async function submit() {
     </div>
 
     <form
-      class="space-y-4 rounded-md border border-gray-200 bg-white p-4"
+      class="space-y-4 rounded-md border border-default bg-default p-4"
       @submit.prevent="submit"
     >
       <UFormField
@@ -147,7 +147,7 @@ async function submit() {
           :aria-label="t('tournaments.new.pairingSystem')"
           class="w-full"
         />
-        <p class="mt-1 text-xs text-gray-500">
+        <p class="mt-1 text-xs text-muted">
           {{ t(`tournaments.pairingSystem.${form.pairingSystem}.description`) }}
         </p>
       </UFormField>
@@ -162,7 +162,7 @@ async function submit() {
           :aria-label="t('tournaments.new.plannedRounds')"
           :disabled="form.pairingSystem === 'round_robin'"
         />
-        <p class="mt-1 text-xs text-gray-500">
+        <p class="mt-1 text-xs text-muted">
           {{ plannedRoundsHint }}
         </p>
       </UFormField>
@@ -175,7 +175,7 @@ async function submit() {
       <p
         v-if="errorMessage"
         role="alert"
-        class="text-sm text-red-600"
+        class="text-sm text-error"
       >
         {{ errorMessage }}
       </p>

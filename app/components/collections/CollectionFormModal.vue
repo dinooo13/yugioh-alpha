@@ -135,7 +135,7 @@ async function save() {
         <p
           v-if="errorMessage"
           role="alert"
-          class="text-sm text-red-600"
+          class="text-sm text-error"
         >
           {{ errorMessage }}
         </p>

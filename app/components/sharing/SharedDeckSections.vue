@@ -27,14 +27,14 @@ function cardMetaLine(card: SharedDeckCardRow): string {
     <section
       v-for="section in DECK_SECTIONS"
       :key="section"
-      class="rounded-md border border-gray-200 bg-white"
+      class="rounded-md border border-default bg-default"
     >
-      <header class="flex items-center justify-between border-b border-gray-200 px-4 py-3">
-        <h2 class="text-base font-semibold text-gray-900">
+      <header class="flex items-center justify-between border-b border-default px-4 py-3">
+        <h2 class="text-base font-semibold text-highlighted">
           {{ sectionName(section) }}
         </h2>
         <span
-          class="text-sm font-semibold tabular-nums text-gray-500"
+          class="text-sm font-semibold tabular-nums text-muted"
           :aria-label="t('sharing.deckSections.countIn', { section: sectionName(section) })"
         >
           {{ counts[section] }}
@@ -43,14 +43,14 @@ function cardMetaLine(card: SharedDeckCardRow): string {
 
       <p
         v-if="sections[section].length === 0"
-        class="px-4 py-6 text-sm text-gray-500"
+        class="px-4 py-6 text-sm text-muted"
       >
         {{ t('sharing.deckSections.empty', { section: sectionName(section) }) }}
       </p>
 
       <ul
         v-else
-        class="divide-y divide-gray-100"
+        class="divide-y divide-default"
       >
         <li
           v-for="row in sections[section]"
@@ -66,15 +66,15 @@ function cardMetaLine(card: SharedDeckCardRow): string {
           />
 
           <div class="min-w-0 flex-1">
-            <p class="truncate text-sm font-medium text-gray-900">
+            <p class="truncate text-sm font-medium text-highlighted">
               {{ cardName(row) }}
             </p>
-            <p class="truncate text-xs text-gray-500">
+            <p class="truncate text-xs text-muted">
               {{ cardMetaLine(row) }}
             </p>
           </div>
 
-          <span class="shrink-0 text-sm font-semibold tabular-nums text-gray-700">
+          <span class="shrink-0 text-sm font-semibold tabular-nums text-default">
             {{ row.quantity }}×
           </span>
         </li>

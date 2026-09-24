@@ -41,7 +41,7 @@ const resolvedNoImageLabel = computed(() => props.noImageLabel ?? t('card.noImag
           v-else
           role="img"
           :aria-label="t('card.noImageFor', { name: title, label: resolvedNoImageLabel })"
-          class="mx-auto flex aspect-[59/86] w-48 flex-col items-center justify-center gap-1 rounded-md bg-gray-100 text-xs text-gray-400"
+          class="mx-auto flex aspect-[59/86] w-48 flex-col items-center justify-center gap-1 rounded-md bg-elevated text-xs text-muted"
         >
           <UIcon
             name="i-lucide-image-off"

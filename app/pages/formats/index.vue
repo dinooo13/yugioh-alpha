@@ -83,7 +83,7 @@ function ruleCountLabel(format: RuleFormatListItem) {
 
     <p
       v-if="errorMessage"
-      class="text-sm text-red-600"
+      class="text-sm text-error"
     >
       {{ errorMessage }}
     </p>
@@ -101,21 +101,21 @@ function ruleCountLabel(format: RuleFormatListItem) {
 
     <template v-else>
       <section class="space-y-3">
-        <h2 class="text-lg font-semibold text-gray-900">
+        <h2 class="text-lg font-semibold text-highlighted">
           {{ t('formats.list.official') }}
         </h2>
         <ul class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           <li
             v-for="format in builtins"
             :key="format.id"
-            class="flex flex-col rounded-md border border-gray-200 bg-white p-4"
+            class="flex flex-col rounded-md border border-default bg-default p-4"
           >
             <div class="flex items-start justify-between gap-2">
               <NuxtLink
                 :to="`/formats/${format.id}`"
                 class="min-w-0 flex-1"
               >
-                <h3 class="truncate text-base font-semibold text-gray-900 hover:text-primary">
+                <h3 class="truncate text-base font-semibold text-highlighted hover:text-primary">
                   {{ formatName(format) }}
                 </h3>
               </NuxtLink>
@@ -127,11 +127,11 @@ function ruleCountLabel(format: RuleFormatListItem) {
             </div>
             <p
               v-if="formatDescription(format)"
-              class="mt-1 line-clamp-3 text-sm text-gray-500"
+              class="mt-1 line-clamp-3 text-sm text-muted"
             >
               {{ formatDescription(format) }}
             </p>
-            <p class="mt-3 text-xs text-gray-400">
+            <p class="mt-3 text-xs text-muted">
               {{ ruleCountLabel(format) }}
             </p>
             <div class="mt-3 flex gap-2">
@@ -159,7 +159,7 @@ function ruleCountLabel(format: RuleFormatListItem) {
       </section>
 
       <section class="space-y-3">
-        <h2 class="text-lg font-semibold text-gray-900">
+        <h2 class="text-lg font-semibold text-highlighted">
           {{ t('formats.list.mine') }}
         </h2>
 
@@ -186,23 +186,23 @@ function ruleCountLabel(format: RuleFormatListItem) {
           <li
             v-for="format in ownFormats"
             :key="format.id"
-            class="flex flex-col rounded-md border border-gray-200 bg-white p-4"
+            class="flex flex-col rounded-md border border-default bg-default p-4"
           >
             <NuxtLink
               :to="`/formats/${format.id}`"
               class="min-w-0"
             >
-              <h3 class="truncate text-base font-semibold text-gray-900 hover:text-primary">
+              <h3 class="truncate text-base font-semibold text-highlighted hover:text-primary">
                 {{ format.name }}
               </h3>
             </NuxtLink>
             <p
               v-if="format.description"
-              class="mt-1 line-clamp-3 text-sm text-gray-500"
+              class="mt-1 line-clamp-3 text-sm text-muted"
             >
               {{ format.description }}
             </p>
-            <p class="mt-3 text-xs text-gray-400">
+            <p class="mt-3 text-xs text-muted">
               {{ ruleCountLabel(format) }}
             </p>
             <div class="mt-3 flex flex-wrap gap-2">

@@ -32,14 +32,14 @@ const winner = computed(() => {
 </script>
 
 <template>
-  <section class="rounded-md border border-gray-200 bg-white p-4">
+  <section class="rounded-md border border-default bg-default p-4">
     <div class="flex flex-wrap items-center justify-between gap-2">
-      <h2 class="text-base font-semibold text-gray-900">
+      <h2 class="text-base font-semibold text-highlighted">
         {{ t('tournaments.standings.title') }}
       </h2>
       <p
         v-if="winner"
-        class="flex items-center gap-1.5 text-sm font-semibold text-amber-600"
+        class="flex items-center gap-1.5 text-sm font-semibold text-warning"
       >
         <UIcon
           name="i-lucide-trophy"
@@ -51,7 +51,7 @@ const winner = computed(() => {
 
     <p
       v-if="standings.length === 0"
-      class="mt-4 text-sm text-gray-500"
+      class="mt-4 text-sm text-muted"
     >
       {{ t('tournaments.standings.empty') }}
     </p>
@@ -73,7 +73,7 @@ const winner = computed(() => {
         >
           <tr
             role="row"
-            class="border-b border-gray-200 text-xs uppercase tracking-wide text-gray-500"
+            class="border-b border-default text-xs uppercase tracking-wide text-muted"
           >
             <th
               role="columnheader"
@@ -133,24 +133,24 @@ const winner = computed(() => {
         </thead>
         <tbody
           role="rowgroup"
-          class="block space-y-2 sm:table-row-group sm:space-y-0 sm:divide-y sm:divide-gray-100"
+          class="block space-y-2 sm:table-row-group sm:space-y-0 sm:divide-y sm:divide-default"
         >
           <tr
             v-for="row in standings"
             :key="row.participantId"
             role="row"
             class="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-x-2 gap-y-2 rounded-md border p-3 sm:table-row sm:rounded-none sm:border-0 sm:p-0"
-            :class="row.rank === 1 ? 'border-amber-200 bg-amber-50' : 'border-gray-200'"
+            :class="row.rank === 1 ? 'border-warning/30 bg-warning/10' : 'border-default'"
           >
             <td
               role="cell"
-              class="tabular-nums text-gray-500 sm:py-2 sm:pr-2"
+              class="tabular-nums text-muted sm:py-2 sm:pr-2"
             >
               <span class="inline-flex items-center gap-1">
                 <UIcon
                   v-if="row.rank === 1"
                   name="i-lucide-trophy"
-                  class="size-3.5 text-amber-500"
+                  class="size-3.5 text-warning"
                 />
                 {{ row.rank }}
               </span>
@@ -158,7 +158,7 @@ const winner = computed(() => {
             <td
               role="cell"
               class="font-medium sm:px-2 sm:py-2"
-              :class="row.rank === 1 ? 'text-amber-900' : 'text-gray-900'"
+              :class="row.rank === 1 ? 'text-highlighted' : 'text-highlighted'"
             >
               {{ row.name }}
               <UBadge
@@ -174,7 +174,7 @@ const winner = computed(() => {
               role="cell"
               class="text-right font-semibold tabular-nums sm:px-2 sm:py-2 sm:text-left sm:font-normal"
             >
-              {{ row.points }}<span class="text-xs font-normal text-gray-500 sm:hidden"> {{ t('tournaments.standings.pointsShort') }}</span>
+              {{ row.points }}<span class="text-xs font-normal text-muted sm:hidden"> {{ t('tournaments.standings.pointsShort') }}</span>
             </td>
             <td
               role="cell"
@@ -208,34 +208,34 @@ const winner = computed(() => {
             >
               <dl class="grid grid-cols-4 gap-2 text-xs">
                 <div>
-                  <dt class="text-gray-500">
+                  <dt class="text-muted">
                     {{ t('tournaments.standings.record') }}
                   </dt>
-                  <dd class="tabular-nums text-gray-900">
+                  <dd class="tabular-nums text-highlighted">
                     {{ recordLabel(row) }}
                   </dd>
                 </div>
                 <div>
-                  <dt class="text-gray-500">
+                  <dt class="text-muted">
                     {{ t('tournaments.standings.omw') }}
                   </dt>
-                  <dd class="tabular-nums text-gray-900">
+                  <dd class="tabular-nums text-highlighted">
                     {{ formatRate(row.opponentMatchWinRate) }}
                   </dd>
                 </div>
                 <div>
-                  <dt class="text-gray-500">
+                  <dt class="text-muted">
                     {{ t('tournaments.standings.gw') }}
                   </dt>
-                  <dd class="tabular-nums text-gray-900">
+                  <dd class="tabular-nums text-highlighted">
                     {{ formatRate(row.gameWinRate) }}
                   </dd>
                 </div>
                 <div>
-                  <dt class="text-gray-500">
+                  <dt class="text-muted">
                     {{ t('tournaments.standings.ogw') }}
                   </dt>
-                  <dd class="tabular-nums text-gray-900">
+                  <dd class="tabular-nums text-highlighted">
                     {{ formatRate(row.opponentGameWinRate) }}
                   </dd>
                 </div>
@@ -248,7 +248,7 @@ const winner = computed(() => {
 
     <!-- A visible legend rather than tooltips only: `title` never shows on
          touch devices (#28). -->
-    <p class="mt-3 text-xs text-gray-500">
+    <p class="mt-3 text-xs text-muted">
       {{ legend }}
     </p>
   </section>

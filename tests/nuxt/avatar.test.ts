@@ -35,4 +35,11 @@ describe('avatarColorClasses', () => {
     expect(bg).toMatch(/^bg-[a-z]+-100$/)
     expect(text).toMatch(/^text-[a-z]+-800$/)
   })
+
+  it('pairs every color with a dark-mode variant of the same hue', () => {
+    const { bg, darkBg, darkText } = avatarColorClasses('fabian')
+    const hue = bg.split('-')[1]
+    expect(darkBg).toBe(`dark:bg-${hue}-400/15`)
+    expect(darkText).toBe(`dark:text-${hue}-200`)
+  })
 })

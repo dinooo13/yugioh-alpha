@@ -448,7 +448,7 @@ async function save() {
 
 <template>
   <div class="space-y-6">
-    <div class="space-y-4 rounded-md border border-gray-200 bg-white p-4">
+    <div class="space-y-4 rounded-md border border-default bg-default p-4">
       <UFormField
         :label="t('formats.editor.name')"
         :error="nameError"
@@ -474,19 +474,19 @@ async function save() {
       </UFormField>
     </div>
 
-    <div class="space-y-3 rounded-md border border-gray-200 bg-white p-4">
+    <div class="space-y-3 rounded-md border border-default bg-default p-4">
       <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <h2 class="text-base font-semibold text-gray-900">
+        <h2 class="text-base font-semibold text-highlighted">
           {{ t('formats.editor.rules') }}
         </h2>
-        <p class="text-sm text-gray-500">
+        <p class="text-sm text-muted">
           {{ count('formats.list.ruleCount', rules.length) }}
         </p>
       </div>
 
       <p
         v-if="rules.length === 0"
-        class="text-sm text-gray-500"
+        class="text-sm text-muted"
       >
         {{ t('formats.editor.noRules') }}
       </p>
@@ -495,15 +495,15 @@ async function save() {
         <li
           v-for="(rule, index) in rules"
           :key="`${rule.kind}-${index}`"
-          class="rounded-md border border-gray-200 p-3"
+          class="rounded-md border border-default p-3"
         >
           <div class="flex items-start justify-between gap-2">
             <div class="min-w-0">
-              <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">
+              <p class="text-xs font-semibold uppercase tracking-wide text-muted">
                 {{ ruleKindLabel(rule.kind) }}
               </p>
               <p
-                class="mt-0.5 text-sm text-gray-900"
+                class="mt-0.5 text-sm text-highlighted"
                 :data-testid="`rule-summary-${index}`"
               >
                 {{ summaryFor(rule) }}
@@ -769,9 +769,9 @@ async function save() {
 
       <div
         v-if="!readonly"
-        class="border-t border-gray-200 pt-3"
+        class="border-t border-default pt-3"
       >
-        <p class="text-sm font-medium text-gray-700">
+        <p class="text-sm font-medium text-default">
           {{ t('formats.editor.addRule') }}
         </p>
         <div class="mt-2 flex flex-wrap gap-2">
@@ -791,11 +791,11 @@ async function save() {
       </div>
     </div>
 
-    <div class="space-y-3 rounded-md border border-gray-200 bg-white p-4">
-      <h2 class="text-base font-semibold text-gray-900">
+    <div class="space-y-3 rounded-md border border-default bg-default p-4">
+      <h2 class="text-base font-semibold text-highlighted">
         {{ t('formats.editor.check.title') }}
       </h2>
-      <p class="text-sm text-gray-500">
+      <p class="text-sm text-muted">
         {{ t('formats.editor.check.description') }}
       </p>
 
@@ -820,7 +820,7 @@ async function save() {
 
       <p
         v-if="checkError"
-        class="text-sm text-red-600"
+        class="text-sm text-error"
       >
         {{ checkError }}
       </p>
@@ -831,7 +831,7 @@ async function save() {
           variant="subtle"
           :label="checkBadgeLabel"
         />
-        <ul class="mt-2 list-inside list-disc space-y-0.5 text-sm text-gray-700">
+        <ul class="mt-2 list-inside list-disc space-y-0.5 text-sm text-default">
           <li
             v-for="(issue, index) in checkResult.issues"
             :key="`${issue.code}-${issue.cardId ?? index}`"
@@ -845,7 +845,7 @@ async function save() {
     <p
       v-if="errorMessage"
       role="alert"
-      class="text-sm text-red-600"
+      class="text-sm text-error"
     >
       {{ errorMessage }}
     </p>

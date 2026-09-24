@@ -30,19 +30,19 @@ const loginTarget = computed(() => ({ path: '/login', query: { redirect: route.f
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-50">
+  <div class="min-h-screen bg-muted">
     <LayoutSkipLink />
 
-    <header class="border-b border-gray-200 bg-white">
+    <header class="border-b border-default bg-default">
       <div class="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
         <NuxtLink
           :to="session ? '/' : '/login'"
           class="flex items-center gap-2.5"
         >
-          <div class="flex size-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-white">
+          <div class="flex size-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-inverted">
             Y
           </div>
-          <span class="whitespace-nowrap text-base font-semibold text-gray-900">yugioh alpha</span>
+          <span class="whitespace-nowrap text-base font-semibold text-highlighted">yugioh alpha</span>
         </NuxtLink>
 
         <div class="flex items-center gap-2">

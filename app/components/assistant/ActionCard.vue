@@ -306,9 +306,9 @@ async function reject() {
 
 <template>
   <div class="flex justify-start">
-    <div class="w-full max-w-md rounded-md border border-gray-200 bg-white p-3 text-sm">
+    <div class="w-full max-w-md rounded-md border border-default bg-default p-3 text-sm">
       <div class="flex items-center justify-between gap-2">
-        <span class="font-medium text-gray-900">{{ t(`assistant.action.kind.${action.kind}`) }}</span>
+        <span class="font-medium text-highlighted">{{ t(`assistant.action.kind.${action.kind}`) }}</span>
         <UBadge
           :color="statusColor"
           variant="subtle"
@@ -316,13 +316,13 @@ async function reject() {
         />
       </div>
 
-      <p class="mt-1 text-gray-600">
+      <p class="mt-1 text-toned">
         {{ summary }}
       </p>
 
       <div
         v-if="preview"
-        class="mt-2 space-y-2 rounded-md bg-gray-50 p-2 text-xs"
+        class="mt-2 space-y-2 rounded-md bg-muted p-2 text-xs"
         data-testid="action-preview"
       >
         <div class="flex flex-wrap items-center gap-2">
@@ -332,14 +332,14 @@ async function reject() {
             size="sm"
             :label="legalityBadge.label"
           />
-          <span class="text-gray-600">
+          <span class="text-toned">
             {{ previewCounts }}
           </span>
         </div>
 
         <ul
           v-if="previewIssues.length > 0"
-          class="list-inside list-disc space-y-0.5 text-red-700"
+          class="list-inside list-disc space-y-0.5 text-error"
         >
           <li
             v-for="(issue, index) in previewIssues"
@@ -349,17 +349,17 @@ async function reject() {
           </li>
           <li
             v-if="hiddenIssueCount > 0"
-            class="list-none text-gray-500"
+            class="list-none text-muted"
           >
             {{ t('assistant.action.preview.moreIssues', { count: integer(hiddenIssueCount) }, hiddenIssueCount) }}
           </li>
         </ul>
 
         <div v-if="preview.missing.length > 0">
-          <p class="font-medium text-amber-900">
+          <p class="font-medium text-highlighted">
             {{ t('assistant.action.preview.missingTitle') }}
           </p>
-          <ul class="mt-0.5 space-y-0.5 text-amber-800">
+          <ul class="mt-0.5 space-y-0.5 text-toned">
             <li
               v-for="card in preview.missing"
               :key="card.catalogCardId"
@@ -369,7 +369,7 @@ async function reject() {
           </ul>
         </div>
 
-        <p class="text-gray-400">
+        <p class="text-muted">
           {{ t('assistant.action.preview.snapshot') }}
         </p>
       </div>
@@ -391,7 +391,7 @@ async function reject() {
       >
         <dl
           v-if="metaEntries.length > 0"
-          class="space-y-0.5 text-xs text-gray-500"
+          class="space-y-0.5 text-xs text-muted"
         >
           <div
             v-for="entry in metaEntries"
@@ -411,7 +411,7 @@ async function reject() {
         >
           <table class="w-full text-left text-xs">
             <thead>
-              <tr class="text-gray-400">
+              <tr class="text-muted">
                 <th
                   v-for="column in columns"
                   :key="column"
@@ -425,7 +425,7 @@ async function reject() {
               <tr
                 v-for="(row, rowIndex) in rows"
                 :key="rowIndex"
-                class="border-t border-gray-100"
+                class="border-t border-muted"
               >
                 <td
                   v-for="column in columns"
@@ -442,7 +442,7 @@ async function reject() {
 
       <p
         v-if="errorMessage"
-        class="mt-2 text-xs text-red-600"
+        class="mt-2 text-xs text-error"
       >
         {{ errorMessage }}
       </p>
