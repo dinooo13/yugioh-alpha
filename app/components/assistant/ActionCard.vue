@@ -26,6 +26,19 @@ const isApplying = ref(false)
 const isRejecting = ref(false)
 const errorMessage = ref('')
 
+// Waiting for a decision: a gold glow; applied: a success ring; turned down
+// or failed: faded.
+const cardStateClass = computed(() => {
+  switch (props.action.status) {
+    case 'pending':
+      return 'shadow-glow-gold'
+    case 'applied':
+      return 'ring-1 ring-success/40'
+    default:
+      return 'opacity-80'
+  }
+})
+
 const statusColor = computed(() => {
   switch (props.action.status) {
     case 'applied':
@@ -305,10 +318,27 @@ async function reject() {
 </script>
 
 <template>
-  <div class="flex justify-start">
-    <div class="w-full max-w-md rounded-md border border-default bg-default p-3 text-sm">
+  <div class="flex justify-start ps-[2.375rem]">
+    <!-- An "activated spell" (ADR 0016): a spell-colored stripe on top, a
+         gold glow while it waits for a decision. -->
+    <div
+      class="panel relative w-full max-w-md overflow-hidden p-3 pt-4 text-sm transition-[box-shadow,opacity] duration-200"
+      :class="cardStateClass"
+      data-frame="spell"
+    >
+      <span
+        class="frame-stripe absolute inset-x-0 top-0 h-[3px]"
+        aria-hidden="true"
+      />
       <div class="flex items-center justify-between gap-2">
-        <span class="font-medium text-highlighted">{{ t(`assistant.action.kind.${action.kind}`) }}</span>
+        <span class="inline-flex min-w-0 items-center gap-2 font-semibold text-highlighted">
+          <UIcon
+            name="i-lucide-scroll-text"
+            class="size-4 shrink-0 text-secondary"
+            aria-hidden="true"
+          />
+          <span class="truncate">{{ t(`assistant.action.kind.${action.kind}`) }}</span>
+        </span>
         <UBadge
           :color="statusColor"
           variant="subtle"
@@ -322,7 +352,7 @@ async function reject() {
 
       <div
         v-if="preview"
-        class="mt-2 space-y-2 rounded-md bg-muted p-2 text-xs"
+        class="mt-2 space-y-2 rounded-lg bg-elevated/60 p-2.5 text-xs ring-1 ring-default"
         data-testid="action-preview"
       >
         <div class="flex flex-wrap items-center gap-2">
@@ -359,7 +389,7 @@ async function reject() {
           <p class="font-medium text-highlighted">
             {{ t('assistant.action.preview.missingTitle') }}
           </p>
-          <ul class="mt-0.5 space-y-0.5 text-toned">
+          <ul class="mt-0.5 space-y-0.5 text-warning">
             <li
               v-for="card in preview.missing"
               :key="card.catalogCardId"

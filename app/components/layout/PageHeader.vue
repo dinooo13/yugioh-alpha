@@ -19,11 +19,14 @@ withDefaults(defineProps<{
   eyebrow?: string
   /** Single-line title with ellipsis — for user-provided names. */
   truncate?: boolean
+  /** Keep the `<h1>` for screen readers only (something else shows it). */
+  hideTitle?: boolean
 }>(), {
   title: undefined,
   description: undefined,
   eyebrow: undefined,
   truncate: false,
+  hideTitle: false,
 })
 </script>
 
@@ -39,8 +42,9 @@ withDefaults(defineProps<{
         {{ eyebrow }}
       </p>
       <h1
-        class="font-display text-[1.625rem] leading-tight font-semibold tracking-[0.01em] text-highlighted sm:text-3xl"
-        :class="truncate ? 'truncate' : 'break-words hyphens-auto'"
+        :class="hideTitle
+          ? 'sr-only'
+          : ['font-display text-[1.625rem] leading-tight font-semibold tracking-[0.01em] text-highlighted sm:text-3xl', truncate ? 'truncate' : 'break-words hyphens-auto']"
       >
         <slot name="title">
           {{ title }}

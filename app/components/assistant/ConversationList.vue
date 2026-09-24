@@ -87,8 +87,8 @@ async function onDelete(item: AssistantConversationListItem) {
       >
         <NuxtLink
           :to="`/assistant/${item.id}`"
-          class="min-w-0 flex-1 truncate rounded-md px-2.5 py-1.5 text-sm text-default hover:bg-elevated"
-          :class="{ 'bg-elevated font-medium text-highlighted': item.id === props.activeId }"
+          class="relative min-w-0 flex-1 truncate rounded-md px-2.5 py-1.5 text-sm text-default transition-colors hover:bg-elevated/60"
+          :class="{ 'bg-primary/10 font-medium text-highlighted before:absolute before:inset-y-2 before:start-0 before:w-0.5 before:rounded-full before:bg-secondary': item.id === props.activeId }"
         >
           {{ item.title }}
         </NuxtLink>
@@ -97,7 +97,7 @@ async function onDelete(item: AssistantConversationListItem) {
           color="neutral"
           variant="ghost"
           size="xs"
-          class="tap-target shrink-0 opacity-0 group-hover:opacity-100"
+          class="tap-target shrink-0 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
           :aria-label="t('assistant.conversations.deleteLabel', { title: item.title })"
           :loading="deletingId === item.id"
           @click="onDelete(item)"

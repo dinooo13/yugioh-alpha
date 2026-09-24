@@ -16,12 +16,26 @@ const isUser = computed(() => props.role === 'user')
 
 <template>
   <div
-    class="flex"
+    class="flex items-end gap-2.5"
     :class="isUser ? 'justify-end' : 'justify-start'"
   >
+    <!-- The assistant's "arcane" avatar (decorative; the thread says who is
+         speaking through the bubble's side and color). -->
+    <span
+      v-if="!isUser"
+      class="mb-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary ring-1 ring-secondary/60"
+      aria-hidden="true"
+    >
+      <UIcon
+        name="i-lucide-sparkles"
+        class="size-3.5"
+      />
+    </span>
     <div
-      class="max-w-[85%] rounded-lg px-3 py-2 text-sm sm:max-w-[75%]"
-      :class="isUser ? 'bg-primary text-inverted' : 'bg-elevated text-highlighted'"
+      class="max-w-[85%] px-3.5 py-2.5 text-sm leading-6 sm:max-w-[75%]"
+      :class="isUser
+        ? 'rounded-2xl rounded-br-md bg-linear-to-br from-primary-500 to-primary-600 text-on-primary shadow-sm'
+        : 'rounded-2xl rounded-bl-md bg-elevated text-default ring-1 ring-default'"
     >
       <ul
         v-if="attachments && attachments.length > 0"
@@ -31,7 +45,7 @@ const isUser = computed(() => props.role === 'user')
           v-for="index in attachments.length"
           :key="index"
           class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs"
-          :class="isUser ? 'bg-inverted/15' : 'bg-default'"
+          :class="isUser ? 'bg-on-primary/15' : 'bg-default'"
         >
           <UIcon
             name="i-lucide-image"
