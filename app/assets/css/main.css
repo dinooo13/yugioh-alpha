@@ -464,3 +464,95 @@
     transform: translateX(var(--x, 0)) translateY(-5px) rotate(var(--r, 0deg));
   }
 }
+
+/* ------------------------------------------------------------------------
+ * Decks (ADR 0016): a fanned cover and section meters.
+ * --------------------------------------------------------------------- */
+
+@layer components {
+  /* The deck cover with two card backs fanned out behind it; they spread
+     and the cover lifts when the tile is hovered (motion permitting). */
+  .deck-fan {
+    position: relative;
+    display: grid;
+    place-items: end center;
+    padding: 0.5rem 0.625rem 0.125rem;
+  }
+
+  .deck-fan > .fan-card {
+    position: absolute;
+    bottom: 0.125rem;
+    left: 50%;
+    width: 4rem;
+    margin-left: -2rem;
+    aspect-ratio: 59 / 86;
+    border-radius: 4.5% / 3.1%;
+    transform-origin: 50% 100%;
+    transition: transform 360ms var(--ease-summon);
+    box-shadow: 0 0 0 1px color-mix(in oklab, var(--color-millennium-400) 25%, transparent), var(--shadow-panel);
+  }
+
+  .deck-fan > .fan-card:nth-child(1) {
+    transform: translateX(-6px) rotate(-8deg);
+  }
+
+  .deck-fan > .fan-card:nth-child(2) {
+    transform: translateX(6px) rotate(7deg);
+  }
+
+  .deck-fan > .fan-cover {
+    position: relative;
+    transition: transform 360ms var(--ease-summon);
+  }
+
+  /* A 3px meter under a deck section count; `--fill` is the share. */
+  .deck-meter {
+    position: relative;
+    padding-bottom: 0.5rem;
+  }
+
+  .deck-meter::before,
+  .deck-meter::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    height: 3px;
+    border-radius: 9999px;
+  }
+
+  .deck-meter::before {
+    right: 0;
+    background: var(--ui-bg-elevated);
+  }
+
+  .deck-meter::after {
+    width: var(--fill, 0%);
+    background: var(--meter, var(--ui-primary));
+    transition: width 360ms var(--ease-out-expo);
+  }
+
+  .deck-meter[data-state="under"] { --meter: var(--ui-warning); }
+  .deck-meter[data-state="over"] { --meter: var(--ui-error); }
+}
+
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .group:hover .deck-fan > .fan-card:nth-child(1) {
+    transform: translateX(-12px) rotate(-14deg);
+  }
+
+  .group:hover .deck-fan > .fan-card:nth-child(2) {
+    transform: translateX(12px) rotate(12deg);
+  }
+
+  .group:hover .deck-fan > .fan-cover {
+    transform: translateY(-4px);
+  }
+}
+
+@media (forced-colors: active) {
+  .deck-meter::before,
+  .deck-meter::after {
+    forced-color-adjust: none;
+  }
+}

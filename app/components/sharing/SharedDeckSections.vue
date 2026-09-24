@@ -27,14 +27,14 @@ function cardMetaLine(card: SharedDeckCardRow): string {
     <section
       v-for="section in DECK_SECTIONS"
       :key="section"
-      class="rounded-md border border-default bg-default"
+      class="panel overflow-hidden"
     >
       <header class="flex items-center justify-between border-b border-default px-4 py-3">
         <h2 class="text-base font-semibold text-highlighted">
           {{ sectionName(section) }}
         </h2>
         <span
-          class="text-sm font-semibold tabular-nums text-muted"
+          class="font-numeric text-sm font-bold tracking-[0.04em] text-muted tabular-nums"
           :aria-label="t('sharing.deckSections.countIn', { section: sectionName(section) })"
         >
           {{ counts[section] }}
@@ -55,8 +55,12 @@ function cardMetaLine(card: SharedDeckCardRow): string {
         <li
           v-for="row in sections[section]"
           :key="`${section}-${row.catalogCardId}`"
-          class="flex items-center gap-3 px-4 py-2"
+          class="relative flex items-center gap-3 px-4 py-2"
         >
+          <CardFrameStripe
+            :type="row.type"
+            :frame-type="row.frameType"
+          />
           <CardThumb
             :src="row.imageSmall"
             :alt="cardName(row)"
@@ -74,7 +78,7 @@ function cardMetaLine(card: SharedDeckCardRow): string {
             </p>
           </div>
 
-          <span class="shrink-0 text-sm font-semibold tabular-nums text-default">
+          <span class="shrink-0 font-numeric text-sm font-semibold tracking-[0.04em] text-default tabular-nums">
             {{ row.quantity }}×
           </span>
         </li>
