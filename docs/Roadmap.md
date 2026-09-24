@@ -463,8 +463,7 @@ Product outcome:
 The app feels like a duel arena at night, with the card scans as the
 brightest thing on screen, and it reads well in both light and dark mode.
 
-Status: implemented on `feat/redesign-duel-arena` as a proposal for the
-owner's review. After a first look the owner asked for a sidebar that
+Status: implemented and merged (PR #79), approved by the owner. After a first look the owner asked for a sidebar that
 follows the color mode (no always-dark sidebar) and for the assistant pages
 to get the same page header as every other page; both are in. See
 [`docs/adr/0016-visual-design-system.md`](adr/0016-visual-design-system.md).
