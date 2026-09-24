@@ -21,10 +21,6 @@
       "label": "Inventar durchsuchen",
       "inText": "Auch im Kartentext suchen",
       "facetsOverviewOnly": "Diese Filter wirken nur in \"Übersicht\". \"Liste\" filtert nach Suchtext und Sammlung.",
-      "type": "Typ",
-      "attribute": "Attribut",
-      "race": "Monsterart",
-      "level": "Level",
       "reset": "Reset",
       "sortLabel": "Sortierung",
       "sort": {
