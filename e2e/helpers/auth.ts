@@ -19,6 +19,21 @@ export interface RegisteredUser {
 }
 
 /**
+ * Resolves once Nuxt has finished hydrating the current document (`nuxtApp.isHydrating` is false,
+ * set right before `app:suspense:resolve` in nuxt/dist/app/nuxt.js). Before that, text typed into a
+ * server-rendered input stays in the DOM but never reaches `v-model` (a submit sees empty fields), and
+ * buttons have no handlers yet. Call it after every full page load (`goto`, `reload`, an `external`
+ * navigateTo) and before the first `fill`/click that relies on Vue.
+ */
+export async function waitForHydration(page: Page): Promise<void> {
+  await page.waitForFunction(() => {
+    type NuxtRoot = Element & { __vue_app__?: { config: { globalProperties: { $nuxt?: { isHydrating?: boolean } } } } }
+    const nuxtApp = (document.querySelector('#__nuxt') as NuxtRoot | null)?.__vue_app__?.config.globalProperties.$nuxt
+    return nuxtApp !== undefined && nuxtApp.isHydrating === false
+  })
+}
+
+/**
  * Registers a fresh user via the `/register` UI and asserts it lands on `/`
  * (Better Auth signs the user in immediately after registration). Returns
  * the credentials used, so callers can log back in later in the same test.
@@ -29,23 +44,28 @@ export async function registerAndLogin(page: Page, options: RegisterAndLoginOpti
   const password = options.password ?? 'super-secret-123'
 
   await page.goto('/register')
-  // Typing before hydration is lost: v-model resets the fields when Vue
-  // takes over the server-rendered form ("Bitte fülle alle Felder aus.").
-  await page.waitForLoadState('networkidle')
+  // Typing before hydration is lost ("Bitte fülle alle Felder aus.").
+  await waitForHydration(page)
   await page.getByLabel('Name').fill(name)
   await page.getByLabel('E-Mail').fill(email)
   await page.getByLabel('Passwort').fill(password)
   await page.getByRole('button', { name: 'Registrieren' }).click()
 
   await expect(page).toHaveURL('/')
+  // `/` is reached by a full page load (`navigateTo(..., { external: true })`).
+  await waitForHydration(page)
 
   return { name, email, password }
 }
 
-/** Logs the current user out via the header "Abmelden" button and asserts landing on `/login`. */
+/**
+ * Logs the current user out via the header "Abmelden" button, asserts landing on `/login`
+ * and waits for that page (a full page load) to hydrate.
+ */
 export async function logout(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Abmelden' }).click()
   await expect(page).toHaveURL('/login')
+  await waitForHydration(page)
 }
 
 export interface LoginCredentials {
@@ -56,11 +76,12 @@ export interface LoginCredentials {
 /**
  * Signs in through the `/login` form. Expects the page to already show the
  * login form (e.g. after `logout()` or a redirect to `/login?redirect=...`),
- * so a `redirect` query survives. Does not wait for the target page; callers
- * assert the landing URL themselves.
+ * so a `redirect` query survives. Waits for the form to hydrate before typing.
+ * Does not wait for the target page; callers assert the landing URL themselves.
  */
 export async function loginViaForm(page: Page, { email, password }: LoginCredentials): Promise<void> {
   await expect(page.getByRole('heading', { name: 'Anmelden' })).toBeVisible()
+  await waitForHydration(page)
   await page.getByLabel('E-Mail').fill(email)
   await page.getByLabel('Passwort').fill(password)
   await page.getByRole('button', { name: 'Anmelden' }).click()

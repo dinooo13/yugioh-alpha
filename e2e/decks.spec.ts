@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { registerAndLogin } from './helpers/auth'
+import { registerAndLogin, waitForHydration } from './helpers/auth'
 import { acceptConfirm } from './helpers/confirm'
 import { CARD } from './helpers/cards'
 
@@ -26,6 +26,7 @@ test.describe('deckbuilder', () => {
 
     // --- Create a deck ------------------------------------------------------
     await page.goto('/decks')
+    await waitForHydration(page)
     await expect(page.getByText('Noch keine Decks')).toBeVisible()
 
     await page.getByRole('button', { name: 'Neues Deck' }).first().click()
@@ -95,6 +96,7 @@ test.describe('deckbuilder', () => {
     // Reload instead of clearing the search box: a pending debounced refresh
     // would re-render the list under the open dropdown.
     await page.goto('/decks')
+    await waitForHydration(page)
     await expect(page.getByRole('listitem').filter({ hasText: 'Test Deck' })).toBeVisible()
 
     await page.getByRole('button', { name: 'Optionen für Test Deck' }).click()
@@ -117,6 +119,7 @@ test.describe('deckbuilder on a phone', () => {
     expect(response.ok()).toBe(true)
 
     await page.goto('/decks')
+    await waitForHydration(page)
     await page.getByRole('button', { name: 'Neues Deck' }).first().click()
     await page.getByLabel('Deckname').fill('Handy Deck')
     await page.getByRole('button', { name: 'Erstellen' }).click()
@@ -134,6 +137,7 @@ test.describe('deckbuilder on a phone', () => {
 
     // Once the deck has cards, the panel starts collapsed on a phone.
     await page.reload()
+    await waitForHydration(page)
     await expect(mainCount).toHaveText('1/40–60')
     await expect(search).toBeHidden()
 
@@ -157,6 +161,7 @@ test.describe('deckbuilder on a phone', () => {
     const deck = await response.json() as { id: string }
 
     await page.goto(`/decks/${deck.id}`)
+    await waitForHydration(page)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Menü Deck')
 
     await page.getByRole('button', { name: 'Weitere Aktionen' }).click()
@@ -197,6 +202,7 @@ test.describe('deckbuilder on a phone', () => {
     }
 
     await page.goto(`/decks/${deck.id}`)
+    await waitForHydration(page)
     const darkMagicianRow = page.locator(`li:has(p[title="${CARD.darkMagician}"])`)
     const potOfGreedRow = page.locator(`li:has(p[title="${CARD.potOfGreed}"])`)
 
@@ -242,6 +248,7 @@ test.describe('deckbuilder at 1024px', () => {
     const deck = await response.json() as { id: string }
 
     await page.goto(`/decks/${deck.id}`)
+    await waitForHydration(page)
 
     // The title shows in full — no ellipsis.
     const heading = page.getByRole('heading', { level: 1 })
