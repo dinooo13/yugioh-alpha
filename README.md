@@ -234,7 +234,10 @@ ever proposes a **pending action**, shown as a card with `Übernehmen` /
 `Verwerfen` buttons; nothing is written until the user confirms it. A
 message can include up to 6 photos (resized client-side before upload) that
 the model identifies against the catalog. Voice dictation is currently not
-offered (it was removed again because it didn't work reliably).
+offered (it was removed again because it didn't work reliably). The
+assistant answers in the interface language (German or English, see
+[`docs/adr/0014-ui-internationalisation.md`](./docs/adr/0014-ui-internationalisation.md));
+card names stay English.
 
 This works with any OpenAI-compatible Chat Completions endpoint that
 supports streaming and tool calls — e.g. OpenAI, OpenRouter, Ollama,
