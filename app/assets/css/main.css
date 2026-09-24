@@ -287,6 +287,12 @@
   .arena-surface {
     background-image: none;
   }
+
+  /* Icons are masks filled with `currentColor`; forced colors would replace
+     that fill with the page background and hide every icon. */
+  .iconify {
+    forced-color-adjust: none;
+  }
 }
 
 /* ------------------------------------------------------------------------

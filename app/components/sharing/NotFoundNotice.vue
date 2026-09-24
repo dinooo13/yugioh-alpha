@@ -30,7 +30,19 @@ const loginTarget = computed(() => ({ path: '/login', query: { redirect: route.f
 
 <template>
   <div class="panel px-6 py-12 text-center">
-    <h1 class="text-lg font-semibold text-highlighted">
+    <div
+      class="relative mx-auto mb-5 flex size-16 items-center justify-center"
+      aria-hidden="true"
+    >
+      <span class="absolute inset-0 rounded-full border border-dashed border-secondary/45 motion-safe:animate-[spin_40s_linear_infinite]" />
+      <span class="flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary ring-1 ring-primary/20">
+        <UIcon
+          name="i-lucide-search-x"
+          class="size-6"
+        />
+      </span>
+    </div>
+    <h1 class="font-display text-xl font-semibold text-highlighted">
       {{ t('sharing.notFound.title') }}
     </h1>
     <p class="mt-2 text-sm text-muted">

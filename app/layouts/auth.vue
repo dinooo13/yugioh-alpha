@@ -17,7 +17,7 @@ const POINTS = ['inventory', 'decks', 'tournaments'] as const
         class="relative flex min-h-64 flex-1 items-center justify-center"
         aria-hidden="true"
       >
-        <LayoutArcaneRings class="absolute top-1/2 left-1/2 size-[28rem] -translate-x-1/2 -translate-y-1/2 xl:size-[32rem]" />
+        <LayoutArcaneRings class="absolute top-1/2 left-1/2 aspect-square h-full max-h-[32rem] -translate-x-1/2 -translate-y-1/2" />
         <LayoutCardFan card-class="w-24 xl:w-28" />
       </div>
 
