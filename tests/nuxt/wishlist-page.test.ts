@@ -148,27 +148,27 @@ describe('wishlist page', () => {
 })
 
 describe('add to wishlist button', () => {
-  it('toggles its label between "Zur Wunschliste" and "Auf der Wunschliste"', async () => {
-    const fetchMock = vi.fn(() => Promise.resolve(undefined))
-    vi.stubGlobal('$fetch', fetchMock)
-
+  // Presentational since #98: the catalog page owns the state and the
+  // request (useWishlistToggle, see wishlist-toggle.test.ts).
+  it('shows "Zur Wunschliste" or "Auf der Wunschliste" and emits toggle', async () => {
     const component = await mountSuspended(AddToWishlistButton, {
-      props: { catalogCardId: 42, inWishlist: false },
+      props: { inWishlist: false },
     })
 
     expect(component.text()).toContain('Zur Wunschliste')
-
     await component.find('button').trigger('click')
-
-    expect(fetchMock).toHaveBeenCalledWith('/api/wishlist', { method: 'POST', body: { catalogCardId: 42 } })
-    expect(component.emitted('changed')).toEqual([[true]])
+    expect(component.emitted('toggle')).toEqual([[]])
 
     await component.setProps({ inWishlist: true })
     expect(component.text()).toContain('Auf der Wunschliste')
+  })
 
-    await component.find('button').trigger('click')
+  it('shows the loading state and an error', async () => {
+    const component = await mountSuspended(AddToWishlistButton, {
+      props: { inWishlist: false, loading: true, error: 'Wunschliste konnte nicht aktualisiert werden.' },
+    })
 
-    expect(fetchMock).toHaveBeenCalledWith('/api/wishlist/card/42', { method: 'DELETE' })
-    expect(component.emitted('changed')?.[1]).toEqual([false])
+    expect(component.find('button').attributes('aria-busy') ?? component.find('button').attributes('disabled')).toBeDefined()
+    expect(component.find('p.text-error').text()).toBe('Wunschliste konnte nicht aktualisiert werden.')
   })
 })

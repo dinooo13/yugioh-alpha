@@ -104,31 +104,14 @@ const setSelection = computed({
   },
 })
 
-// Seeds the "Zur Wunschliste" toggle state per card (Phase 6). A Set keeps the
-// per-card lookup below cheap regardless of how many cards are on the page.
+// Seeds the "Zur Wunschliste" toggle state per card (Phase 6). The state
+// lives here, not in the buttons (#98): a toggle that finishes while the grid
+// reloads isn't lost, and the tile and the card detail agree.
 const { data: wishlistIds } = await useFetch<{ ids: number[] }>('/api/wishlist/ids', {
   headers: import.meta.server ? useRequestHeaders(['cookie']) : undefined,
   default: () => ({ ids: [] }),
 })
-const wishlistedCardIds = ref<Set<number>>(new Set())
-watch(wishlistIds, (value) => {
-  wishlistedCardIds.value = new Set(value?.ids ?? [])
-}, { immediate: true })
-
-function isWishlisted(cardId: number) {
-  return wishlistedCardIds.value.has(cardId)
-}
-
-function onWishlistChanged(cardId: number, inWishlist: boolean) {
-  const next = new Set(wishlistedCardIds.value)
-  if (inWishlist) {
-    next.add(cardId)
-  }
-  else {
-    next.delete(cardId)
-  }
-  wishlistedCardIds.value = next
-}
+const wishlist = useWishlistToggle(computed(() => wishlistIds.value?.ids ?? []))
 
 const {
   data: cards,
@@ -457,9 +440,10 @@ async function onAddedToInventory() {
               @click="openAddToInventory(card)"
             />
             <WishlistAddToWishlistButton
-              :catalog-card-id="card.id"
-              :in-wishlist="isWishlisted(card.id)"
-              @changed="value => onWishlistChanged(card.id, value)"
+              :in-wishlist="wishlist.isWishlisted(card.id)"
+              :loading="wishlist.isSaving(card.id)"
+              :error="wishlist.errorFor(card.id)"
+              @toggle="wishlist.toggle(card.id)"
             />
           </div>
         </div>
@@ -511,9 +495,11 @@ async function onAddedToInventory() {
         />
         <WishlistAddToWishlistButton
           v-if="isDetailOpen"
-          :catalog-card-id="selectedCardId"
-          :in-wishlist="isWishlisted(selectedCardId)"
-          @changed="value => onWishlistChanged(selectedCardId, value)"
+          :in-wishlist="wishlist.isWishlisted(selectedCardId)"
+          :loading="wishlist.isSaving(selectedCardId)"
+          :error="wishlist.errorFor(selectedCardId)"
+          size="md"
+          @toggle="wishlist.toggle(selectedCardId)"
         />
       </template>
     </CardDetailModal>
