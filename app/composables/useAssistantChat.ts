@@ -1,6 +1,7 @@
 import { useChat } from '@ai-sdk/vue'
 import { DefaultChatTransport } from 'ai'
-import type { AssistantActionView, AssistantConversationSummary } from '~~/shared/assistant-chat'
+import { ASSISTANT_TITLE_MAX_USER_MESSAGES } from '~~/shared/assistant-chat'
+import type { AssistantActionView, AssistantConversationSummary, AssistantConversationTitleResult } from '~~/shared/assistant-chat'
 import type { AssistantUIConversation, AssistantUIMessage, AssistantUIMessagePart } from '~~/shared/assistant-ui'
 import { assistantChatErrorCode, isAssistantConnectionError, isAssistantHttpError } from '~/utils/assistant-chat-error'
 
@@ -9,6 +10,8 @@ export interface UseAssistantChatOptions {
   model?: () => string | undefined
   /** After every turn, however it ended: the conversation's title and position in the list may have changed. */
   onTurnEnd?: () => void | Promise<void>
+  /** The model named the conversation after a turn (#129): its title changed. */
+  onTitleChange?: () => void | Promise<void>
 }
 
 /** A message id the server accepts as its own (a UUID); `crypto.randomUUID` only exists in secure contexts. */
@@ -73,7 +76,10 @@ function wait(ms: number): Promise<void> {
  * - retry after an error: a message the server never got is sent again,
  *   else the answer is regenerated;
  * - proposals applied or rejected in the thread (`updateAction`), which
- *   win over the streamed or loaded state of their `data-action` part.
+ *   win over the streamed or loaded state of their `data-action` part;
+ * - after a completed turn, asks the server to name the conversation
+ *   (`POST …/title`, #129) — outside the turn, so the composer is free
+ *   meanwhile; never shows an error.
  *
  * Call it once per conversation (the thread component is keyed by the id).
  */
@@ -106,8 +112,8 @@ export function useAssistantChat(conversationId: string, options: UseAssistantCh
         }
       },
     }),
-    onFinish: ({ isAbort, message }) => {
-      void afterTurn(isAbort, message)
+    onFinish: ({ isAbort, isError, isDisconnect, message }) => {
+      void afterTurn(isAbort, message, isError || isDisconnect)
     },
   })
 
@@ -170,7 +176,35 @@ export function useAssistantChat(conversationId: string, options: UseAssistantCh
     }
   }
 
-  async function afterTurn(isAbort: boolean, message: AssistantUIMessage) {
+  /**
+   * After a completed turn: lets the title model name the conversation
+   * (#129). The server decides whether it still may (only an automatic
+   * title is replaced, in the first few messages); this only skips the
+   * request once there are too many messages. Any failure keeps the title.
+   */
+  async function requestTitle() {
+    if (isDisposed || !conversation.value) {
+      return
+    }
+    const userMessages = chat.messages.value.filter(message => message.role === 'user').length
+    if (userMessages > ASSISTANT_TITLE_MAX_USER_MESSAGES) {
+      return
+    }
+    let result: AssistantConversationTitleResult | null
+    try {
+      result = await $fetch<AssistantConversationTitleResult | null>(`/api/assistant/chat/${conversationId}/title`, { method: 'POST' })
+    }
+    catch {
+      return
+    }
+    if (isDisposed || !result?.generated) {
+      return
+    }
+    conversation.value = result.conversation
+    await options.onTitleChange?.()
+  }
+
+  async function afterTurn(isAbort: boolean, message: AssistantUIMessage, failed: boolean) {
     try {
       if (isAbort) {
         await refetchEndedTurn(true)
@@ -183,6 +217,9 @@ export function useAssistantChat(conversationId: string, options: UseAssistantCh
       isCancelling.value = false
     }
     await options.onTurnEnd?.()
+    if (!isAbort && !failed) {
+      await requestTitle()
+    }
   }
 
   const isBusy = computed(() => chat.status.value === 'submitted' || chat.status.value === 'streaming' || isCancelling.value)

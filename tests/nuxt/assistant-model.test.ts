@@ -1,24 +1,29 @@
 // The chat assistant's model layer (server/utils/assistant-model.ts, ADR
 // 0020): provider/status resolution, the model picker, the OpenAI-compatible
-// provider on the AI SDK, the deterministic fake used by tests and E2E, and
-// the error codes and tool error texts.
+// provider on the AI SDK, the deterministic fakes used by tests and E2E, the
+// title model (#129), and the error codes and tool error texts.
 
 import { describe, expect, it } from 'vitest'
-import { jsonSchema, streamText, tool } from 'ai'
+import { generateText, jsonSchema, streamText, tool } from 'ai'
 import {
   AssistantToolError,
   assistantErrorCode,
   assistantStreamErrorText,
+  createFakeTitleModel,
   createOpenAiCompatibleLanguageModel,
+  DEFAULT_TITLE_MODEL,
   fakeStreamParts,
+  fakeTitle,
   fakeTurn,
   getAssistantStatus,
   resolveModelChoice,
+  resolveTitleModelId,
   toolErrorText,
   useAssistantLanguageModel,
+  useAssistantTitleModel,
 } from '../../server/utils/assistant-model'
 import type { AssistantLanguageModel } from '../../server/utils/assistant-model'
-import { TOOL_TEXT } from '../../server/utils/assistant-prompts'
+import { buildTitleInstructions, buildTitlePrompt, TOOL_TEXT } from '../../server/utils/assistant-prompts'
 
 describe('assistant status/config resolution', () => {
   it('resolves to fake, openai-by-key, openai-by-custom-base-url, or disabled', () => {
@@ -360,6 +365,96 @@ describe('the fake language model (NUXT_ASSISTANT_PROVIDER=fake)', () => {
     expect(fakeTurn({ prompt: [user('text-werkzeug')] })).toEqual({ text: 'search_catalog {"query":"Dark Magician"}', toolCalls: [] })
     expect(fakeTurn({ prompt: [{ role: 'system', content: TOOL_TEXT.textWrittenToolCallHint }, user('text-werkzeug')] }).toolCalls)
       .toEqual([{ toolName: 'search_catalog', input: { query: 'Dark Magician' } }])
+  })
+})
+
+describe('the fake\'s #128 triggers: get_card and reasoning', () => {
+  const user = (text: string) => ({ role: 'user' as const, content: [{ type: 'text' as const, text }] })
+
+  it('reads a card by its id, then answers', () => {
+    expect(fakeTurn({ prompt: [user('zeige karte 46986414')] })).toEqual({ text: '', toolCalls: [{ toolName: 'get_card', input: { id: 46986414 } }] })
+    expect(fakeTurn({ prompt: [
+      user('zeige karte 46986414'),
+      { role: 'assistant', content: [{ type: 'tool-call', toolCallId: '1', toolName: 'get_card', input: { id: 46986414 } }] },
+      { role: 'tool', content: [{ type: 'tool-result', toolCallId: '1', toolName: 'get_card', output: { type: 'json', value: { id: 46986414, name: 'Dark Magician' } } }] },
+    ] })).toEqual({ text: 'Kartendetails gelesen.', toolCalls: [] })
+  })
+
+  it('streams reasoning before the text', () => {
+    const turn = fakeTurn({ prompt: [user('denk nach')] })
+    expect(turn).toEqual({ reasoning: 'Ich überlege kurz.', text: 'Fertig überlegt.', toolCalls: [] })
+    const parts = fakeStreamParts(turn)
+    expect(parts.map(part => part.type)).toEqual(['stream-start', 'reasoning-start', 'reasoning-delta', 'reasoning-end', 'text-start', 'text-delta', 'text-end', 'finish'])
+    expect(parts[2]).toMatchObject({ delta: 'Ich überlege kurz.' })
+  })
+})
+
+describe('the title model (NUXT_ASSISTANT_TITLE_MODEL, #129)', () => {
+  it('resolves the configured id: empty = the default, "off" (any case) = none', () => {
+    expect(resolveTitleModelId({ titleModel: '' })).toBe(DEFAULT_TITLE_MODEL)
+    expect(resolveTitleModelId({ titleModel: '  ' })).toBe('glm-5.3-flash')
+    expect(resolveTitleModelId({})).toBe('glm-5.3-flash')
+    expect(resolveTitleModelId({ titleModel: 'off' })).toBeNull()
+    expect(resolveTitleModelId({ titleModel: ' OFF ' })).toBeNull()
+    expect(resolveTitleModelId({ titleModel: ' gpt-4o-mini ' })).toBe('gpt-4o-mini')
+  })
+
+  it('is the fake title model with the fake provider, the configured one with openai, and none when off or unconfigured', () => {
+    const config = useRuntimeConfig().assistant as { provider: string, baseUrl: string, apiKey: string, model: string, reasoningEffort: string, titleModel: string }
+    const original = { ...config }
+    const originalEnvKey = process.env.OPENAI_API_KEY
+    try {
+      config.provider = 'fake'
+      config.titleModel = ''
+      expect(useAssistantTitleModel()).toMatchObject({ id: 'glm-5.3-flash', model: { provider: 'fake' } })
+      config.titleModel = 'off'
+      expect(useAssistantTitleModel()).toBeNull()
+
+      config.provider = 'openai'
+      config.titleModel = 'glm-5.3-flash'
+      config.reasoningEffort = 'low'
+      const title = useAssistantTitleModel()
+      expect(title?.id).toBe('glm-5.3-flash')
+      expect(title?.model).toMatchObject({ modelId: 'glm-5.3-flash' })
+      expect(title?.providerOptions).toEqual({ assistant: { reasoningEffort: 'low' } })
+
+      config.provider = ''
+      config.apiKey = ''
+      config.baseUrl = ''
+      delete process.env.OPENAI_API_KEY
+      expect(useAssistantTitleModel()).toBeNull()
+    }
+    finally {
+      Object.assign(config, original)
+      if (originalEnvKey !== undefined) {
+        process.env.OPENAI_API_KEY = originalEnvKey
+      }
+    }
+  })
+
+  const call = (locale: 'de' | 'en', userText: string, answerText = 'Antwort.') => ({
+    prompt: [
+      { role: 'system' as const, content: buildTitleInstructions(locale) },
+      { role: 'user' as const, content: [{ type: 'text' as const, text: buildTitlePrompt({ userText, answerText }) }] },
+    ],
+  })
+
+  it('the fake names the conversation after the first message\'s first words, in the interface language', () => {
+    expect(fakeTitle(call('de', 'suche Dark Magician'))).toBe('Thema: suche Dark Magician')
+    expect(fakeTitle(call('en', 'suche Dark Magician'))).toBe('Topic: suche Dark Magician')
+    expect(fakeTitle(call('de', 'bitte baue mir ein Deck mit Magiern'))).toBe('Thema: bitte baue mir ein')
+    expect(fakeTitle(call('de', '', 'Auf dem Bild sehe ich Dark Magician.'))).toBe('Thema: Auf dem Bild sehe')
+    expect(fakeTitle(call('de', '', ''))).toBe('Thema: Foto')
+    expect(fakeTitle(call('de', 'suche Dark Magician'))).toBe(fakeTitle(call('de', 'suche Dark Magician')))
+  })
+
+  it('the fake fails on "titel-fehler" (the fallback trigger)', () => {
+    expect(() => fakeTitle(call('de', 'titel-fehler bitte'))).toThrow('fake title failure')
+  })
+
+  it('the fake title model answers through generateText', async () => {
+    const result = await generateText({ model: createFakeTitleModel(), instructions: buildTitleInstructions('de'), prompt: buildTitlePrompt({ userText: 'suche Dark Magician', answerText: '' }) })
+    expect(result.text).toBe('Thema: suche Dark Magician')
   })
 })
 

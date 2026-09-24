@@ -351,7 +351,8 @@ model; see [`.env.example`](../.env.example).
 Since [ADR 0020](adr/0020-assistant-on-the-ai-sdk.md) (#84) the assistant runs on the
 Vercel AI SDK with Nuxt UI's chat components, stores messages as AI SDK `UIMessage` parts
 (older conversations are converted when read), guards against looping tool calls (#54), and
-offers a model picker (`NUXT_ASSISTANT_MODELS`).
+offers a model picker (`NUXT_ASSISTANT_MODELS`), and names new conversations with a separate
+title model (`NUXT_ASSISTANT_TITLE_MODEL`, #129).
 
 ### Phase 9: German and English (#34)
 

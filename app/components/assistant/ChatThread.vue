@@ -8,7 +8,8 @@ import { isToolPart } from '~/utils/assistant-tool-activity'
 // Nuxt UI's chat components (docs/adr/0020-assistant-on-the-ai-sdk.md). Keyed
 // by the conversation id in the page, so every conversation gets its own
 // chat. Each message is rendered from its parts, in order: text, the
-// model's reasoning (collapsed), tool chips and proposals.
+// model's reasoning (collapsed, also while streaming — #128), tool chips and
+// proposals.
 
 const props = withDefaults(defineProps<{
   conversationId: string
@@ -31,6 +32,8 @@ const emit = defineEmits<{
   loaded: [conversation: AssistantConversationSummary]
   /** A turn ended (however): its title and place in the list may have changed. */
   turnEnd: []
+  /** The model named the conversation (#129): its title changed. */
+  titleChange: []
 }>()
 
 const { t } = useI18n()
@@ -66,6 +69,7 @@ const {
 } = useAssistantChat(props.conversationId, {
   model: () => canPickModel.value ? selectedModel.value ?? undefined : undefined,
   onTurnEnd: () => emit('turnEnd'),
+  onTitleChange: () => emit('titleChange'),
 })
 
 // `step-start` parts only mark the model's steps; a message with nothing
@@ -194,10 +198,10 @@ watch(conversation, (summary) => {
                 :text="part.text"
                 class="w-fit max-w-full rounded-2xl rounded-bl-md bg-elevated px-3.5 py-2.5 text-default ring-1 ring-default sm:max-w-[85%]"
               />
-              <UChatReasoning
+              <AssistantReasoning
                 v-else-if="part.type === 'reasoning'"
                 :text="part.text"
-                :streaming="part.state === 'streaming'"
+                :streaming="part.state === 'streaming' && isTurnRunning && message.id === lastMessageId"
               />
               <AssistantToolPart
                 v-else-if="isToolPart(part)"

@@ -105,6 +105,15 @@ export interface AssistantConversationSummary {
   updatedAt: string
 }
 
+/** User messages up to which a conversation may still get a model-generated title (#129). */
+export const ASSISTANT_TITLE_MAX_USER_MESSAGES = 3
+
+/** `POST /api/assistant/chat/:id/title` — the conversation, and whether the model just named it (#129). */
+export interface AssistantConversationTitleResult {
+  conversation: AssistantConversationSummary
+  generated: boolean
+}
+
 /**
  * What a proposed deck (a `create_deck` / `update_deck_cards` /
  * `set_deck_format` action — the latter previews the deck's unchanged cards
@@ -180,9 +189,10 @@ export function toolCallDeckId(call: Pick<AssistantToolCallView, 'name' | 'argum
 /**
  * What a tool activity chip names after the tool's label: the search query,
  * the proposed deck's name, the deck the call refers to (its name, #53 —
- * nothing when the name isn't known), or a card id.
+ * nothing when the name isn't known), or the card's name (from the result,
+ * #128), else its id.
  */
-export function toolCallDetail(call: Pick<AssistantToolCallView, 'name' | 'arguments' | 'deckName'>): string | null {
+export function toolCallDetail(call: Pick<AssistantToolCallView, 'name' | 'arguments' | 'deckName'> & { cardName?: string }): string | null {
   const args = call.arguments
   if (typeof args.query === 'string' && args.query !== '') {
     return args.query
@@ -194,7 +204,7 @@ export function toolCallDetail(call: Pick<AssistantToolCallView, 'name' | 'argum
     return call.deckName ?? null
   }
   if (typeof args.id === 'number' || (typeof args.id === 'string' && args.id !== '')) {
-    return String(args.id)
+    return call.cardName ?? String(args.id)
   }
   return null
 }
