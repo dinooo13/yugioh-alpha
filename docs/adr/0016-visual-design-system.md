@@ -40,8 +40,8 @@ Constraints that shape the answer:
    mode the semantic variables are pinned to AA-safe shades (primary 600,
    secondary/success/info/warning 700, error 600, muted neutral-500).
    `tests/nuxt/no-raw-palette.test.ts` fails on any raw palette class in
-   `app/**/*.{vue,ts}`; the few intentional ones (avatar colors, dark islands)
-   sit on an allowlist with a reason, and stale allowlist entries fail too.
+   `app/**/*.{vue,ts}`; the few intentional ones (avatar colors) sit on an
+   allowlist with a reason, and stale allowlist entries fail too.
 2. **Dark-first color mode, stored in a cookie.** `@nuxtjs/color-mode` with
    `preference: 'dark'` and `storage: 'cookie'` (`ygo-color-mode`), so the
    server renders the right `<html class>` and there is no flash. A toggle sits
@@ -68,9 +68,15 @@ Constraints that shape the answer:
    layers and gradient text.
 7. **Original motifs only**: a rhombus lattice, arcane rings, an abstract
    card back of concentric ellipses and a tilted-card brand mark.
-8. **The desktop sidebar is a `.dark` island in both modes**, as are the
-   auth hero pane and the dashboard/profile banners. Shadows are defined with
-   `@theme inline` so they resolve against the element's own mode.
+8. **Every surface follows the color mode**, the shell included: the
+   sidebar and the mobile drawer are light in light mode and dark in dark
+   mode (the owner's review turned down an always-dark sidebar). They stand
+   apart from the canvas through their own lit surface (`arena-surface`:
+   the panel color with a violet corner glow and the lattice), a gold
+   hairline on the edge and the gold active-item marker. The only things
+   that stay dark in both modes are the card backs, like real cards.
+   Shadows and glows are defined with `@theme inline`, so they resolve
+   against the element's own colors.
 9. **Automated checks.** `e2e/a11y-axe.spec.ts` runs axe (`wcag2a`,
    `wcag2aa`, including color contrast) on the key pages in both modes;
    `e2e/color-mode.spec.ts` covers the toggle, the cookie, SSR and

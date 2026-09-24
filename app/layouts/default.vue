@@ -33,8 +33,7 @@ watch(() => route.fullPath, () => {
       />
     </header>
 
-    <!-- Always dark, in both modes (ADR 0016). -->
-    <aside class="dark arena-island sticky top-0 hidden h-dvh w-64 shrink-0 flex-col scheme-dark lg:flex">
+    <aside class="arena-surface sticky top-0 hidden h-dvh w-64 shrink-0 flex-col border-e border-default lg:flex">
       <div class="px-5 pt-6 pb-5">
         <LayoutBrandMark to="/" />
       </div>
@@ -42,7 +41,7 @@ watch(() => route.fullPath, () => {
       <LayoutSidebarContent />
 
       <div
-        class="gold-hairline-y absolute inset-y-0 right-0"
+        class="gold-hairline-y absolute inset-y-0 -right-px"
         aria-hidden="true"
       />
     </aside>
@@ -53,7 +52,7 @@ watch(() => route.fullPath, () => {
       :title="t('app.header.menu')"
       class="lg:hidden"
       :ui="{
-        content: 'dark arena-island scheme-dark max-w-72',
+        content: 'arena-surface max-w-72',
         header: 'border-b border-default',
         title: 'font-display text-lg tracking-[0.04em] text-highlighted',
         body: 'flex flex-col p-0 sm:p-0',

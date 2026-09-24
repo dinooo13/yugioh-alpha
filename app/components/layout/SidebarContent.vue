@@ -87,7 +87,7 @@ async function onLogout() {
           :name="displayName"
           :handle="avatarSeed"
           size="md"
-          class="shrink-0 ring-2 ring-secondary/60 ring-offset-2 ring-offset-island"
+          class="shrink-0 ring-2 ring-secondary/60 ring-offset-2 ring-offset-bg"
         />
         <span class="min-w-0 flex-1 truncate text-sm font-medium text-highlighted">{{ displayName }}</span>
         <LayoutColorModeToggle />
