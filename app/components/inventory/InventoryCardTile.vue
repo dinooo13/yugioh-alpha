@@ -13,7 +13,7 @@ const emit = defineEmits<{
 
 const breakdown = computed(() => props.item.collectionBreakdown ?? [])
 const showInline = computed(() => breakdown.value.length <= 2)
-const { t } = useI18n()
+const { t, n } = useI18n()
 const { cardName, cardValue } = useCardText()
 
 const frame = computed(() => cardFrame(props.item))
@@ -61,7 +61,7 @@ const frame = computed(() => cardFrame(props.item))
       </div>
 
       <p class="font-numeric text-sm font-semibold tracking-[0.04em] text-highlighted tabular-nums">
-        {{ t('card.totalQuantity', { count: item.totalQuantity }) }}
+        {{ t('card.totalQuantity', { count: n(item.totalQuantity, 'integer') }) }}
       </p>
 
       <div class="flex min-w-0 flex-wrap items-center gap-1">
@@ -73,7 +73,7 @@ const frame = computed(() => cardFrame(props.item))
             variant="subtle"
             class="max-w-full"
           >
-            <span class="truncate">{{ t('inventory.breakdown.entry', { name: breakdownLabel(entry, t), count: entry.quantity }) }}</span>
+            <span class="truncate">{{ t('inventory.breakdown.entry', { name: breakdownLabel(entry, t), count: n(entry.quantity, 'integer') }) }}</span>
           </UBadge>
         </template>
         <UPopover v-else>
@@ -93,7 +93,7 @@ const frame = computed(() => cardFrame(props.item))
                 class="flex items-center justify-between gap-4 text-sm"
               >
                 <span class="text-default">{{ breakdownLabel(entry, t) }}</span>
-                <span class="font-medium tabular-nums text-highlighted">×{{ entry.quantity }}</span>
+                <span class="font-medium tabular-nums text-highlighted">×{{ n(entry.quantity, 'integer') }}</span>
               </div>
             </div>
           </template>
