@@ -4,12 +4,18 @@
 // Pure functions that take the translation functions; `useRuleDescription()`
 // binds them to the active locale.
 
+import type { CardValueKind } from '~/utils/card-values'
 import type { CapReason, CardFilter, DescribeOptions, Rule } from '~~/shared/rule-formats'
 
 export interface RuleDescriptionI18n {
   t: (key: string, named?: Record<string, unknown>, plural?: number) => string
   /** Formats a calendar date with the `date` named format. */
   d: (value: Date, key: string) => string
+  /**
+   * The label of a stored card type / attribute / race in the card language
+   * (`useCardText().cardValue`, ADR 0015); without it the stored value is shown.
+   */
+  cardValue?: (kind: CardValueKind, value: string) => string
 }
 
 /** `2005-07-01` → the date in the locale's `date` format; unparseable input is returned as it is. */
@@ -53,24 +59,25 @@ function copiesLabel(i18n: RuleDescriptionI18n, maxCopies: number): string {
   return i18n.t('formats.rule.filter.copies.allowed', { max: maxCopies })
 }
 
-/** A one-liner for a card filter, e.g. "Attribut DARK, Stufe ab 5". */
+/** A one-liner for a card filter, e.g. "Attribut FINSTERNIS, Stufe ab 5". */
 export function describeCardFilter(i18n: RuleDescriptionI18n, filter: CardFilter, options?: DescribeOptions): string {
   const { t } = i18n
   const parts: string[] = []
   const region = filter.region === 'ocg' ? 'OCG' : 'TCG'
   const either = (values: string[]) => values.join(` ${t('formats.rule.cardFilter.or')} `)
+  const labels = (kind: CardValueKind, values: string[]) => values.map(value => i18n.cardValue?.(kind, value) ?? value)
 
   if (filter.types?.length) {
-    parts.push(t('formats.rule.cardFilter.types', { values: either(filter.types) }))
+    parts.push(t('formats.rule.cardFilter.types', { values: either(labels('type', filter.types)) }))
   }
   if (filter.frameTypes?.length) {
     parts.push(t('formats.rule.cardFilter.frameTypes', { values: either(filter.frameTypes) }))
   }
   if (filter.attributes?.length) {
-    parts.push(t('formats.rule.cardFilter.attributes', { values: either(filter.attributes) }))
+    parts.push(t('formats.rule.cardFilter.attributes', { values: either(labels('attribute', filter.attributes)) }))
   }
   if (filter.races?.length) {
-    parts.push(t('formats.rule.cardFilter.races', { values: either(filter.races) }))
+    parts.push(t('formats.rule.cardFilter.races', { values: either(labels('race', filter.races)) }))
   }
   if (filter.archetypes?.length) {
     parts.push(t('formats.rule.cardFilter.archetypes', { values: either(filter.archetypes) }))

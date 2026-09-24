@@ -12,10 +12,10 @@ const emit = defineEmits<{
 
 const breakdown = computed(() => props.item.collectionBreakdown ?? [])
 const showInline = computed(() => breakdown.value.length <= 2)
-const subtitle = computed(() => cardSubtitle(props.item))
-
 const { t } = useI18n()
-const { cardName } = useCardText()
+const { cardName, cardValue } = useCardText()
+
+const subtitle = computed(() => cardSubtitle(props.item, cardValue))
 </script>
 
 <template>

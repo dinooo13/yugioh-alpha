@@ -4,9 +4,11 @@
 // Model-facing text is English and exists in one version only: the system
 // prompt, the image hint, the deck context block, the tool and parameter
 // descriptions, and the tool results/errors. The reply language is not baked
-// into any of it — `replyLanguageInstruction(locale)` is appended as the last
-// paragraph of the system prompt on every turn, from the interface language
-// the request resolved to (`resolveUiLocale`).
+// into any of it — `REPLY_LANGUAGE_INSTRUCTION[locale]` and
+// `CARD_NAME_INSTRUCTION[cardLocale]` are appended as the last two paragraphs
+// of the system prompt on every turn, from the interface language
+// (`resolveUiLocale`) and the card language (`resolveCardLocale`, ADR 0015)
+// the request resolved to.
 //
 // Texts saved as message content (fallback answers, the "cancelled" marker)
 // and the default conversation title are user-facing, so they are localized
@@ -36,22 +38,30 @@ Deck building:
 
 export const IMAGE_HINT = 'This message contains one or more images, probably of cards: identify them (name, set code if visible), confirm the name with `search_catalog`, and ask if you are unsure.'
 
-/**
- * The last paragraph of the system prompt: which language to answer in. The
- * card-name sentence is the part F3 (card display language) changes.
- */
+/** The second-to-last paragraph of the system prompt: which language to answer in (the interface language, ADR 0014). */
 export const REPLY_LANGUAGE_INSTRUCTION: Record<AppLocale, string> = {
-  de: 'Reply in German (address the user informally with "du") unless the user explicitly asks for another language. Tool results and card texts may be in English; that does not change your reply language. Keep card names in English, exactly as the catalog spells them.',
-  en: 'Reply in English unless the user explicitly asks for another language. Keep card names in English, exactly as the catalog spells them.',
+  de: 'Reply in German (address the user informally with "du") unless the user explicitly asks for another language. Tool results and card texts may be in English; that does not change your reply language.',
+  en: 'Reply in English unless the user explicitly asks for another language.',
 }
 
-/** The full system prompt of one turn: base prompt, deck context, image hint, reply-language instruction (always last). */
-export function buildSystemPrompt(options: { deckContext: string | null, hasImages: boolean, locale: AppLocale }): string {
+/**
+ * The last paragraph of the system prompt: which name to call cards by (the
+ * card language, ADR 0015). In German, tool results carry `nameDe` where a
+ * card has an official German name.
+ */
+export const CARD_NAME_INSTRUCTION: Record<AppLocale, string> = {
+  de: 'Name cards by their official German name (nameDe in tool results); use the English name when a card has none, and add it in parentheses where it helps. Tool arguments accept either name.',
+  en: 'Keep card names in English, exactly as the catalog spells them.',
+}
+
+/** The full system prompt of one turn: base prompt, deck context, image hint, then the reply-language and card-name instructions (always last). */
+export function buildSystemPrompt(options: { deckContext: string | null, hasImages: boolean, locale: AppLocale, cardLocale: AppLocale }): string {
   return [
     SYSTEM_PROMPT,
     ...(options.deckContext ? [options.deckContext] : []),
     ...(options.hasImages ? [IMAGE_HINT] : []),
     REPLY_LANGUAGE_INSTRUCTION[options.locale],
+    CARD_NAME_INSTRUCTION[options.cardLocale],
   ].join('\n\n')
 }
 
@@ -67,8 +77,10 @@ export interface DeckContextInput {
   counts: { main: number, extra: number, side: number }
   /** null = no format assigned. */
   validation: { legal: boolean, issueMessages: string[] } | null
-  /** `catalogCardId|name|section|quantity|owned` rows. */
+  /** `catalogCardId|name|section|quantity|owned` rows; with `withGermanNames`, `catalogCardId|name|nameDe|section|quantity|owned`. */
   cardLines: string[]
+  /** German card language (ADR 0015): the card lines carry a `nameDe` column (empty when a card has none). */
+  withGermanNames?: boolean
 }
 
 /**
@@ -92,7 +104,7 @@ export function formatDeckContextBlock(deck: DeckContextInput): string {
     `Format: ${deck.format ? `${deck.format.name} (ID ${deck.format.id})` : 'none'}`,
     `Counts: Main ${deck.counts.main} · Extra ${deck.counts.extra} · Side ${deck.counts.side}`,
     `Legality: ${legality}`,
-    'Cards (catalogCardId|name|section|quantity|owned):',
+    `Cards (${deck.withGermanNames ? 'catalogCardId|name|nameDe|section|quantity|owned' : 'catalogCardId|name|section|quantity|owned'}):`,
     ...(shownLines.length > 0 ? shownLines : ['(empty)']),
     ...(deck.cardLines.length > shownLines.length ? ['… truncated'] : []),
     `Change this deck's cards only with update_deck_cards and deckId=${deck.id} (quantity is the new absolute amount), and its format only with set_deck_format and this deckId.`,
@@ -119,7 +131,7 @@ export const TOOL_DESCRIPTIONS = {
 
 /** Parameter descriptions shared by several tools. */
 export const TOOL_PARAM_DESCRIPTIONS = {
-  cardNameQuery: 'Card name or part of it',
+  cardNameQuery: 'Card name or part of it (English or German)',
   searchCatalogLimit: (max: number) => `Maximum number of results (default/maximum: ${max})`,
   catalogCardId: 'Catalog card ID (passcode)',
   collectionId: 'Only consider this collection',

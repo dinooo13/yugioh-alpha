@@ -156,13 +156,13 @@ describe('toolDefinitions', () => {
 
 describe('runTool', () => {
   it('rejects an unknown tool name with 400', async () => {
-    expect(await statusOf(() => runTool('does_not_exist', { db, userId: 'user-a' }, {}))).toBe(400)
+    expect(await statusOf(() => runTool('does_not_exist', { db, userId: 'user-a', cardLocale: 'en' }, {}))).toBe(400)
   })
 })
 
 describe('search_catalog', () => {
   it('finds cards by a name substring and includes stats', async () => {
-    const outcome = await tool('search_catalog').run({ db, userId: 'user-a' }, { query: 'Dark Mag' })
+    const outcome = await tool('search_catalog').run({ db, userId: 'user-a', cardLocale: 'en' }, { query: 'Dark Mag' })
     expect(outcome.result).toMatchObject({
       items: [
         expect.objectContaining({ id: CARD.darkMagician, name: 'Dark Magician', type: 'Normal Monster', atk: 2500, def: 2100 }),
@@ -174,15 +174,15 @@ describe('search_catalog', () => {
   it('finds cards by their German name, with wildcards literal (ADR 0015)', async () => {
     seedGermanNames(db, { [CARD.darkMagician]: 'Dunkler Magier' })
 
-    const german = await tool('search_catalog').run({ db, userId: 'user-a' }, { query: 'Dunkler' })
+    const german = await tool('search_catalog').run({ db, userId: 'user-a', cardLocale: 'en' }, { query: 'Dunkler' })
     expect(german.result).toMatchObject({ items: [expect.objectContaining({ id: CARD.darkMagician, name: 'Dark Magician' })] })
 
-    const wildcard = await tool('search_catalog').run({ db, userId: 'user-a' }, { query: '%' })
+    const wildcard = await tool('search_catalog').run({ db, userId: 'user-a', cardLocale: 'en' }, { query: '%' })
     expect(wildcard.result).toMatchObject({ items: [] })
   })
 
   it('rejects non-object arguments', async () => {
-    expect(await statusOf(() => tool('search_catalog').run({ db, userId: 'user-a' }, 'nope'))).toBe(400)
+    expect(await statusOf(() => tool('search_catalog').run({ db, userId: 'user-a', cardLocale: 'en' }, 'nope'))).toBe(400)
   })
 
   it('caps the result at getAssistantLimits().toolResultItems and respects a smaller limit', async () => {
@@ -197,12 +197,12 @@ describe('search_catalog', () => {
     }))
     db.insert(schema.catalogCard).values(extraCards).run()
 
-    const full = await tool('search_catalog').run({ db, userId: 'user-a' }, { query: 'Filler Card' })
+    const full = await tool('search_catalog').run({ db, userId: 'user-a', cardLocale: 'en' }, { query: 'Filler Card' })
     const fullResult = full.result as { items: unknown[], truncated: boolean }
     expect(fullResult.items).toHaveLength(toolResultItems)
     expect(fullResult.truncated).toBe(true)
 
-    const limited = await tool('search_catalog').run({ db, userId: 'user-a' }, { query: 'Filler Card', limit: 3 })
+    const limited = await tool('search_catalog').run({ db, userId: 'user-a', cardLocale: 'en' }, { query: 'Filler Card', limit: 3 })
     const limitedResult = limited.result as { items: unknown[], truncated: boolean }
     expect(limitedResult.items).toHaveLength(3)
     expect(limitedResult.truncated).toBe(true)
@@ -211,17 +211,17 @@ describe('search_catalog', () => {
 
 describe('get_card', () => {
   it('returns full card data including printings and banlist info', async () => {
-    const outcome = await tool('get_card').run({ db, userId: 'user-a' }, { id: CARD.darkMagician })
+    const outcome = await tool('get_card').run({ db, userId: 'user-a', cardLocale: 'en' }, { id: CARD.darkMagician })
     expect(outcome.result).toMatchObject({ id: CARD.darkMagician, name: 'Dark Magician', desc: 'The ultimate wizard.' })
     expect((outcome.result as { printings: unknown[] }).printings).toEqual([])
   })
 
   it('404s for an unknown card id', async () => {
-    expect(await statusOf(() => tool('get_card').run({ db, userId: 'user-a' }, { id: 1 }))).toBe(404)
+    expect(await statusOf(() => tool('get_card').run({ db, userId: 'user-a', cardLocale: 'en' }, { id: 1 }))).toBe(404)
   })
 
   it('rejects a missing id', async () => {
-    expect(await statusOf(() => tool('get_card').run({ db, userId: 'user-a' }, {}))).toBe(400)
+    expect(await statusOf(() => tool('get_card').run({ db, userId: 'user-a', cardLocale: 'en' }, {}))).toBe(400)
   })
 })
 
@@ -232,7 +232,7 @@ describe('search_inventory', () => {
     await own(db, 'user-a', CARD.darkMagician, 1)
     await own(db, 'user-a', CARD.potOfGreed, 3)
 
-    const outcome = await tool('search_inventory').run({ db, userId: 'user-a' }, {})
+    const outcome = await tool('search_inventory').run({ db, userId: 'user-a', cardLocale: 'en' }, {})
     const { items } = outcome.result as { items: Array<{ catalogCardId: number, quantity: number, collections: unknown[] }> }
     const byCard = new Map(items.map(row => [row.catalogCardId, row]))
 
@@ -245,23 +245,23 @@ describe('search_inventory', () => {
     await own(db, 'user-a', CARD.darkMagician, 1)
     await own(db, 'user-b', CARD.potOfGreed, 5)
 
-    const byQuery = await tool('search_inventory').run({ db, userId: 'user-a' }, { query: 'Dark' })
+    const byQuery = await tool('search_inventory').run({ db, userId: 'user-a', cardLocale: 'en' }, { query: 'Dark' })
     expect(byQuery.result).toMatchObject({ items: [expect.objectContaining({ catalogCardId: CARD.darkMagician })] })
 
-    const byQueryMiss = await tool('search_inventory').run({ db, userId: 'user-a' }, { query: 'Pot of Greed' })
+    const byQueryMiss = await tool('search_inventory').run({ db, userId: 'user-a', cardLocale: 'en' }, { query: 'Pot of Greed' })
     expect(byQueryMiss.result).toMatchObject({ items: [] })
   })
 
   it('404s for a collectionId the caller does not own', async () => {
     const foreign = await createCollection(db, 'user-b', { name: 'Foreign', description: null })
-    expect(await statusOf(() => tool('search_inventory').run({ db, userId: 'user-a' }, { collectionId: foreign.id }))).toBe(404)
+    expect(await statusOf(() => tool('search_inventory').run({ db, userId: 'user-a', cardLocale: 'en' }, { collectionId: foreign.id }))).toBe(404)
   })
 
   it('includes the deck-building card facts (no card text) and the default copy limit', async () => {
     await own(db, 'user-a', CARD.darkMagician, 2)
     await own(db, 'user-a', CARD.stardustDragon, 1)
 
-    const outcome = await tool('search_inventory').run({ db, userId: 'user-a' }, {})
+    const outcome = await tool('search_inventory').run({ db, userId: 'user-a', cardLocale: 'en' }, {})
     const { items } = outcome.result as { items: Array<Record<string, unknown>> }
     const byName = Object.fromEntries(items.map(item => [item.name, item]))
 
@@ -294,7 +294,7 @@ describe('search_inventory', () => {
     await own(db, 'user-a', CARD.potOfGreed, 2)
     await own(db, 'user-a', CARD.mirrorForce, 3)
 
-    const outcome = await tool('search_inventory').run({ db, userId: 'user-a' }, { formatId: format.id })
+    const outcome = await tool('search_inventory').run({ db, userId: 'user-a', cardLocale: 'en' }, { formatId: format.id })
     const result = outcome.result as { items: Array<{ name: string, maxCopies: number }>, total: number, formatName: string }
 
     expect(result.formatName).toBe('Verbot')
@@ -307,7 +307,7 @@ describe('search_inventory', () => {
 
   it('404s for a formatId that is not the caller\'s or built in', async () => {
     const foreign = createRuleFormat(db, 'user-b', validateRuleFormatInput({ name: 'Fremd', rules: { rules: [] } }))
-    expect(await statusOf(() => tool('search_inventory').run({ db, userId: 'user-a' }, { formatId: foreign.id }))).toBe(404)
+    expect(await statusOf(() => tool('search_inventory').run({ db, userId: 'user-a', cardLocale: 'en' }, { formatId: foreign.id }))).toBe(404)
   })
 
   it('pages with offset past the item cap', async () => {
@@ -325,16 +325,16 @@ describe('search_inventory', () => {
       await own(db, 'user-a', id, 1)
     }
 
-    const first = (await tool('search_inventory').run({ db, userId: 'user-a' }, {})).result as { items: Array<{ name: string }>, truncated: boolean, total: number, offset: number }
+    const first = (await tool('search_inventory').run({ db, userId: 'user-a', cardLocale: 'en' }, {})).result as { items: Array<{ name: string }>, truncated: boolean, total: number, offset: number }
     expect(first).toMatchObject({ truncated: true, total: toolResultItems + 5, offset: 0 })
     expect(first.items).toHaveLength(toolResultItems)
 
-    const second = (await tool('search_inventory').run({ db, userId: 'user-a' }, { offset: toolResultItems })).result as { items: Array<{ name: string }>, truncated: boolean }
+    const second = (await tool('search_inventory').run({ db, userId: 'user-a', cardLocale: 'en' }, { offset: toolResultItems })).result as { items: Array<{ name: string }>, truncated: boolean }
     expect(second.truncated).toBe(false)
     expect(second.items).toHaveLength(5)
     expect(second.items[0]!.name).toBe(`Filler Card ${String(toolResultItems).padStart(3, '0')}`)
 
-    expect(await statusOf(() => tool('search_inventory').run({ db, userId: 'user-a' }, { offset: -1 }))).toBe(400)
+    expect(await statusOf(() => tool('search_inventory').run({ db, userId: 'user-a', cardLocale: 'en' }, { offset: -1 }))).toBe(400)
   })
 })
 
@@ -344,7 +344,7 @@ describe('list_collections', () => {
     await own(db, 'user-a', CARD.darkMagician, 4, { collection_id: collection.id })
     await createCollection(db, 'user-b', { name: 'Not mine', description: null })
 
-    const outcome = await tool('list_collections').run({ db, userId: 'user-a' }, {})
+    const outcome = await tool('list_collections').run({ db, userId: 'user-a', cardLocale: 'en' }, {})
     expect(outcome.result).toMatchObject({ items: [{ id: collection.id, name: 'Box 1', cardCount: 4 }], truncated: false })
   })
 })
@@ -355,7 +355,7 @@ describe('list_decks', () => {
     upsertDeckCard(db, 'user-a', deck.id, { catalogCardId: CARD.darkMagician, section: 'main', quantity: 1 })
     createDeck(db, 'user-b', { name: 'Not mine', description: null })
 
-    const outcome = await tool('list_decks').run({ db, userId: 'user-a' }, {})
+    const outcome = await tool('list_decks').run({ db, userId: 'user-a', cardLocale: 'en' }, {})
     expect(outcome.result).toMatchObject({
       items: [
         expect.objectContaining({ id: deck.id, name: 'My Deck', formatName: null, legal: null, counts: { main: 1, extra: 0, side: 0, total: 1 } }),
@@ -369,7 +369,7 @@ describe('list_decks', () => {
     createDeck(db, 'user-a', { name: 'Blue-Eyes Deck', description: null })
     createDeck(db, 'user-a', { name: 'Burn Deck', description: null })
 
-    const outcome = await tool('list_decks').run({ db, userId: 'user-a' }, { query: 'Blue-Eyes' })
+    const outcome = await tool('list_decks').run({ db, userId: 'user-a', cardLocale: 'en' }, { query: 'Blue-Eyes' })
     const { items } = outcome.result as { items: Array<{ name: string }> }
     expect(items.map(item => item.name)).toEqual(['Blue-Eyes Deck'])
   })
@@ -386,7 +386,7 @@ describe('get_deck', () => {
     updateDeck(db, 'user-a', deck.id, { formatId: format.id })
     await own(db, 'user-a', CARD.darkMagician, 1)
 
-    const outcome = await tool('get_deck').run({ db, userId: 'user-a' }, { id: deck.id })
+    const outcome = await tool('get_deck').run({ db, userId: 'user-a', cardLocale: 'en' }, { id: deck.id })
     expect(outcome.result).toMatchObject({
       id: deck.id,
       name: 'My Deck',
@@ -402,7 +402,7 @@ describe('get_deck', () => {
 
   it('404s for a deck owned by another user', async () => {
     const foreignDeck = createDeck(db, 'user-b', { name: 'Foreign', description: null })
-    expect(await statusOf(() => tool('get_deck').run({ db, userId: 'user-a' }, { id: foreignDeck.id }))).toBe(404)
+    expect(await statusOf(() => tool('get_deck').run({ db, userId: 'user-a', cardLocale: 'en' }, { id: foreignDeck.id }))).toBe(404)
   })
 })
 
@@ -410,7 +410,7 @@ describe('list_formats', () => {
   it('lists built-in and the caller\'s own formats', async () => {
     seedBuiltinFormats(db)
     createRuleFormat(db, 'user-a', validateRuleFormatInput({ name: 'Mein Format', rules: { rules: [] } }))
-    const outcome = await tool('list_formats').run({ db, userId: 'user-a' }, {})
+    const outcome = await tool('list_formats').run({ db, userId: 'user-a', cardLocale: 'en' }, {})
     const { items: names } = outcome.result as { items: Array<{ name: string, isBuiltin: boolean }> }
     expect(names.some(item => item.isBuiltin)).toBe(true)
     expect(names.some(item => item.name === 'Mein Format' && !item.isBuiltin)).toBe(true)
@@ -427,7 +427,7 @@ describe('validate_deck', () => {
     upsertDeckCard(db, 'user-a', deck.id, { catalogCardId: CARD.darkMagician, section: 'main', quantity: 2 })
     updateDeck(db, 'user-a', deck.id, { formatId: format.id })
 
-    const outcome = await tool('validate_deck').run({ db, userId: 'user-a' }, { deckId: deck.id })
+    const outcome = await tool('validate_deck').run({ db, userId: 'user-a', cardLocale: 'en' }, { deckId: deck.id })
     expect((outcome.result as { legal: boolean }).legal).toBe(false)
   })
 
@@ -435,13 +435,13 @@ describe('validate_deck', () => {
     const format = createRuleFormat(db, 'user-a', validateRuleFormatInput({ name: 'Format', rules: { rules: [] } }))
     const deck = createDeck(db, 'user-a', { name: 'My Deck', description: null })
 
-    const outcome = await tool('validate_deck').run({ db, userId: 'user-a' }, { deckId: deck.id, formatId: format.id })
+    const outcome = await tool('validate_deck').run({ db, userId: 'user-a', cardLocale: 'en' }, { deckId: deck.id, formatId: format.id })
     expect((outcome.result as { legal: boolean }).legal).toBe(true)
   })
 
   it('400s when the deck has no format and none was given', async () => {
     const deck = createDeck(db, 'user-a', { name: 'My Deck', description: null })
-    expect(await statusOf(() => tool('validate_deck').run({ db, userId: 'user-a' }, { deckId: deck.id }))).toBe(400)
+    expect(await statusOf(() => tool('validate_deck').run({ db, userId: 'user-a', cardLocale: 'en' }, { deckId: deck.id }))).toBe(400)
   })
 
   it('checks a planned new deck (cards + formatId): counts, legality, and missing cards, without writing', async () => {
@@ -451,7 +451,7 @@ describe('validate_deck', () => {
     }))
     await own(db, 'user-a', CARD.darkMagician, 1)
 
-    const outcome = await tool('validate_deck').run({ db, userId: 'user-a' }, {
+    const outcome = await tool('validate_deck').run({ db, userId: 'user-a', cardLocale: 'en' }, {
       formatId: format.id,
       cards: [
         { catalogCardId: CARD.darkMagician, section: 'main', quantity: 3 },
@@ -476,7 +476,7 @@ describe('validate_deck', () => {
     const deck = createDeck(db, 'user-a', { name: 'My Deck', description: null })
     upsertDeckCard(db, 'user-a', deck.id, { catalogCardId: CARD.darkMagician, section: 'main', quantity: 1 })
 
-    const outcome = await tool('validate_deck').run({ db, userId: 'user-a' }, {
+    const outcome = await tool('validate_deck').run({ db, userId: 'user-a', cardLocale: 'en' }, {
       deckId: deck.id,
       changes: [{ catalogCardId: CARD.potOfGreed, section: 'main', quantity: 2 }],
     })
@@ -495,23 +495,108 @@ describe('validate_deck', () => {
 
   it('400s without deckId and cards, for cards together with deckId, and for a card in the wrong section', async () => {
     const deck = createDeck(db, 'user-a', { name: 'My Deck', description: null })
-    expect(await statusOf(() => tool('validate_deck').run({ db, userId: 'user-a' }, {}))).toBe(400)
-    expect(await statusOf(() => tool('validate_deck').run({ db, userId: 'user-a' }, {
+    expect(await statusOf(() => tool('validate_deck').run({ db, userId: 'user-a', cardLocale: 'en' }, {}))).toBe(400)
+    expect(await statusOf(() => tool('validate_deck').run({ db, userId: 'user-a', cardLocale: 'en' }, {
       changes: [{ catalogCardId: CARD.darkMagician, section: 'main', quantity: 1 }],
     }))).toBe(400)
-    expect(await statusOf(() => tool('validate_deck').run({ db, userId: 'user-a' }, {
+    expect(await statusOf(() => tool('validate_deck').run({ db, userId: 'user-a', cardLocale: 'en' }, {
       deckId: deck.id,
       cards: [{ catalogCardId: CARD.darkMagician, section: 'main', quantity: 1 }],
     }))).toBe(400)
-    expect(await statusOf(() => tool('validate_deck').run({ db, userId: 'user-a' }, {
+    expect(await statusOf(() => tool('validate_deck').run({ db, userId: 'user-a', cardLocale: 'en' }, {
       cards: [{ catalogCardId: CARD.stardustDragon, section: 'main', quantity: 1 }],
     }))).toBe(400)
   })
 })
 
+describe('German card language (ADR 0015)', () => {
+  const de = () => ({ db, userId: 'user-a', cardLocale: 'de' as const })
+  const en = () => ({ db, userId: 'user-a', cardLocale: 'en' as const })
+
+  beforeEach(() => {
+    // Raigeki keeps no German name: the English fallback.
+    seedGermanNames(db, { [CARD.darkMagician]: 'Dunkler Magier', [CARD.potOfGreed]: 'Topf der Gier' })
+    db.update(schema.catalogCardTranslation)
+      .set({ desc: 'Der ultimative Hexer.' })
+      .where(eq(schema.catalogCardTranslation.cardId, CARD.darkMagician))
+      .run()
+  })
+
+  it('search_catalog adds nameDe only in German and only when a card has one', async () => {
+    const german = (await tool('search_catalog').run(de(), { query: 'i' })).result as { items: Array<Record<string, unknown>> }
+    expect(german.items.find(item => item.id === CARD.darkMagician)).toMatchObject({ name: 'Dark Magician', nameDe: 'Dunkler Magier' })
+    expect(german.items.find(item => item.id === CARD.raigeki)).not.toHaveProperty('nameDe')
+
+    const english = (await tool('search_catalog').run(en(), { query: 'i' })).result as { items: Array<Record<string, unknown>> }
+    expect(english.items.every(item => !('nameDe' in item))).toBe(true)
+  })
+
+  it('get_card adds nameDe and descDe only in German', async () => {
+    expect((await tool('get_card').run(de(), { id: CARD.darkMagician })).result)
+      .toMatchObject({ name: 'Dark Magician', nameDe: 'Dunkler Magier', desc: 'The ultimate wizard.', descDe: 'Der ultimative Hexer.' })
+    // A German name without German text: no descDe.
+    const potOfGreed = (await tool('get_card').run(de(), { id: CARD.potOfGreed })).result
+    expect(potOfGreed).toMatchObject({ nameDe: 'Topf der Gier' })
+    expect(potOfGreed).not.toHaveProperty('descDe')
+
+    const english = (await tool('get_card').run(en(), { id: CARD.darkMagician })).result
+    expect(english).not.toHaveProperty('nameDe')
+    expect(english).not.toHaveProperty('descDe')
+  })
+
+  it('search_inventory and get_deck add nameDe only in German', async () => {
+    await own(db, 'user-a', CARD.darkMagician, 2)
+    await own(db, 'user-a', CARD.raigeki, 1)
+    const deck = createDeck(db, 'user-a', { name: 'My Deck', description: null })
+    upsertDeckCard(db, 'user-a', deck.id, { catalogCardId: CARD.darkMagician, section: 'main', quantity: 2 })
+
+    const inventory = (await tool('search_inventory').run(de(), {})).result as { items: Array<Record<string, unknown>> }
+    expect(inventory.items).toEqual([
+      expect.objectContaining({ catalogCardId: CARD.darkMagician, name: 'Dark Magician', nameDe: 'Dunkler Magier' }),
+      expect.not.objectContaining({ nameDe: expect.anything() }),
+    ])
+    const englishInventory = (await tool('search_inventory').run(en(), {})).result as { items: Array<Record<string, unknown>> }
+    expect(englishInventory.items.every(item => !('nameDe' in item))).toBe(true)
+
+    expect((await tool('get_deck').run(de(), { id: deck.id })).result).toMatchObject({
+      sections: { main: [{ catalogCardId: CARD.darkMagician, name: 'Dark Magician', nameDe: 'Dunkler Magier', quantity: 2 }] },
+    })
+    const englishDeck = (await tool('get_deck').run(en(), { id: deck.id })).result as { sections: { main: object[] } }
+    expect(englishDeck.sections.main[0]).not.toHaveProperty('nameDe')
+  })
+
+  it('validate_deck keeps the German names of missing cards and issue params only in German', async () => {
+    const format = createRuleFormat(db, 'user-a', validateRuleFormatInput({
+      name: 'Format',
+      rules: { rules: [{ kind: 'copies', maxCopies: 1 }] },
+    }))
+    const deck = createDeck(db, 'user-a', { name: 'My Deck', description: null })
+    upsertDeckCard(db, 'user-a', deck.id, { catalogCardId: CARD.darkMagician, section: 'main', quantity: 2 })
+
+    const planned = { formatId: format.id, cards: [
+      { catalogCardId: CARD.darkMagician, section: 'main', quantity: 1 },
+      { catalogCardId: CARD.raigeki, section: 'main', quantity: 1 },
+    ] }
+    const german = (await tool('validate_deck').run(de(), planned)).result as { missing: Array<Record<string, unknown>> }
+    expect(german.missing).toEqual([
+      { catalogCardId: CARD.darkMagician, name: 'Dark Magician', nameDe: 'Dunkler Magier', needed: 1, owned: 0 },
+      { catalogCardId: CARD.raigeki, name: 'Raigeki', needed: 1, owned: 0 },
+    ])
+    const english = (await tool('validate_deck').run(en(), planned)).result as { missing: Array<Record<string, unknown>> }
+    expect(english.missing.every(card => !('nameDe' in card))).toBe(true)
+
+    type Validation = { issues: Array<{ params: Record<string, unknown> }> }
+    const germanIssues = ((await tool('validate_deck').run(de(), { deckId: deck.id, formatId: format.id })).result as Validation).issues
+    expect(germanIssues[0]!.params).toMatchObject({ cardName: 'Dark Magician', cardNameDe: 'Dunkler Magier' })
+    const englishIssues = ((await tool('validate_deck').run(en(), { deckId: deck.id, formatId: format.id })).result as Validation).issues
+    expect(englishIssues[0]!.params).toMatchObject({ cardName: 'Dark Magician' })
+    expect(englishIssues[0]!.params).not.toHaveProperty('cardNameDe')
+  })
+})
+
 describe('add_to_inventory (write tool)', () => {
   it('produces a pending action instead of writing directly', async () => {
-    const outcome = await tool('add_to_inventory').run({ db, userId: 'user-a' }, {
+    const outcome = await tool('add_to_inventory').run({ db, userId: 'user-a', cardLocale: 'en' }, {
       items: [{ catalogCardId: CARD.darkMagician, quantity: 2 }],
     })
 
@@ -527,7 +612,7 @@ describe('add_to_inventory (write tool)', () => {
   })
 
   it('400s for an unknown catalog card id', async () => {
-    expect(await statusOf(() => tool('add_to_inventory').run({ db, userId: 'user-a' }, {
+    expect(await statusOf(() => tool('add_to_inventory').run({ db, userId: 'user-a', cardLocale: 'en' }, {
       items: [{ catalogCardId: 1, quantity: 1 }],
     }))).toBe(400)
   })
@@ -535,7 +620,7 @@ describe('add_to_inventory (write tool)', () => {
 
 describe('create_deck (write tool)', () => {
   it('produces a pending action and never creates the deck', async () => {
-    const outcome = await tool('create_deck').run({ db, userId: 'user-a' }, {
+    const outcome = await tool('create_deck').run({ db, userId: 'user-a', cardLocale: 'en' }, {
       name: 'Neues Deck',
       cards: [{ catalogCardId: CARD.darkMagician, section: 'main', quantity: 2 }],
     })
@@ -553,7 +638,7 @@ describe('create_deck (write tool)', () => {
     }))
     await own(db, 'user-a', CARD.darkMagician, 1)
 
-    const outcome = await tool('create_deck').run({ db, userId: 'user-a' }, {
+    const outcome = await tool('create_deck').run({ db, userId: 'user-a', cardLocale: 'en' }, {
       name: 'Neues Deck',
       formatId: format.id,
       cards: [{ catalogCardId: CARD.darkMagician, section: 'main', quantity: 2 }],
@@ -575,14 +660,14 @@ describe('create_deck (write tool)', () => {
   })
 
   it('400s for a card placed in the wrong section', async () => {
-    expect(await statusOf(() => tool('create_deck').run({ db, userId: 'user-a' }, {
+    expect(await statusOf(() => tool('create_deck').run({ db, userId: 'user-a', cardLocale: 'en' }, {
       name: 'Neues Deck',
       cards: [{ catalogCardId: CARD.stardustDragon, section: 'main', quantity: 1 }],
     }))).toBe(400)
   })
 
   it('400s for an unknown catalog card id', async () => {
-    expect(await statusOf(() => tool('create_deck').run({ db, userId: 'user-a' }, {
+    expect(await statusOf(() => tool('create_deck').run({ db, userId: 'user-a', cardLocale: 'en' }, {
       name: 'Neues Deck',
       cards: [{ catalogCardId: 1, section: 'main', quantity: 1 }],
     }))).toBe(400)
@@ -592,7 +677,7 @@ describe('create_deck (write tool)', () => {
 describe('update_deck_cards (write tool)', () => {
   it('produces a pending action referencing the deck\'s current name', async () => {
     const deck = createDeck(db, 'user-a', { name: 'Mein Deck', description: null })
-    const outcome = await tool('update_deck_cards').run({ db, userId: 'user-a' }, {
+    const outcome = await tool('update_deck_cards').run({ db, userId: 'user-a', cardLocale: 'en' }, {
       deckId: deck.id,
       changes: [{ catalogCardId: CARD.darkMagician, section: 'main', quantity: 3 }],
     })
@@ -607,7 +692,7 @@ describe('update_deck_cards (write tool)', () => {
     upsertDeckCard(db, 'user-a', deck.id, { catalogCardId: CARD.potOfGreed, section: 'main', quantity: 1 })
     await own(db, 'user-a', CARD.potOfGreed, 1)
 
-    const outcome = await tool('update_deck_cards').run({ db, userId: 'user-a' }, {
+    const outcome = await tool('update_deck_cards').run({ db, userId: 'user-a', cardLocale: 'en' }, {
       deckId: deck.id,
       changes: [{ catalogCardId: CARD.darkMagician, section: 'main', quantity: 2 }],
     }) as Extract<ToolOutcome, { action: unknown }>
@@ -629,7 +714,7 @@ describe('update_deck_cards (write tool)', () => {
 
   it('404s for a deck owned by another user', async () => {
     const foreignDeck = createDeck(db, 'user-b', { name: 'Foreign', description: null })
-    expect(await statusOf(() => tool('update_deck_cards').run({ db, userId: 'user-a' }, {
+    expect(await statusOf(() => tool('update_deck_cards').run({ db, userId: 'user-a', cardLocale: 'en' }, {
       deckId: foreignDeck.id,
       changes: [{ catalogCardId: CARD.darkMagician, section: 'main', quantity: 1 }],
     }))).toBe(404)
@@ -637,7 +722,7 @@ describe('update_deck_cards (write tool)', () => {
 
   it('400s for an empty changes array', async () => {
     const deck = createDeck(db, 'user-a', { name: 'Mein Deck', description: null })
-    expect(await statusOf(() => tool('update_deck_cards').run({ db, userId: 'user-a' }, { deckId: deck.id, changes: [] }))).toBe(400)
+    expect(await statusOf(() => tool('update_deck_cards').run({ db, userId: 'user-a', cardLocale: 'en' }, { deckId: deck.id, changes: [] }))).toBe(400)
   })
 })
 
@@ -650,7 +735,7 @@ describe('set_deck_format (write tool)', () => {
   }
 
   async function propose(args: Record<string, unknown>, userId = 'user-a') {
-    return await tool('set_deck_format').run({ db, userId }, args) as Extract<ToolOutcome, { action: unknown }>
+    return await tool('set_deck_format').run({ db, userId, cardLocale: 'en' }, args) as Extract<ToolOutcome, { action: unknown }>
   }
 
   it('produces a pending action with a preview in the new format and leaves the deck untouched', async () => {
@@ -783,7 +868,7 @@ describe('applyAction', () => {
   }
 
   async function proposeAddToInventory(userId: string, quantity = 2) {
-    const outcome = await tool('add_to_inventory').run({ db, userId }, {
+    const outcome = await tool('add_to_inventory').run({ db, userId, cardLocale: 'en' }, {
       items: [{ catalogCardId: CARD.darkMagician, quantity }],
     })
     const action = (outcome as Extract<ToolOutcome, { action: unknown }>).action
@@ -799,7 +884,7 @@ describe('applyAction', () => {
   })
 
   it('applies the enriched create_deck / update_deck_cards payloads (names, preview) exactly as proposed', async () => {
-    const created = await tool('create_deck').run({ db, userId: 'user-a' }, {
+    const created = await tool('create_deck').run({ db, userId: 'user-a', cardLocale: 'en' }, {
       name: 'KI-Deck',
       cards: [{ catalogCardId: CARD.darkMagician, section: 'main', quantity: 2 }],
     }) as Extract<ToolOutcome, { action: unknown }>
@@ -811,7 +896,7 @@ describe('applyAction', () => {
       expect.objectContaining({ catalogCardId: CARD.darkMagician, quantity: 2 }),
     ])
 
-    const updated = await tool('update_deck_cards').run({ db, userId: 'user-a' }, {
+    const updated = await tool('update_deck_cards').run({ db, userId: 'user-a', cardLocale: 'en' }, {
       deckId,
       changes: [
         { catalogCardId: CARD.darkMagician, section: 'main', quantity: 0 },
@@ -828,14 +913,14 @@ describe('applyAction', () => {
     const format = createRuleFormat(db, 'user-a', validateRuleFormatInput({ name: 'Format', rules: { rules: [] } }))
     const deck = createDeck(db, 'user-a', { name: 'Magier', description: null })
 
-    const assign = await tool('set_deck_format').run({ db, userId: 'user-a' }, { deckId: deck.id, formatId: format.id }) as Extract<ToolOutcome, { action: unknown }>
+    const assign = await tool('set_deck_format').run({ db, userId: 'user-a', cardLocale: 'en' }, { deckId: deck.id, formatId: format.id }) as Extract<ToolOutcome, { action: unknown }>
     const assignRow = insertPendingAction('user-a', assign.action.kind, assign.action.payload, assign.action.summary)
     const assigned = await applyAction(db, 'user-a', assignRow.id)
     expect(assigned.status).toBe('applied')
     expect((assigned.result as { id: string }).id).toBe(deck.id)
     expect(getDeckDetail(db, 'user-a', deck.id).format?.id).toBe(format.id)
 
-    const remove = await tool('set_deck_format').run({ db, userId: 'user-a' }, { deckId: deck.id, formatId: null }) as Extract<ToolOutcome, { action: unknown }>
+    const remove = await tool('set_deck_format').run({ db, userId: 'user-a', cardLocale: 'en' }, { deckId: deck.id, formatId: null }) as Extract<ToolOutcome, { action: unknown }>
     const removeRow = insertPendingAction('user-a', remove.action.kind, remove.action.payload, remove.action.summary)
     expect((await applyAction(db, 'user-a', removeRow.id)).status).toBe('applied')
     expect(getDeckDetail(db, 'user-a', deck.id).format).toBeNull()
@@ -844,7 +929,7 @@ describe('applyAction', () => {
   it('marks a set_deck_format action failed when the format was deleted after the proposal', async () => {
     const format = createRuleFormat(db, 'user-a', validateRuleFormatInput({ name: 'Format', rules: { rules: [] } }))
     const deck = createDeck(db, 'user-a', { name: 'Magier', description: null })
-    const outcome = await tool('set_deck_format').run({ db, userId: 'user-a' }, { deckId: deck.id, formatId: format.id }) as Extract<ToolOutcome, { action: unknown }>
+    const outcome = await tool('set_deck_format').run({ db, userId: 'user-a', cardLocale: 'en' }, { deckId: deck.id, formatId: format.id }) as Extract<ToolOutcome, { action: unknown }>
     const row = insertPendingAction('user-a', outcome.action.kind, outcome.action.payload, outcome.action.summary)
 
     deleteRuleFormat(db, 'user-a', format.id)
@@ -912,7 +997,7 @@ describe('applyAction', () => {
 
   it('rolls back the whole payload (no orphan deck) when create_deck succeeds but the format assignment fails', async () => {
     const format = createRuleFormat(db, 'user-a', validateRuleFormatInput({ name: 'Format', rules: { rules: [] } }))
-    const outcome = await tool('create_deck').run({ db, userId: 'user-a' }, {
+    const outcome = await tool('create_deck').run({ db, userId: 'user-a', cardLocale: 'en' }, {
       name: 'Rollback Deck',
       formatId: format.id,
       cards: [{ catalogCardId: CARD.darkMagician, section: 'main', quantity: 1 }],
@@ -964,7 +1049,7 @@ describe('applyAction', () => {
 
   it('does not partially apply a batch of deck-card changes when one entry is invalid', async () => {
     const deck = createDeck(db, 'user-a', { name: 'Mein Deck', description: null })
-    const outcome = await tool('update_deck_cards').run({ db, userId: 'user-a' }, {
+    const outcome = await tool('update_deck_cards').run({ db, userId: 'user-a', cardLocale: 'en' }, {
       deckId: deck.id,
       changes: [
         { catalogCardId: CARD.darkMagician, section: 'main', quantity: 2 },
@@ -987,7 +1072,7 @@ describe('applyAction', () => {
 
 describe('rejectAction', () => {
   it('marks a pending action rejected', async () => {
-    const outcome = await tool('add_to_inventory').run({ db, userId: 'user-a' }, {
+    const outcome = await tool('add_to_inventory').run({ db, userId: 'user-a', cardLocale: 'en' }, {
       items: [{ catalogCardId: CARD.darkMagician, quantity: 1 }],
     })
     const action = (outcome as Extract<ToolOutcome, { action: unknown }>).action

@@ -33,6 +33,7 @@ const props = defineProps<{
 
 const { t } = useI18n()
 const { conditionShortLabel, editionShortLabel } = useCardOptionItems()
+const { cardValueOptions } = useCardText()
 
 const filters = defineModel<InventorySearchFilters>('filters', { required: true })
 
@@ -44,9 +45,9 @@ const filters = defineModel<InventorySearchFilters>('filters', { required: true 
 // elsewhere as "unset" via falsy checks) unchanged.
 const noSetValue = '__all_sets__'
 
-const typeItems = computed(() => props.facets.types.map(value => ({ label: value, value })))
-const attributeItems = computed(() => props.facets.attributes.map(value => ({ label: value, value })))
-const raceItems = computed(() => props.facets.races.map(value => ({ label: value, value })))
+const typeItems = computed(() => cardValueOptions('type', props.facets.types))
+const attributeItems = computed(() => cardValueOptions('attribute', props.facets.attributes))
+const raceItems = computed(() => cardValueOptions('race', props.facets.races))
 const levelItems = computed(() => props.facets.levels.map(value => ({ label: t('card.level', { level: value }), value })))
 const setItems = computed(() => [
   { label: t('inventory.search.allSets'), value: noSetValue },

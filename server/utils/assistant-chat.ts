@@ -584,7 +584,7 @@ export type ChatTurnEvent =
  * free-text deck description is left out entirely. The text itself lives in
  * assistant-prompts.ts (`formatDeckContextBlock`).
  */
-export function buildDeckContextBlock(db: Db, userId: string, deckId: string): string | null {
+export function buildDeckContextBlock(db: Db, userId: string, deckId: string, cardLocale: AppLocale = 'en'): string | null {
   let detail: ReturnType<typeof getDeckDetail>
   try {
     detail = getDeckDetail(db, userId, deckId)
@@ -593,6 +593,7 @@ export function buildDeckContextBlock(db: Db, userId: string, deckId: string): s
     return null
   }
 
+  const withGermanNames = cardLocale === 'de'
   return formatDeckContextBlock({
     id: detail.id,
     name: detail.name,
@@ -602,7 +603,10 @@ export function buildDeckContextBlock(db: Db, userId: string, deckId: string): s
       ? { legal: detail.validation.legal, issueMessages: detail.validation.issues.map(issue => issue.message) }
       : null,
     cardLines: DECK_SECTIONS.flatMap(section => detail.sections[section].map(row =>
-      `${row.catalogCardId}|${row.name}|${section}|${row.quantity}|${row.owned}`)),
+      withGermanNames
+        ? `${row.catalogCardId}|${row.name}|${row.nameDe ?? ''}|${section}|${row.quantity}|${row.owned}`
+        : `${row.catalogCardId}|${row.name}|${section}|${row.quantity}|${row.owned}`)),
+    withGermanNames,
   })
 }
 
@@ -625,20 +629,23 @@ export function buildDeckContextBlock(db: Db, userId: string, deckId: string): s
  * `input.locale` is the interface language of the request (the messages
  * endpoint resolves it per turn): the reply-language instruction at the end
  * of the system prompt and the fallback texts saved as the answer follow it.
+ * `input.cardLocale` is the card language (ADR 0015): the card-name
+ * instruction, the deck context block and the tool results follow it.
  */
 export async function runChatTurn(
   db: Db,
   userId: string,
   conversationId: string,
-  input: AssistantMessageInput & { locale?: AppLocale },
+  input: AssistantMessageInput & { locale?: AppLocale, cardLocale?: AppLocale },
   model: DeckAssistantModel,
   emit: (event: ChatTurnEvent) => void | Promise<void>,
   signal?: AbortSignal,
 ): Promise<void> {
   const locale = input.locale ?? DEFAULT_APP_LOCALE
+  const cardLocale = input.cardLocale ?? locale
   const turnText = TURN_TEXT[locale]
   const conversation = requireOwnConversation(db, userId, conversationId)
-  const deckContext = conversation.deckId ? buildDeckContextBlock(db, userId, conversation.deckId) : null
+  const deckContext = conversation.deckId ? buildDeckContextBlock(db, userId, conversation.deckId, cardLocale) : null
 
   const limits = getAssistantLimits()
   const priorHistory = loadHistory(db, conversationId, limits)
@@ -675,7 +682,7 @@ export async function runChatTurn(
     },
   ]
 
-  const system = buildSystemPrompt({ deckContext, hasImages: input.images.length > 0, locale })
+  const system = buildSystemPrompt({ deckContext, hasImages: input.images.length > 0, locale, cardLocale })
   const startedAt = Date.now()
 
   try {
@@ -773,7 +780,7 @@ export async function runChatTurn(
         }
         else {
           try {
-            const outcome = await runTool(call.name, { db, userId }, parsedArguments.value)
+            const outcome = await runTool(call.name, { db, userId, cardLocale }, parsedArguments.value)
             resultForModel = outcome.result
             if ('action' in outcome) {
               proposedAction = outcome.action

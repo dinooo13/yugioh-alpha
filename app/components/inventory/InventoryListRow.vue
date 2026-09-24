@@ -28,7 +28,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const { cardName } = useCardText()
+const { cardName, cardValue } = useCardText()
 const displayName = computed(() => cardName({ name: props.item.cardName, nameDe: props.item.cardNameDe }))
 const { editionShortLabel, conditionShortLabel } = useCardOptionItems()
 
@@ -54,7 +54,7 @@ const languageLabel = computed(() => props.item.language.toUpperCase())
           {{ displayName }}
         </div>
         <div class="truncate text-xs text-gray-500">
-          {{ item.cardType }}<span v-if="item.setName"> · {{ item.setName }}</span><span v-if="item.rarity"> · {{ item.rarity }}</span>
+          {{ cardValue('type', item.cardType) }}<span v-if="item.setName"> · {{ item.setName }}</span><span v-if="item.rarity"> · {{ item.rarity }}</span>
         </div>
         <div class="flex flex-wrap gap-1">
           <UBadge

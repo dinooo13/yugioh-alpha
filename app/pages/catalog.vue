@@ -73,7 +73,7 @@ const PAGE_SIZE = 24
 usePageTitle('catalog.title')
 
 const { t } = useI18n()
-const { cardLocale, cardName, cardDesc, englishName, hasGermanText } = useCardText()
+const { cardLocale, cardName, cardDesc, englishName, hasGermanText, cardValue, cardValueOptions } = useCardText()
 const count = useCount()
 
 const route = useRoute()
@@ -118,6 +118,11 @@ const cardQuery = computed(() => ({
 const { data: facets } = await useFetch<CatalogFacets>('/api/catalog/facets', {
   default: () => ({ types: [], attributes: [], races: [], levels: [], sets: [] }),
 })
+
+// Filter values stay English (the API filters on them); labels follow the card language.
+const typeOptions = computed(() => cardValueOptions('type', facets.value.types))
+const attributeOptions = computed(() => cardValueOptions('attribute', facets.value.attributes))
+const raceOptions = computed(() => cardValueOptions('race', facets.value.races))
 
 // A plain `<select>` with 1000+ sets meant scrolling through an unsearchable
 // list to find one (UX review #5) — `USelectMenu` is searchable by default,
@@ -299,11 +304,11 @@ async function onAddedToInventory() {
               {{ t('catalog.filters.type') }}
             </option>
             <option
-              v-for="option in facets.types"
-              :key="option"
-              :value="option"
+              v-for="option in typeOptions"
+              :key="option.value"
+              :value="option.value"
             >
-              {{ option }}
+              {{ option.label }}
             </option>
           </select>
 
@@ -316,11 +321,11 @@ async function onAddedToInventory() {
               {{ t('catalog.filters.attribute') }}
             </option>
             <option
-              v-for="option in facets.attributes"
-              :key="option"
-              :value="option"
+              v-for="option in attributeOptions"
+              :key="option.value"
+              :value="option.value"
             >
-              {{ option }}
+              {{ option.label }}
             </option>
           </select>
 
@@ -352,11 +357,11 @@ async function onAddedToInventory() {
               {{ t('catalog.filters.race') }}
             </option>
             <option
-              v-for="option in facets.races"
-              :key="option"
-              :value="option"
+              v-for="option in raceOptions"
+              :key="option.value"
+              :value="option.value"
             >
-              {{ option }}
+              {{ option.label }}
             </option>
           </select>
 
@@ -467,7 +472,7 @@ async function onAddedToInventory() {
             {{ cardName(card) }}
           </h2>
           <p class="truncate text-xs text-gray-500">
-            {{ card.type }}
+            {{ cardValue('type', card.type) }}
           </p>
           <div class="flex flex-wrap gap-1">
             <UBadge
@@ -476,7 +481,7 @@ async function onAddedToInventory() {
               color="neutral"
               variant="soft"
             >
-              {{ card.attribute }}
+              {{ cardValue('attribute', card.attribute) }}
             </UBadge>
             <UBadge
               v-if="card.level"
@@ -598,9 +603,9 @@ async function onAddedToInventory() {
                 {{ t('card.englishName', { name: englishName(detail.card) }) }}
               </p>
               <p class="text-sm text-gray-600">
-                {{ detail.card.type }}
+                {{ cardValue('type', detail.card.type) }}
                 <template v-if="detail.card.attribute">
-                  · {{ detail.card.attribute }}
+                  · {{ cardValue('attribute', detail.card.attribute) }}
                 </template>
                 <template v-if="detail.card.level">
                   · {{ t('card.level', { level: detail.card.level }) }}

@@ -4,13 +4,16 @@ import type { RuleDescriptionI18n } from '~/utils/rule-description'
 
 /**
  * The rule describer (`app/utils/rule-description.ts`) bound to the active
- * interface language (ADR 0014).
+ * interface language (ADR 0014); card types, attributes and races in a filter
+ * are labelled in the card language (ADR 0015).
  */
 export function useRuleDescription() {
   const { t, d } = useI18n()
+  const { cardValue } = useCardText()
   const i18n: RuleDescriptionI18n = {
     t: (key, named, plural) => (plural === undefined ? t(key, named ?? {}) : t(key, named ?? {}, plural)),
     d: (value, key) => d(value, key),
+    cardValue,
   }
 
   return {

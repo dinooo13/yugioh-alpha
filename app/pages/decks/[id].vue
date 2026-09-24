@@ -100,7 +100,7 @@ const route = useRoute()
 const deckId = computed(() => String(route.params.id ?? ''))
 
 const { t, n } = useI18n()
-const { cardName } = useCardText()
+const { cardName, cardValue, cardValueOptions } = useCardText()
 const count = useCount()
 const apiError = useApiError()
 const validationText = useValidationText()
@@ -288,11 +288,11 @@ const ALL_ATTRIBUTES = '__all_attributes__'
 
 const typeItems = computed(() => [
   { label: t('decks.editor.addPanel.allTypes'), value: ALL_TYPES },
-  ...(facets.value?.types ?? []).map(value => ({ label: value, value })),
+  ...cardValueOptions('type', facets.value?.types ?? []),
 ])
 const attributeItems = computed(() => [
   { label: t('decks.editor.addPanel.allAttributes'), value: ALL_ATTRIBUTES },
-  ...(facets.value?.attributes ?? []).map(value => ({ label: value, value })),
+  ...cardValueOptions('attribute', facets.value?.attributes ?? []),
 ])
 
 const typeSelection = computed({
@@ -473,7 +473,7 @@ function sectionCountClass(section: DeckSection): string {
 }
 
 function cardMetaLine(card: { type: string, level: number | null, attribute: string | null }): string {
-  return [card.type, card.level !== null ? t('card.stars', { level: card.level }) : null, card.attribute]
+  return [cardValue('type', card.type), card.level !== null ? t('card.stars', { level: card.level }) : null, card.attribute ? cardValue('attribute', card.attribute) : null]
     .filter(Boolean)
     .join(' · ')
 }

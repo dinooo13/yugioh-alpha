@@ -41,7 +41,7 @@ describe('inventory page', () => {
     const component = await mountSuspended(InventoryPage)
 
     expect(component.text()).toContain('Dark Magician')
-    expect(component.text()).toContain('Normal Monster')
+    expect(component.text()).toContain('Normales Monster')
     expect(component.text()).toContain('×3')
     expect(component.text()).toContain('NM')
 

@@ -53,8 +53,26 @@ describe('rule describer', () => {
       match: 'matching',
       filter: { attributes: ['DARK', 'LIGHT'], levelMin: 5, atkMax: 2000, hasEffect: false, nameContains: 'Dragon' },
       maxCopies: 2,
-    })).toBe('Karten mit Attribut DARK oder LIGHT, Stufe ab 5, ATK bis 2000, ohne Effekt, Name enthält "Dragon": semi-limitiert (max. 2)')
+    })).toBe('Karten mit Attribut FINSTERNIS oder LICHT, Stufe ab 5, ATK bis 2000, ohne Effekt, Name enthält "Dragon": semi-limitiert (max. 2)')
     expect(describeRule({ kind: 'filter', match: 'matching', filter: {}, maxCopies: 3 })).toBe('Karten mit alle Karten: erlaubt (max. 3)')
+  })
+
+  it('labels card types, attributes and races in the card language (ADR 0015)', async () => {
+    const { describeCardFilter } = await composables()
+    const filter = { types: ['Spell Card'], attributes: ['dark'], races: ['Spellcaster', 'Creator God'] }
+
+    // German interface, German cards; stored in any case, unknown values as they are.
+    expect(describeCardFilter(filter)).toBe('Typ Zauberkarte, Attribut FINSTERNIS, Art Hexer oder Creator God')
+
+    // German interface, English cards.
+    useState('card-locale-choice').value = 'en'
+    expect(describeCardFilter(filter)).toBe('Typ Spell Card, Attribut dark, Art Spellcaster oder Creator God')
+
+    // English interface, German cards.
+    await setTestLocale('en')
+    useState('card-locale-choice').value = 'de'
+    expect(describeCardFilter(filter)).toBe('card type Zauberkarte, attribute FINSTERNIS, monster type Hexer or Creator God')
+    useState('card-locale-choice').value = null
   })
 
   it('describes every rule kind in English', async () => {

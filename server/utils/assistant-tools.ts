@@ -48,6 +48,8 @@ import { previewDeckProposal } from './deck-proposal'
 import { ACTION_SUMMARY, TOOL_DESCRIPTIONS, TOOL_PARAM_DESCRIPTIONS, TOOL_TEXT } from './assistant-prompts'
 import type { AssistantActionKind, AssistantDeckPreview } from '../../shared/assistant-chat'
 import type { DeckValidation } from '../../shared/rule-formats'
+import type { AppLocale } from '../../shared/locale'
+import { cardNameDeSql } from './card-translation-sql'
 
 type Db = ReturnType<typeof useDb>
 
@@ -65,6 +67,12 @@ const SEARCH_INVENTORY_ROW_SCAN_MULTIPLIER = 25
 export interface ToolRunContext {
   db: Db
   userId: string
+  /**
+   * The card language of the turn (ADR 0015). In German, card rows in the
+   * tool results also carry the official German name (`nameDe`, plus
+   * `descDe` in get_card) where there is one; in English they are unchanged.
+   */
+  cardLocale: AppLocale
 }
 
 export interface AssistantProposedAction {
@@ -170,9 +178,18 @@ function capResult<T>(items: T[], max = getAssistantLimits().toolResultItems): {
   return { items: items.slice(0, max), truncated: items.length > max, total: items.length }
 }
 
+/**
+ * `{ nameDe }` for a card row the model reads, only in German card language
+ * and only when the card has a German name — English turns see exactly what
+ * they saw before F3d, and a missing key costs no tokens.
+ */
+function germanNameField(nameDe: string | null | undefined, cardLocale: AppLocale): { nameDe?: string } {
+  return cardLocale === 'de' && nameDe ? { nameDe } : {}
+}
+
 // --- Read tools ----------------------------------------------------------------
 
-function toolSearchCatalog(db: Db, args: unknown) {
+function toolSearchCatalog(db: Db, cardLocale: AppLocale, args: unknown) {
   const record = requireArgs(args)
   const query = optionalString(record, 'query') ?? ''
   const itemsCap = getAssistantLimits().toolResultItems
@@ -186,6 +203,7 @@ function toolSearchCatalog(db: Db, args: unknown) {
     .select({
       id: catalogCard.id,
       name: catalogCard.name,
+      nameDe: cardNameDeSql(),
       type: catalogCard.type,
       attribute: catalogCard.attribute,
       race: catalogCard.race,
@@ -222,7 +240,16 @@ function toolSearchCatalog(db: Db, args: unknown) {
     }
   }
 
-  return { items: capped.map(row => ({ ...row, imageSmall: imageByCard.get(row.id) ?? null })), truncated }
+  return {
+    items: capped.map(({ id, name, nameDe, ...row }) => ({
+      id,
+      name,
+      ...germanNameField(nameDe, cardLocale),
+      ...row,
+      imageSmall: imageByCard.get(id) ?? null,
+    })),
+    truncated,
+  }
 }
 
 // The same bilingual name search as the catalog (ADR 0015): English or German
@@ -231,7 +258,7 @@ function sqlLikeName(query: string) {
   return cardNameMatches(query)
 }
 
-async function toolGetCard(db: Db, args: unknown) {
+async function toolGetCard(db: Db, cardLocale: AppLocale, args: unknown) {
   const record = requireArgs(args)
   const id = requirePositiveInt(record, 'id')
 
@@ -243,8 +270,10 @@ async function toolGetCard(db: Db, args: unknown) {
   return {
     id: detail.card.id,
     name: detail.card.name,
+    ...germanNameField(detail.card.nameDe, cardLocale),
     type: detail.card.type,
     desc: detail.card.desc,
+    ...(cardLocale === 'de' && detail.card.descDe ? { descDe: detail.card.descDe } : {}),
     attribute: detail.card.attribute,
     race: detail.card.race,
     level: detail.card.level,
@@ -267,7 +296,7 @@ async function toolGetCard(db: Db, args: unknown) {
  * assistant's candidate pool (ADR 0006 → ADR 0011). `offset` pages through a
  * result larger than the item cap.
  */
-function toolSearchInventory(db: Db, userId: string, args: unknown) {
+function toolSearchInventory(db: Db, userId: string, cardLocale: AppLocale, args: unknown) {
   const record = requireArgs(args)
   const query = optionalString(record, 'query')
   const collectionId = optionalString(record, 'collectionId')
@@ -290,6 +319,7 @@ function toolSearchInventory(db: Db, userId: string, args: unknown) {
     .select({
       catalogCardId: ownedCard.catalogCardId,
       name: catalogCard.name,
+      nameDe: cardNameDeSql(),
       type: catalogCard.type,
       frameType: catalogCard.frameType,
       attribute: catalogCard.attribute,
@@ -343,6 +373,7 @@ function toolSearchInventory(db: Db, userId: string, args: unknown) {
     .map(({ card, quantity, collections }) => ({
       catalogCardId: card.catalogCardId,
       name: card.name,
+      ...germanNameField(card.nameDe, cardLocale),
       type: card.type,
       attribute: card.attribute,
       race: card.race,
@@ -389,11 +420,18 @@ function toolListDecks(db: Db, userId: string, args: unknown) {
   return { items: mapped, truncated: total > mapped.length, total }
 }
 
-function deckRowView(row: DeckCardRow, section: DeckSection) {
-  return { catalogCardId: row.catalogCardId, name: row.name, section, quantity: row.quantity, owned: row.owned }
+function deckRowView(row: DeckCardRow, section: DeckSection, cardLocale: AppLocale) {
+  return {
+    catalogCardId: row.catalogCardId,
+    name: row.name,
+    ...germanNameField(row.nameDe, cardLocale),
+    section,
+    quantity: row.quantity,
+    owned: row.owned,
+  }
 }
 
-function toolGetDeck(db: Db, userId: string, args: unknown) {
+function toolGetDeck(db: Db, userId: string, cardLocale: AppLocale, args: unknown) {
   const record = requireArgs(args)
   const deckId = requireNonEmptyString(record, 'id')
   const detail = getDeckDetail(db, userId, deckId)
@@ -404,9 +442,9 @@ function toolGetDeck(db: Db, userId: string, args: unknown) {
     formatName: detail.format?.name ?? null,
     counts: detail.counts,
     sections: {
-      main: detail.sections.main.map(row => deckRowView(row, 'main')),
-      extra: detail.sections.extra.map(row => deckRowView(row, 'extra')),
-      side: detail.sections.side.map(row => deckRowView(row, 'side')),
+      main: detail.sections.main.map(row => deckRowView(row, 'main', cardLocale)),
+      extra: detail.sections.extra.map(row => deckRowView(row, 'extra', cardLocale)),
+      side: detail.sections.side.map(row => deckRowView(row, 'side', cardLocale)),
     },
     validation: detail.validation
       ? { legal: detail.validation.legal, issues: detail.validation.issues.map(issue => issue.message) }
@@ -458,7 +496,7 @@ function assertKnownCardsInSections(db: Db, cards: DeckCardInput[]) {
  * its pending action (counts, legality, missing cards), so the model can fix
  * problems *before* proposing anything.
  */
-function toolValidateDeck(db: Db, userId: string, args: unknown) {
+function toolValidateDeck(db: Db, userId: string, cardLocale: AppLocale, args: unknown) {
   const record = requireArgs(args)
   const deckId = optionalString(record, 'deckId')
   const formatId = optionalString(record, 'formatId')
@@ -469,25 +507,25 @@ function toolValidateDeck(db: Db, userId: string, args: unknown) {
     if (deckId) {
       badRequest(TOOL_TEXT.cardsWithDeckId)
     }
-    return previewForModel(previewDeckProposal(db, userId, { cards: parseProposalCards(db, record.cards), formatId }))
+    return previewForModel(previewDeckProposal(db, userId, { cards: parseProposalCards(db, record.cards), formatId }), cardLocale)
   }
   if (!deckId) {
     badRequest(TOOL_TEXT.deckIdOrCards)
   }
   if (hasChanges) {
-    return previewForModel(previewDeckProposal(db, userId, { deckId, changes: parseProposalChanges(db, record.changes), formatId }))
+    return previewForModel(previewDeckProposal(db, userId, { deckId, changes: parseProposalChanges(db, record.changes), formatId }), cardLocale)
   }
 
   if (formatId) {
     const format = requireAccessibleFormat(db, userId, formatId)
-    return validationForModel(validateDeckWithRules(db, userId, deckId, format.rules))
+    return validationForModel(validateDeckWithRules(db, userId, deckId, format.rules), cardLocale)
   }
 
   const detail = getDeckDetail(db, userId, deckId)
   if (!detail.validation) {
     badRequest(TOOL_TEXT.noFormatAssigned)
   }
-  return validationForModel(detail.validation)
+  return validationForModel(detail.validation, cardLocale)
 }
 
 // --- Write tools (propose a pending action; never mutate directly) ------------
@@ -495,12 +533,16 @@ function toolValidateDeck(db: Db, userId: string, args: unknown) {
 /**
  * A preview as the model reads it: the issues as canonical English text only
  * — `issueDetails` (code + params) is for the UI's action card and would just
- * repeat every issue in the tool result — and the missing cards without
- * their display-only German names (ADR 0015; the model's card names are
- * #34 F3d's business).
+ * repeat every issue in the tool result — and the missing cards with their
+ * German name only in German card language (ADR 0015).
  */
-function previewForModel(preview: AssistantDeckPreview): AssistantDeckPreview {
-  const missing = preview.missing.map(({ nameDe: _nameDe, ...card }) => card)
+function previewForModel(preview: AssistantDeckPreview, cardLocale: AppLocale): AssistantDeckPreview {
+  const missing = preview.missing.map(({ catalogCardId, name, nameDe, ...card }) => ({
+    catalogCardId,
+    name,
+    ...germanNameField(nameDe, cardLocale),
+    ...card,
+  }))
   if (!preview.validation) {
     return { ...preview, missing }
   }
@@ -508,8 +550,11 @@ function previewForModel(preview: AssistantDeckPreview): AssistantDeckPreview {
   return { ...preview, validation, missing }
 }
 
-/** A deck validation as the model reads it: issue params without the display-only German card name (ADR 0015). */
-function validationForModel(validation: DeckValidation): DeckValidation {
+/** A deck validation as the model reads it: an issue's German card name (`params.cardNameDe`) only in German card language (ADR 0015). */
+function validationForModel(validation: DeckValidation, cardLocale: AppLocale): DeckValidation {
+  if (cardLocale === 'de') {
+    return validation
+  }
   return {
     ...validation,
     issues: validation.issues.map(({ params: { cardNameDe: _cardNameDe, ...params }, ...issue }) => ({ ...issue, params })),
@@ -565,7 +610,7 @@ function assertCardsFitSections(db: Db, cards: Array<{ catalogCardId: number, se
   }
 }
 
-async function toolCreateDeck(db: Db, userId: string, args: unknown): Promise<ToolOutcome> {
+async function toolCreateDeck(db: Db, userId: string, cardLocale: AppLocale, args: unknown): Promise<ToolOutcome> {
   const record = requireArgs(args)
   const name = requireNonEmptyString(record, 'name')
   if (name.length > DECK_NAME_MAX_LENGTH) {
@@ -593,10 +638,10 @@ async function toolCreateDeck(db: Db, userId: string, args: unknown): Promise<To
     formatName: preview.formatName,
     cards: withCardNames(db, cards),
     preview,
-  }, summary, { preview: previewForModel(preview) })
+  }, summary, { preview: previewForModel(preview, cardLocale) })
 }
 
-async function toolUpdateDeckCards(db: Db, userId: string, args: unknown): Promise<ToolOutcome> {
+async function toolUpdateDeckCards(db: Db, userId: string, cardLocale: AppLocale, args: unknown): Promise<ToolOutcome> {
   const record = requireArgs(args)
   const deckId = requireNonEmptyString(record, 'deckId')
   const detail = getDeckDetail(db, userId, deckId)
@@ -612,7 +657,7 @@ async function toolUpdateDeckCards(db: Db, userId: string, args: unknown): Promi
     deckName: detail.name,
     changes: withCardNames(db, changes),
     preview,
-  }, summary, { preview: previewForModel(preview) })
+  }, summary, { preview: previewForModel(preview, cardLocale) })
 }
 
 /** `formatId` for set_deck_format: required key; `''` (or `null`) = remove the format. */
@@ -631,7 +676,7 @@ function parseTargetFormatId(record: Record<string, unknown>): string | null {
   return trimmed === '' ? null : trimmed
 }
 
-async function toolSetDeckFormat(db: Db, userId: string, args: unknown): Promise<ToolOutcome> {
+async function toolSetDeckFormat(db: Db, userId: string, cardLocale: AppLocale, args: unknown): Promise<ToolOutcome> {
   const record = requireArgs(args)
   const deckId = requireNonEmptyString(record, 'deckId')
   const detail = getDeckDetail(db, userId, deckId)
@@ -658,7 +703,7 @@ async function toolSetDeckFormat(db: Db, userId: string, args: unknown): Promise
     previousFormatId: detail.format?.id ?? null,
     previousFormatName: detail.format?.name ?? null,
     preview,
-  }, summary, { preview: previewForModel(preview) })
+  }, summary, { preview: previewForModel(preview, cardLocale) })
 }
 
 // --- Registry --------------------------------------------------------------------
@@ -680,7 +725,7 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
         limit: { type: 'integer', description: TOOL_PARAM_DESCRIPTIONS.searchCatalogLimit(0) },
       },
     },
-    run: async (ctx, args) => ({ result: toolSearchCatalog(ctx.db, args) }),
+    run: async (ctx, args) => ({ result: toolSearchCatalog(ctx.db, ctx.cardLocale, args) }),
   },
   {
     name: 'get_card',
@@ -692,7 +737,7 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
       required: ['id'],
       properties: { id: { type: 'integer', description: TOOL_PARAM_DESCRIPTIONS.catalogCardId } },
     },
-    run: async (ctx, args) => ({ result: await toolGetCard(ctx.db, args) }),
+    run: async (ctx, args) => ({ result: await toolGetCard(ctx.db, ctx.cardLocale, args) }),
   },
   {
     name: 'search_inventory',
@@ -708,7 +753,7 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
         offset: { type: 'integer', description: TOOL_PARAM_DESCRIPTIONS.offset },
       },
     },
-    run: async (ctx, args) => ({ result: toolSearchInventory(ctx.db, ctx.userId, args) }),
+    run: async (ctx, args) => ({ result: toolSearchInventory(ctx.db, ctx.userId, ctx.cardLocale, args) }),
   },
   {
     name: 'list_collections',
@@ -738,7 +783,7 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
       required: ['id'],
       properties: { id: { type: 'string', description: TOOL_PARAM_DESCRIPTIONS.deckId } },
     },
-    run: async (ctx, args) => ({ result: toolGetDeck(ctx.db, ctx.userId, args) }),
+    run: async (ctx, args) => ({ result: toolGetDeck(ctx.db, ctx.userId, ctx.cardLocale, args) }),
   },
   {
     name: 'list_formats',
@@ -787,7 +832,7 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
         },
       },
     },
-    run: async (ctx, args) => ({ result: toolValidateDeck(ctx.db, ctx.userId, args) }),
+    run: async (ctx, args) => ({ result: toolValidateDeck(ctx.db, ctx.userId, ctx.cardLocale, args) }),
   },
   {
     name: 'add_to_inventory',
@@ -844,7 +889,7 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
         },
       },
     },
-    run: async (ctx, args) => toolCreateDeck(ctx.db, ctx.userId, args),
+    run: async (ctx, args) => toolCreateDeck(ctx.db, ctx.userId, ctx.cardLocale, args),
   },
   {
     name: 'update_deck_cards',
@@ -871,7 +916,7 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
         },
       },
     },
-    run: async (ctx, args) => toolUpdateDeckCards(ctx.db, ctx.userId, args),
+    run: async (ctx, args) => toolUpdateDeckCards(ctx.db, ctx.userId, ctx.cardLocale, args),
   },
   {
     name: 'set_deck_format',
@@ -889,7 +934,7 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
         formatId: { type: 'string', description: TOOL_PARAM_DESCRIPTIONS.setFormatId },
       },
     },
-    run: async (ctx, args) => toolSetDeckFormat(ctx.db, ctx.userId, args),
+    run: async (ctx, args) => toolSetDeckFormat(ctx.db, ctx.userId, ctx.cardLocale, args),
   },
 ]
 

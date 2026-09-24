@@ -1,3 +1,5 @@
+import type { CardValueKind } from '~/utils/card-values'
+
 // Shape of one aggregated row from `GET /api/inventory/search`, shared by the
 // "Übersicht" tile and its preview modal.
 export interface InventoryCollectionBreakdown {
@@ -35,6 +37,17 @@ export function breakdownKey(entry: InventoryCollectionBreakdown): string {
   return entry.collectionId ?? '__none__'
 }
 
-export function cardSubtitle(item: Pick<InventorySearchResultItem, 'type' | 'attribute' | 'race'>): string {
-  return [item.type, item.attribute, item.race].filter(Boolean).join(' · ')
+/**
+ * "Type · Attribute · Race"; `label` turns each stored English value into its
+ * label in the card language (`useCardText().cardValue`, ADR 0015).
+ */
+export function cardSubtitle(
+  item: Pick<InventorySearchResultItem, 'type' | 'attribute' | 'race'>,
+  label: (kind: CardValueKind, value: string) => string = (_kind, value) => value,
+): string {
+  const parts: Array<[CardValueKind, string | null]> = [['type', item.type], ['attribute', item.attribute], ['race', item.race]]
+  return parts
+    .filter((part): part is [CardValueKind, string] => Boolean(part[1]))
+    .map(([kind, value]) => label(kind, value))
+    .join(' · ')
 }
