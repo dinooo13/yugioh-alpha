@@ -138,6 +138,19 @@ describe('toolDefinitions', () => {
       expect(typeof definition.function.parameters).toBe('object')
     }
   })
+
+  it('describes every tool and parameter in English, one version for every locale (ADR 0014)', () => {
+    const json = JSON.stringify(toolDefinitions())
+    expect(json).not.toMatch(/[äöüÄÖÜß]/)
+    expect(json).not.toMatch(/\b(?:der|die|das|und|nicht|Karte|Karten|Vorschlag)\b/)
+    // The search_catalog limit carries the live cap.
+    const searchCatalog = toolDefinitions().find(definition => definition.function.name === 'search_catalog')!
+    expect(JSON.stringify(searchCatalog.function.parameters)).toContain(`(default/maximum: ${getAssistantLimits().toolResultItems})`)
+  })
+
+  it('never uses a nullable union type in a parameter schema (#54: the provider garbles such calls)', () => {
+    expect(JSON.stringify(toolDefinitions())).not.toMatch(/"type":\s*\[/)
+  })
 })
 
 describe('runTool', () => {
@@ -494,7 +507,11 @@ describe('add_to_inventory (write tool)', () => {
     expect('action' in outcome).toBe(true)
     const withAction = outcome as Extract<ToolOutcome, { action: unknown }>
     expect(withAction.action.kind).toBe('add_to_inventory')
-    expect(withAction.action.summary).toContain('Dark Magician')
+    // The stored summary is canonical English; the UI renders its own.
+    expect(withAction.action.summary).toBe('Add 1 card(s) to the inventory: Dark Magician x2')
+    // Display-only card names for the action card, next to what gets written.
+    expect(withAction.action.payload.items).toEqual([expect.objectContaining({ catalogCardId: CARD.darkMagician, quantity: 2, name: 'Dark Magician' })])
+    expect(withAction.result).toMatchObject({ status: 'pending_confirmation', message: 'Proposal created, waiting for the user\'s confirmation.' })
     expect(ownedQuantitiesByCard(db, 'user-a', [CARD.darkMagician]).get(CARD.darkMagician)).toBeUndefined()
   })
 
@@ -645,8 +662,15 @@ describe('set_deck_format (write tool)', () => {
     expect(preview.formatId).toBe(format.id)
     expect(preview.validation.legal).toBe(false)
     expect(preview.validation.issues.some(issue => issue.includes('Dark Magician'))).toBe(true)
-    expect(outcome.result).toMatchObject({ status: 'pending_confirmation', preview })
-    expect(outcome.action.summary).toContain('kein Format → Streng')
+    // The action card renders the issues from code + params (ADR 0014) …
+    expect(outcome.action.payload.preview).toMatchObject({
+      validation: { issueDetails: [expect.objectContaining({ code: 'card_limit_exceeded', params: expect.objectContaining({ cardName: 'Dark Magician' }) })] },
+    })
+    // … the model only reads the English text.
+    const { issueDetails: _issueDetails, ...modelValidation } = (outcome.action.payload.preview as { validation: Record<string, unknown> }).validation
+    expect(outcome.result).toMatchObject({ status: 'pending_confirmation', preview: { ...preview, validation: modelValidation } })
+    expect((outcome.result as { preview: { validation: object } }).preview.validation).not.toHaveProperty('issueDetails')
+    expect(outcome.action.summary).toContain('no format → Streng')
 
     expect(getDeckDetail(db, 'user-a', deck.id).format).toBeNull()
   })
@@ -666,7 +690,7 @@ describe('set_deck_format (write tool)', () => {
       previousFormatName: 'Streng',
       preview: { formatId: null, formatName: null, validation: null, counts: { main: 2 } },
     })
-    expect(outcome.action.summary.endsWith('→ kein Format')).toBe(true)
+    expect(outcome.action.summary.endsWith('→ no format')).toBe(true)
     expect(getDeckDetail(db, 'user-a', deck.id).format?.id).toBe(format.id)
   })
 

@@ -1,18 +1,18 @@
 <script setup lang="ts">
 import type { AssistantConversationSummary } from '~~/shared/assistant-chat'
-import { apiErrorMessage } from '~/utils/card-entry'
 import { isAssistantIntent } from '~/utils/assistant-intents'
 
-useHead({ title: 'Assistent – yugioh alpha' })
+usePageTitle('assistant.title')
+
+const { t } = useI18n()
+const apiError = useApiError()
 
 // Same three examples as docs/Roadmap.md's Phase 8 write-up — a bare chat
 // input is intimidating on first visit, so give the user something to
-// click instead of a blank page.
-const EXAMPLE_PROMPTS = [
-  'Welche Karten habe ich von Blue-Eyes?',
-  'Baue mir ein Deck aus meinen Karten für GOAT',
-  'Foto einer Karte hinzufügen',
-]
+// click instead of a blank page. Sent as the user's message, so they are
+// in the interface language.
+const EXAMPLE_PROMPT_KEYS = ['inventory', 'deck', 'photo'] as const
+const examplePrompts = computed(() => EXAMPLE_PROMPT_KEYS.map(key => t(`assistant.index.examples.${key}`)))
 
 const route = useRoute()
 const router = useRouter()
@@ -53,7 +53,7 @@ onMounted(async () => {
     await navigateTo(`/assistant/${conversation.id}?intent=${startIntent}`, { replace: true })
   }
   catch (error) {
-    errorMessage.value = apiErrorMessage(error, 'Die Unterhaltung konnte nicht erstellt werden.')
+    errorMessage.value = apiError(error, 'assistant.conversations.errors.create')
     isStarting.value = false
     await router.replace({ query: {} })
   }
@@ -69,7 +69,7 @@ async function startWithPrompt(prompt: string) {
     await navigateTo({ path: `/assistant/${conversation.id}`, query: { prompt } })
   }
   catch (error) {
-    errorMessage.value = apiErrorMessage(error, 'Die Unterhaltung konnte nicht erstellt werden.')
+    errorMessage.value = apiError(error, 'assistant.conversations.errors.create')
   }
   finally {
     isCreating.value = false
@@ -89,7 +89,7 @@ async function startEmpty() {
     await navigateTo(`/assistant/${conversation.id}`)
   }
   catch (error) {
-    errorMessage.value = apiErrorMessage(error, 'Die Unterhaltung konnte nicht erstellt werden.')
+    errorMessage.value = apiError(error, 'assistant.conversations.errors.create')
   }
   finally {
     isCreating.value = false
@@ -101,11 +101,10 @@ async function startEmpty() {
   <div class="space-y-6">
     <div>
       <h1 class="text-2xl font-semibold text-gray-900">
-        Assistent
+        {{ t('assistant.title') }}
       </h1>
       <p class="mt-1 max-w-prose text-sm text-gray-500">
-        Frag den Assistenten nach deinem Inventar, deinen Decks oder lass ihn eine Karte per Foto erkennen — er
-        schlägt Änderungen vor, die du erst bestätigen musst.
+        {{ t('assistant.index.intro') }}
       </p>
     </div>
 
@@ -116,7 +115,7 @@ async function startEmpty() {
       class="text-sm text-gray-500"
       role="status"
     >
-      Unterhaltung wird vorbereitet …
+      {{ t('assistant.index.preparing') }}
     </p>
 
     <template v-else>
@@ -129,7 +128,7 @@ async function startEmpty() {
 
       <UButton
         icon="i-lucide-plus"
-        label="Neue Unterhaltung"
+        :label="t('assistant.conversations.new')"
         size="lg"
         :loading="isCreating"
         @click="startEmpty"
@@ -137,7 +136,7 @@ async function startEmpty() {
 
       <div class="grid gap-3 sm:grid-cols-3">
         <button
-          v-for="prompt in EXAMPLE_PROMPTS"
+          v-for="prompt in examplePrompts"
           :key="prompt"
           type="button"
           class="rounded-md border border-gray-200 bg-white p-4 text-left text-sm text-gray-700 transition hover:border-primary hover:bg-primary/5 disabled:opacity-50"

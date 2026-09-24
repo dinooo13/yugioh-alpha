@@ -12,6 +12,7 @@ import type {
   AssistantMessageView,
   AssistantStatus,
 } from '~~/shared/assistant-chat'
+import { setTestLocale } from './fixtures/locale'
 
 const state = vi.hoisted(() => ({
   status: { enabled: true, provider: 'fake', model: 'fake', chat: true, vision: true, visionModel: null } as AssistantStatus,
@@ -90,7 +91,8 @@ function buildMessages(): AssistantMessageView[] {
   ]
 }
 
-afterEach(() => {
+afterEach(async () => {
+  await setTestLocale('de')
   vi.unstubAllGlobals()
   state.status = { enabled: true, provider: 'fake', model: 'fake', chat: true, vision: true, visionModel: null }
   state.conversations = { items: [] }
@@ -409,5 +411,91 @@ describe('assistant empty-state page', () => {
     expect(component.text()).not.toContain('Unterhaltung wird vorbereitet')
     expect(findButton(component, 'Neue Unterhaltung')).toBeTruthy()
     expect(component.find('.text-red-600').exists()).toBe(true)
+  })
+
+  // --- #34 F2d: interface language and deck names in tool chips (#53) ---
+
+  function deckToolMessages(): AssistantMessageView[] {
+    return [
+      { id: 'm1', role: 'user', content: 'prüfe mein Deck', createdAt: '2025-01-01T00:00:01.000Z' },
+      {
+        id: 'm2',
+        role: 'assistant',
+        content: '',
+        toolCalls: [
+          { id: 'call-1', name: 'validate_deck', arguments: { deckId: 'deck-1' }, deckName: 'Magier' },
+          { id: 'call-2', name: 'get_deck', arguments: { id: 'gone-deck' } },
+          { id: 'call-3', name: 'search_inventory', arguments: { query: 'Blue-Eyes' } },
+        ],
+        createdAt: '2025-01-01T00:00:02.000Z',
+      },
+      { id: 'm3', role: 'tool', content: JSON.stringify({ legal: true, issues: [] }), toolCallId: 'call-1', toolName: 'validate_deck', createdAt: '2025-01-01T00:00:03.000Z' },
+      { id: 'm4', role: 'tool', content: JSON.stringify({ error: 'Deck not found' }), toolCallId: 'call-2', toolName: 'get_deck', createdAt: '2025-01-01T00:00:03.500Z' },
+      { id: 'm5', role: 'tool', content: JSON.stringify({ items: [{ name: 'A' }, { name: 'B' }], truncated: true, total: 30 }), toolCallId: 'call-3', toolName: 'search_inventory', createdAt: '2025-01-01T00:00:03.700Z' },
+      { id: 'm6', role: 'assistant', content: 'Dein Deck ist legal.', createdAt: '2025-01-01T00:00:04.000Z' },
+    ]
+  }
+
+  it('names the deck in tool chips instead of its id, and shows a failed tool with its error as tooltip', async () => {
+    vi.stubGlobal('$fetch', vi.fn((url: string) => url === '/api/assistant/chat/conv-1'
+      ? Promise.resolve({ conversation: conversation(), messages: deckToolMessages(), actions: [] })
+      : Promise.resolve(null)))
+
+    const component = await mountSuspended(AssistantConversationPage)
+    await flushPromises()
+
+    const text = component.text()
+    expect(text).toContain('Prüft ein Deck: Magier')
+    expect(text).not.toContain('deck-1')
+    // An unresolvable deck (deleted, or not the user's) gets no detail at all.
+    expect(text).toContain('Liest ein Deck')
+    expect(text).not.toContain('gone-deck')
+    expect(text).toContain('Fehlgeschlagen')
+    expect(component.find('[title="Deck not found"]').exists()).toBe(true)
+    expect(text).toContain('Durchsucht dein Inventar: Blue-Eyes')
+    expect(text).toContain('mindestens 2 Ergebnis(se)')
+  })
+
+  it('renders the thread, chips, composer and deck chip in English', async () => {
+    await setTestLocale('en')
+    vi.stubGlobal('$fetch', vi.fn((url: string) => url === '/api/assistant/chat/conv-1'
+      ? Promise.resolve({ conversation: conversation({ title: 'Deck: Magier', deck: { id: 'deck-1', name: 'Magier' } }), messages: deckToolMessages(), actions: [] })
+      : Promise.resolve(null)))
+
+    const component = await mountSuspended(AssistantConversationPage)
+    await flushPromises()
+
+    const text = component.text()
+    expect(text).toContain('Checking a deck: Magier')
+    expect(text).toContain('Reading a deck')
+    expect(text).toContain('Failed')
+    expect(text).toContain('Searching your inventory: Blue-Eyes')
+    expect(text).toContain('at least 2 results')
+    expect(text).toContain('Deck: Magier')
+    expect(component.find('a[href="/decks/deck-1"]').attributes('aria-label')).toBe('Open deck Magier')
+    expect(component.find('textarea').attributes('placeholder')).toBe('Message the assistant…')
+    expect(findButton(component, 'Send')).toBeTruthy()
+    expect(findButton(component, 'New conversation')).toBeTruthy()
+  })
+
+  it('shows the English empty state, example prompts and deck-entry draft', async () => {
+    await setTestLocale('en')
+    vi.stubGlobal('$fetch', vi.fn(() => Promise.resolve(null)))
+
+    const index = await mountSuspended(AssistantIndexPage)
+    await flushPromises()
+    expect(index.find('h1').text()).toBe('Assistant')
+    expect(index.text()).toContain('Which Blue-Eyes cards do I have?')
+    expect(index.text()).toContain('Build me a GOAT deck from my cards')
+
+    state.query = { intent: 'edit-deck' }
+    vi.stubGlobal('$fetch', vi.fn((url: string) => url === '/api/assistant/chat/conv-1'
+      ? Promise.resolve({ conversation: conversation(), messages: [], actions: [] })
+      : Promise.resolve(null)))
+    const page = await mountSuspended(AssistantConversationPage)
+    await flushPromises()
+    expect((page.find('textarea').element as HTMLTextAreaElement).value)
+      .toBe('How can I improve this deck with cards from my inventory?')
+    expect(page.text()).toContain('No messages yet — tell the assistant what it should do for you.')
   })
 })

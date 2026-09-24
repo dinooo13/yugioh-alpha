@@ -221,7 +221,7 @@ describe('chat()', () => {
     expect(result.text).toBe('Hallo')
   })
 
-  it('maps a mid-stream read error (dropped connection) to the German 502, not a raw error', async () => {
+  it('maps a mid-stream read error (dropped connection) to the "unreachable" 502, not a raw error', async () => {
     const fetchImpl = (async () => {
       const stream = new ReadableStream<Uint8Array>({
         start(controller) {
@@ -235,7 +235,7 @@ describe('chat()', () => {
 
     await expect(model.chat(chatBaseInput, collectHandlers().handlers)).rejects.toMatchObject({
       statusCode: 502,
-      statusMessage: 'Der KI-Assistent ist derzeit nicht erreichbar.',
+      data: { code: 'assistant_unreachable' },
     })
   })
 
@@ -336,7 +336,7 @@ describe('chat()', () => {
 
     await expect(model.chat(chatBaseInput, collectHandlers().handlers)).rejects.toMatchObject({
       statusCode: 503,
-      statusMessage: 'KI-Assistent ist nicht korrekt konfiguriert.',
+      data: { code: 'assistant_misconfigured' },
     })
   })
 
@@ -346,7 +346,7 @@ describe('chat()', () => {
 
     await expect(model.chat(chatBaseInput, collectHandlers().handlers)).rejects.toMatchObject({
       statusCode: 503,
-      statusMessage: 'Der KI-Assistent ist ausgelastet, bitte später erneut versuchen.',
+      data: { code: 'assistant_busy' },
     })
   })
 
@@ -408,7 +408,7 @@ describe('chat()', () => {
 
       const pending = expect(model.chat(chatBaseInput, collectHandlers().handlers)).rejects.toMatchObject({
         statusCode: 502,
-        statusMessage: 'Der KI-Assistent ist derzeit nicht erreichbar.',
+        data: { code: 'assistant_unreachable' },
       })
       await vi.advanceTimersByTimeAsync(DEFAULT_ASSISTANT_TIMEOUT_MS)
       await pending
@@ -481,6 +481,21 @@ describe('fake model chat()', () => {
     expect(JSON.parse(result.toolCalls[0]!.arguments)).toEqual({ items: [{ catalogCardId: 46986414, quantity: 2 }] })
   })
 
+  it('also takes the English "add" as an add intent', async () => {
+    const model = createFakeModel()
+    const messages: ChatMessage[] = [
+      userText('suche Dark Magician'),
+      assistantToolCallMessage(),
+      toolResultMessage([{ id: 46986414, name: 'Dark Magician' }]),
+      userText('add 3 of them'),
+    ]
+
+    const result = await model.chat({ sessionId: 's', system: 'sys', messages, tools: [] }, noopHandlers())
+
+    expect(result.toolCalls[0]!.name).toBe('add_to_inventory')
+    expect(JSON.parse(result.toolCalls[0]!.arguments)).toEqual({ items: [{ catalogCardId: 46986414, quantity: 3 }] })
+  })
+
   it('answers with a confirmation after the add_to_inventory tool result', async () => {
     const model = createFakeModel()
     const messages: ChatMessage[] = [
@@ -538,10 +553,10 @@ describe('fake model chat()', () => {
 
   describe('with a linked deck in the system prompt', () => {
     const deckSystem = [
-      'Du bist ein Yu-Gi-Oh!-Assistent.',
-      'Deck-ID: deck-1',
-      'Deckname: Blue-Eyes Test',
-      'Anzahl: Main 40 · Extra 5 · Side 2',
+      'You are a Yu-Gi-Oh! assistant.',
+      'Deck ID: deck-1',
+      'Deck name: Blue-Eyes Test',
+      'Counts: Main 40 · Extra 5 · Side 2',
     ].join('\n')
 
     it('answers "Was ist in meinem Deck?" from the deck context block', async () => {

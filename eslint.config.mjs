@@ -4,42 +4,10 @@ import withNuxt from './.nuxt/eslint.config.mjs'
 
 const LOCALE_FILES = ['i18n/locales/**/*.json']
 
-// Files whose UI copy has been moved into the i18n catalogues (#34 F2,
-// ADR 0014). `no-raw-text` is enforced only here; each F2 PR adds its own
-// files, and F2d replaces the list with `app/**/*.vue`.
-const EXTRACTED_FILES = [
-  // F2a: app shell, auth, profile, dashboard
-  'app/app.vue',
-  'app/layouts/*.vue',
-  'app/components/layout/*.vue',
-  'app/components/profile/*.vue',
-  'app/pages/index.vue',
-  'app/pages/login.vue',
-  'app/pages/register.vue',
-  'app/pages/profile.vue',
-  // F2b: collection side (inventory, quick entry, catalog, wishlist,
-  // sharing, player pages except the player deck page)
-  'app/components/inventory/*.vue',
-  'app/components/entry/*.vue',
-  'app/components/collections/*.vue',
-  'app/components/card/*.vue',
-  'app/components/wishlist/*.vue',
-  'app/components/sharing/*.vue',
-  'app/pages/inventory/*.vue',
-  'app/pages/catalog.vue',
-  'app/pages/wishlist.vue',
-  'app/pages/players/[[]handle]/index.vue',
-  'app/pages/players/[[]handle]/inventory.vue',
-  'app/pages/players/[[]handle]/collections/*.vue',
-  // F2c: decks, formats, tournaments, the player deck page
-  'app/pages/decks/*.vue',
-  'app/components/decks/*.vue',
-  'app/pages/formats/*.vue',
-  'app/components/formats/*.vue',
-  'app/pages/tournaments/*.vue',
-  'app/components/tournaments/*.vue',
-  'app/pages/players/[[]handle]/decks/*.vue',
-]
+// Every Vue file takes its UI copy from the i18n catalogues (#34 F2,
+// ADR 0014); `no-raw-text` keeps it that way. (F2a–F2c ratcheted this file by
+// file; F2d made it cover all of app/.)
+const VUE_FILES = ['app/**/*.vue']
 
 // The plugin's `flat/base` config minus its YAML block (no YAML catalogues)
 // and with the JSON parser limited to the catalogues, so package.json,
@@ -77,14 +45,27 @@ export default withNuxt(
   },
   {
     name: 'app/vue-i18n/no-raw-text',
-    files: EXTRACTED_FILES,
+    files: VUE_FILES,
     rules: {
       '@intlify/vue-i18n/no-raw-text': ['error', {
         attributes: {
           '/.+/': ['label', 'title', 'placeholder', 'description', 'aria-label', 'alt', 'text', 'help', 'hint'],
         },
-        ignorePattern: '^[-–—·…/:()#%+×→•|0-9\\s]+$',
+        // `*`, not `+`: an empty `alt=""` (a decorative image) is not copy.
+        ignorePattern: '^[-–—·…/:()#%+×→•|0-9\\s]*$',
         ignoreText: ['yugioh alpha', 'Y', 'Main', 'Extra', 'Side', 'TCG', 'OCG', 'GOAT', 'ATK', 'DEF'],
+      }],
+    },
+  },
+  {
+    // Counted phrases go through `useCount()` (vue-i18n plurals, localized
+    // numbers) — `pluralize` builds German-only strings.
+    name: 'app/no-german-plural',
+    files: ['app/**/*.{ts,vue}'],
+    rules: {
+      'no-restricted-imports': ['error', {
+        // Matches `~~/shared/plural` as well as relative paths.
+        patterns: [{ group: ['**/shared/plural'], message: 'Use useCount() from app/composables/useCount.ts (ADR 0014).' }],
       }],
     },
   },

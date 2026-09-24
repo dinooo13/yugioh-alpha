@@ -8,6 +8,7 @@ import type { AssistantMessageInput, ChatTurnEvent } from '../../../../utils/ass
 import { requireUser } from '../../../../utils/session'
 import { claimTurnLock, isTurnInFlight, releaseTurnLock } from '../../../../utils/assistant-turn-lock'
 import { ASSISTANT_MESSAGE_TOTAL_BYTES_MAX } from '../../../../../shared/assistant-chat'
+import { resolveUiLocale } from '../../../../utils/ui-locale'
 
 // A little over the encoded-image cap plus the rest of the JSON body (text
 // field, array brackets, field names) — generous enough for any legitimate
@@ -26,22 +27,27 @@ function sseEventData(turnEvent: ChatTurnEvent): unknown {
     case 'text_delta':
       return { text: turnEvent.text }
     case 'tool_call':
-      return { id: turnEvent.id, name: turnEvent.name, label: turnEvent.label }
+      return {
+        id: turnEvent.id,
+        name: turnEvent.name,
+        arguments: turnEvent.arguments,
+        ...(turnEvent.deckName !== undefined ? { deckName: turnEvent.deckName } : {}),
+      }
     case 'tool_result':
-      return { id: turnEvent.id, ok: turnEvent.ok, summary: turnEvent.summary }
+      return { id: turnEvent.id, ok: turnEvent.ok, outcome: turnEvent.outcome }
     case 'action_proposed':
       return { action: turnEvent.action }
     case 'message_end':
       return { message: turnEvent.message }
     case 'error':
-      return { message: turnEvent.message }
+      return { code: turnEvent.code, message: turnEvent.message }
   }
 }
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
   if (!id) {
-    throw createError({ statusCode: 404, statusMessage: 'Unterhaltung nicht gefunden.' })
+    throw createError({ statusCode: 404, statusMessage: 'Conversation not found', data: { code: 'conversation_not_found' } })
   }
 
   const user = await requireUser(event)
@@ -53,13 +59,19 @@ export default defineEventHandler(async (event) => {
     .where(and(eq(assistantConversation.id, id), eq(assistantConversation.userId, user.id)))
     .get()
   if (!conversationRow) {
-    throw createError({ statusCode: 404, statusMessage: 'Unterhaltung nicht gefunden.' })
+    throw createError({ statusCode: 404, statusMessage: 'Conversation not found', data: { code: 'conversation_not_found' } })
   }
 
   const model = useDeckAssistantModel()
   if (!model) {
-    throw createError({ statusCode: 503, statusMessage: 'KI-Assistent ist nicht konfiguriert.' })
+    throw createError({ statusCode: 503, statusMessage: 'The assistant is not configured', data: { code: 'assistant_not_configured' } })
   }
+
+  // The interface language of this request decides the reply language and
+  // the fallback texts saved into the conversation (ADR 0014) — per turn,
+  // so switching the language mid-conversation takes effect right away.
+  // Resolved before the lock below is claimed, so it can't leak it.
+  const locale = await resolveUiLocale(event)
 
   // Claimed right after the check, before `readBody` — otherwise two
   // near-simultaneous submits could both pass the check while the first is
@@ -67,7 +79,7 @@ export default defineEventHandler(async (event) => {
   // below (including a validation/size error) releases it again; once
   // `runChatTurn` is handed the lock, its own `finally` releases it.
   if (isTurnInFlight(user.id)) {
-    throw createError({ statusCode: 409, statusMessage: 'Es läuft bereits eine Anfrage.' })
+    throw createError({ statusCode: 409, statusMessage: 'A turn is already in progress', data: { code: 'turn_in_progress' } })
   }
   claimTurnLock(user.id)
 
@@ -78,7 +90,7 @@ export default defineEventHandler(async (event) => {
     // only rejects a body that's already unreasonable up front.
     const contentLength = Number(getRequestHeader(event, 'content-length'))
     if (Number.isFinite(contentLength) && contentLength > MAX_REQUEST_BODY_BYTES) {
-      throw createError({ statusCode: 413, statusMessage: 'Die Anfrage ist zu groß.' })
+      throw createError({ statusCode: 413, statusMessage: 'Request too large', data: { code: 'request_too_large' } })
     }
     input = validateAssistantMessageInput(await readBody(event))
   }
@@ -96,7 +108,7 @@ export default defineEventHandler(async (event) => {
   const abortController = new AbortController()
   stream.onClosed(() => abortController.abort())
 
-  runChatTurn(db, user.id, id, input, model, async (turnEvent) => {
+  runChatTurn(db, user.id, id, { ...input, locale }, model, async (turnEvent) => {
     await stream.push({ event: sseEventName(turnEvent), data: JSON.stringify(sseEventData(turnEvent)) })
   }, abortController.signal)
     .catch(() => {

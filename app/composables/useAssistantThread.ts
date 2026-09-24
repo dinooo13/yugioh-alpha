@@ -1,11 +1,15 @@
 import { SseRequestError, readSse } from '~/utils/sse'
-import { summarizeStoredToolResult, toolCallLabel } from '~/utils/assistant-tool-activity'
-import { apiErrorMessage } from '~/utils/card-entry'
+import { storedToolResultOutcome } from '~/utils/assistant-tool-activity'
+import type { ToolActivityCall } from '~/utils/assistant-tool-activity'
 import type { AssistantActivityStatus, AssistantTimelineItem } from '~/utils/assistant-timeline'
 import type {
   AssistantActionView,
   AssistantConversationSummary,
   AssistantMessageView,
+  AssistantSseError,
+  AssistantSseToolCall,
+  AssistantSseToolResult,
+  AssistantToolOutcome,
 } from '~~/shared/assistant-chat'
 
 interface ConversationDetailResponse {
@@ -25,7 +29,7 @@ interface ConversationDetailResponse {
  */
 type StreamingItem =
   | { type: 'text', key: string, text: string }
-  | { type: 'activity', key: string, id: string, label: string, status: AssistantActivityStatus, summary?: string }
+  | { type: 'activity', key: string, id: string, call: ToolActivityCall, status: AssistantActivityStatus, outcome?: AssistantToolOutcome }
   | { type: 'action', key: string, action: AssistantActionView }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -40,12 +44,16 @@ function isTextDelta(data: unknown): data is { text: string } {
   return isRecord(data) && typeof data.text === 'string'
 }
 
-function isToolCall(data: unknown): data is { id: string, name: string, label: string } {
-  return isRecord(data) && typeof data.id === 'string' && typeof data.name === 'string' && typeof data.label === 'string'
+function isToolCall(data: unknown): data is AssistantSseToolCall {
+  return isRecord(data)
+    && typeof data.id === 'string'
+    && typeof data.name === 'string'
+    && isRecord(data.arguments)
+    && (data.deckName === undefined || typeof data.deckName === 'string')
 }
 
-function isToolResult(data: unknown): data is { id: string, ok: boolean, summary: string } {
-  return isRecord(data) && typeof data.id === 'string' && typeof data.ok === 'boolean' && typeof data.summary === 'string'
+function isToolResult(data: unknown): data is AssistantSseToolResult {
+  return isRecord(data) && typeof data.id === 'string' && typeof data.ok === 'boolean' && isRecord(data.outcome)
 }
 
 function isActionView(value: unknown): value is AssistantActionView {
@@ -74,8 +82,8 @@ function isMessageEnd(data: unknown): data is { message: AssistantMessageView } 
   return isRecord(data) && isMessageView(data.message)
 }
 
-function isErrorPayload(data: unknown): data is { message: string } {
-  return isRecord(data) && typeof data.message === 'string'
+function isErrorPayload(data: unknown): data is Partial<AssistantSseError> {
+  return isRecord(data) && (typeof data.code === 'string' || typeof data.message === 'string')
 }
 
 /** Aborting a fetch/body read surfaces as `DOMException` in browsers but as
@@ -95,6 +103,10 @@ function isAbortError(error: unknown): boolean {
  * mirrors on the client.
  */
 export function useAssistantThread(conversationId: Ref<string>) {
+  const { t } = useI18n()
+  const apiError = useApiError()
+  const apiErrorCode = useApiErrorCode()
+
   const conversation = ref<AssistantConversationSummary | null>(null)
   const messages = ref<AssistantMessageView[]>([])
   const actions = ref<AssistantActionView[]>([])
@@ -131,7 +143,7 @@ export function useAssistantThread(conversationId: Ref<string>) {
       applyDetail(await fetchDetail(conversationId.value))
     }
     catch (error) {
-      loadError.value = apiErrorMessage(error, 'Die Unterhaltung konnte nicht geladen werden.')
+      loadError.value = apiError(error, 'assistant.thread.errors.load')
     }
     finally {
       isLoading.value = false
@@ -158,7 +170,7 @@ export function useAssistantThread(conversationId: Ref<string>) {
       streamingItems.value = []
     }
     catch (error) {
-      sendError.value = apiErrorMessage(error, 'Die Unterhaltung konnte nicht aktualisiert werden.')
+      sendError.value = apiError(error, 'assistant.thread.errors.refresh')
     }
   }
 
@@ -190,13 +202,13 @@ export function useAssistantThread(conversationId: Ref<string>) {
       }
       for (const call of message.toolCalls ?? []) {
         const toolMessage = toolMessagesByCallId.value.get(call.id)
-        const resolved = toolMessage ? summarizeStoredToolResult(toolMessage.content) : undefined
+        const resolved = toolMessage ? storedToolResultOutcome(toolMessage.content) : undefined
         items.push({
           type: 'activity',
           key: `${message.id}-${call.id}`,
-          label: toolCallLabel(call),
+          call: { name: call.name, arguments: call.arguments, ...(call.deckName !== undefined ? { deckName: call.deckName } : {}) },
           status: resolved ? (resolved.ok ? 'ok' : 'error') : 'running',
-          summary: resolved?.summary,
+          outcome: resolved?.outcome,
         })
       }
       for (const action of actions.value.filter(candidate => candidate.messageId === message.id)) {
@@ -216,7 +228,7 @@ export function useAssistantThread(conversationId: Ref<string>) {
         }
       }
       else if (item.type === 'activity') {
-        items.push({ type: 'activity', key: item.key, label: item.label, status: item.status, summary: item.summary })
+        items.push({ type: 'activity', key: item.key, call: item.call, status: item.status, outcome: item.outcome })
       }
       else {
         items.push({ type: 'action', key: item.key, action: item.action })
@@ -243,17 +255,18 @@ export function useAssistantThread(conversationId: Ref<string>) {
     streamingItems.value = [...items, { type: 'text', key: `streaming-text-${streamingTextCounter}`, text }]
   }
 
-  function appendStreamingActivity(data: { id: string, label: string }) {
+  function appendStreamingActivity(data: AssistantSseToolCall) {
+    const call: ToolActivityCall = { name: data.name, arguments: data.arguments, ...(data.deckName !== undefined ? { deckName: data.deckName } : {}) }
     streamingItems.value = [
       ...streamingItems.value,
-      { type: 'activity', key: `streaming-activity-${data.id}`, id: data.id, label: data.label, status: 'running' },
+      { type: 'activity', key: `streaming-activity-${data.id}`, id: data.id, call, status: 'running' },
     ]
   }
 
-  function updateStreamingActivity(data: { id: string, ok: boolean, summary: string }) {
+  function updateStreamingActivity(data: AssistantSseToolResult) {
     streamingItems.value = streamingItems.value.map(item => (
       item.type === 'activity' && item.id === data.id
-        ? { ...item, status: data.ok ? 'ok' : 'error', summary: data.summary }
+        ? { ...item, status: data.ok ? 'ok' : 'error', outcome: data.outcome }
         : item
     ))
   }
@@ -275,6 +288,8 @@ export function useAssistantThread(conversationId: Ref<string>) {
 
     // Optimistic local echo — replaced by the persisted row the next time
     // the conversation is (re)loaded; good enough for the current session.
+    // (MessageBubble renders attachment labels by index, see
+    // `assistant.thread.photo`.)
     messages.value = [
       ...messages.value,
       {
@@ -282,7 +297,7 @@ export function useAssistantThread(conversationId: Ref<string>) {
         role: 'user',
         content: input.text,
         ...(input.images.length > 0
-          ? { attachments: input.images.map((_, index) => ({ kind: 'image' as const, label: `Foto ${index + 1}` })) }
+          ? { attachments: input.images.map((_, index) => ({ kind: 'image' as const, label: t('assistant.thread.photo', { index: index + 1 }) })) }
           : {}),
         createdAt: new Date().toISOString(),
       },
@@ -333,7 +348,7 @@ export function useAssistantThread(conversationId: Ref<string>) {
         }
         else if (event.event === 'error') {
           if (isErrorPayload(event.data)) {
-            sendError.value = event.data.message
+            sendError.value = apiErrorCode(event.data.code, undefined, 'assistant.thread.errors.unexpected')
           }
         }
       }
@@ -346,8 +361,8 @@ export function useAssistantThread(conversationId: Ref<string>) {
       }
       else {
         sendError.value = error instanceof SseRequestError
-          ? error.message
-          : 'Die Verbindung wurde unterbrochen. Bitte versuche es erneut.'
+          ? apiErrorCode(error.code, undefined, 'assistant.thread.errors.unexpected')
+          : t('assistant.thread.errors.connectionLost')
       }
     }
     finally {

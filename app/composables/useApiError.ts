@@ -21,9 +21,8 @@ export function useApiErrorCode() {
  * (ADR 0014): the translation of the error's `data.code` under
  * `errors.api.<code>` when there is one, else the caller's fallback key.
  * The server's `statusMessage` is technical English and is never shown.
- *
- * Replaces `apiErrorMessage` from `~/utils/card-entry`; each #34 F2 PR
- * migrates the call sites of its own area.
+ * (Nitro serializes `createError` as `{ statusCode, statusMessage, data }`;
+ * `$fetch` exposes that body as `error.data`.)
  */
 export function useApiError() {
   const translate = useApiErrorCode()

@@ -8,6 +8,8 @@ const props = defineProps<{
   attachments?: AssistantAttachment[]
 }>()
 
+const { t } = useI18n()
+
 const blocks = computed(() => parseAssistantMessageBlocks(props.content))
 const isUser = computed(() => props.role === 'user')
 </script>
@@ -26,7 +28,7 @@ const isUser = computed(() => props.role === 'user')
         class="mb-1.5 flex flex-wrap gap-1"
       >
         <li
-          v-for="(attachment, index) in attachments"
+          v-for="index in attachments.length"
           :key="index"
           class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs"
           :class="isUser ? 'bg-white/20' : 'bg-white'"
@@ -35,7 +37,7 @@ const isUser = computed(() => props.role === 'user')
             name="i-lucide-image"
             class="size-3"
           />
-          {{ attachment.label }}
+          {{ t('assistant.thread.photo', { index }) }}
         </li>
       </ul>
 

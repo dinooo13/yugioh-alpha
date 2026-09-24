@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { ASSISTANT_ACTION_KIND_LABELS, ASSISTANT_ACTION_STATUS_LABELS } from '~~/shared/assistant-chat'
 import type { AssistantActionView } from '~~/shared/assistant-chat'
 import { DECK_SECTIONS } from '~~/shared/deck-sections'
-import { apiErrorMessage } from '~/utils/card-entry'
+import type { ValidationTextSource } from '~/composables/useValidationText'
 
 const props = defineProps<{
   action: AssistantActionView
@@ -12,9 +11,14 @@ const emit = defineEmits<{
   updated: [action: AssistantActionView]
 }>()
 
-// Deck section names come from the catalogue since #34 F2c; the rest of this
-// card is translated in F2d.
-const { t } = useI18n()
+// Everything on this card is rendered in the interface language (ADR 0014)
+// from the action's kind and payload; the stored `summary` is only the
+// fallback for actions whose payload lacks the fields for that.
+const { t, n } = useI18n()
+const apiError = useApiError()
+const validationText = useValidationText()
+const { formatName } = useFormatLabel()
+const { languageLabel, conditionLabel, editionLabel } = useCardOptionItems()
 
 const isExpanded = ref(false)
 const isApplying = ref(false)
@@ -34,22 +38,23 @@ const statusColor = computed(() => {
   }
 })
 
-// Payload fields the write tools actually produce (server/utils/assistant-tools.ts) —
-// only these are ever shown, whichever of them a given action kind carries.
-const FIELD_LABELS: Record<string, string> = {
-  name: 'Karte',
-  catalogCardId: 'Karte (ID)',
-  quantity: 'Menge',
-  section: 'Sektion',
-  collectionId: 'Sammlung',
-  language: 'Sprache',
-  condition: 'Zustand',
-  edition: 'Auflage',
-  printingId: 'Druck',
-}
-
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function integer(value: number): string {
+  return n(value, 'integer')
+}
+
+/** A format for display: a built-in one by id in the interface language, else its stored name; `null` = no format. */
+function formatLabel(id: unknown, name: unknown, noFormatKey: string): string {
+  if (typeof name === 'string') {
+    return formatName({ id: typeof id === 'string' ? id : null, name })
+  }
+  if (typeof id === 'string') {
+    return id
+  }
+  return t(noFormatKey)
 }
 
 function rowsOf(payload: Record<string, unknown>): Array<Record<string, unknown>> {
@@ -64,35 +69,105 @@ function rowsOf(payload: Record<string, unknown>): Array<Record<string, unknown>
 
 const rows = computed(() => rowsOf(props.action.payload))
 
-const columns = computed(() => {
-  const keys: string[] = []
-  for (const key of Object.keys(FIELD_LABELS)) {
-    if (rows.value.some(row => row[key] !== null && row[key] !== undefined)) {
-      keys.push(key)
+/**
+ * The summary line from the action's kind and payload. The fields were
+ * always stored for the deck actions (ADR 0011); `add_to_inventory` items
+ * carry card names since #34 F2d — older ones show the stored summary.
+ */
+const summary = computed(() => {
+  const { kind, payload } = props.action
+  const list = rows.value
+  switch (kind) {
+    case 'add_to_inventory': {
+      if (list.length === 0 || !list.every(row => typeof row.name === 'string')) {
+        return props.action.summary
+      }
+      const cards = list
+        .map(row => t('assistant.action.summary.cardQuantity', { name: row.name, quantity: integer(Number(row.quantity) || 0) }))
+        .join(', ')
+      return t('assistant.action.summary.add_to_inventory', { count: integer(list.length), cards }, list.length)
     }
+    case 'create_deck': {
+      if (typeof payload.name !== 'string' || !Array.isArray(payload.cards)) {
+        return props.action.summary
+      }
+      const total = list.reduce((sum, row) => sum + (Number(row.quantity) || 0), 0)
+      return t('assistant.action.summary.create_deck', { name: payload.name, count: integer(total) }, total)
+    }
+    case 'update_deck_cards': {
+      if (typeof payload.deckName !== 'string' || !Array.isArray(payload.changes)) {
+        return props.action.summary
+      }
+      return t('assistant.action.summary.update_deck_cards', { deck: payload.deckName, count: integer(list.length) }, list.length)
+    }
+    case 'set_deck_format': {
+      if (typeof payload.deckName !== 'string' || !('formatId' in payload)) {
+        return props.action.summary
+      }
+      return t('assistant.action.summary.set_deck_format', {
+        deck: payload.deckName,
+        from: formatLabel(payload.previousFormatId, payload.previousFormatName, 'assistant.action.summary.noFormat'),
+        to: formatLabel(payload.formatId, payload.formatName, 'assistant.action.summary.noFormat'),
+      })
+    }
+    default:
+      return props.action.summary
   }
-  // Deck rows carry the card's name (ADR 0011) — the bare catalog id next to
-  // it is noise. Older actions without names still show the id.
+})
+
+// Payload fields the write tools actually produce (server/utils/assistant-tools.ts) —
+// only these are ever shown, whichever of them a given action kind carries.
+const FIELDS = ['name', 'catalogCardId', 'quantity', 'section', 'collectionId', 'language', 'condition', 'edition', 'printingId'] as const
+type Field = typeof FIELDS[number]
+
+const columns = computed<Field[]>(() => {
+  const keys = FIELDS.filter(key => rows.value.some(row => row[key] !== null && row[key] !== undefined))
+  // Rows carry the card's name (ADR 0011; inventory rows since #34 F2d) —
+  // the bare catalog id next to it is noise. Older actions without names
+  // still show the id.
   return keys.includes('name') ? keys.filter(key => key !== 'catalogCardId') : keys
 })
 
-function columnLabel(column: string): string {
+function columnLabel(column: Field): string {
   // update_deck_cards' quantity is the new absolute amount, not a delta.
   if (column === 'quantity' && props.action.kind === 'update_deck_cards') {
-    return 'Neue Menge'
+    return t('assistant.action.field.newQuantity')
   }
-  return FIELD_LABELS[column] ?? column
+  return t(`assistant.action.field.${column}`)
+}
+
+function displayValue(column: Field, value: unknown): string {
+  if (typeof value === 'string') {
+    if (column === 'section' && (DECK_SECTIONS as readonly string[]).includes(value)) {
+      return t(`decks.section.${value}`)
+    }
+    if (column === 'language') {
+      return languageLabel(value)
+    }
+    if (column === 'condition') {
+      return conditionLabel(value)
+    }
+    if (column === 'edition') {
+      return editionLabel(value)
+    }
+  }
+  return String(value)
 }
 
 // --- Proposal preview (create_deck / update_deck_cards / set_deck_format, ADR 0011) ---
 
 interface DeckPreview {
   counts: { main: number, extra: number, side: number }
-  validation: { legal: boolean, issues: string[] } | null
+  /** `issueDetails` when stored (code + params, #34 F2d), else the stored `issues` text. */
+  validation: { legal: boolean, issues: Array<ValidationTextSource | string> } | null
   missing: Array<{ catalogCardId: number, name: string, needed: number, owned: number }>
 }
 
 const PREVIEW_ISSUES_SHOWN = 5
+
+function isIssueDetail(value: unknown): value is ValidationTextSource {
+  return isPlainObject(value) && typeof value.code === 'string' && typeof value.message === 'string'
+}
 
 /** `payload.preview`, if the action carries a well-formed one (older actions don't). */
 const preview = computed<DeckPreview | null>(() => {
@@ -102,13 +177,14 @@ const preview = computed<DeckPreview | null>(() => {
   }
   const counts = raw.counts as Record<string, unknown>
   const validation = isPlainObject(raw.validation) ? raw.validation : null
+  const issueDetails = validation && Array.isArray(validation.issueDetails) ? validation.issueDetails.filter(isIssueDetail) : null
+  const issueTexts = validation && Array.isArray(validation.issues)
+    ? validation.issues.filter((issue): issue is string => typeof issue === 'string')
+    : []
   return {
     counts: { main: Number(counts.main) || 0, extra: Number(counts.extra) || 0, side: Number(counts.side) || 0 },
     validation: validation
-      ? {
-          legal: validation.legal === true,
-          issues: Array.isArray(validation.issues) ? validation.issues.filter((issue): issue is string => typeof issue === 'string') : [],
-        }
+      ? { legal: validation.legal === true, issues: issueDetails ?? issueTexts }
       : null,
     missing: raw.missing.filter(isPlainObject).map(card => ({
       catalogCardId: Number(card.catalogCardId),
@@ -119,16 +195,24 @@ const preview = computed<DeckPreview | null>(() => {
   }
 })
 
+const previewIssues = computed(() => (preview.value?.validation?.issues ?? []).slice(0, PREVIEW_ISSUES_SHOWN).map(issue => validationText(issue)))
+const hiddenIssueCount = computed(() => Math.max(0, (preview.value?.validation?.issues.length ?? 0) - PREVIEW_ISSUES_SHOWN))
+
+const previewCounts = computed(() => {
+  const counts = preview.value?.counts ?? { main: 0, extra: 0, side: 0 }
+  return t('assistant.action.preview.counts', { main: integer(counts.main), extra: integer(counts.extra), side: integer(counts.side) })
+})
+
 const legalityBadge = computed(() => {
   const validation = preview.value?.validation
   if (!validation) {
-    return { color: 'neutral' as const, label: 'Kein Format' }
+    return { color: 'neutral' as const, label: t('assistant.action.preview.noFormat') }
   }
   if (validation.legal) {
-    return { color: 'success' as const, label: 'Legal' }
+    return { color: 'success' as const, label: t('assistant.action.preview.legal') }
   }
   const count = validation.issues.length
-  return { color: 'error' as const, label: `Nicht legal – ${count} ${count === 1 ? 'Problem' : 'Probleme'}` }
+  return { color: 'error' as const, label: t('assistant.action.preview.notLegal', { count: integer(count) }, count) }
 })
 
 // An applied create_deck / set_deck_format stores the (new or updated) deck's
@@ -142,32 +226,26 @@ const openDeckId = computed(() => {
   return isPlainObject(result) && typeof result.id === 'string' ? result.id : null
 })
 
-function displayValue(column: string, value: unknown): string {
-  if (column === 'section' && typeof value === 'string' && (DECK_SECTIONS as readonly string[]).includes(value)) {
-    return t(`decks.section.${value}`)
-  }
-  return String(value)
-}
-
 // Top-level scalars worth showing above the row table (e.g. create_deck's
-// name/formatId, update_deck_cards' deckId, set_deck_format's old/new format)
+// name/format, update_deck_cards' deck, set_deck_format's old/new format)
 // — arrays are rendered as rows instead, everything else in the payload is
 // internal detail.
 const metaEntries = computed(() => {
-  const entries: Array<{ label: string, value: string }> = []
+  const entries: Array<{ key: string, label: string, value: string }> = []
   const payload = props.action.payload
+  const add = (key: string, value: string) => entries.push({ key, label: t(`assistant.action.meta.${key}`), value })
   if (typeof payload.name === 'string') {
-    entries.push({ label: 'Name', value: payload.name })
+    add('name', payload.name)
   }
   if (typeof payload.deckName === 'string' || typeof payload.deckId === 'string') {
-    entries.push({ label: 'Deck', value: String(payload.deckName ?? payload.deckId) })
+    add('deck', String(payload.deckName ?? payload.deckId))
   }
   if (props.action.kind === 'set_deck_format') {
-    entries.push({ label: 'Bisheriges Format', value: typeof payload.previousFormatName === 'string' ? payload.previousFormatName : 'Kein Format' })
-    entries.push({ label: 'Neues Format', value: typeof payload.formatName === 'string' ? payload.formatName : 'Kein Format' })
+    add('previousFormat', formatLabel(payload.previousFormatId, payload.previousFormatName, 'assistant.action.meta.noFormat'))
+    add('newFormat', formatLabel(payload.formatId, payload.formatName, 'assistant.action.meta.noFormat'))
   }
   else if (typeof payload.formatName === 'string' || typeof payload.formatId === 'string') {
-    entries.push({ label: 'Format', value: String(payload.formatName ?? payload.formatId) })
+    add('format', formatLabel(payload.formatId, payload.formatName, 'assistant.action.meta.noFormat'))
   }
   return entries
 })
@@ -188,7 +266,7 @@ async function apply() {
     emit('updated', response.action)
   }
   catch (error) {
-    errorMessage.value = apiErrorMessage(error, 'Der Vorschlag konnte nicht übernommen werden.')
+    errorMessage.value = apiError(error, 'assistant.action.errors.apply')
   }
   finally {
     isApplying.value = false
@@ -209,7 +287,7 @@ async function reject() {
     emit('updated', response.action)
   }
   catch (error) {
-    errorMessage.value = apiErrorMessage(error, 'Der Vorschlag konnte nicht verworfen werden.')
+    errorMessage.value = apiError(error, 'assistant.action.errors.reject')
   }
   finally {
     isRejecting.value = false
@@ -221,16 +299,16 @@ async function reject() {
   <div class="flex justify-start">
     <div class="w-full max-w-md rounded-md border border-gray-200 bg-white p-3 text-sm">
       <div class="flex items-center justify-between gap-2">
-        <span class="font-medium text-gray-900">{{ ASSISTANT_ACTION_KIND_LABELS[action.kind] }}</span>
+        <span class="font-medium text-gray-900">{{ t(`assistant.action.kind.${action.kind}`) }}</span>
         <UBadge
           :color="statusColor"
           variant="subtle"
-          :label="ASSISTANT_ACTION_STATUS_LABELS[action.status]"
+          :label="t(`assistant.action.status.${action.status}`)"
         />
       </div>
 
       <p class="mt-1 text-gray-600">
-        {{ action.summary }}
+        {{ summary }}
       </p>
 
       <div
@@ -246,44 +324,44 @@ async function reject() {
             :label="legalityBadge.label"
           />
           <span class="text-gray-600">
-            Main {{ preview.counts.main }} · Extra {{ preview.counts.extra }} · Side {{ preview.counts.side }}
+            {{ previewCounts }}
           </span>
         </div>
 
         <ul
-          v-if="preview.validation && preview.validation.issues.length > 0"
+          v-if="previewIssues.length > 0"
           class="list-inside list-disc space-y-0.5 text-red-700"
         >
           <li
-            v-for="(issue, index) in preview.validation.issues.slice(0, PREVIEW_ISSUES_SHOWN)"
+            v-for="(issue, index) in previewIssues"
             :key="index"
           >
             {{ issue }}
           </li>
           <li
-            v-if="preview.validation.issues.length > PREVIEW_ISSUES_SHOWN"
+            v-if="hiddenIssueCount > 0"
             class="list-none text-gray-500"
           >
-            … und {{ preview.validation.issues.length - PREVIEW_ISSUES_SHOWN }} weitere
+            {{ t('assistant.action.preview.moreIssues', { count: integer(hiddenIssueCount) }, hiddenIssueCount) }}
           </li>
         </ul>
 
         <div v-if="preview.missing.length > 0">
           <p class="font-medium text-amber-900">
-            Fehlende Karten (nicht oder nicht genug im Inventar)
+            {{ t('assistant.action.preview.missingTitle') }}
           </p>
           <ul class="mt-0.5 space-y-0.5 text-amber-800">
             <li
               v-for="card in preview.missing"
               :key="card.catalogCardId"
             >
-              {{ card.name }}: {{ card.needed }} benötigt, {{ card.owned }} im Besitz
+              {{ t('assistant.action.preview.missingCard', { name: card.name, needed: integer(card.needed), owned: integer(card.owned) }) }}
             </li>
           </ul>
         </div>
 
         <p class="text-gray-400">
-          Stand beim Vorschlag
+          {{ t('assistant.action.preview.snapshot') }}
         </p>
       </div>
 
@@ -293,7 +371,7 @@ async function reject() {
         variant="link"
         size="xs"
         class="tap-target mt-1 px-0"
-        :label="isExpanded ? 'Details ausblenden' : 'Details anzeigen'"
+        :label="isExpanded ? t('assistant.action.hideDetails') : t('assistant.action.showDetails')"
         :trailing-icon="isExpanded ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'"
         @click="() => { isExpanded = !isExpanded }"
       />
@@ -308,7 +386,7 @@ async function reject() {
         >
           <div
             v-for="entry in metaEntries"
-            :key="entry.label"
+            :key="entry.key"
             class="flex gap-1"
           >
             <dt class="font-medium">
@@ -367,7 +445,7 @@ async function reject() {
         <UButton
           size="xs"
           icon="i-lucide-check"
-          label="Übernehmen"
+          :label="t('assistant.action.apply')"
           :loading="isApplying"
           :disabled="isRejecting"
           class="tap-target"
@@ -378,7 +456,7 @@ async function reject() {
           color="neutral"
           variant="outline"
           icon="i-lucide-x"
-          label="Verwerfen"
+          :label="t('assistant.action.reject')"
           :loading="isRejecting"
           :disabled="isApplying"
           class="tap-target"
@@ -393,7 +471,7 @@ async function reject() {
         color="neutral"
         variant="outline"
         icon="i-lucide-layers"
-        label="Deck öffnen"
+        :label="t('assistant.action.openDeck')"
         class="tap-target mt-3"
       />
     </div>

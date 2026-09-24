@@ -1,13 +1,26 @@
 <script setup lang="ts">
+import type { AssistantToolOutcome } from '~~/shared/assistant-chat'
 import type { AssistantActivityStatus } from '~/utils/assistant-timeline'
+import { toolCallLabel, toolOutcomeSummary } from '~/utils/assistant-tool-activity'
+import type { ToolActivityCall } from '~/utils/assistant-tool-activity'
 
-withDefaults(defineProps<{
-  label: string
+const props = withDefaults(defineProps<{
+  call: ToolActivityCall
   status: AssistantActivityStatus
-  summary?: string
+  outcome?: AssistantToolOutcome
 }>(), {
-  summary: undefined,
+  outcome: undefined,
 })
+
+const { t, n } = useI18n()
+
+const label = computed(() => toolCallLabel(t, props.call))
+const summary = computed(() => props.status === 'running' || !props.outcome
+  ? null
+  : toolOutcomeSummary(t, props.status !== 'error', props.outcome, count => n(count, 'integer')))
+// A failed tool shows "failed"; the raw (technical, English) error the
+// model got is only in the tooltip.
+const errorDetail = computed(() => props.status === 'error' ? props.outcome?.error : undefined)
 </script>
 
 <template>
@@ -17,6 +30,7 @@ withDefaults(defineProps<{
       :class="status === 'error'
         ? 'border-red-200 bg-red-50 text-red-700'
         : 'border-gray-200 bg-gray-50 text-gray-600'"
+      :title="errorDetail"
     >
       <UIcon
         v-if="status === 'running'"
@@ -35,7 +49,7 @@ withDefaults(defineProps<{
       />
       <span class="truncate">{{ label }}</span>
       <span
-        v-if="summary && status !== 'running'"
+        v-if="summary"
         class="truncate text-gray-400"
       >— {{ summary }}</span>
     </div>

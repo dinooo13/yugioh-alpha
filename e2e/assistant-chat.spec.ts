@@ -192,4 +192,36 @@ test.describe('Chat assistant', () => {
     await page.getByRole('link', { name: 'Zum Assistenten', exact: true }).click()
     await expect(page).toHaveURL(/\/assistant/)
   })
+
+  test('runs in English for an English interface: chips, action card and saved texts (#34 F2d)', async ({ page, context, baseURL }) => {
+    await registerAndLogin(page)
+    await context.addCookies([{ name: 'ui_locale', value: 'en', url: baseURL! }])
+
+    await page.goto('/assistant')
+    await expect(page.getByRole('heading', { name: 'Assistant', exact: true })).toBeVisible()
+    await page.getByRole('button', { name: 'New conversation', exact: true }).click()
+    await expect(page).toHaveURL(/\/assistant\/[0-9a-f-]+$/)
+
+    const message = page.getByLabel('Message', { exact: true })
+    const send = page.getByRole('button', { name: 'Send', exact: true })
+    await expect(message).toBeEnabled()
+
+    // The fake provider keeps its German trigger words and replies.
+    await message.fill('suche Dark Magician')
+    await send.click()
+    await expect(page.getByText('Searching the catalog: Dark Magician')).toBeVisible()
+    await expect(page.getByText('1 result', { exact: false })).toBeVisible()
+
+    await message.fill('add 2')
+    await send.click()
+    await expect(page.getByText('Add cards to the inventory')).toBeVisible()
+    await expect(page.getByText('Add 1 card to the inventory: Dark Magician x2')).toBeVisible()
+    await expect(page.getByText('Waiting for confirmation')).toBeVisible()
+    await page.getByRole('button', { name: 'Reject', exact: true }).click()
+    await expect(page.getByText('Rejected')).toBeVisible()
+
+    // The conversation list shows the conversation, titled from its first message.
+    await expect(page.getByRole('link', { name: 'suche Dark Magician' }).first()).toBeVisible()
+  })
 })
+

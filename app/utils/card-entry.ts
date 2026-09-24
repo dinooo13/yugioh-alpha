@@ -270,16 +270,6 @@ function apiErrorBody(error: unknown): ApiErrorBody | undefined {
   return body && typeof body === 'object' ? body as ApiErrorBody : undefined
 }
 
-/**
- * Nitro serializes `createError` as `{ statusCode, statusMessage, data }`;
- * `$fetch` exposes that body as `error.data`. Prefer the endpoint's own
- * message over ofetch's technical "[POST] ... 400 Bad Request" string.
- */
-export function apiErrorMessage(error: unknown, fallback: string): string {
-  const statusMessage = apiErrorBody(error)?.statusMessage
-  return typeof statusMessage === 'string' && statusMessage !== '' ? statusMessage : fallback
-}
-
 /** Per-item validation failures carried by `/api/inventory/bulk`. */
 export function apiItemErrors(error: unknown): ApiItemError[] {
   return apiErrorBody(error)?.data?.errors ?? []

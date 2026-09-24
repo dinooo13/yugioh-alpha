@@ -1,3 +1,149 @@
 {
-  "assistant": {}
+  "assistant": {
+    "title": "Assistent",
+    "index": {
+      "intro": "Frag den Assistenten nach deinem Inventar, deinen Decks oder lass ihn eine Karte per Foto erkennen — er schlägt Änderungen vor, die du erst bestätigen musst.",
+      "preparing": "Unterhaltung wird vorbereitet …",
+      "examples": {
+        "inventory": "Welche Karten habe ich von Blue-Eyes?",
+        "deck": "Baue mir ein Deck aus meinen Karten für GOAT",
+        "photo": "Foto einer Karte hinzufügen"
+      }
+    },
+    "intent": {
+      "new-deck": "Baue mir aus meinen Karten ein neues Deck. Format und Spielstil: ",
+      "edit-deck": "Wie kann ich dieses Deck mit Karten aus meinem Inventar verbessern?"
+    },
+    "unavailable": {
+      "title": "Assistent nicht verfügbar",
+      "description": "Der KI-Assistent ist auf diesem Server gerade nicht eingerichtet. Wende dich an die Person, die die App betreibt."
+    },
+    "conversations": {
+      "title": "Unterhaltungen",
+      "new": "Neue Unterhaltung",
+      "empty": "Noch keine Unterhaltungen.",
+      "deleteLabel": "'{title}' löschen",
+      "confirmDelete": {
+        "title": "Unterhaltung löschen",
+        "description": "\"{title}\" löschen? Das kann nicht rückgängig gemacht werden."
+      },
+      "errors": {
+        "create": "Die Unterhaltung konnte nicht erstellt werden.",
+        "delete": "Die Unterhaltung konnte nicht gelöscht werden."
+      }
+    },
+    "thread": {
+      "deckChip": "Deck: {name}",
+      "openDeck": "Deck {name} öffnen",
+      "empty": "Noch keine Nachrichten — schreib dem Assistenten, was er für dich tun soll.",
+      "photo": "Foto {index}",
+      "errors": {
+        "load": "Die Unterhaltung konnte nicht geladen werden.",
+        "refresh": "Die Unterhaltung konnte nicht aktualisiert werden.",
+        "connectionLost": "Die Verbindung wurde unterbrochen. Bitte versuche es erneut.",
+        "unexpected": "Es ist ein unerwarteter Fehler aufgetreten."
+      }
+    },
+    "composer": {
+      "placeholder": "Nachricht an den Assistenten…",
+      "label": "Nachricht",
+      "takePhoto": "Foto aufnehmen",
+      "fromGallery": "Aus Galerie hinzufügen",
+      "addPhoto": "Foto hinzufügen",
+      "removeImage": "Bild {index} entfernen",
+      "send": "Senden",
+      "cancelling": "Wird abgebrochen…",
+      "errors": {
+        "tooManyImages": "Es sind höchstens {max} Bilder pro Nachricht erlaubt.",
+        "imagesTooLarge": "Die Bilder sind zusammen zu groß (max. {max} MB). Entferne eins oder nutze ein kleineres Foto.",
+        "imageFailed": "Das Bild konnte nicht verarbeitet werden.",
+        "textTooLong": "Bitte höchstens {max} Zeichen schreiben."
+      }
+    },
+    "tool": {
+      "label": {
+        "search_catalog": "Sucht im Katalog",
+        "get_card": "Liest Kartendetails",
+        "search_inventory": "Durchsucht dein Inventar",
+        "list_collections": "Listet deine Sammlungen",
+        "list_decks": "Listet deine Decks",
+        "get_deck": "Liest ein Deck",
+        "list_formats": "Listet Formate",
+        "validate_deck": "Prüft ein Deck",
+        "add_to_inventory": "Schlägt vor, Karten ins Inventar aufzunehmen",
+        "create_deck": "Schlägt ein neues Deck vor",
+        "update_deck_cards": "Schlägt Deck-Änderungen vor",
+        "set_deck_format": "Schlägt eine Formatänderung vor"
+      },
+      "withDetail": "{label}: {detail}",
+      "outcome": {
+        "results": "{count} Ergebnis(se) | {count} Ergebnis(se)",
+        "atLeast": "mindestens {count} Ergebnis(se) | mindestens {count} Ergebnis(se)",
+        "pending": "Vorschlag angelegt",
+        "done": "OK"
+      },
+      "failed": "Fehlgeschlagen"
+    },
+    "action": {
+      "kind": {
+        "add_to_inventory": "Karten ins Inventar aufnehmen",
+        "create_deck": "Neues Deck anlegen",
+        "update_deck_cards": "Deck-Karten ändern",
+        "set_deck_format": "Deck-Format ändern"
+      },
+      "status": {
+        "pending": "Wartet auf Bestätigung",
+        "applied": "Übernommen",
+        "rejected": "Verworfen",
+        "failed": "Fehlgeschlagen"
+      },
+      "summary": {
+        "add_to_inventory": "{count} Karte(n) zum Inventar hinzufügen: {cards} | {count} Karte(n) zum Inventar hinzufügen: {cards}",
+        "create_deck": "Neues Deck \"{name}\" mit {count} Karte(n) anlegen | Neues Deck \"{name}\" mit {count} Karte(n) anlegen",
+        "update_deck_cards": "{count} Kartenänderung(en) an Deck \"{deck}\" | {count} Kartenänderung(en) an Deck \"{deck}\"",
+        "set_deck_format": "Format von Deck \"{deck}\" ändern: {from} → {to}",
+        "cardQuantity": "{name} x{quantity}",
+        "noFormat": "kein Format"
+      },
+      "field": {
+        "name": "Karte",
+        "catalogCardId": "Karte (ID)",
+        "quantity": "Menge",
+        "newQuantity": "Neue Menge",
+        "section": "Sektion",
+        "collectionId": "Sammlung",
+        "language": "Drucksprache",
+        "condition": "Zustand",
+        "edition": "Auflage",
+        "printingId": "Druck"
+      },
+      "meta": {
+        "name": "Name",
+        "deck": "Deck",
+        "format": "Format",
+        "previousFormat": "Bisheriges Format",
+        "newFormat": "Neues Format",
+        "noFormat": "Kein Format"
+      },
+      "preview": {
+        "noFormat": "Kein Format",
+        "legal": "Legal",
+        "notLegal": "Nicht legal – {count} Problem | Nicht legal – {count} Probleme",
+        "counts": "Main {main} · Extra {extra} · Side {side}",
+        "moreIssues": "… und {count} weitere",
+        "missingTitle": "Fehlende Karten (nicht oder nicht genug im Inventar)",
+        "missingCard": "{name}: {needed} benötigt, {owned} im Besitz",
+        "snapshot": "Stand beim Vorschlag"
+      },
+      "showDetails": "Details anzeigen",
+      "hideDetails": "Details ausblenden",
+      "apply": "Übernehmen",
+      "reject": "Verwerfen",
+      "openDeck": "Deck öffnen",
+      "errors": {
+        "apply": "Der Vorschlag konnte nicht übernommen werden.",
+        "reject": "Der Vorschlag konnte nicht verworfen werden."
+      }
+    }
+  }
 }

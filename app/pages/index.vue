@@ -1,5 +1,5 @@
 <script setup lang="ts">
-const { t } = useI18n()
+const { t, n } = useI18n()
 const formatCount = useCount()
 usePageTitle('dashboard.title')
 
@@ -119,7 +119,7 @@ const cards = computed<OnboardingCard[]>(() => [
         </div>
 
         <p class="mt-4 text-3xl font-semibold tabular-nums text-gray-900">
-          {{ card.count }}
+          {{ n(card.count, 'integer') }}
         </p>
         <p class="mt-1 text-sm text-gray-500">
           {{ card.description }}

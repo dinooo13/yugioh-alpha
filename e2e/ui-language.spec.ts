@@ -111,4 +111,38 @@ test.describe('interface language', () => {
 
     expect(warnings).toEqual([])
   })
+
+  test('an English browser gets the English UI without any cookie (Accept-Language, #34 F2d)', async ({ browser }) => {
+    const context = await browser.newContext({ locale: 'en-US' })
+    const page = await context.newPage()
+    const warnings = trackHydrationWarnings(page)
+
+    await page.goto('/login')
+    await page.waitForLoadState('networkidle')
+    await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible()
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en')
+    await expect(page).toHaveTitle('Sign in – yugioh alpha')
+    // Detection alone sets no cookie; only picking a language does.
+    expect((await context.cookies()).some(cookie => cookie.name === 'ui_locale')).toBe(false)
+
+    // A cookie beats the header.
+    await pickLanguage(page, 'Interface language', 'Deutsch')
+    await page.reload()
+    await page.waitForLoadState('networkidle')
+    await expect(page.getByRole('heading', { name: 'Anmelden' })).toBeVisible()
+
+    expect(warnings).toEqual([])
+    await context.close()
+  })
+
+  test('a context created with browser.newContext() keeps the project\'s German locale', async ({ browser }) => {
+    // Several specs open a second context this way; they must stay German
+    // now that Accept-Language is detected.
+    const context = await browser.newContext()
+    const page = await context.newPage()
+    await page.goto('/login')
+    await expect(page.getByRole('heading', { name: 'Anmelden' })).toBeVisible()
+    await expect(page.locator('html')).toHaveAttribute('lang', 'de')
+    await context.close()
+  })
 })

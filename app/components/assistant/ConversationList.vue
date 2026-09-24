@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import type { AssistantConversationListItem } from '~~/shared/assistant-chat'
-import { apiErrorMessage } from '~/utils/card-entry'
 
 const props = defineProps<{
   items: AssistantConversationListItem[]
@@ -13,6 +12,8 @@ const emit = defineEmits<{
 }>()
 
 const { confirm } = useConfirm()
+const { t } = useI18n()
+const apiError = useApiError()
 
 const isCreating = ref(false)
 const deletingId = ref<string | null>(null)
@@ -29,7 +30,7 @@ async function onCreate() {
     emit('created', conversation.id)
   }
   catch (error) {
-    errorMessage.value = apiErrorMessage(error, 'Die Unterhaltung konnte nicht erstellt werden.')
+    errorMessage.value = apiError(error, 'assistant.conversations.errors.create')
   }
   finally {
     isCreating.value = false
@@ -38,8 +39,8 @@ async function onCreate() {
 
 async function onDelete(item: AssistantConversationListItem) {
   const confirmed = await confirm({
-    title: 'Unterhaltung löschen',
-    description: `"${item.title}" löschen? Das kann nicht rückgängig gemacht werden.`,
+    title: t('assistant.conversations.confirmDelete.title'),
+    description: t('assistant.conversations.confirmDelete.description', { title: item.title }),
   })
   if (!confirmed) {
     return
@@ -52,7 +53,7 @@ async function onDelete(item: AssistantConversationListItem) {
     emit('deleted', item.id)
   }
   catch (error) {
-    errorMessage.value = apiErrorMessage(error, 'Die Unterhaltung konnte nicht gelöscht werden.')
+    errorMessage.value = apiError(error, 'assistant.conversations.errors.delete')
   }
   finally {
     deletingId.value = null
@@ -65,7 +66,7 @@ async function onDelete(item: AssistantConversationListItem) {
     <div class="p-3">
       <UButton
         icon="i-lucide-plus"
-        label="Neue Unterhaltung"
+        :label="t('assistant.conversations.new')"
         block
         :loading="isCreating"
         @click="onCreate"
@@ -97,7 +98,7 @@ async function onDelete(item: AssistantConversationListItem) {
           variant="ghost"
           size="xs"
           class="tap-target shrink-0 opacity-0 group-hover:opacity-100"
-          :aria-label="`'${item.title}' löschen`"
+          :aria-label="t('assistant.conversations.deleteLabel', { title: item.title })"
           :loading="deletingId === item.id"
           @click="onDelete(item)"
         />
@@ -107,7 +108,7 @@ async function onDelete(item: AssistantConversationListItem) {
         v-if="props.items.length === 0"
         class="px-2.5 py-1.5 text-sm text-gray-500"
       >
-        Noch keine Unterhaltungen.
+        {{ t('assistant.conversations.empty') }}
       </li>
     </ul>
   </div>

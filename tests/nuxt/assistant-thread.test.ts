@@ -1,5 +1,6 @@
 import { defineComponent, watch } from 'vue'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { setTestLocale } from './fixtures/locale'
 import { flushPromises } from '@vue/test-utils'
 import { mountSuspended } from '@nuxt/test-utils/runtime'
 import type {
@@ -12,7 +13,8 @@ import type {
 // stream path through useAssistantThread — exactly where findings #1-#3
 // (action cards invisible live, chips/pre-tool text vanishing on
 // message_end, wrong streaming order) lived — plus #5's cancel wiring and
-// the 409/503 German error surfaces.
+// the 409/503 error surfaces (error codes, rendered in the interface
+// language — ADR 0014).
 
 /** A `ReadableStream` we can push individual SSE event chunks into (and
  * error, to simulate an aborted fetch) whenever the test wants to, instead
@@ -104,8 +106,9 @@ function types(component: Awaited<ReturnType<typeof mountThread>>): string[] {
   return (component.vm.timeline as TimelineItemLike[]).map(item => item.type)
 }
 
-afterEach(() => {
+afterEach(async () => {
   vi.unstubAllGlobals()
+  await setTestLocale('de')
 })
 
 describe('useAssistantThread', () => {
@@ -136,14 +139,15 @@ describe('useAssistantThread', () => {
     drivable.push(sseEvent('message_start', { userMessageId: 'm1' }))
     await flushPromises()
 
-    drivable.push(sseEvent('tool_call', { id: 'call-1', name: 'search_catalog', label: 'Sucht im Katalog: Dark Magician' }))
+    drivable.push(sseEvent('tool_call', { id: 'call-1', name: 'search_catalog', arguments: { query: 'Dark Magician' } }))
     await flushPromises()
     expect(types(component)).toEqual(['message', 'activity'])
-    expect(vm.timeline.at(-1)).toMatchObject({ type: 'activity', status: 'running' })
+    expect(vm.timeline.at(-1)).toMatchObject({ type: 'activity', status: 'running', call: { name: 'search_catalog', arguments: { query: 'Dark Magician' } } })
 
-    drivable.push(sseEvent('tool_result', { id: 'call-1', ok: true, summary: '1 Ergebnis(se)' }))
+    drivable.push(sseEvent('tool_result', { id: 'call-1', ok: true, outcome: { count: 1 } }))
     await flushPromises()
-    expect(vm.timeline.at(-1)).toMatchObject({ type: 'activity', status: 'ok', summary: '1 Ergebnis(se)' })
+    expect(vm.timeline.at(-1)).toMatchObject({ type: 'activity', status: 'ok', outcome: { count: 1 } })
+    const streamedChip = vm.timeline.at(-1)
 
     drivable.push(sseEvent('text_delta', { text: 'Ich schlage vor, ' }))
     await flushPromises()
@@ -182,6 +186,13 @@ describe('useAssistantThread', () => {
     // that row's tool chip — ahead of the final confirmation text (m4).
     expect(types(component)).toEqual(['message', 'activity', 'action', 'message'])
     expect(vm.timeline.some(item => item.type === 'action' && item.action.status === 'pending')).toBe(true)
+
+    // Reload parity: the persisted chip carries exactly what the live one
+    // did, so ToolActivity renders the same text either way.
+    const reloadedChip = vm.timeline.find(item => item.type === 'activity')
+    const { key: _streamedKey, ...streamed } = streamedChip as TimelineItemLike
+    const { key: _reloadedKey, ...reloaded } = reloadedChip as TimelineItemLike
+    expect(reloaded).toEqual(streamed)
   })
 
   it('message_end re-syncs in the background without toggling isLoading and swaps streaming items atomically', async () => {
@@ -213,8 +224,8 @@ describe('useAssistantThread', () => {
     const sendPromise = vm.send({ text: 'füge Dark Magician hinzu', images: [] })
     await flushPromises()
 
-    drivable.push(sseEvent('tool_call', { id: 'call-1', name: 'search_catalog', label: 'Sucht im Katalog: Dark Magician' }))
-    drivable.push(sseEvent('tool_result', { id: 'call-1', ok: true, summary: '1 Ergebnis(se)' }))
+    drivable.push(sseEvent('tool_call', { id: 'call-1', name: 'search_catalog', arguments: { query: 'Dark Magician' } }))
+    drivable.push(sseEvent('tool_result', { id: 'call-1', ok: true, outcome: { count: 1 } }))
     drivable.push(sseEvent('text_delta', { text: 'Ich schlage vor, die Karte hinzuzufügen.' }))
     drivable.push(sseEvent('action_proposed', { action: pendingAction() }))
     drivable.push(sseEvent('message_end', {
@@ -313,9 +324,9 @@ describe('useAssistantThread', () => {
     expect(vm.sendError).toBe('')
   })
 
-  it('surfaces a 409 (turn already in flight) with its German statusMessage', async () => {
+  it('surfaces a 409 (turn already in flight) from its error code', async () => {
     const fetchMock = vi.fn(() => Promise.resolve(
-      new Response(JSON.stringify({ statusCode: 409, statusMessage: 'Es läuft bereits eine Anfrage.' }), { status: 409 }),
+      new Response(JSON.stringify({ statusCode: 409, statusMessage: 'A turn is already in progress', data: { code: 'turn_in_progress' } }), { status: 409 }),
     ))
     vi.stubGlobal('fetch', fetchMock)
 
@@ -326,9 +337,9 @@ describe('useAssistantThread', () => {
     expect(component.vm.isStreaming).toBe(false)
   })
 
-  it('surfaces a 503 (assistant not configured) with its German statusMessage', async () => {
+  it('surfaces a 503 (assistant not configured) from its error code', async () => {
     const fetchMock = vi.fn(() => Promise.resolve(
-      new Response(JSON.stringify({ statusCode: 503, statusMessage: 'KI-Assistent ist nicht konfiguriert.' }), { status: 503 }),
+      new Response(JSON.stringify({ statusCode: 503, statusMessage: 'The assistant is not configured', data: { code: 'assistant_not_configured' } }), { status: 503 }),
     ))
     vi.stubGlobal('fetch', fetchMock)
 
@@ -337,5 +348,39 @@ describe('useAssistantThread', () => {
 
     expect(component.vm.sendError).toBe('KI-Assistent ist nicht konfiguriert.')
     expect(component.vm.isStreaming).toBe(false)
+  })
+
+  it('never shows a raw statusMessage: an error without a known code gets the generic text', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(
+      new Response(JSON.stringify({ statusCode: 400, statusMessage: 'text must be a string' }), { status: 400 }),
+    )))
+
+    const component = await mountThread()
+    await component.vm.send({ text: 'hallo', images: [] })
+
+    expect(component.vm.sendError).toBe('Es ist ein unerwarteter Fehler aufgetreten.')
+  })
+
+  it('shows an SSE error event by its code, in the interface language', async () => {
+    const drivable = createDrivableStream()
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(drivable.stream, { status: 200 }))))
+
+    const component = await mountThread()
+    const sendPromise = component.vm.send({ text: 'hallo', images: [] })
+    await flushPromises()
+    drivable.push(sseEvent('error', { code: 'assistant_unreachable', message: 'The assistant is currently unreachable' }))
+    drivable.close()
+    await sendPromise
+    expect(component.vm.sendError).toBe('Der KI-Assistent ist derzeit nicht erreichbar.')
+
+    await setTestLocale('en')
+    const english = createDrivableStream()
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(new Response(english.stream, { status: 200 }))))
+    const englishSend = component.vm.send({ text: 'hello', images: [] })
+    await flushPromises()
+    english.push(sseEvent('error', { code: 'unexpected', message: 'boom' }))
+    english.close()
+    await englishSend
+    expect(component.vm.sendError).toBe('An unexpected error occurred.')
   })
 })

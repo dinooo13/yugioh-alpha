@@ -16,11 +16,11 @@ export const DEFAULT_APP_LOCALE: AppLocale = 'de'
 export const UI_LOCALE_COOKIE = 'ui_locale'
 
 /**
- * Whether `Accept-Language` takes part in the resolution. Off until the
- * whole UI is translated (#34 F2d), so an English browser doesn't get a
- * half-translated app.
+ * Whether `Accept-Language` takes part in the resolution. It was off while
+ * the UI was only partly translated, so an English browser didn't get a
+ * half-translated app; on since the whole UI is translated (#34 F2d).
  */
-export const DETECT_ACCEPT_LANGUAGE = false
+export const DETECT_ACCEPT_LANGUAGE = true
 
 export function isAppLocale(value: unknown): value is AppLocale {
   return typeof value === 'string' && (APP_LOCALES as readonly string[]).includes(value)

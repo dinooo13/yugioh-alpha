@@ -1,9 +1,13 @@
 // Shared contract for the chat assistant with tools (Phase 8), used by both
 // the server (server/utils/assistant-*.ts, server/api/assistant/chat/**) and
 // the UI. Intentionally dependency-free beyond other pure shared modules, so
-// the UI can import types without pulling in server code. See
+// the UI can import types without pulling in server code. No UI copy lives
+// here (ADR 0014): the UI renders tool activity, actions and errors from the
+// structured values below in the interface language. See
 // docs/adr/0010-chat-assistant-with-tools.md and
 // docs/adr/0011-deck-assistance-in-chat.md.
+
+import type { ValidationIssue } from './rule-formats'
 
 /** `GET /api/assistant/status` — whether (and how) the assistant is configured on this server. */
 export interface AssistantStatus {
@@ -24,7 +28,10 @@ export type AssistantMessageRole = 'user' | 'assistant' | 'tool'
 
 export interface AssistantAttachment {
   kind: 'image'
-  /** e.g. "Foto 1" — the image bytes themselves are never persisted. */
+  /**
+   * e.g. "Foto 1", in the language of the turn that stored it — the UI
+   * renders its own label by index. The image bytes are never persisted.
+   */
   label: string
 }
 
@@ -33,6 +40,12 @@ export interface AssistantToolCallView {
   id: string
   name: string
   arguments: Record<string, unknown>
+  /**
+   * Display-only (#53): the current name of the caller's deck the call
+   * refers to (`toolCallDeckId`), resolved when the conversation is read —
+   * never persisted. Missing when the call has no deck or the deck is gone.
+   */
+  deckName?: string
 }
 
 export interface AssistantMessageView {
@@ -114,8 +127,13 @@ export interface AssistantDeckPreview {
   formatId: string | null
   formatName: string | null
   counts: { main: number, extra: number, side: number, total: number }
-  /** null when no format is in play (no legality statement). */
-  validation: { legal: boolean, issues: string[] } | null
+  /**
+   * null when no format is in play (no legality statement). `issues` is the
+   * canonical English text (what the model reads); `issueDetails` the same
+   * issues as code + params, which the UI renders in the interface language
+   * (missing on previews stored before #34 F2d, which show `issues`).
+   */
+  validation: { legal: boolean, issues: string[], issueDetails?: ValidationIssue[] } | null
   missing: Array<{ catalogCardId: number, name: string, needed: number, owned: number }>
 }
 
@@ -128,45 +146,138 @@ export const ASSISTANT_MESSAGE_TEXT_MAX = 20_000
 export const ASSISTANT_MESSAGE_IMAGES_MAX = 6
 export const ASSISTANT_MESSAGE_TOTAL_BYTES_MAX = 12 * 1024 * 1024
 
+// --- Tools -------------------------------------------------------------------
+
+export const ASSISTANT_TOOL_NAMES = [
+  'search_catalog',
+  'get_card',
+  'search_inventory',
+  'list_collections',
+  'list_decks',
+  'get_deck',
+  'list_formats',
+  'validate_deck',
+  'add_to_inventory',
+  'create_deck',
+  'update_deck_cards',
+  'set_deck_format',
+] as const
+
+export type AssistantToolName = typeof ASSISTANT_TOOL_NAMES[number]
+
+export function isAssistantToolName(value: unknown): value is AssistantToolName {
+  return typeof value === 'string' && (ASSISTANT_TOOL_NAMES as readonly string[]).includes(value)
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+/** The id of the caller's deck a tool call refers to: `deckId`, or `get_deck`'s `id`. */
+export function toolCallDeckId(call: Pick<AssistantToolCallView, 'name' | 'arguments'>): string | null {
+  const args = call.arguments
+  if (typeof args.deckId === 'string' && args.deckId !== '') {
+    return args.deckId
+  }
+  if (call.name === 'get_deck' && typeof args.id === 'string' && args.id !== '') {
+    return args.id
+  }
+  return null
+}
+
+/**
+ * What a tool activity chip names after the tool's label: the search query,
+ * the proposed deck's name, the deck the call refers to (its name, #53 —
+ * nothing when the name isn't known), or a card id.
+ */
+export function toolCallDetail(call: Pick<AssistantToolCallView, 'name' | 'arguments' | 'deckName'>): string | null {
+  const args = call.arguments
+  if (typeof args.query === 'string' && args.query !== '') {
+    return args.query
+  }
+  if (typeof args.name === 'string' && args.name !== '') {
+    return args.name
+  }
+  if (toolCallDeckId(call)) {
+    return call.deckName ?? null
+  }
+  if (typeof args.id === 'number' || (typeof args.id === 'string' && args.id !== '')) {
+    return String(args.id)
+  }
+  return null
+}
+
+/**
+ * A tool call's outcome as the chat shows it: a result count (with
+ * `truncated` when the tool capped it), a pending proposal, or the raw
+ * (English) error the model got. Nothing set = done, nothing to count.
+ */
+export interface AssistantToolOutcome {
+  count?: number
+  truncated?: boolean
+  pending?: boolean
+  error?: string
+}
+
+/**
+ * Derives the outcome from a tool result exactly as it was persisted (the
+ * `tool` message's JSON content, already parsed): the server sends it with
+ * the live `tool_result` event, the UI derives it again for a reloaded
+ * thread, so both look the same. Any `{ error }` payload counts as failed —
+ * also the "result too large" envelope of a call that itself succeeded.
+ */
+export function summarizeToolResult(ok: boolean, result: unknown): { ok: boolean, outcome: AssistantToolOutcome } {
+  if (isRecord(result) && typeof result.error === 'string') {
+    return { ok: false, outcome: { error: result.error } }
+  }
+  if (!ok) {
+    return { ok: false, outcome: {} }
+  }
+  if (Array.isArray(result)) {
+    return { ok: true, outcome: { count: result.length } }
+  }
+  // The capped read tools (server/utils/assistant-tools.ts capResult) wrap
+  // their array in `{ items, truncated, total? }` so a cap isn't mistaken for
+  // the true count.
+  if (isRecord(result) && Array.isArray(result.items)) {
+    return { ok: true, outcome: { count: result.items.length, ...(result.truncated === true ? { truncated: true } : {}) } }
+  }
+  if (isRecord(result) && result.status === 'pending_confirmation') {
+    return { ok: true, outcome: { pending: true } }
+  }
+  return { ok: true, outcome: {} }
+}
+
+// --- Errors ---------------------------------------------------------------------
+
+/**
+ * `data.code` of the assistant endpoints' HTTP errors and `code` of the SSE
+ * `error` event; the UI shows `errors.api.<code>`. `unexpected` is anything
+ * without a code of its own.
+ */
+export const ASSISTANT_ERROR_CODES = [
+  'conversation_not_found',
+  'action_not_found',
+  'action_already_resolved',
+  'turn_in_progress',
+  'request_too_large',
+  'assistant_not_configured',
+  'assistant_misconfigured',
+  'assistant_busy',
+  'assistant_unreachable',
+  'unexpected',
+] as const
+
+export type AssistantErrorCode = typeof ASSISTANT_ERROR_CODES[number]
+
 // --- SSE event payloads for POST /api/assistant/chat/:id/messages ------------
 
 export interface AssistantSseMessageStart { userMessageId: string }
 export interface AssistantSseTextDelta { text: string }
-export interface AssistantSseToolCall { id: string, name: string, label: string }
-export interface AssistantSseToolResult { id: string, ok: boolean, summary: string }
+/** `arguments` parsed like the persisted call (`{}` when unparseable); `deckName` as in `AssistantToolCallView`. */
+export interface AssistantSseToolCall { id: string, name: string, arguments: Record<string, unknown>, deckName?: string }
+export interface AssistantSseToolResult { id: string, ok: boolean, outcome: AssistantToolOutcome }
 export interface AssistantSseActionProposed { action: AssistantActionView }
 export interface AssistantSseMessageEnd { message: AssistantMessageView }
-export interface AssistantSseError { message: string }
-
-// --- German labels, per tool name, for chat activity chips --------------------
-// (server/utils/assistant-chat.ts builds the full "Sucht im Katalog: X…"
-// activity label off this; the UI's ToolActivity.vue reuses it verbatim.)
-
-export const ASSISTANT_TOOL_LABELS: Record<string, string> = {
-  search_catalog: 'Sucht im Katalog',
-  get_card: 'Liest Kartendetails',
-  search_inventory: 'Durchsucht dein Inventar',
-  list_collections: 'Listet deine Sammlungen',
-  list_decks: 'Listet deine Decks',
-  get_deck: 'Liest ein Deck',
-  list_formats: 'Listet Formate',
-  validate_deck: 'Prüft ein Deck',
-  add_to_inventory: 'Schlägt vor, Karten ins Inventar aufzunehmen',
-  create_deck: 'Schlägt ein neues Deck vor',
-  update_deck_cards: 'Schlägt Deck-Änderungen vor',
-  set_deck_format: 'Schlägt eine Formatänderung vor',
-}
-
-export const ASSISTANT_ACTION_KIND_LABELS: Record<AssistantActionKind, string> = {
-  add_to_inventory: 'Karten ins Inventar aufnehmen',
-  create_deck: 'Neues Deck anlegen',
-  update_deck_cards: 'Deck-Karten ändern',
-  set_deck_format: 'Deck-Format ändern',
-}
-
-export const ASSISTANT_ACTION_STATUS_LABELS: Record<AssistantActionStatus, string> = {
-  pending: 'Wartet auf Bestätigung',
-  applied: 'Übernommen',
-  rejected: 'Verworfen',
-  failed: 'Fehlgeschlagen',
-}
+/** `message` is technical English for logs; the UI shows `code`. */
+export interface AssistantSseError { code: string, message: string }

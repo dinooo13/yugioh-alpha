@@ -85,9 +85,17 @@ export interface DeckAssistantModel {
   chat(input: ChatModelInput, handlers: ChatStreamHandlers, signal?: AbortSignal): Promise<ChatModelResult>
 }
 
-function assistantError(statusCode: number, message: string): never {
-  throw createError({ statusCode, statusMessage: message, message })
+/** Technical English `statusMessage` plus the `data.code` the UI translates (ADR 0014, `errors.api.<code>`). */
+function assistantError(statusCode: number, code: 'assistant_misconfigured' | 'assistant_busy' | 'assistant_unreachable'): never {
+  const message = ASSISTANT_ERROR_MESSAGES[code]
+  throw createError({ statusCode, statusMessage: message, message, data: { code } })
 }
+
+const ASSISTANT_ERROR_MESSAGES = {
+  assistant_misconfigured: 'The assistant is not configured correctly',
+  assistant_busy: 'The assistant is busy, try again later',
+  assistant_unreachable: 'The assistant is currently unreachable',
+} as const
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
@@ -158,13 +166,13 @@ export interface CreateOpenAiCompatibleModelOptions {
   fetch?: typeof fetch
 }
 
-/** Maps the provider status codes with a dedicated German error (auth, rate limit); returns for anything else. */
+/** Maps the provider status codes with a dedicated error code (auth, rate limit); returns for anything else. */
 function mapCommonErrorStatus(status: number): void {
   if (status === 401 || status === 403) {
-    assistantError(503, 'KI-Assistent ist nicht korrekt konfiguriert.')
+    assistantError(503, 'assistant_misconfigured')
   }
   if (status === 429) {
-    assistantError(503, 'Der KI-Assistent ist ausgelastet, bitte später erneut versuchen.')
+    assistantError(503, 'assistant_busy')
   }
 }
 
@@ -294,15 +302,15 @@ export function createOpenAiCompatibleModel(options: CreateOpenAiCompatibleModel
           return { text: '', toolCalls: [], finishReason: 'other', aborted: true }
         }
         if (error instanceof Error && error.name === 'AbortError') {
-          assistantError(502, 'Der KI-Assistent ist derzeit nicht erreichbar.')
+          assistantError(502, 'assistant_unreachable')
         }
-        assistantError(502, 'Der KI-Assistent ist derzeit nicht erreichbar.')
+        assistantError(502, 'assistant_unreachable')
       }
 
       if (response.status < 200 || response.status >= 300) {
         clearTimeout(timeoutId)
         mapCommonErrorStatus(response.status)
-        assistantError(502, 'Der KI-Assistent ist derzeit nicht erreichbar.')
+        assistantError(502, 'assistant_unreachable')
       }
 
       let text = ''
@@ -367,7 +375,7 @@ export function createOpenAiCompatibleModel(options: CreateOpenAiCompatibleModel
           const toolCalls = [...toolCallsByIndex.entries()].sort(([a], [b]) => a - b).map(([, call]) => call)
           return { text, toolCalls, finishReason: 'other', aborted: true }
         }
-        assistantError(502, 'Der KI-Assistent ist derzeit nicht erreichbar.')
+        assistantError(502, 'assistant_unreachable')
       }
       finally {
         clearTimeout(timeoutId)
@@ -490,6 +498,7 @@ function fakeTextResult(text: string): ChatModelResult {
 }
 
 const FAKE_DECK_INTENT_PATTERN = /\bdeck\b/i
+const FAKE_ADD_INTENT_PATTERN_EN = /\badd\b/i
 
 /**
  * Proves the linked deck's context block (assistant-chat.ts
@@ -497,8 +506,8 @@ const FAKE_DECK_INTENT_PATTERN = /\bdeck\b/i
  * name and card total read back from it.
  */
 function fakeDeckContextAnswer(system: string): string {
-  const name = system.match(/^Deckname: (.*)$/m)?.[1] ?? '?'
-  const counts = system.match(/^Anzahl: Main (\d+) · Extra (\d+) · Side (\d+)$/m)
+  const name = system.match(/^Deck name: (.*)$/m)?.[1] ?? '?'
+  const counts = system.match(/^Counts: Main (\d+) · Extra (\d+) · Side (\d+)$/m)
   const total = counts ? Number(counts[1]) + Number(counts[2]) + Number(counts[3]) : 0
   return `Kontext-Deck: ${name} (${total} Karten)`
 }
@@ -513,7 +522,8 @@ async function fakeChat(input: ChatModelInput, handlers: ChatStreamHandlers): Pr
   const text = lastUser ? fakeUserText(lastUser) : ''
   const lower = text.toLowerCase()
   const isSearchIntent = FAKE_SEARCH_INTENT_PATTERN.test(lower)
-  const isAddIntent = lower.includes('hinzufügen') || lower.includes('füge')
+  // German trigger words, plus English "add" for English-UI tests.
+  const isAddIntent = lower.includes('hinzufügen') || lower.includes('füge') || FAKE_ADD_INTENT_PATTERN_EN.test(lower)
   const hasImage = lastUser ? fakeHasImage(lastUser) : false
 
   let result: ChatModelResult
@@ -557,7 +567,7 @@ async function fakeChat(input: ChatModelInput, handlers: ChatStreamHandlers): Pr
       ? fakeToolCallResult('add_to_inventory', { items: [{ catalogCardId: card.id, quantity: fakeExtractQuantity(text) }] })
       : fakeTextResult('Ich habe keine passende Karte gefunden.')
   }
-  else if (FAKE_DECK_INTENT_PATTERN.test(text) && input.system.includes('Deck-ID:')) {
+  else if (FAKE_DECK_INTENT_PATTERN.test(text) && input.system.includes('Deck ID:')) {
     result = fakeTextResult(fakeDeckContextAnswer(input.system))
   }
   else {

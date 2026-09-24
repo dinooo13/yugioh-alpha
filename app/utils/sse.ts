@@ -15,17 +15,21 @@ export interface SseEvent<T = unknown> {
   data: T
 }
 
-/** Same shape as the body Nitro's `createError` serializes, so callers can
- * reuse `apiErrorMessage` (app/utils/card-entry.ts) against it. */
+/** A non-2xx response. `data` is the body Nitro's `createError` serializes
+ * (so `useApiError` works on it too); `code` is its `data.code`, which the UI
+ * translates (`errors.api.<code>`, ADR 0014). `message` is technical English
+ * and never shown. */
 export class SseRequestError extends Error {
   statusCode: number
+  code?: string
   data?: unknown
 
-  constructor(statusCode: number, message: string, data?: unknown) {
+  constructor(statusCode: number, message: string, data?: unknown, code?: string) {
     super(message)
     this.name = 'SseRequestError'
     this.statusCode = statusCode
     this.data = data
+    this.code = code
   }
 }
 
@@ -105,7 +109,8 @@ async function toRequestError(response: Response): Promise<SseRequestError> {
     body = undefined
   }
   const statusMessage = isRecord(body) && typeof body.statusMessage === 'string' ? body.statusMessage : undefined
-  return new SseRequestError(response.status, statusMessage ?? `Anfrage fehlgeschlagen (${response.status}).`, body)
+  const code = isRecord(body) && isRecord(body.data) && typeof body.data.code === 'string' ? body.data.code : undefined
+  return new SseRequestError(response.status, statusMessage ?? `Request failed (${response.status})`, body, code)
 }
 
 /**

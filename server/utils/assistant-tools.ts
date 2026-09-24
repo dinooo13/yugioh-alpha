@@ -44,7 +44,8 @@ import { isExtraDeckCard, isSectionAllowedForCard } from '../../shared/deck-sect
 import { listRuleFormats, requireAccessibleFormat, requireAssignableFormat } from './rule-formats'
 import { loadCardDataForValidation, loadCardNames, maxCopiesByCard, missingCatalogCardIds } from './deck-validation'
 import { previewDeckProposal } from './deck-proposal'
-import type { AssistantActionKind } from '../../shared/assistant-chat'
+import { ACTION_SUMMARY, TOOL_DESCRIPTIONS, TOOL_PARAM_DESCRIPTIONS, TOOL_TEXT } from './assistant-prompts'
+import type { AssistantActionKind, AssistantDeckPreview } from '../../shared/assistant-chat'
 
 type Db = ReturnType<typeof useDb>
 
@@ -76,7 +77,7 @@ export type ToolOutcome =
 
 export interface AssistantTool {
   name: string
-  /** German-facing description shown to the model; the tool name itself stays English (the wire format). */
+  /** Description shown to the model (English, assistant-prompts.ts); the tool name is the wire format. */
   description: string
   parameters: Record<string, unknown>
   kind: 'read' | 'write'
@@ -89,10 +90,6 @@ function badRequest(message: string): never {
 
 function notFound(message: string): never {
   throw createError({ statusCode: 404, statusMessage: message })
-}
-
-function conflict(message: string): never {
-  throw createError({ statusCode: 409, statusMessage: message })
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -239,7 +236,7 @@ async function toolGetCard(db: Db, args: unknown) {
 
   const detail = await getCatalogCardDetail(db, id)
   if (!detail) {
-    notFound('Karte nicht gefunden.')
+    notFound(TOOL_TEXT.cardNotFound)
   }
 
   return {
@@ -447,7 +444,7 @@ function parseProposalChanges(db: Db, rawChanges: unknown): DeckCardInput[] {
 function assertKnownCardsInSections(db: Db, cards: DeckCardInput[]) {
   const missingIds = missingCatalogCardIds(db, cards.map(card => card.catalogCardId))
   if (missingIds.length > 0) {
-    badRequest(`Unbekannte Karten-IDs: ${missingIds.join(', ')}`)
+    badRequest(TOOL_TEXT.unknownCardIds(missingIds))
   }
   assertCardsFitSections(db, cards)
 }
@@ -469,15 +466,15 @@ function toolValidateDeck(db: Db, userId: string, args: unknown) {
 
   if (hasCards) {
     if (deckId) {
-      badRequest('cards beschreibt ein neues Deck; für ein bestehendes Deck deckId mit changes verwenden.')
+      badRequest(TOOL_TEXT.cardsWithDeckId)
     }
-    return previewDeckProposal(db, userId, { cards: parseProposalCards(db, record.cards), formatId })
+    return previewForModel(previewDeckProposal(db, userId, { cards: parseProposalCards(db, record.cards), formatId }))
   }
   if (!deckId) {
-    badRequest('Gib deckId (optional mit changes) oder cards für ein geplantes neues Deck an.')
+    badRequest(TOOL_TEXT.deckIdOrCards)
   }
   if (hasChanges) {
-    return previewDeckProposal(db, userId, { deckId, changes: parseProposalChanges(db, record.changes), formatId })
+    return previewForModel(previewDeckProposal(db, userId, { deckId, changes: parseProposalChanges(db, record.changes), formatId }))
   }
 
   if (formatId) {
@@ -487,14 +484,25 @@ function toolValidateDeck(db: Db, userId: string, args: unknown) {
 
   const detail = getDeckDetail(db, userId, deckId)
   if (!detail.validation) {
-    badRequest('Diesem Deck ist kein Format zugewiesen; gib formatId an, um trotzdem gegen ein Format zu prüfen.')
+    badRequest(TOOL_TEXT.noFormatAssigned)
   }
   return detail.validation
 }
 
 // --- Write tools (propose a pending action; never mutate directly) ------------
 
-const PENDING_MESSAGE = 'Vorschlag angelegt, wartet auf Bestätigung.'
+/**
+ * A preview as the model reads it: the issues as canonical English text only
+ * — `issueDetails` (code + params) is for the UI's action card and would just
+ * repeat every issue in the tool result.
+ */
+function previewForModel(preview: AssistantDeckPreview): AssistantDeckPreview {
+  if (!preview.validation) {
+    return preview
+  }
+  const { issueDetails: _issueDetails, ...validation } = preview.validation
+  return { ...preview, validation }
+}
 
 function pendingOutcome(
   kind: AssistantActionKind,
@@ -504,12 +512,12 @@ function pendingOutcome(
 ): ToolOutcome {
   return {
     action: { kind, payload, summary },
-    result: { status: 'pending_confirmation', message: PENDING_MESSAGE, summary, ...extraResult },
+    result: { status: 'pending_confirmation', message: TOOL_TEXT.pending, summary, ...extraResult },
   }
 }
 
-/** The proposal's rows plus each card's name — for the action card's table only (see `executeActionPayload`). */
-function withCardNames(db: Db, cards: DeckCardInput[]) {
+/** The proposal's rows plus each card's name — for the action card's table and summary only (see `executeActionPayload`). */
+function withCardNames<T extends { catalogCardId: number }>(db: Db, cards: T[]): Array<T & { name: string }> {
   const names = loadCardNames(db, cards.map(card => card.catalogCardId))
   return cards.map(card => ({ ...card, name: names[card.catalogCardId] ?? `#${card.catalogCardId}` }))
 }
@@ -517,13 +525,14 @@ function withCardNames(db: Db, cards: DeckCardInput[]) {
 async function toolAddToInventory(db: Db, userId: string, args: unknown): Promise<ToolOutcome> {
   const record = requireArgs(args)
   const inputs: InventoryInput[] = validateInventoryBulkInput(db, userId, { items: record.items })
-  const names = loadCardNames(db, inputs.map(input => input.catalogCardId))
+  // Each item's `name` is display-only, like the deck tools' rows:
+  // `validateInventoryInput` reads only the fields it knows, so it never
+  // reaches the write.
+  const items = withCardNames(db, inputs)
 
-  const summary = `${inputs.length} Karte(n) zum Inventar hinzufügen: ${inputs
-    .map(input => `${names[input.catalogCardId] ?? `#${input.catalogCardId}`} x${input.quantity}`)
-    .join(', ')}`
+  const summary = ACTION_SUMMARY.addToInventory(items.length, items.map(item => `${item.name} x${item.quantity}`).join(', '))
 
-  return pendingOutcome('add_to_inventory', { items: inputs }, summary)
+  return pendingOutcome('add_to_inventory', { items }, summary)
 }
 
 function assertCardsFitSections(db: Db, cards: Array<{ catalogCardId: number, section: DeckSection }>) {
@@ -531,7 +540,7 @@ function assertCardsFitSections(db: Db, cards: Array<{ catalogCardId: number, se
   for (const card of cards) {
     const info = cardData.get(card.catalogCardId)
     if (info && !isSectionAllowedForCard(info, card.section)) {
-      badRequest(`Karte #${card.catalogCardId} passt nicht in Sektion "${card.section}".`)
+      badRequest(TOOL_TEXT.sectionNotAllowed(card.catalogCardId, card.section))
     }
   }
 }
@@ -551,7 +560,7 @@ async function toolCreateDeck(db: Db, userId: string, args: unknown): Promise<To
   const preview = previewDeckProposal(db, userId, { cards, formatId })
 
   const totalQuantity = cards.reduce((sum, card) => sum + card.quantity, 0)
-  const summary = `Neues Deck "${name}" mit ${totalQuantity} Karte(n) anlegen`
+  const summary = ACTION_SUMMARY.createDeck(name, totalQuantity)
 
   // `formatName`, the rows' `name` and `preview` are display-only extras for
   // the action card (a snapshot from proposal time) — `executeActionPayload`
@@ -564,7 +573,7 @@ async function toolCreateDeck(db: Db, userId: string, args: unknown): Promise<To
     formatName: preview.formatName,
     cards: withCardNames(db, cards),
     preview,
-  }, summary, { preview })
+  }, summary, { preview: previewForModel(preview) })
 }
 
 async function toolUpdateDeckCards(db: Db, userId: string, args: unknown): Promise<ToolOutcome> {
@@ -575,7 +584,7 @@ async function toolUpdateDeckCards(db: Db, userId: string, args: unknown): Promi
   const changes = parseProposalChanges(db, record.changes)
   const preview = previewDeckProposal(db, userId, { deckId, changes })
 
-  const summary = `${changes.length} Kartenänderung(en) an Deck "${detail.name}"`
+  const summary = ACTION_SUMMARY.updateDeckCards(changes.length, detail.name)
 
   // `deckName`, the rows' `name` and `preview` are display-only (see create_deck above).
   return pendingOutcome('update_deck_cards', {
@@ -583,13 +592,13 @@ async function toolUpdateDeckCards(db: Db, userId: string, args: unknown): Promi
     deckName: detail.name,
     changes: withCardNames(db, changes),
     preview,
-  }, summary, { preview })
+  }, summary, { preview: previewForModel(preview) })
 }
 
 /** `formatId` for set_deck_format: required key; `''` (or `null`) = remove the format. */
 function parseTargetFormatId(record: Record<string, unknown>): string | null {
   if (!('formatId' in record) || record.formatId === undefined) {
-    badRequest('formatId is required (leerer String entfernt das Format)')
+    badRequest(TOOL_TEXT.formatIdRequired)
   }
   const value = record.formatId
   if (value === null) {
@@ -612,14 +621,12 @@ async function toolSetDeckFormat(db: Db, userId: string, args: unknown): Promise
   const format = formatId ? requireAssignableFormat(db, userId, formatId) : null
 
   if ((detail.format?.id ?? null) === formatId) {
-    badRequest(formatId ? 'Das Deck hat bereits dieses Format.' : 'Das Deck hat bereits kein Format.')
+    badRequest(formatId ? TOOL_TEXT.sameFormat : TOOL_TEXT.alreadyNoFormat)
   }
 
   const preview = previewDeckProposal(db, userId, { deckId, formatId })
 
-  const from = detail.format?.name ?? 'kein Format'
-  const to = format?.name ?? 'kein Format'
-  const summary = `Format von Deck "${detail.name}" ändern: ${from} → ${to}`
+  const summary = ACTION_SUMMARY.setDeckFormat(detail.name, detail.format?.name ?? null, format?.name ?? null)
 
   // Only `deckId`/`formatId` are ever written; `deckName`, `formatName`,
   // `previousFormat*` and `preview` are display-only (see create_deck above).
@@ -631,7 +638,7 @@ async function toolSetDeckFormat(db: Db, userId: string, args: unknown): Promise
     previousFormatId: detail.format?.id ?? null,
     previousFormatName: detail.format?.name ?? null,
     preview,
-  }, summary, { preview })
+  }, summary, { preview: previewForModel(preview) })
 }
 
 // --- Registry --------------------------------------------------------------------
@@ -639,100 +646,100 @@ async function toolSetDeckFormat(db: Db, userId: string, args: unknown): Promise
 export const ASSISTANT_TOOLS: AssistantTool[] = [
   {
     name: 'search_catalog',
-    description: 'Sucht Karten im globalen Kartenkatalog nach Namen (unabhängig vom Besitz des Nutzers).',
+    description: TOOL_DESCRIPTIONS.search_catalog,
     kind: 'read',
     parameters: {
       type: 'object',
       additionalProperties: false,
       required: ['query'],
       properties: {
-        query: { type: 'string', description: 'Kartenname oder Teil davon' },
+        query: { type: 'string', description: TOOL_PARAM_DESCRIPTIONS.cardNameQuery },
         // The real number is filled in by `toolDefinitions()` below, from
         // `getAssistantLimits()` — this array is built once at module load,
         // so the live (possibly overridden) limit can't be baked in here.
-        limit: { type: 'integer', description: 'Maximale Trefferzahl (Standard = Maximum)' },
+        limit: { type: 'integer', description: TOOL_PARAM_DESCRIPTIONS.searchCatalogLimit(0) },
       },
     },
     run: async (ctx, args) => ({ result: toolSearchCatalog(ctx.db, args) }),
   },
   {
     name: 'get_card',
-    description: 'Liefert die vollständigen Katalogdaten einer Karte (Text, Drucke, Banlist-Status) über ihre Katalog-ID.',
+    description: TOOL_DESCRIPTIONS.get_card,
     kind: 'read',
     parameters: {
       type: 'object',
       additionalProperties: false,
       required: ['id'],
-      properties: { id: { type: 'integer', description: 'Katalog-Karten-ID (passcode)' } },
+      properties: { id: { type: 'integer', description: TOOL_PARAM_DESCRIPTIONS.catalogCardId } },
     },
     run: async (ctx, args) => ({ result: await toolGetCard(ctx.db, args) }),
   },
   {
     name: 'search_inventory',
-    description: 'Durchsucht das Inventar (die besessenen Karten) des Nutzers, optional gefiltert nach Name oder Sammlung. Liefert je Karte Menge, Kartendaten (Typ, Attribut, Typ/Rasse, Stufe, ATK/DEF, Archetyp, isExtra = Extra-Deck-Karte; keinen Kartentext – dafür get_card) und maxCopies: die erlaubte Kopienzahl im Format (ohne formatId 3). Mit formatId fehlen im Format verbotene Karten. Bei truncated=true mit offset weiterblättern.',
+    description: TOOL_DESCRIPTIONS.search_inventory,
     kind: 'read',
     parameters: {
       type: 'object',
       additionalProperties: false,
       properties: {
-        query: { type: 'string', description: 'Kartenname oder Teil davon' },
-        collectionId: { type: 'string', description: 'Nur diese Sammlung berücksichtigen' },
-        formatId: { type: 'string', description: 'Regelformat, dessen Kopienbegrenzung (maxCopies) gelten soll; verbotene Karten werden weggelassen' },
-        offset: { type: 'integer', description: 'Anzahl zu überspringender Treffer (zum Weiterblättern)' },
+        query: { type: 'string', description: TOOL_PARAM_DESCRIPTIONS.cardNameQuery },
+        collectionId: { type: 'string', description: TOOL_PARAM_DESCRIPTIONS.collectionId },
+        formatId: { type: 'string', description: TOOL_PARAM_DESCRIPTIONS.inventoryFormatId },
+        offset: { type: 'integer', description: TOOL_PARAM_DESCRIPTIONS.offset },
       },
     },
     run: async (ctx, args) => ({ result: toolSearchInventory(ctx.db, ctx.userId, args) }),
   },
   {
     name: 'list_collections',
-    description: 'Listet die Sammlungen (Kisten, Ordner, ...) des Nutzers mit Kartenanzahl.',
+    description: TOOL_DESCRIPTIONS.list_collections,
     kind: 'read',
     parameters: { type: 'object', additionalProperties: false, properties: {} },
     run: async (ctx) => ({ result: toolListCollections(ctx.db, ctx.userId) }),
   },
   {
     name: 'list_decks',
-    description: 'Listet die Decks des Nutzers, optional gefiltert nach Namen, mit Kartenzahl und Legalität.',
+    description: TOOL_DESCRIPTIONS.list_decks,
     kind: 'read',
     parameters: {
       type: 'object',
       additionalProperties: false,
-      properties: { query: { type: 'string', description: 'Deck- oder Kartenname' } },
+      properties: { query: { type: 'string', description: TOOL_PARAM_DESCRIPTIONS.deckQuery } },
     },
     run: async (ctx, args) => ({ result: toolListDecks(ctx.db, ctx.userId, args) }),
   },
   {
     name: 'get_deck',
-    description: 'Liefert den Inhalt (Main/Extra/Side) und den Validierungsstatus eines Decks des Nutzers.',
+    description: TOOL_DESCRIPTIONS.get_deck,
     kind: 'read',
     parameters: {
       type: 'object',
       additionalProperties: false,
       required: ['id'],
-      properties: { id: { type: 'string', description: 'Deck-ID' } },
+      properties: { id: { type: 'string', description: TOOL_PARAM_DESCRIPTIONS.deckId } },
     },
     run: async (ctx, args) => ({ result: toolGetDeck(ctx.db, ctx.userId, args) }),
   },
   {
     name: 'list_formats',
-    description: 'Listet die verfügbaren Regelformate (eingebaut und eigene) auf.',
+    description: TOOL_DESCRIPTIONS.list_formats,
     kind: 'read',
     parameters: { type: 'object', additionalProperties: false, properties: {} },
     run: async (ctx) => ({ result: toolListFormats(ctx.db, ctx.userId) }),
   },
   {
     name: 'validate_deck',
-    description: 'Prüft ein Deck gegen ein Regelformat (das zugewiesene oder formatId) und liefert Legalität und Probleme. Mit cards (geplantes neues Deck) oder deckId + changes (geplante Änderungen) wird der Vorschlag geprüft, ohne etwas zu speichern: Ergebnis sind Anzahl je Sektion, Legalität und missing (Karten, von denen der Nutzer nicht genug besitzt). Vor create_deck/update_deck_cards aufrufen.',
+    description: TOOL_DESCRIPTIONS.validate_deck,
     kind: 'read',
     parameters: {
       type: 'object',
       additionalProperties: false,
       properties: {
-        deckId: { type: 'string', description: 'Bestehendes Deck; weglassen, wenn cards ein neues Deck beschreibt' },
-        formatId: { type: 'string', description: 'Weglassen, um das dem Deck zugewiesene Format zu verwenden (ein neues Deck ohne formatId wird nicht auf Legalität geprüft)' },
+        deckId: { type: 'string', description: TOOL_PARAM_DESCRIPTIONS.validateDeckId },
+        formatId: { type: 'string', description: TOOL_PARAM_DESCRIPTIONS.validateFormatId },
         cards: {
           type: 'array',
-          description: 'Vollständige Kartenliste eines geplanten neuen Decks (ohne deckId)',
+          description: TOOL_PARAM_DESCRIPTIONS.validateCards,
           items: {
             type: 'object',
             additionalProperties: false,
@@ -746,7 +753,7 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
         },
         changes: {
           type: 'array',
-          description: 'Geplante Änderungen an deckId, wie bei update_deck_cards',
+          description: TOOL_PARAM_DESCRIPTIONS.validateChanges,
           items: {
             type: 'object',
             additionalProperties: false,
@@ -754,7 +761,7 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
             properties: {
               catalogCardId: { type: 'integer' },
               section: { type: 'string', enum: ['main', 'extra', 'side'] },
-              quantity: { type: 'integer', description: 'Neue absolute Menge; 0 entfernt die Karte' },
+              quantity: { type: 'integer', description: TOOL_PARAM_DESCRIPTIONS.absoluteQuantity },
             },
           },
         },
@@ -764,7 +771,7 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
   },
   {
     name: 'add_to_inventory',
-    description: 'Schlägt vor, Karten zum Inventar des Nutzers hinzuzufügen. Mutiert nichts direkt — legt einen Vorschlag an, den der Nutzer bestätigen muss.',
+    description: TOOL_DESCRIPTIONS.add_to_inventory,
     kind: 'write',
     parameters: {
       type: 'object',
@@ -793,7 +800,7 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
   },
   {
     name: 'create_deck',
-    description: 'Schlägt vor, ein neues Deck aus Katalogkarten anzulegen. Mutiert nichts direkt — legt einen Vorschlag an, den der Nutzer bestätigen muss. Das Ergebnis enthält eine Vorschau (Anzahl, Legalität, fehlende Karten).',
+    description: TOOL_DESCRIPTIONS.create_deck,
     kind: 'write',
     parameters: {
       type: 'object',
@@ -821,7 +828,7 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
   },
   {
     name: 'update_deck_cards',
-    description: 'Schlägt Änderungen an den Karten eines bestehenden Decks des Nutzers vor. quantity ist die neue absolute Menge der Karte in dieser Sektion (keine Differenz); 0 entfernt die Karte. Mutiert nichts direkt — legt einen Vorschlag an, den der Nutzer bestätigen muss. Das Ergebnis enthält eine Vorschau (Anzahl, Legalität, fehlende Karten).',
+    description: TOOL_DESCRIPTIONS.update_deck_cards,
     kind: 'write',
     parameters: {
       type: 'object',
@@ -838,7 +845,7 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
             properties: {
               catalogCardId: { type: 'integer' },
               section: { type: 'string', enum: ['main', 'extra', 'side'] },
-              quantity: { type: 'integer', description: 'Neue absolute Menge; 0 entfernt die Karte' },
+              quantity: { type: 'integer', description: TOOL_PARAM_DESCRIPTIONS.absoluteQuantity },
             },
           },
         },
@@ -848,7 +855,7 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
   },
   {
     name: 'set_deck_format',
-    description: 'Schlägt vor, einem bestehenden Deck des Nutzers ein anderes Regelformat zuzuweisen (formatId aus list_formats) oder mit leerer formatId ("") das Format zu entfernen. Ändert keine Karten. Mutiert nichts direkt — legt einen Vorschlag an, den der Nutzer bestätigen muss. Das Ergebnis enthält eine Vorschau im neuen Format (Anzahl, Legalität, fehlende Karten).',
+    description: TOOL_DESCRIPTIONS.set_deck_format,
     kind: 'write',
     parameters: {
       type: 'object',
@@ -859,7 +866,7 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
         // A plain string, not `['string', 'null']`: the configured
         // OpenAI-compatible provider garbled calls against the union type
         // (empty arguments). The server still accepts null too.
-        formatId: { type: 'string', description: 'Neue Format-ID aus list_formats; leerer String ("") entfernt das Format' },
+        formatId: { type: 'string', description: TOOL_PARAM_DESCRIPTIONS.setFormatId },
       },
     },
     run: async (ctx, args) => toolSetDeckFormat(ctx.db, ctx.userId, args),
@@ -876,7 +883,7 @@ function toolParameters(tool: AssistantTool, toolResultItems: number): Record<st
     ...tool.parameters,
     properties: {
       ...properties,
-      limit: { type: 'integer', description: `Maximale Trefferzahl (Standard/Maximum: ${toolResultItems})` },
+      limit: { type: 'integer', description: TOOL_PARAM_DESCRIPTIONS.searchCatalogLimit(toolResultItems) },
     },
   }
 }
@@ -892,12 +899,16 @@ export function toolDefinitions(): ToolDefinition[] {
 export async function runTool(name: string, ctx: ToolRunContext, rawArgs: unknown): Promise<ToolOutcome> {
   const tool = ASSISTANT_TOOLS.find(candidate => candidate.name === name)
   if (!tool) {
-    badRequest(`Unbekanntes Werkzeug: ${name}`)
+    badRequest(TOOL_TEXT.unknownTool(name))
   }
   return tool.run(ctx, rawArgs)
 }
 
 // --- Actions: apply/reject a pending write --------------------------------------
+
+function actionAlreadyResolved(): never {
+  throw createError({ statusCode: 409, statusMessage: 'This action was already resolved', data: { code: 'action_already_resolved' } })
+}
 
 type AssistantActionRow = typeof assistantAction.$inferSelect
 
@@ -909,7 +920,7 @@ function requireOwnAction(db: Db, userId: string, actionId: string): AssistantAc
     .get()
 
   if (!row) {
-    notFound('Vorschlag nicht gefunden.')
+    throw createError({ statusCode: 404, statusMessage: 'Action not found', data: { code: 'action_not_found' } })
   }
   return row
 }
@@ -918,7 +929,7 @@ function errorMessage(error: unknown): string {
   if (error && typeof error === 'object' && 'statusMessage' in error && typeof (error as { statusMessage?: unknown }).statusMessage === 'string') {
     return (error as { statusMessage: string }).statusMessage
   }
-  return 'Unbekannter Fehler beim Anwenden des Vorschlags.'
+  return 'Unknown error while applying the action'
 }
 
 /**
@@ -961,7 +972,7 @@ function executeActionPayload(db: Db, userId: string, action: AssistantActionRow
       const cards = validateDeckCreateCardsInput({ cards: payload.cards ?? [] }) ?? []
       const missingIds = missingCatalogCardIds(db, cards.map(card => card.catalogCardId))
       if (missingIds.length > 0) {
-        badRequest(`Unbekannte Karten-IDs: ${missingIds.join(', ')}`)
+        badRequest(TOOL_TEXT.unknownCardIds(missingIds))
       }
       assertCardsFitSections(db, cards)
 
@@ -983,7 +994,7 @@ function executeActionPayload(db: Db, userId: string, action: AssistantActionRow
       const changes: DeckCardInput[] = rawChanges.map(raw => validateDeckCardInput(raw))
       const missingIds = missingCatalogCardIds(db, changes.map(change => change.catalogCardId))
       if (missingIds.length > 0) {
-        badRequest(`Unbekannte Karten-IDs: ${missingIds.join(', ')}`)
+        badRequest(TOOL_TEXT.unknownCardIds(missingIds))
       }
       assertCardsFitSections(db, changes)
 
@@ -1006,7 +1017,7 @@ function executeActionPayload(db: Db, userId: string, action: AssistantActionRow
       return updateDeck(db, userId, payload.deckId, { formatId: payload.formatId })
     }
     default:
-      throw createError({ statusCode: 500, statusMessage: `Unbekannte Vorschlagsart: ${action.kind}` })
+      throw createError({ statusCode: 500, statusMessage: `Unknown action kind: ${action.kind}` })
   }
 }
 
@@ -1036,7 +1047,7 @@ export async function applyAction(db: Db, userId: string, actionId: string): Pro
     .all()
 
   if (claimed.length === 0) {
-    conflict('Dieser Vorschlag wurde bereits bearbeitet.')
+    actionAlreadyResolved()
   }
   const action = claimed[0]!
 
@@ -1064,7 +1075,7 @@ export async function applyAction(db: Db, userId: string, actionId: string): Pro
 export function rejectAction(db: Db, userId: string, actionId: string): AssistantActionRow {
   const action = requireOwnAction(db, userId, actionId)
   if (action.status !== 'pending') {
-    conflict('Dieser Vorschlag wurde bereits bearbeitet.')
+    actionAlreadyResolved()
   }
 
   const [updated] = db
