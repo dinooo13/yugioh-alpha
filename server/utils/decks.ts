@@ -809,7 +809,8 @@ export function deleteDeck(db: Db, userId: string, deckId: string) {
 /**
  * Optional body of `POST /api/decks/:id/duplicate`: the copy's name, which
  * the UI builds in the interface language (ADR 0014). Without it the server
- * falls back to `duplicateNameFor`.
+ * falls back to an English `<name> (copy)` from `duplicateNameFor` (ADR 0014:
+ * server text is technical English).
  */
 export function validateDuplicateDeckInput(body: unknown): { name?: string } {
   if (body === undefined || body === null || body === '') {
@@ -869,7 +870,7 @@ export function duplicateDeck(db: Db, userId: string, deckId: string, input: { n
 // Truncates the base name (not the suffix) so a duplicate always stays
 // recognizable as a copy within the 80 character name limit.
 export function duplicateNameFor(name: string): string {
-  const suffix = ' (Kopie)'
+  const suffix = ' (copy)'
   return `${name.slice(0, DECK_NAME_MAX_LENGTH - suffix.length).trimEnd()}${suffix}`
 }
 

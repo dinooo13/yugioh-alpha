@@ -190,7 +190,7 @@ describe('built-in formats', () => {
   it('clones a built-in into an editable custom format', () => {
     const copy = cloneRuleFormat(db, 'user-a', 'goat')
 
-    expect(copy.name).toBe('GOAT Format (Kopie)')
+    expect(copy.name).toBe('GOAT Format (copy)')
     expect(copy.isBuiltin).toBe(false)
     expect(copy.rules).toEqual(getRuleFormat(db, 'user-a', 'goat').rules)
 
@@ -205,7 +205,7 @@ describe('built-in formats', () => {
     // The UI sends the copy's name and, for a built-in, its translated
     // description and rule labels (ADR 0014).
     const overrides = validateRuleFormatUpdateInput({
-      name: 'GOAT Format (copy)',
+      name: 'GOAT Format (Kopie)',
       description: 'Retro format',
       rules: {
         rules: getRuleFormat(db, 'user-a', 'goat').rules.rules.map(rule => (
@@ -215,7 +215,7 @@ describe('built-in formats', () => {
     })
     const copy = cloneRuleFormat(db, 'user-a', 'goat', overrides)
 
-    expect(copy.name).toBe('GOAT Format (copy)')
+    expect(copy.name).toBe('GOAT Format (Kopie)')
     expect(copy.description).toBe('Retro format')
     expect(copy.rules.rules).toContainEqual(expect.objectContaining({ kind: 'filter', label: 'Nur Karten bis Juni 2005' }))
     // The built-in itself is untouched.
@@ -237,10 +237,10 @@ describe('built-in formats', () => {
       .toThrow(expect.objectContaining({ statusCode: 400, data: { code: 'invalid_rules' } }))
   })
 
-  it('keeps the "(Kopie)" suffix inside the 80 character name limit', () => {
-    expect(cloneNameFor('Kurz')).toBe('Kurz (Kopie)')
+  it('keeps the "(copy)" suffix inside the 80 character name limit', () => {
+    expect(cloneNameFor('Kurz')).toBe('Kurz (copy)')
     expect(cloneNameFor('x'.repeat(80))).toHaveLength(80)
-    expect(cloneNameFor('x'.repeat(80)).endsWith(' (Kopie)')).toBe(true)
+    expect(cloneNameFor('x'.repeat(80)).endsWith(' (copy)')).toBe(true)
   })
 })
 

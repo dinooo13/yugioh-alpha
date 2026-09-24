@@ -202,13 +202,13 @@ describe('deck validation', () => {
     expect(() => validateDeckCardMoveInput({ catalogCardId: 1, from: 'main', to: 'side', quantity: 1e20 })).toThrow()
   })
 
-  it('keeps the "(Kopie)" suffix inside the 80 character name limit', () => {
-    expect(duplicateNameFor('Kurz')).toBe('Kurz (Kopie)')
+  it('keeps the "(copy)" suffix inside the 80 character name limit', () => {
+    expect(duplicateNameFor('Kurz')).toBe('Kurz (copy)')
 
     const longName = 'D'.repeat(80)
     const copyName = duplicateNameFor(longName)
     expect(copyName).toHaveLength(80)
-    expect(copyName.endsWith(' (Kopie)')).toBe(true)
+    expect(copyName.endsWith(' (copy)')).toBe(true)
   })
 
   it('rejects a move between identical sections', () => {
@@ -411,7 +411,7 @@ describe('deck persistence', () => {
       .toThrow(expect.objectContaining({ statusCode: 400 }))
   })
 
-  it('duplicates a deck with its cards under a "(Kopie)" name', () => {
+  it('duplicates a deck with its cards under a "(copy)" name', () => {
     const deck = createDeck(db, 'user-a', { name: 'Original', description: 'Notiz' })
     upsertDeckCard(db, 'user-a', deck.id, { catalogCardId: CARD.darkMagician, section: 'main', quantity: 3 })
     upsertDeckCard(db, 'user-a', deck.id, { catalogCardId: CARD.stardustDragon, section: 'extra', quantity: 1 })
@@ -419,7 +419,7 @@ describe('deck persistence', () => {
     const copy = duplicateDeck(db, 'user-a', deck.id)
 
     expect(copy.id).not.toBe(deck.id)
-    expect(copy.name).toBe('Original (Kopie)')
+    expect(copy.name).toBe('Original (copy)')
     expect(copy.description).toBe('Notiz')
     expect(copy.counts).toMatchObject({ main: 3, extra: 1, total: 4 })
 
@@ -432,8 +432,8 @@ describe('deck persistence', () => {
     const deck = createDeck(db, 'user-a', { name: 'Original', description: null })
 
     // The UI names the copy in the interface language (ADR 0014).
-    const copy = duplicateDeck(db, 'user-a', deck.id, validateDuplicateDeckInput({ name: '  Original (copy)  ' }))
-    expect(copy.name).toBe('Original (copy)')
+    const copy = duplicateDeck(db, 'user-a', deck.id, validateDuplicateDeckInput({ name: '  Original (Kopie)  ' }))
+    expect(copy.name).toBe('Original (Kopie)')
 
     expect(validateDuplicateDeckInput(undefined)).toEqual({})
     expect(validateDuplicateDeckInput({})).toEqual({})
