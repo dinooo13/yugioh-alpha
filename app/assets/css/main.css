@@ -71,8 +71,8 @@
   --color-attr-wind: #37a86b;
   --color-attr-divine: #d8a51c;
 
-  /* The always-dark surfaces (`arena-island`): sidebar, drawer, banners. */
-  --color-island: #0a0a1a;
+  /* The night behind the arcane card back (always dark, like a real card). */
+  --color-night: #0a0a1a;
   /* Modal and slideover backdrop, in both modes. */
   --color-scrim: rgb(10 10 26 / 0.7);
   /* Text on a saturated primary-500+ fill (white on brand-500: 4.62:1). */
@@ -87,8 +87,8 @@
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* Resolved on the element itself, so the always-dark islands (sidebar,
-   banners) get their own shadows and glows. */
+/* Resolved on the element itself, so a glow follows the colors of the
+   element it sits on. */
 @theme inline {
   --shadow-panel: var(--app-shadow-panel);
   --shadow-lift: var(--app-shadow-lift);
@@ -188,7 +188,7 @@
 
 /* ------------------------------------------------------------------------
  * Building blocks (ADR 0016). Ceremony at the edges, calm in the middle:
- * `panel` is the standard surface; the canvas, islands, hairlines and the
+ * `panel` is the standard surface; the canvas, lit surfaces, hairlines and the
  * summon button are reserved for shells, heroes and one CTA per page.
  * --------------------------------------------------------------------- */
 
@@ -249,16 +249,15 @@
     mask-image: radial-gradient(1200px 700px at 70% 0%, #000 0%, transparent 75%);
   }
 
-  /* An always-dark surface (sidebar, drawer, hero panes, banners): put it on
-     an element that also carries `dark`. `color` is set again, so text that
-     inherits picks up the island's own tokens. */
-  .arena-island {
+  /* A lit surface for the shell and the heroes (sidebar, drawer, auth pane,
+     dashboard and profile banners): the panel color with a violet glow in
+     one corner and the lattice. Follows the color mode. */
+  .arena-surface {
     position: relative;
     isolation: isolate;
-    color: var(--ui-text);
-    background-color: var(--color-island);
+    background-color: var(--ui-bg);
     background-image:
-      radial-gradient(420px 260px at 0% 0%, color-mix(in oklab, var(--color-brand-500) 16%, transparent), transparent 70%),
+      radial-gradient(420px 260px at 0% 0%, var(--app-glow-violet), transparent 70%),
       var(--app-lattice);
   }
 
@@ -270,7 +269,7 @@
 
   .gold-hairline-y {
     width: 1px;
-    background: linear-gradient(180deg, transparent, color-mix(in oklab, var(--color-millennium-400) 45%, transparent) 30%, color-mix(in oklab, var(--color-millennium-400) 45%, transparent) 70%, transparent);
+    background: linear-gradient(180deg, transparent, color-mix(in oklab, var(--ui-secondary) 45%, transparent) 30%, color-mix(in oklab, var(--ui-secondary) 45%, transparent) 70%, transparent);
   }
 }
 
@@ -282,7 +281,7 @@
     display: none;
   }
 
-  .arena-island {
+  .arena-surface {
     background-image: none;
   }
 }
@@ -359,7 +358,7 @@
     background:
       radial-gradient(ellipse 30% 22% at 50% 50%, rgb(151 135 248 / 0.55), transparent 72%),
       repeating-radial-gradient(ellipse 60% 48% at 50% 50%, transparent 0 8%, rgb(232 181 46 / 0.16) 8% 8.8%),
-      linear-gradient(160deg, var(--color-brand-900), var(--color-island) 78%);
+      linear-gradient(160deg, var(--color-brand-900), var(--color-night) 78%);
   }
 
   .card-back::before {
