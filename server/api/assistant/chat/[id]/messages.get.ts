@@ -1,6 +1,6 @@
 import { createError, getRouterParam } from 'h3'
 import { useDb } from '../../../../db'
-import { loadDeckRef, requireOwnConversation, toConversationSummary } from '../../../../utils/assistant-chat'
+import { requireOwnConversation, toConversationSummary } from '../../../../utils/assistant-chat'
 import { loadUiMessages } from '../../../../utils/assistant-ui-messages'
 import { requireUser } from '../../../../utils/session'
 import type { AssistantUIConversation } from '../../../../../shared/assistant-ui'
@@ -22,7 +22,7 @@ export default defineEventHandler(async (event): Promise<AssistantUIConversation
   const conversation = requireOwnConversation(db, user.id, id)
 
   return {
-    conversation: toConversationSummary(conversation, loadDeckRef(db, conversation.deckId)),
+    conversation: toConversationSummary(conversation),
     messages: loadUiMessages(db, user.id, id),
   }
 })

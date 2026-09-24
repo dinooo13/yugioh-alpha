@@ -3,16 +3,11 @@
     "title": "Assistant",
     "index": {
       "intro": "Ask the assistant about your inventory or your decks, or let it recognize a card from a photo — it proposes changes that you confirm first.",
-      "preparing": "Preparing the conversation …",
       "examples": {
         "inventory": "Which Blue-Eyes cards do I have?",
         "deck": "Build me a GOAT deck from my cards",
         "photo": "Add a card from a photo"
       }
-    },
-    "intent": {
-      "new-deck": "Build me a new deck from my cards. Format and play style: ",
-      "edit-deck": "How can I improve this deck with cards from my inventory?"
     },
     "unavailable": {
       "title": "Assistant unavailable",
@@ -33,8 +28,6 @@
       }
     },
     "thread": {
-      "deckChip": "Deck: {name}",
-      "openDeck": "Open deck {name}",
       "empty": "No messages yet — tell the assistant what it should do for you.",
       "photo": "Photo {index}",
       "scrollToBottom": "Jump to the end",

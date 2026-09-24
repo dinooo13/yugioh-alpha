@@ -215,10 +215,6 @@ const formatItems = computed(() => [
   })),
 ])
 
-// --- Chat assistant entry point ("Mit KI bearbeiten", ADR 0011) -------------
-
-const { data: assistantStatus } = await useAssistantStatus()
-
 // --- Sharing (Phase 6) -------------------------------------------------------
 
 // Cheap, lazily creates the profile on first read — needed only to build the
@@ -738,14 +734,6 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
               :label="t('decks.editor.addCards')"
               class="lg:hidden"
               @click="openAddPanel"
-            />
-            <UButton
-              v-if="assistantStatus?.chat"
-              icon="i-lucide-sparkles"
-              color="neutral"
-              variant="outline"
-              :label="t('decks.editor.editWithAi')"
-              :to="{ path: '/assistant', query: { deckId } }"
             />
             <UButton
               icon="i-lucide-share-2"

@@ -1,10 +1,10 @@
 import { createError, getRouterParam } from 'h3'
 import { useDb } from '../../../db'
-import { loadDeckRef, requireOwnConversation, toConversationSummary } from '../../../utils/assistant-chat'
+import { requireOwnConversation, toConversationSummary } from '../../../utils/assistant-chat'
 import { requireUser } from '../../../utils/session'
 import type { AssistantConversationSummary } from '../../../../shared/assistant-chat'
 
-/** One conversation's summary (title, deck link); its messages come from `GET …/:id/messages`. */
+/** One conversation's summary (its title); its messages come from `GET …/:id/messages`. */
 export default defineEventHandler(async (event): Promise<{ conversation: AssistantConversationSummary }> => {
   const id = getRouterParam(event, 'id')
   if (!id) {
@@ -15,5 +15,5 @@ export default defineEventHandler(async (event): Promise<{ conversation: Assista
   const db = useDb()
   const conversation = requireOwnConversation(db, user.id, id)
 
-  return { conversation: toConversationSummary(conversation, loadDeckRef(db, conversation.deckId)) }
+  return { conversation: toConversationSummary(conversation) }
 })

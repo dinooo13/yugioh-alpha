@@ -56,11 +56,10 @@ export function legacyRedirectTarget(url: string): string | null {
   if (!first) return null
 
   if (first === 'decks') {
-    // Former one-shot builder (ADR 0011): straight to the chat, no chain.
+    // Former one-shot builder (ADR 0011): straight to the assistant, no chain
+    // (ADR 0021: no deck entry point, so plain `/assistant`).
     if (segments.length === 2 && segments[1]!.toLowerCase() === 'assistent') {
-      const params = new URLSearchParams(search)
-      if (!params.has('intent')) params.set('intent', 'new-deck')
-      return build(['assistant'], params.toString(), hash)
+      return build(['assistant'], search, hash)
     }
     // Dashboard "Deck anlegen" used `/decks?neu=1`.
     if (segments.length === 1 && search) {

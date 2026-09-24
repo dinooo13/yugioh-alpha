@@ -4,6 +4,8 @@
 
 Accepted. Mechanism note: the per-turn deck context is now passed as `instructions` by the [ADR 0020](0020-assistant-on-the-ai-sdk.md) engine; the decisions are unchanged.
 
+The deck link (sections "Deck-linked conversations", "Per-turn context injection, never persisted" and "Entry points") is superseded by [ADR 0021](0021-no-deck-link-in-assistant-conversations.md); the removal of the one-shot path, the ported guarantees and the unavailable notice still apply.
+
 ## Context
 
 Since [ADR 0010](0010-chat-assistant-with-tools.md) the app had two parallel

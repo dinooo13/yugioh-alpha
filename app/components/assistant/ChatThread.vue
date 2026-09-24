@@ -13,22 +13,19 @@ import { isToolPart } from '~/utils/assistant-tool-activity'
 
 const props = withDefaults(defineProps<{
   conversationId: string
-  /** Pre-fills the composer (a deck entry point's draft) — never sent on its own. */
-  initialText?: string
   /** Sent once the conversation is loaded (an example prompt from /assistant). */
   initialPrompt?: string
   /** The models the user may pick from (the server's list) and its default. */
   models?: string[]
   defaultModel?: string | null
 }>(), {
-  initialText: '',
   initialPrompt: '',
   models: () => [],
   defaultModel: null,
 })
 
 const emit = defineEmits<{
-  /** The conversation's summary, once loaded (title, linked deck). */
+  /** The conversation's summary, once loaded (its title). */
   loaded: [conversation: AssistantConversationSummary]
   /** A turn ended (however): its title and place in the list may have changed. */
   turnEnd: []
@@ -248,7 +245,6 @@ watch(conversation, (summary) => {
 
     <AssistantComposer
       v-model:model="selectedModel"
-      :initial-text="initialText"
       :status="status"
       :cancelling="isCancelling"
       :models="canPickModel ? models : []"

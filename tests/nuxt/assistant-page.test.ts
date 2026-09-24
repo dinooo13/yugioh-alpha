@@ -73,7 +73,7 @@ afterEach(async () => {
   vi.restoreAllMocks()
 })
 
-/** Spies on the router's `replace` (dropping `?intent=` / `?prompt=`) without navigating. */
+/** Spies on the router's `replace` (dropping `?prompt=`) without navigating. */
 function spyOnReplace() {
   return vi.spyOn(useRouter(), 'replace').mockResolvedValue(undefined)
 }
@@ -95,61 +95,40 @@ describe('assistant chat page', () => {
     expect(component.find('textarea').exists()).toBe(false)
   })
 
-  it('shows a chip linking to the conversation\'s deck', async () => {
-    stubConversation(conversationSummary({ title: 'Deck: Magier', deck: { id: 'deck-1', name: 'Magier' } }), [])
+  it('shows the title as a visible heading and no deck link, even for an old \'Deck: …\' title', async () => {
+    stubConversation(conversationSummary({ title: 'Deck: Magier' }), [])
 
     const component = await mountSuspended(AssistantConversationPage)
     await flushPromises()
 
-    const chip = component.find('a[href="/decks/deck-1"]')
-    expect(chip.exists()).toBe(true)
-    expect(chip.text()).toBe('Deck: Magier')
-    expect(chip.attributes('aria-label')).toBe('Deck Magier öffnen')
-
-    // The default title just repeats the chip — it stays for screen readers
-    // only, so "Deck: Magier" isn't shown twice (#48).
-    const heading = component.find('h1')
+    const header = component.find('header')
+    const heading = header.find('h1')
     expect(heading.text()).toBe('Deck: Magier')
-    expect(heading.classes()).toContain('sr-only')
-  })
-
-  it('keeps the title visible next to the chip once it differs from the deck\'s name', async () => {
-    stubConversation(conversationSummary({ title: 'Deck: Alt', deck: { id: 'deck-1', name: 'Neu' } }), [])
-
-    const component = await mountSuspended(AssistantConversationPage)
-    await flushPromises()
-
-    const heading = component.find('h1')
-    expect(heading.text()).toBe('Deck: Alt')
     expect(heading.classes()).not.toContain('sr-only')
-    expect(component.find('a[href="/decks/deck-1"]').text()).toBe('Deck: Neu')
+    expect(header.find('a[href^="/decks/"]').exists()).toBe(false)
   })
 
-  it('shows no deck chip for an unlinked conversation, and the empty-thread hint', async () => {
+  it('shows the empty-thread hint', async () => {
     stubConversation(conversationSummary(), [])
 
     const component = await mountSuspended(AssistantConversationPage)
     await flushPromises()
 
-    expect(component.find('a[href^="/decks/"]').exists()).toBe(false)
     expect(component.text()).toContain('Noch keine Nachrichten')
   })
 
-  it('pre-fills (but does not send) the composer with the ?intent= draft', async () => {
+  it('ignores ?intent= — the composer starts empty', async () => {
     state.query = { intent: 'edit-deck' }
-    stubConversation(conversationSummary({ deck: { id: 'deck-1', name: 'Magier' } }), [])
+    stubConversation(conversationSummary(), [])
     const streamFetch = vi.fn()
     vi.stubGlobal('fetch', streamFetch)
-    const replaceMock = spyOnReplace()
 
     const component = await mountSuspended(AssistantConversationPage)
     await flushPromises()
 
-    expect((component.find('textarea').element as HTMLTextAreaElement).value)
-      .toBe('Wie kann ich dieses Deck mit Karten aus meinem Inventar verbessern?')
+    expect((component.find('textarea').element as HTMLTextAreaElement).value).toBe('')
     // Nothing was sent: no stream request.
     expect(streamFetch).not.toHaveBeenCalled()
-    expect(replaceMock).toHaveBeenCalledWith({ query: {} })
   })
 
   it('sends a ?prompt= example once the conversation is loaded, and drops it from the URL', async () => {
@@ -223,9 +202,9 @@ describe('assistant chat page', () => {
     expect(component.find('[data-testid="assistant-tool"][data-outcome="error"]').text()).toContain('Deck not found')
   })
 
-  it('renders the thread, chips, composer and deck chip in English', async () => {
+  it('renders the thread, chips and composer in English', async () => {
     await setTestLocale('en')
-    stubConversation(conversationSummary({ title: 'Deck: Magier', deck: { id: 'deck-1', name: 'Magier' } }), deckToolMessages())
+    stubConversation(conversationSummary({ title: 'Magier prüfen' }), deckToolMessages())
 
     const component = await mountSuspended(AssistantConversationPage)
     await flushPromises()
@@ -236,22 +215,17 @@ describe('assistant chat page', () => {
     expect(text).toContain('Failed')
     expect(text).toContain('Searching your inventory: Blue-Eyes')
     expect(text).toContain('at least 2 results')
-    expect(text).toContain('Deck: Magier')
-    expect(component.find('a[href="/decks/deck-1"]').attributes('aria-label')).toBe('Open deck Magier')
     expect(component.find('textarea').attributes('placeholder')).toBe('Message the assistant…')
     expect(findButton(component, 'Send')).toBeTruthy()
     expect(findButton(component, 'New conversation')).toBeTruthy()
   })
 
-  it('shows the English empty thread and deck-entry draft', async () => {
+  it('shows the English empty thread', async () => {
     await setTestLocale('en')
-    state.query = { intent: 'edit-deck' }
     stubConversation(conversationSummary(), [])
 
     const page = await mountSuspended(AssistantConversationPage)
     await flushPromises()
-    expect((page.find('textarea').element as HTMLTextAreaElement).value)
-      .toBe('How can I improve this deck with cards from my inventory?')
     expect(page.text()).toContain('No messages yet — tell the assistant what it should do for you.')
   })
 
@@ -343,63 +317,21 @@ describe('assistant empty-state page', () => {
     expect(findButton(component, 'Neue Unterhaltung')).toBeFalsy()
   })
 
-  it('?deckId= creates a deck-linked conversation and continues with the edit-deck draft', async () => {
-    state.query = { deckId: 'deck-1' }
-    // Even with existing conversations, a deck entry point must not be
-    // swallowed by the redirect-to-newest.
+  it('ignores old ?deckId= / ?intent= links and goes to the newest conversation', async () => {
     state.conversations = { items: [{ id: 'existing-conv', title: 'Bestehend', updatedAt: '2025-01-01T00:00:00.000Z' }] }
-    const fetchMock = vi.fn((url: string, options?: { method?: string }) => {
-      if (url === '/api/assistant/chat' && options?.method === 'POST') {
-        return Promise.resolve({ id: 'deck-conv' })
-      }
-      return Promise.resolve(null)
-    })
-    vi.stubGlobal('$fetch', fetchMock)
+    for (const query of [{ deckId: 'deck-1' }, { intent: 'new-deck' }] as Array<Record<string, string>>) {
+      state.query = query
+      navigateToMock.mockClear()
+      const fetchMock = vi.fn((_url: string, _options?: { method?: string }) => Promise.resolve(null))
+      vi.stubGlobal('$fetch', fetchMock)
 
-    const component = await mountSuspended(AssistantIndexPage)
-    await flushPromises()
+      const component = await mountSuspended(AssistantIndexPage)
+      await flushPromises()
 
-    expect(fetchMock).toHaveBeenCalledWith('/api/assistant/chat', { method: 'POST', body: { deckId: 'deck-1' } })
-    expect(navigateToMock).toHaveBeenCalledWith('/assistant/deck-conv?intent=edit-deck', { replace: true })
-    expect(navigateToMock).not.toHaveBeenCalledWith('/assistant/existing-conv')
-    expect(component.text()).toContain('Unterhaltung wird vorbereitet')
-  })
-
-  it('?intent=new-deck creates a plain conversation and continues with the new-deck draft', async () => {
-    state.query = { intent: 'new-deck' }
-    state.conversations = { items: [{ id: 'existing-conv', title: 'Bestehend', updatedAt: '2025-01-01T00:00:00.000Z' }] }
-    const fetchMock = vi.fn((url: string, options?: { method?: string }) => {
-      if (url === '/api/assistant/chat' && options?.method === 'POST') {
-        return Promise.resolve({ id: 'new-deck-conv' })
-      }
-      return Promise.resolve(null)
-    })
-    vi.stubGlobal('$fetch', fetchMock)
-
-    await mountSuspended(AssistantIndexPage)
-    await flushPromises()
-
-    expect(fetchMock).toHaveBeenCalledWith('/api/assistant/chat', { method: 'POST' })
-    expect(navigateToMock).toHaveBeenCalledWith('/assistant/new-deck-conv?intent=new-deck', { replace: true })
-    expect(navigateToMock).not.toHaveBeenCalledWith('/assistant/existing-conv')
-  })
-
-  it('shows the error and falls back to the empty state when starting from ?deckId= fails', async () => {
-    state.query = { deckId: 'gone' }
-    vi.stubGlobal('$fetch', vi.fn((url: string, options?: { method?: string }) => {
-      if (url === '/api/assistant/chat' && options?.method === 'POST') {
-        return Promise.reject(Object.assign(new Error('Not Found'), { statusCode: 404, data: { statusMessage: 'Deck not found' } }))
-      }
-      return Promise.resolve(null)
-    }))
-
-    const component = await mountSuspended(AssistantIndexPage)
-    await flushPromises()
-
-    expect(navigateToMock).not.toHaveBeenCalled()
-    expect(component.text()).not.toContain('Unterhaltung wird vorbereitet')
-    expect(findButton(component, 'Neue Unterhaltung')).toBeTruthy()
-    expect(component.find('.text-error').exists()).toBe(true)
+      expect(navigateToMock, JSON.stringify(query)).toHaveBeenCalledWith('/assistant/existing-conv')
+      expect(fetchMock.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false)
+      expect(component.text()).not.toContain('Unterhaltung wird vorbereitet')
+    }
   })
 
 })

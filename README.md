@@ -238,10 +238,11 @@ and legality. The format editor can check any of the user's decks against the
 
 ## KI-Deckbau
 
-Deck building with AI help happens in the [Assistent](#assistent) chat —
-"Mit KI erstellen" on `/decks` and "Mit KI bearbeiten" in the deck editor
-both open `/assistant`. See
-[`docs/adr/0011-deck-assistance-in-chat.md`](./docs/adr/0011-deck-assistance-in-chat.md).
+Deck building with AI help happens in the [Assistent](#assistent) chat:
+open it from the navigation and name the deck. The assistant reads your decks
+and formats through its tools. See
+[`docs/adr/0011-deck-assistance-in-chat.md`](./docs/adr/0011-deck-assistance-in-chat.md)
+and [`docs/adr/0021-no-deck-link-in-assistant-conversations.md`](./docs/adr/0021-no-deck-link-in-assistant-conversations.md).
 
 ## Assistent
 
@@ -251,15 +252,7 @@ catalog, inventory, and decks — it replaced the Foto and Sprache modes of
 Every conversation is saved and listed in a sidebar (titled from its first
 message), with a "Neue Unterhaltung" button and per-conversation deletion.
 
-Deck entry points: "Mit KI erstellen" on `/decks` opens a new conversation
-with a deck-building draft in the message field (never sent automatically);
-"Mit KI bearbeiten" in the deck editor opens a conversation **linked to that
-deck** — titled "Deck: <Name>", with a chip in the thread header linking back
-to the deck. On every turn of a linked conversation the assistant sees the
-deck's *current* cards, format, and legality (rebuilt per turn, never stored
-in the history), so "dieses Deck" just works and an applied change shows up
-on the next turn. Deleting the deck only unlinks the conversation. For deck
-building the assistant prefers the user's inventory — `search_inventory`
+For deck building the assistant prefers the user's inventory — `search_inventory`
 reports each owned card's type/stats, whether it's an Extra Deck card, and
 its copy limit in a format (format-forbidden cards are left out) — and checks
 proposals with `validate_deck` first. A proposed deck or deck change shows,
@@ -321,6 +314,7 @@ tool result size, history window, model call timeout) are configurable via
 `server/utils/assistant-limits.ts`. See
 [`docs/adr/0010-chat-assistant-with-tools.md`](./docs/adr/0010-chat-assistant-with-tools.md),
 [`docs/adr/0011-deck-assistance-in-chat.md`](./docs/adr/0011-deck-assistance-in-chat.md),
+[`docs/adr/0021-no-deck-link-in-assistant-conversations.md`](./docs/adr/0021-no-deck-link-in-assistant-conversations.md),
 and [`docs/adr/0009-openai-compatible-assistant-provider.md`](./docs/adr/0009-openai-compatible-assistant-provider.md).
 
 ## Teilen & Profile

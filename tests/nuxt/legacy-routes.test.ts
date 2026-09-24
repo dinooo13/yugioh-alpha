@@ -37,18 +37,16 @@ const REDIRECTS: ReadonlyArray<readonly [string, string]> = [
   ['/spieler/inventar', '/players/inventar'],
   // Other query parameters pass through unchanged.
   ['/inventar/erfassen?collectionId=c1', '/inventory/quick-entry?collectionId=c1'],
-  ['/assistent?deckId=d1', '/assistant?deckId=d1'],
-  ['/assistent?intent=new-deck', '/assistant?intent=new-deck'],
   ['/assistent/c1?prompt=Hallo%20Welt', '/assistant/c1?prompt=Hallo%20Welt'],
   ['/katalog?card=42&q=Dunkler', '/catalog?card=42&q=Dunkler'],
   // Inventory view values.
   ['/inventar?view=uebersicht&collectionId=c1', '/inventory?view=overview&collectionId=c1'],
   ['/inventar?view=liste', '/inventory?view=list'],
   ['/inventar?collectionId=__none__', '/inventory?collectionId=__none__'],
-  // The former one-shot deck builder: one hop straight to the chat.
-  ['/decks/assistent', '/assistant?intent=new-deck'],
+  // The former one-shot deck builder: one hop straight to the assistant (ADR 0021: plain, no intent added).
+  ['/decks/assistent', '/assistant'],
   ['/decks/assistent?intent=x', '/assistant?intent=x'],
-  ['/Decks/Assistent', '/assistant?intent=new-deck'],
+  ['/Decks/Assistent', '/assistant'],
   // Dashboard "Deck anlegen".
   ['/decks?neu=1', '/decks?new=1'],
   // Fragments are kept; the old #wunschliste anchor is accepted as not scrolling.

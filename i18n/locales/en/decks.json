@@ -35,7 +35,6 @@
     "list": {
       "title": "Decks",
       "count": "{count} deck | {count} decks",
-      "createWithAi": "Create with AI",
       "newDeck": "New deck",
       "searchPlaceholder": "Search decks (name or card)...",
       "searchLabel": "Search decks",
@@ -85,7 +84,6 @@
       "loadFailedDescription": "Please try again later.",
       "totalCards": "{count} card in total | {count} cards in total",
       "addCards": "Add cards",
-      "editWithAi": "Edit with AI",
       "share": "Share",
       "moreActions": "More actions",
       "formatLabel": "Format",

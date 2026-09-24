@@ -11,7 +11,6 @@ export function conversationSummary(overrides: Partial<AssistantConversationSumm
   return {
     id: 'conv-1',
     title: 'Testkonversation',
-    deck: null,
     createdAt: '2025-01-01T00:00:00.000Z',
     updatedAt: '2025-01-01T00:05:00.000Z',
     ...overrides,

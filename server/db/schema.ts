@@ -714,11 +714,12 @@ export const assistantConversation = sqliteTable(
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
     // Seeded from the first user message (truncated), shown in the conversation
-    // list — or "Deck: <name>" for a deck-linked conversation.
+    // list.
     title: text('title').notNull(),
-    // Optional deck this conversation is about (ADR 0011): its current state is
-    // injected into the system prompt on every turn. Deleting the deck only
-    // unlinks the conversation, it never deletes the chat history.
+    // Deprecated (ADR 0021): formerly the deck this conversation was linked to
+    // (ADR 0011). Nothing reads or writes it any more; kept (with its index and
+    // ON DELETE SET NULL) because dropping a column needs a table rebuild,
+    // which the migrator can't do safely (ADR 0011). Old rows keep their value.
     deckId: text('deck_id')
       .references(() => deck.id, { onDelete: 'set null' }),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
@@ -792,7 +793,6 @@ export const assistantAction = sqliteTable(
 
 export const assistantConversationRelations = relations(assistantConversation, ({ one, many }) => ({
   user: one(user, { fields: [assistantConversation.userId], references: [user.id] }),
-  deck: one(deck, { fields: [assistantConversation.deckId], references: [deck.id] }),
   messages: many(assistantMessage),
   actions: many(assistantAction),
 }))

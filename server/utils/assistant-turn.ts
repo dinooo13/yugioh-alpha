@@ -32,7 +32,6 @@ import type { AssistantActionView } from '../../shared/assistant-chat'
 import type { AssistantUIMessage, AssistantUIMessagePart } from '../../shared/assistant-ui'
 import type { AppLocale } from '../../shared/locale'
 import {
-  buildDeckContextBlock,
   conversationTitleFromText,
   hydrateActionViews,
   requireOwnConversation,
@@ -252,7 +251,7 @@ export interface AssistantTurnOptions {
   model: AssistantLanguageModel
   /** The interface language (reply language, saved fallback texts — ADR 0014). */
   locale: AppLocale
-  /** The card language (card names, deck context, tool results — ADR 0015). */
+  /** The card language (card names, tool results — ADR 0015). */
   cardLocale: AppLocale
   /** Defaults to `getAssistantLimits()`. */
   limits?: AssistantLimits
@@ -289,7 +288,7 @@ export function startAssistantTurn(options: AssistantTurnOptions): AssistantTurn
   const { db, userId, conversationId, request, model, locale, cardLocale } = options
   const limits = options.limits ?? getAssistantLimits()
   const turnText = TURN_TEXT[locale]
-  const conversation = requireOwnConversation(db, userId, conversationId)
+  requireOwnConversation(db, userId, conversationId)
 
   let userRow: typeof assistantMessage.$inferSelect
   if (request.trigger === 'submit-message') {
@@ -303,9 +302,8 @@ export function startAssistantTurn(options: AssistantTurnOptions): AssistantTurn
     })
     // Derived the moment the first message is stored, not after a successful
     // turn: a turn that fails right after this must not leave the
-    // conversation titled "Neue Unterhaltung" forever. A deck-linked
-    // conversation keeps its "Deck: <name>" title.
-    if (isFirstMessage && request.text !== '' && !conversation.deckId) {
+    // conversation titled "Neue Unterhaltung" forever.
+    if (isFirstMessage && request.text !== '') {
       db.update(assistantConversation)
         .set({ title: conversationTitleFromText(request.text) })
         .where(eq(assistantConversation.id, conversationId))
@@ -335,8 +333,7 @@ export function startAssistantTurn(options: AssistantTurnOptions): AssistantTurn
   const placeholder = insertAssistantPlaceholder(db, { conversationId, id: assistantId, after: userRow.createdAt, model: modelId })
   const createdAt = placeholder.createdAt.toISOString()
 
-  const deckContext = conversation.deckId ? buildDeckContextBlock(db, userId, conversation.deckId, cardLocale) : null
-  const instructions = buildSystemPrompt({ deckContext, hasImages, locale, cardLocale })
+  const instructions = buildSystemPrompt({ hasImages, locale, cardLocale })
 
   // A proposal's `data-action` part is written right after its tool call's
   // result chunk (the tool runs before that chunk is read), so the thread

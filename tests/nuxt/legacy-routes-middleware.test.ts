@@ -42,7 +42,7 @@ describe('legacy routes middleware', () => {
     runMiddleware('/decks/assistent')
 
     expect(navigateToMock).toHaveBeenCalledWith(
-      '/assistant?intent=new-deck',
+      '/assistant',
       { replace: true, redirectCode: 301 },
     )
   })

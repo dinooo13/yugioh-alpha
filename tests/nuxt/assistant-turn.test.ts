@@ -625,30 +625,26 @@ describe('startAssistantTurn: history, images and regenerate', () => {
     expect(storedMessages(conversationId).map(row => row.content)).toEqual(['Hallo?', 'Jetzt klappt es.'])
   })
 
-  it('passes the deck context block and the locale instructions as instructions', async () => {
+  it('passes the locale instructions as instructions — no deck block, even for a legacy deck-linked conversation', async () => {
     const deck = createDeck(db, 'user-a', { name: 'Magier-Deck', description: null })
     upsertDeckCard(db, 'user-a', deck.id, { catalogCardId: CARD.darkMagician, section: 'main', quantity: 2 })
-    const conversationId = createConversation(db, 'user-a', { deckId: deck.id }).id
+    const conversationId = newConversation()
+    db.update(schema.assistantConversation)
+      .set({ deckId: deck.id, title: 'Deck: Magier-Deck' })
+      .where(eq(schema.assistantConversation.id, conversationId))
+      .run()
     const { model, calls } = scriptedModel([text('ok')])
 
     await runTurn(conversationId, model, { locale: 'en', cardLocale: 'en' })
 
     const system = systemOf(calls[0]!)
-    expect(system).toContain(`Deck ID: ${deck.id}`)
+    expect(system).toContain('Deck building:')
+    expect(system).not.toContain('Deck ID:')
+    expect(system).not.toContain('Context: this conversation')
     expect(system.endsWith(`${REPLY_LANGUAGE_INSTRUCTION.en}\n\n${CARD_NAME_INSTRUCTION.en}`)).toBe(true)
     expect(calls[0]!.headers?.['x-opencode-session']).toBe(conversationId)
-    // The deck-linked conversation keeps its title.
-    expect(db.select().from(schema.assistantConversation).get()!.title).toBe('Deck: Magier-Deck')
-  })
-
-  it('adds no deck block to an unlinked conversation', async () => {
-    createDeck(db, 'user-a', { name: 'Magier-Deck', description: null })
-    const { model, calls } = scriptedModel([text('ok')])
-
-    await runTurn(newConversation(), model)
-
-    expect(systemOf(calls[0]!)).not.toContain('Deck ID:')
-    expect(systemOf(calls[0]!)).toContain('Deck building:')
+    // A legacy "Deck: <name>" title of an empty conversation is named after its first message like any other.
+    expect(db.select().from(schema.assistantConversation).get()!.title).toBe('Hallo')
   })
 
   it('saves the fallback texts in the turn\'s interface language', async () => {
@@ -694,16 +690,6 @@ describe('the fake model end-to-end (NUXT_ASSISTANT_PROVIDER=fake)', () => {
     const messages = loadUiMessages(db, 'user-a', conversationId)
     expect(messages.map(message => message.role)).toEqual(['user', 'assistant', 'user', 'assistant'])
     expect(messages[3]!.parts.find(part => part.type === 'data-action')).toMatchObject({ data: { id: action.id, status: 'pending' } })
-  })
-
-  it('answers from the deck context of a deck-linked conversation', async () => {
-    const deck = createDeck(db, 'user-a', { name: 'Magier-Deck', description: null })
-    upsertDeckCard(db, 'user-a', deck.id, { catalogCardId: CARD.darkMagician, section: 'main', quantity: 2 })
-    const conversationId = createConversation(db, 'user-a', { deckId: deck.id }).id
-
-    await runTurn(conversationId, createFakeLanguageModel(), { body: userText('Was ist in meinem Deck?') })
-
-    expect(storedMessages(conversationId).at(-1)!.content).toBe('Kontext-Deck: Magier-Deck (2 Karten)')
   })
 
   it('ends a "leere argumente" turn with a text answer instead of looping (#54)', async () => {

@@ -4,6 +4,8 @@
 
 Accepted
 
+The `/decks/assistent` target is plain `/assistant` since [ADR 0021](0021-no-deck-link-in-assistant-conversations.md).
+
 ## Context
 
 Every page URL used German slugs (`/inventar`, `/katalog`, `/spieler/:handle`,

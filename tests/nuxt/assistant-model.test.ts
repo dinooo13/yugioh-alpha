@@ -318,6 +318,8 @@ describe('the fake language model (NUXT_ASSISTANT_PROVIDER=fake)', () => {
     expect(fakeTurn({ prompt: [{ role: 'user', content: [{ type: 'file', mediaType: 'image/png', data: { type: 'url', url: new URL('data:image/png;base64,abc') } }] }] }))
       .toEqual({ text: 'Auf dem Bild sehe ich: Dark Magician.', toolCalls: [{ toolName: 'search_catalog', input: { query: 'Dark Magician' } }] })
     expect(fakeTurn({ prompt: [user('Hallo')] }).text).toBe('Testantwort: Hallo')
+    // No deck branch (ADR 0021): even a "Deck ID:" line in the system prompt gets the echo.
+    expect(fakeTurn({ prompt: [{ role: 'system', content: 'Deck ID: d1' }, user('Was ist in meinem Deck?')] }).text).toBe('Testantwort: Was ist in meinem Deck?')
   })
 
   it('adds the first card of an earlier search (German or English add), and confirms the proposal', () => {
@@ -344,13 +346,6 @@ describe('the fake language model (NUXT_ASSISTANT_PROVIDER=fake)', () => {
     expect(toolCalls[0]!.toolName).toBe('search_catalog')
     expect(query.split(/\s+/).length).toBeLessThanOrEqual(3)
     expect(query).not.toContain('Karten für mein Deck')
-  })
-
-  it('answers from the deck context block in the system prompt, and echoes without it or without the word "Deck"', () => {
-    const system = { role: 'system' as const, content: 'Deck ID: d1\nDeck name: Blue-Eyes Test\nCounts: Main 40 · Extra 5 · Side 2' }
-    expect(fakeTurn({ prompt: [system, user('Was ist in meinem Deck?')] }).text).toBe('Kontext-Deck: Blue-Eyes Test (47 Karten)')
-    expect(fakeTurn({ prompt: [user('Was ist in meinem Deck?')] }).text).toBe('Testantwort: Was ist in meinem Deck?')
-    expect(fakeTurn({ prompt: [system, user('Hallo')] }).text).toBe('Testantwort: Hallo')
   })
 
   it('streams one answer as language-model stream parts', () => {
