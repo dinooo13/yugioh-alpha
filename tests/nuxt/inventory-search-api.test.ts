@@ -365,6 +365,16 @@ describe('inventory search aggregation (in-memory db)', () => {
     expect(result.items[0]).toMatchObject({ catalogCardId: 55144522 })
   })
 
+  it('still finds an owned retired card by name (ADR 0019)', async () => {
+    seedCards(db, [{ id: 101402013, name: 'Leviathan of Atlantis - Daedalus', type: 'Effect Monster' }])
+    db.update(schema.catalogCard).set({ retiredAt: new Date() }).run()
+    await addOwnedCard(db, 'user-a', validateInventoryInput({ catalog_card_id: 101402013, quantity: 1 }))
+
+    const result = runInventorySearch(db, 'user-a', { q: 'Leviathan' })
+
+    expect(result.items.map(item => item.catalogCardId)).toEqual([101402013])
+  })
+
   it('matches names case-insensitively with wildcards escaped', async () => {
     seedCards(db, [{ id: 89631139, name: 'Blue-Eyes White Dragon', type: 'Normal Monster' }])
     await addOwnedCard(db, 'user-a', validateInventoryInput({ catalog_card_id: 89631139 }))
@@ -506,7 +516,15 @@ describe('loadInventoryCardDisplay', () => {
       def: 2100,
       imageSmall: 'https://img/main-small.jpg',
       imageLarge: 'https://img/main-large.jpg',
+      retired: false,
     })
+  })
+
+  it('flags a card YGOPRODeck no longer lists (ADR 0019)', () => {
+    seedCards(db, [{ id: 101402013, name: 'Leviathan of Atlantis - Daedalus', type: 'Effect Monster' }])
+    db.update(schema.catalogCard).set({ retiredAt: new Date() }).run()
+
+    expect(loadInventoryCardDisplay(db, [101402013]).get(101402013)).toMatchObject({ retired: true })
   })
 
   it('returns null images for a card without artwork', () => {

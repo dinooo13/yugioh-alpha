@@ -12,6 +12,7 @@ import {
   MAX_WISHLIST_QUANTITY,
   removeWishlistItem,
   removeWishlistItemByCard,
+  updateWishlistItem,
   validateWishlistInput,
   wishlistCardIds,
 } from '../../server/utils/wishlist'
@@ -125,6 +126,18 @@ describe('listWishlist / listPublicWishlist', () => {
     expect(listWishlist(db, 'user-a', { q: 'dunkler mag' }).items.map(item => item.catalogCardId))
       .toEqual([CARD.darkMagician])
     expect(listWishlist(db, 'user-a', { q: 'Topf' }).items).toEqual([])
+  })
+
+  it('still lists a retired card, flagged, in every view (ADR 0019)', () => {
+    expect(listWishlist(db, 'user-a').items[0]).toMatchObject({ retired: false })
+    db.update(schema.catalogCard).set({ retiredAt: new Date() }).run()
+
+    const item = listWishlist(db, 'user-a').items[0]!
+    expect(item).toMatchObject({ catalogCardId: CARD.darkMagician, retired: true })
+    expect(item).not.toHaveProperty('retiredAt')
+    expect(listPublicWishlist(db, 'user-a').items[0]).toMatchObject({ retired: true })
+    expect(updateWishlistItem(db, 'user-a', item.id, { quantity: 2 })).toMatchObject({ quantity: 2, retired: true })
+    expect(addWishlistItem(db, 'user-a', validateWishlistInput({ catalogCardId: CARD.darkMagician }))).toMatchObject({ retired: true })
   })
 
   it('listPublicWishlist omits owned but keeps note', () => {

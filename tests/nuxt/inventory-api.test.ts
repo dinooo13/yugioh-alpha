@@ -213,6 +213,18 @@ describe('inventory persistence helpers', () => {
     for (const key of [...COLLECTOR_KEYS, 'setName', 'rarity']) {
       expect(result.items[0]).not.toHaveProperty(key)
     }
+    expect(result.items[0]).toMatchObject({ cardRetired: false })
+    expect(result.items[0]).not.toHaveProperty('cardRetiredAt')
+  })
+
+  it('keeps an owned retired card in the list, flagged (ADR 0019)', async () => {
+    await addOwnedCard(db, 'user-a', validateInventoryInput({ catalog_card_id: 46986414, quantity: 1 }))
+    db.update(schema.catalogCard).set({ retiredAt: new Date() }).where(eq(schema.catalogCard.id, 46986414)).run()
+
+    const result = listOwnedCards(db, 'user-a', { q: 'Dark Magician' })
+
+    expect(result.total).toBe(1)
+    expect(result.items[0]).toMatchObject({ catalogCardId: 46986414, cardRetired: true })
   })
 
   describe('list filters', () => {

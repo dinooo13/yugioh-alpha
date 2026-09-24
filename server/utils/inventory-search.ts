@@ -233,6 +233,8 @@ export interface InventoryCardDisplay {
   def: number | null
   imageSmall: string | null
   imageLarge: string | null
+  /** YGOPRODeck no longer lists the card (ADR 0019); it stays in the inventory. */
+  retired: boolean
 }
 
 /**
@@ -258,6 +260,7 @@ export function loadInventoryCardDisplay(db: Db, catalogCardIds: number[]): Map<
       level: catalogCard.level,
       atk: catalogCard.atk,
       def: catalogCard.def,
+      retiredAt: catalogCard.retiredAt,
     })
     .from(catalogCard)
     .where(inArray(catalogCard.id, catalogCardIds))
@@ -284,12 +287,13 @@ export function loadInventoryCardDisplay(db: Db, catalogCardIds: number[]): Map<
     }
   }
 
-  for (const card of cards) {
+  for (const { retiredAt, ...card } of cards) {
     const image = primaryImages.get(card.catalogCardId)
     display.set(card.catalogCardId, {
       ...card,
       imageSmall: image?.imageSmall ?? null,
       imageLarge: image?.imageLarge ?? null,
+      retired: retiredAt !== null,
     })
   }
 

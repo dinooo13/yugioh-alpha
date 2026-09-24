@@ -526,6 +526,21 @@ describe('deck availability', () => {
     expect(detail.sections.main[0]).toMatchObject({ owned: 0, usedInDeck: 1, shortfall: 1 })
   })
 
+  it('still loads a retired card in a deck, flagged (ADR 0019)', () => {
+    const deck = createDeck(db, 'user-a', { name: 'Deck', description: null })
+    upsertDeckCard(db, 'user-a', deck.id, { catalogCardId: CARD.darkMagician, section: 'main', quantity: 1 })
+    upsertDeckCard(db, 'user-a', deck.id, { catalogCardId: CARD.potOfGreed, section: 'main', quantity: 1 })
+    db.update(schema.catalogCard).set({ retiredAt: new Date() }).where(eq(schema.catalogCard.id, CARD.potOfGreed)).run()
+
+    const detail = getDeckDetail(db, 'user-a', deck.id)
+
+    expect(detail.sections.main.map(row => [row.catalogCardId, row.retired])).toEqual(expect.arrayContaining([
+      [CARD.darkMagician, false],
+      [CARD.potOfGreed, true],
+    ]))
+    expect(detail.sections.main[0]).not.toHaveProperty('retiredAt')
+  })
+
   it('does not reserve owned copies across decks', async () => {
     await own(db, 'user-a', CARD.darkMagician, 3)
 

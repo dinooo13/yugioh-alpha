@@ -111,6 +111,8 @@ export interface DeckCardRow {
   /** Copies used across all sections of *this* deck. */
   usedInDeck: number
   shortfall: number
+  /** YGOPRODeck no longer lists the card (ADR 0019); the row still resolves. */
+  retired: boolean
 }
 
 export type { DeckWarning }
@@ -542,6 +544,7 @@ function loadDeckCardRows(db: Db, userId: string, deckId: string): DeckCardRow[]
       atk: catalogCard.atk,
       def: catalogCard.def,
       imageSmall: sql<string | null>`min(${catalogCardImage.imageUrlSmall})`,
+      retiredAt: catalogCard.retiredAt,
     })
     .from(deckCard)
     .innerJoin(catalogCard, eq(deckCard.catalogCardId, catalogCard.id))
@@ -557,11 +560,12 @@ function loadDeckCardRows(db: Db, userId: string, deckId: string): DeckCardRow[]
     usedByCard.set(row.catalogCardId, (usedByCard.get(row.catalogCardId) ?? 0) + row.quantity)
   }
 
-  return rows.map((row) => {
+  return rows.map(({ retiredAt, ...row }) => {
     const ownedQuantity = owned.get(row.catalogCardId) ?? 0
     const usedInDeck = usedByCard.get(row.catalogCardId) ?? 0
     return {
       ...row,
+      retired: retiredAt !== null,
       section: row.section as DeckSection,
       owned: ownedQuantity,
       usedInDeck,

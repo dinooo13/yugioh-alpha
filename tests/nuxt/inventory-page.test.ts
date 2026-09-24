@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { nextTick } from 'vue'
+import { nextTick, type Component } from 'vue'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
 import CollectionActions from '~/components/collections/CollectionActions.vue'
 import AddToInventoryModal from '~/components/inventory/AddToInventoryModal.vue'
+import InventoryCardTile from '~/components/inventory/InventoryCardTile.vue'
+import InventoryListRow from '~/components/inventory/InventoryListRow.vue'
+import { UApp } from '#components'
 import InventoryPage from '~/pages/inventory/index.vue'
 import { setTestLocale } from './fixtures/locale'
 
@@ -189,5 +192,46 @@ describe('add to inventory modal', () => {
     expect(text).not.toMatch(/Drucksprache|Zustand|Auflage|Set-Ausgabe/)
 
     component.unmount()
+  })
+})
+
+describe('retired card badge (ADR 0019)', () => {
+  // The badge's tooltip needs the provider UApp gives the real app.
+  function inApp(component: Component, props: Record<string, unknown>) {
+    return mountSuspended(defineComponent({
+      setup: () => () => h(UApp, null, { default: () => h(component, props) }),
+    }))
+  }
+
+  const listItem = ownedDarkMagician().items[0]!
+  const listProps = { assignItems: [], noAssignmentValue: '__none__' }
+  const tileItem = {
+    catalogCardId: 46986414,
+    name: 'Dark Magician',
+    type: 'Normal Monster',
+    attribute: 'DARK',
+    race: 'Spellcaster',
+    level: 7,
+    atk: 2500,
+    def: 2100,
+    imageSmall: null,
+    totalQuantity: 2,
+    collectionBreakdown: [],
+  }
+
+  it('shows on a list row only when the card is retired', async () => {
+    const retired = await inApp(InventoryListRow, { ...listProps, item: { ...listItem, cardRetired: true } })
+    expect(retired.find('[data-testid="card-retired-badge"]').text()).toBe('Nicht mehr im Katalog')
+
+    const active = await inApp(InventoryListRow, { ...listProps, item: { ...listItem, cardRetired: false } })
+    expect(active.find('[data-testid="card-retired-badge"]').exists()).toBe(false)
+  })
+
+  it('shows on an overview tile only when the card is retired', async () => {
+    const retired = await inApp(InventoryCardTile, { item: { ...tileItem, retired: true } })
+    expect(retired.find('[data-testid="card-retired-badge"]').text()).toBe('Nicht mehr im Katalog')
+
+    const active = await inApp(InventoryCardTile, { item: { ...tileItem, retired: false } })
+    expect(active.find('[data-testid="card-retired-badge"]').exists()).toBe(false)
   })
 })

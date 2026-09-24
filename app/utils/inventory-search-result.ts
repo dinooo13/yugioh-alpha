@@ -21,6 +21,8 @@ export interface InventorySearchResultItem {
   def: number | null
   imageSmall: string | null
   imageLarge?: string | null
+  /** YGOPRODeck no longer lists the card (ADR 0019). */
+  retired?: boolean
   totalQuantity: number
   collectionBreakdown?: InventoryCollectionBreakdown[]
 }

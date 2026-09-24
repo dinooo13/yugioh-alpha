@@ -11,6 +11,10 @@
     "germanTextMissing": "There is no German text for this card.",
     "translationSource": "German card texts: {source}",
     "totalQuantity": "×{count} total",
+    "retired": {
+      "badge": "No longer in the catalog",
+      "hint": "YGOPRODeck no longer lists this card. Your entries stay, but it no longer shows up in search."
+    },
     "field": {
       "quantity": "Quantity",
       "collection": "Collection",

@@ -28,6 +28,7 @@ interface DeckCardRow {
   owned: number
   usedInDeck: number
   shortfall: number
+  retired: boolean
 }
 
 interface DeckDetail {
@@ -934,9 +935,10 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
                     {{ cardMetaLine(row) }}
                   </p>
                   <div
-                    v-if="statusLabelFor(row.catalogCardId) || isCoverRow(row)"
+                    v-if="statusLabelFor(row.catalogCardId) || isCoverRow(row) || row.retired"
                     class="mt-0.5 flex flex-wrap gap-1"
                   >
+                    <CardRetiredBadge v-if="row.retired" />
                     <UBadge
                       v-if="statusLabelFor(row.catalogCardId)"
                       size="sm"

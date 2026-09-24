@@ -10,6 +10,8 @@ interface InventoryListItem {
   /** Official German name (ADR 0015); null when there is none. */
   cardNameDe?: string | null
   cardType: string
+  /** YGOPRODeck no longer lists the card (ADR 0019). */
+  cardRetired?: boolean
   imageUrlSmall: string | null
 }
 
@@ -47,6 +49,7 @@ const displayName = computed(() => cardName({ name: props.item.cardName, nameDe:
         <div class="line-clamp-2 text-sm font-medium text-highlighted sm:truncate">
           {{ displayName }}
         </div>
+        <CardRetiredBadge v-if="item.cardRetired" />
         <div
           class="flex min-w-0 items-center gap-1.5 text-xs text-muted"
           :data-frame="frame?.frame"
