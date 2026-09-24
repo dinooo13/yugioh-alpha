@@ -322,15 +322,15 @@ async function onAddedToInventory() {
       v-else
       class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6"
     >
-      <!-- The card name is the tile's button; its overlay makes the whole tile
-           clickable, while the action buttons sit above it. Not a
+      <!-- The card name is the tile's button; `stretched-link` makes the
+           whole tile clickable, while the action buttons sit above it. Not a
            `role="button"` wrapper: that would nest the action buttons inside
            another control. -->
       <article
         v-for="card in cards.items"
         :key="card.id"
         :aria-label="cardName(card)"
-        class="group panel relative flex min-w-0 cursor-pointer flex-col text-left transition-[translate,box-shadow,border-color] duration-200 ease-out-expo hover:border-primary/40 hover:shadow-lift motion-safe:hover:-translate-y-0.5"
+        class="group panel relative flex min-w-0 flex-col text-left transition-[translate,box-shadow,border-color] duration-200 ease-out-expo hover:border-primary/40 hover:shadow-lift motion-safe:hover:-translate-y-0.5"
       >
         <!-- Plain thumbnail: the tile already opens the card. -->
         <CardThumb
@@ -346,7 +346,7 @@ async function onAddedToInventory() {
           <h2 class="min-h-10 text-sm font-semibold leading-5 text-highlighted transition-colors group-hover:text-primary">
             <button
               type="button"
-              class="block w-full text-left after:absolute after:inset-0 after:rounded-xl focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-focus"
+              class="stretched-link block w-full text-left"
               @click="openCard(card.id)"
             >
               <span class="line-clamp-2">{{ cardName(card) }}</span>

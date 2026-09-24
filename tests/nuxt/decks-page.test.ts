@@ -170,11 +170,41 @@ describe('decks page', () => {
     const cover = component.find('img[src="https://images.example/cards_small/46986414.jpg"]')
     expect(cover.exists()).toBe(true)
     expect(cover.attributes('alt')).toBe('Dark Magician')
-    // The cover link is decorative (the deck name is the real link).
-    expect(cover.element.closest('a')?.getAttribute('aria-hidden')).toBe('true')
-    expect(cover.element.closest('a')?.getAttribute('tabindex')).toBe('-1')
+    // The cover is decorative and no longer a link: the stretched deck name
+    // link covers the whole tile (#134).
+    expect(cover.element.closest('a')).toBeNull()
+    expect(cover.element.closest('[aria-hidden="true"]')).not.toBeNull()
 
     expect(component.find('[role="img"][aria-label="Leeres Deck: Leer"]').exists()).toBe(true)
+  })
+
+  it('makes the whole deck tile one link; the options menu sits outside it (#134)', async () => {
+    state.decks = {
+      items: [
+        deck(),
+        deck({ id: 'deck-2', name: 'Leeres Deck', mainCount: 0, extraCount: 0, cardCount: 0, cover: null }),
+      ],
+      total: 2,
+      page: 1,
+      pageSize: 20,
+    }
+
+    const component = await mountSuspended(DecksPage)
+    const tiles = component.findAll('li')
+    expect(tiles).toHaveLength(2)
+
+    for (const [index, tile] of tiles.entries()) {
+      const { id, name } = state.decks.items[index]!
+      const links = tile.findAll('a')
+      expect(links).toHaveLength(1)
+      expect(links[0]!.attributes('href')).toBe(`/decks/${id}`)
+      expect(links[0]!.classes()).toContain('stretched-link')
+
+      const options = tile.find(`button[aria-label="Optionen für ${name}"]`)
+      expect(options.exists()).toBe(true)
+      expect(options.classes()).toContain('z-10')
+      expect(links[0]!.element.contains(options.element)).toBe(false)
+    }
   })
 
   it('shows the empty state when the user has no decks', async () => {

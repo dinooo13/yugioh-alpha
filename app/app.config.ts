@@ -50,14 +50,27 @@ export default defineAppConfig({
     },
     // Placeholders are text: `text-muted` (4.5:1+) instead of `text-dimmed`
     // (3:1, meant for icons), in both modes.
+    // #134: the open menu grows to fit long option names, like set names;
+    // the field keeps its width; labels wrap beyond the cap instead of being
+    // cut (`text-clip` replaces the theme's `truncate` via tailwind-merge).
     select: {
       slots: {
         placeholder: 'truncate text-muted',
+        content: 'w-auto min-w-(--reka-select-trigger-width) max-w-[min(32rem,calc(100vw-2rem))]',
+        itemLabel: 'text-clip break-words',
       },
     },
     selectMenu: {
       slots: {
         placeholder: 'truncate text-muted',
+        content: 'w-auto min-w-(--reka-combobox-trigger-width) max-w-[min(32rem,calc(100vw-2rem))]',
+        itemLabel: 'text-clip break-words',
+      },
+    },
+    inputMenu: {
+      slots: {
+        content: 'w-auto min-w-(--reka-combobox-trigger-width) max-w-[min(32rem,calc(100vw-2rem))]',
+        itemLabel: 'text-clip break-words',
       },
     },
     input: {

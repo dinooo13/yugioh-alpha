@@ -128,6 +128,30 @@ describe('CardDetailModal', () => {
     expect(text).toContain('Kontextbereich')
   })
 
+  it('shows a "?" stat (stored as -1) as "?" and a missing one (a Link\'s DEF) as a dash (#134)', async () => {
+    function stat(label: 'ATK' | 'DEF') {
+      const term = dialog().findAll('dt').find(dt => dt.text() === label)
+      return term?.element.nextElementSibling?.textContent?.trim()
+    }
+
+    const first = await mountModal({ detail: cardDetail({ atk: -1, def: -1 }) })
+    await vi.waitFor(() => {
+      expect(stat('ATK')).toBe('?')
+    })
+    expect(stat('DEF')).toBe('?')
+    expect(dialog().text()).not.toContain('-1')
+
+    first.component.unmount()
+    await vi.waitFor(() => {
+      expect(dialog().exists()).toBe(false)
+    })
+    await mountModal({ detail: cardDetail({ type: 'Link Monster', frameType: 'link', atk: 2300, def: null, level: null, linkval: 3 }) })
+    await vi.waitFor(() => {
+      expect(stat('ATK')).toBe('2300')
+    })
+    expect(stat('DEF')).toBe('–')
+  })
+
   it('falls back to the English text with a hint when a card has no German data', async () => {
     await mountModal({ detail: cardDetail({ nameDe: null, descDe: null }) })
 
