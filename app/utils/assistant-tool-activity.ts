@@ -14,7 +14,7 @@ import { isAssistantToolName, summarizeToolResult, toolCallDetail } from '~~/sha
 import type { AssistantToolCallView, AssistantToolOutcome } from '~~/shared/assistant-chat'
 import type { AssistantUIMessagePart } from '~~/shared/assistant-ui'
 
-/** A tool call as a chip shows it (the persisted/streamed call, minus its id). */
+/** A tool call as a chip shows it: the tool, its input and the deck's name (#53). */
 export type ToolActivityCall = Pick<AssistantToolCallView, 'name' | 'arguments' | 'deckName'>
 
 type Translate = (key: string, named?: Record<string, unknown>, plural?: number) => string
@@ -23,22 +23,6 @@ const DETAIL_MAX_LENGTH = 40
 
 function truncate(text: string, max: number): string {
   return text.length > max ? `${text.slice(0, max - 1)}…` : text
-}
-
-/**
- * The outcome of a persisted `role: 'tool'` message's `content` (the
- * JSON-serialized result the model saw) — for the former thread
- * (`useAssistantThread`), removed with it (#84, 84c).
- */
-export function storedToolResultOutcome(content: string): { ok: boolean, outcome: AssistantToolOutcome } {
-  let parsed: unknown
-  try {
-    parsed = content.trim() === '' ? null : JSON.parse(content)
-  }
-  catch {
-    return { ok: true, outcome: {} }
-  }
-  return summarizeToolResult(true, parsed)
 }
 
 /** "Sucht im Katalog: Dark Magician" — the tool's label, plus the query, name or deck name (#53) it works on. An unknown tool shows its name. */
@@ -50,7 +34,7 @@ export function toolCallLabel(t: Translate, call: ToolActivityCall): string {
 
 /**
  * The text after a finished chip: the result count, a pending proposal, or
- * "failed" (the raw error goes into the chip's tooltip, see ToolActivity.vue).
+ * "failed" (the raw error goes into the chip's body, see ToolPart.vue).
  * `formatCount` formats the number in the interface language.
  */
 export function toolOutcomeSummary(t: Translate, ok: boolean, outcome: AssistantToolOutcome, formatCount: (count: number) => string): string {

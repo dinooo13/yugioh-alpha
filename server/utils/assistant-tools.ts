@@ -3,12 +3,12 @@
 // about the user's catalog/inventory/decks, plus the four write tools that
 // never mutate directly — they validate their arguments (same
 // hand-rolled `validate*Input` style as the rest of the server) and return a
-// **pending action** description instead. The chat engine
-// (server/utils/assistant-chat.ts) persists that as an `assistantAction` row
-// and only `applyAction` below actually calls the existing, already-tested
-// write utils (`addOwnedCardsBulkSync`, `createDeck`, `updateDeck`, `upsertDeckCard`),
-// re-validating the stored payload and running every write of one action
-// inside a single transaction.
+// **pending action** description instead. `buildAssistantToolSet` (the tools
+// as the AI SDK turn uses them, ADR 0020) persists that as an
+// `assistantAction` row, and only `applyAction` below actually calls the
+// existing, already-tested write utils (`addOwnedCardsBulkSync`,
+// `createDeck`, `updateDeck`, `upsertDeckCard`), re-validating the stored
+// payload and running every write of one action inside a single transaction.
 //
 // Every tool is user-scoped: `run(ctx, args)` only ever touches `ctx.userId`'s
 // own rows, and a referenced deck/collection/action that belongs to someone
@@ -21,7 +21,6 @@ import { jsonSchema, tool } from 'ai'
 import type { JSONSchema7, JSONValue, Tool } from 'ai'
 import type { useDb } from '../db'
 import { assistantAction, catalogCard, catalogCardImage, collection, ownedCard } from '../db/schema'
-import type { ToolDefinition } from './deck-assistant-model'
 import { activeCatalogCard, cardNameMatches } from './card-name-search'
 import { getCatalogCardDetail } from './catalog-search'
 import { requireCollectionOwnedByUser, listCollections } from './collections'
@@ -736,9 +735,9 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
       required: ['query'],
       properties: {
         query: { type: 'string', description: TOOL_PARAM_DESCRIPTIONS.cardNameQuery },
-        // The real number is filled in by `toolDefinitions()` below, from
-        // `getAssistantLimits()` — this array is built once at module load,
-        // so the live (possibly overridden) limit can't be baked in here.
+        // The real number is filled in by `toolParameters()` below, from the
+        // turn's limits — this array is built once at module load, so the
+        // live (possibly overridden) limit can't be baked in here.
         limit: { type: 'integer', description: TOOL_PARAM_DESCRIPTIONS.searchCatalogLimit(0) },
       },
     },
@@ -965,22 +964,6 @@ function toolParameters(tool: AssistantTool, toolResultItems: number): Record<st
       limit: { type: 'integer', description: TOOL_PARAM_DESCRIPTIONS.searchCatalogLimit(toolResultItems) },
     },
   }
-}
-
-export function toolDefinitions(): ToolDefinition[] {
-  const { toolResultItems } = getAssistantLimits()
-  return ASSISTANT_TOOLS.map(tool => ({
-    type: 'function',
-    function: { name: tool.name, description: tool.description, parameters: toolParameters(tool, toolResultItems) },
-  }))
-}
-
-export async function runTool(name: string, ctx: ToolRunContext, rawArgs: unknown): Promise<ToolOutcome> {
-  const tool = ASSISTANT_TOOLS.find(candidate => candidate.name === name)
-  if (!tool) {
-    badRequest(TOOL_TEXT.unknownTool(name))
-  }
-  return tool.run(ctx, rawArgs)
 }
 
 // --- The tool set for the AI SDK engine (ADR 0020) ----------------------------------

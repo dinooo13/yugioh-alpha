@@ -41,7 +41,6 @@
       "regenerate": "Antwort neu erzeugen",
       "errors": {
         "load": "Die Unterhaltung konnte nicht geladen werden.",
-        "refresh": "Die Unterhaltung konnte nicht aktualisiert werden.",
         "connectionLost": "Die Verbindung wurde unterbrochen. Bitte versuche es erneut.",
         "unexpected": "Es ist ein unerwarteter Fehler aufgetreten."
       }

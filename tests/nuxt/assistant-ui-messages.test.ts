@@ -300,6 +300,12 @@ describe('validateAssistantTurnRequest', () => {
       .toEqual({ trigger: 'submit-message', text: 'x', images: [] })
   })
 
+  it('measures the image size cap on the decoded payload, not on the data URL\'s length', () => {
+    // 12 MB decoded is about 16 MB of base64 — within the cap.
+    const base64 = 'A'.repeat(Math.floor((12 * 1024 * 1024) / 3) * 4)
+    expect(() => validateAssistantTurnRequest(submit([{ type: 'file', mediaType: 'image/png', url: `data:image/png;base64,${base64}` }]))).not.toThrow()
+  })
+
   it.each([
     ['a non-object body', 'nope'],
     ['an unknown trigger', { trigger: 'resume' }],

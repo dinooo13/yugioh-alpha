@@ -348,6 +348,10 @@ a deck ("Mit KI bearbeiten"), and deck proposals carry a legality/missing-cards 
 The recommended OpenCode Go model is `mimo-v2.6-pro` (MiMo V2.6 Pro), which
 covers text, streamed tool calls, and image turns without a separate vision
 model; see [`.env.example`](../.env.example).
+Since [ADR 0020](adr/0020-assistant-on-the-ai-sdk.md) (#84) the assistant runs on the
+Vercel AI SDK with Nuxt UI's chat components, stores messages as AI SDK `UIMessage` parts
+(older conversations are converted when read), guards against looping tool calls (#54), and
+offers a model picker (`NUXT_ASSISTANT_MODELS`).
 
 ### Phase 9: German and English (#34)
 

@@ -44,6 +44,25 @@ describe('buildSystemPrompt', () => {
     expect(prompt.startsWith(SYSTEM_PROMPT)).toBe(true)
   })
 
+  it('names cards in the card language, independent of the reply language (ADR 0015)', () => {
+    for (const locale of ['de', 'en'] as const) {
+      for (const cardLocale of ['de', 'en'] as const) {
+        const prompt = buildSystemPrompt({ deckContext: null, hasImages: false, locale, cardLocale })
+        expect(prompt.endsWith(`\n\n${REPLY_LANGUAGE_INSTRUCTION[locale]}\n\n${CARD_NAME_INSTRUCTION[cardLocale]}`), `${locale}/${cardLocale}`).toBe(true)
+      }
+    }
+    expect(REPLY_LANGUAGE_INSTRUCTION.en).toContain('Reply in English unless the user explicitly asks for another language.')
+    expect(REPLY_LANGUAGE_INSTRUCTION.de).toContain('Reply in German')
+    expect(CARD_NAME_INSTRUCTION.en).toContain('Keep card names in English')
+    expect(CARD_NAME_INSTRUCTION.de).toContain('official German name (nameDe in tool results)')
+    // The reply-language instruction doesn't speak about card names.
+    expect(REPLY_LANGUAGE_INSTRUCTION.de).not.toContain('card names')
+    expect(REPLY_LANGUAGE_INSTRUCTION.en).not.toContain('card names')
+    // The model-facing prompt itself is English in every locale.
+    expect(SYSTEM_PROMPT.startsWith('You are the assistant in YGO Alpha')).toBe(true)
+    expect(SYSTEM_PROMPT).toContain('the Yu-Gi-Oh! trading card game')
+  })
+
   it('leaves out the deck context and image hint when there are none', () => {
     expect(buildSystemPrompt({ deckContext: null, hasImages: false, locale: 'de', cardLocale: 'de' }))
       .toBe([SYSTEM_PROMPT, REPLY_LANGUAGE_INSTRUCTION.de, CARD_NAME_INSTRUCTION.de].join('\n\n'))

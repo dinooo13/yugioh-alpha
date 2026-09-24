@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { claimTurnLock, isTurnInFlight, releaseTurnLock } from '../../server/utils/assistant-turn-lock'
 
-// Unit-level coverage for the per-user turn lock the messages endpoint
-// (`server/api/assistant/chat/[id]/messages.post.ts`) uses to 409 a second
+// Unit-level coverage for the per-user turn lock the stream endpoint
+// (`server/api/assistant/chat/[id]/stream.post.ts`) uses to 409 a second
 // concurrent submit — extracted specifically so this is testable without
 // spinning up an HTTP server (repo convention is util-level tests).
 
