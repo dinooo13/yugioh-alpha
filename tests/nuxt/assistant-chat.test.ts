@@ -22,7 +22,8 @@ import { createDeck, deleteDeck, updateDeck, upsertDeckCard } from '../../server
 import { createRuleFormat, validateRuleFormatInput } from '../../server/utils/rule-formats'
 import { readFileSync } from 'node:fs'
 import { ASSISTANT_CONVERSATION_TITLE_MAX, ASSISTANT_ERROR_CODES, deckConversationTitle } from '../../shared/assistant-chat'
-import { REPLY_LANGUAGE_INSTRUCTION, TURN_TEXT } from '../../server/utils/assistant-prompts'
+import { CARD_NAME_INSTRUCTION, REPLY_LANGUAGE_INSTRUCTION, TURN_TEXT } from '../../server/utils/assistant-prompts'
+import { seedGermanNames } from './fixtures/german-names'
 
 const CARD = {
   darkMagician: 46986414,
@@ -543,15 +544,59 @@ describe('runChatTurn: interface language (ADR 0014)', () => {
     await runChatTurn(db, 'user-a', conversation.id, { text: 'hello', images: NO_IMAGES, locale: 'en' }, model, collectEvents().emit)
     await runChatTurn(db, 'user-a', conversation.id, { text: 'hallo', images: ['data:image/png;base64,abc'], locale: 'de' }, model, collectEvents().emit)
 
-    expect(calls[0]!.system.endsWith(`\n\n${REPLY_LANGUAGE_INSTRUCTION.de}`)).toBe(true)
-    expect(calls[1]!.system.endsWith(`\n\n${REPLY_LANGUAGE_INSTRUCTION.en}`)).toBe(true)
+    // Without a card language, the card names follow the interface language.
+    expect(calls[0]!.system.endsWith(`\n\n${REPLY_LANGUAGE_INSTRUCTION.de}\n\n${CARD_NAME_INSTRUCTION.de}`)).toBe(true)
+    expect(calls[1]!.system.endsWith(`\n\n${REPLY_LANGUAGE_INSTRUCTION.en}\n\n${CARD_NAME_INSTRUCTION.en}`)).toBe(true)
     expect(calls[1]!.system).toContain('Reply in English unless the user explicitly asks for another language.')
     expect(calls[1]!.system).not.toContain('Reply in German')
-    // The instruction stays last, after the image hint.
+    // The two instructions stay last, after the image hint.
     expect(calls[2]!.system).toContain('search_catalog`, and ask if you are unsure.')
-    expect(calls[2]!.system.endsWith(REPLY_LANGUAGE_INSTRUCTION.de)).toBe(true)
+    expect(calls[2]!.system.endsWith(`${REPLY_LANGUAGE_INSTRUCTION.de}\n\n${CARD_NAME_INSTRUCTION.de}`)).toBe(true)
     // The model-facing prompt itself is English in every locale.
     expect(calls[0]!.system.startsWith('You are a Yu-Gi-Oh! assistant')).toBe(true)
+  })
+
+  it('names cards in the card language, independent of the reply language (ADR 0015)', async () => {
+    const conversation = createConversation(db, 'user-a')
+    const { model, calls } = scriptedChatModel([textResult('ok')])
+
+    const combinations = [
+      { locale: 'de', cardLocale: 'de' },
+      { locale: 'de', cardLocale: 'en' },
+      { locale: 'en', cardLocale: 'de' },
+      { locale: 'en', cardLocale: 'en' },
+    ] as const
+    for (const languages of combinations) {
+      await runChatTurn(db, 'user-a', conversation.id, { text: 'hallo', images: NO_IMAGES, ...languages }, model, collectEvents().emit)
+    }
+
+    combinations.forEach(({ locale, cardLocale }, index) => {
+      const system = calls[index]!.system
+      expect(system.endsWith(`\n\n${REPLY_LANGUAGE_INSTRUCTION[locale]}\n\n${CARD_NAME_INSTRUCTION[cardLocale]}`), `${locale}/${cardLocale}`).toBe(true)
+    })
+    expect(calls[1]!.system).toContain('Keep card names in English')
+    expect(calls[1]!.system).toContain('Reply in German')
+    expect(calls[2]!.system).toContain('official German name (nameDe in tool results)')
+    expect(calls[2]!.system).toContain('Reply in English')
+    // The reply-language instruction no longer speaks about card names.
+    expect(REPLY_LANGUAGE_INSTRUCTION.de).not.toContain('card names')
+    expect(REPLY_LANGUAGE_INSTRUCTION.en).not.toContain('card names')
+  })
+
+  it('passes the card language to the tools: German names in the results only in German (ADR 0015)', async () => {
+    seedGermanNames(db, { [CARD.darkMagician]: 'Dunkler Magier' })
+    const conversation = createConversation(db, 'user-a')
+    const { model } = scriptedChatModel([toolCallResult('search_catalog', { query: 'Dunkler' }), textResult('ok')])
+
+    const german = collectEvents()
+    await runChatTurn(db, 'user-a', conversation.id, { text: 'suche', images: NO_IMAGES, locale: 'en', cardLocale: 'de' }, model, german.emit)
+    const { model: englishModel } = scriptedChatModel([toolCallResult('search_catalog', { query: 'Dunkler' }), textResult('ok')])
+    const english = collectEvents()
+    await runChatTurn(db, 'user-a', conversation.id, { text: 'search', images: NO_IMAGES, locale: 'de', cardLocale: 'en' }, englishModel, english.emit)
+
+    const toolMessages = getConversationDetail(db, 'user-a', conversation.id).messages.filter(message => message.role === 'tool')
+    expect(JSON.parse(toolMessages[0]!.content).items[0]).toMatchObject({ name: 'Dark Magician', nameDe: 'Dunkler Magier' })
+    expect(JSON.parse(toolMessages[1]!.content).items[0]).toEqual(expect.not.objectContaining({ nameDe: expect.anything() }))
   })
 
   it('saves fallback answers in the turn\'s locale', async () => {
@@ -726,7 +771,9 @@ describe('deck-linked conversations (ADR 0011)', () => {
     expect(system).toContain('Counts: Main 2 · Extra 0 · Side 0')
     // Everything the model reads is English (ADR 0014).
     expect(system).toMatch(/Legality: not legal – Dark Magician: 2 copies in the deck; 1 copy is allowed\./)
-    expect(system).toContain(`${CARD.darkMagician}|Dark Magician|main|2|0`)
+    // German card language (the default): a nameDe column, empty for a card without a German name.
+    expect(system).toContain('Cards (catalogCardId|name|nameDe|section|quantity|owned):')
+    expect(system).toContain(`${CARD.darkMagician}|Dark Magician||main|2|0`)
     expect(system).toContain(`update_deck_cards and deckId=${deck.id}`)
     expect(system).toContain('its format only with set_deck_format and this deckId')
     // The deck block comes before the reply-language instruction.
@@ -757,12 +804,28 @@ describe('deck-linked conversations (ADR 0011)', () => {
 
     await runChatTurn(db, 'user-a', conversation.id, { text: 'Und jetzt?', images: NO_IMAGES }, model, collectEvents().emit)
     const nextSystem = calls.at(-1)!.system
-    expect(nextSystem).toContain(`${CARD.potOfGreed}|Pot of Greed|main|1|0`)
+    expect(nextSystem).toContain(`${CARD.potOfGreed}|Pot of Greed||main|1|0`)
     expect(nextSystem).toContain('Counts: Main 3 · Extra 0 · Side 0')
 
     // Nothing of the block ends up in the persisted messages.
     const stored = getConversationDetail(db, 'user-a', conversation.id).messages
     expect(stored.some(message => message.content.includes('Deck ID:'))).toBe(false)
+  })
+
+  it('lists the deck\'s cards with their German names in German card language only (ADR 0015)', async () => {
+    seedGermanNames(db, { [CARD.darkMagician]: 'Dunkler Magier' })
+    const deck = seedDeck()
+    const conversation = createConversation(db, 'user-a', { deckId: deck.id })
+    const { model, calls } = scriptedChatModel([textResult('ok')])
+
+    await runChatTurn(db, 'user-a', conversation.id, { text: 'Was ist in meinem Deck?', images: NO_IMAGES, locale: 'en', cardLocale: 'de' }, model, collectEvents().emit)
+    await runChatTurn(db, 'user-a', conversation.id, { text: 'Was ist in meinem Deck?', images: NO_IMAGES, locale: 'de', cardLocale: 'en' }, model, collectEvents().emit)
+
+    expect(calls[0]!.system).toContain('Cards (catalogCardId|name|nameDe|section|quantity|owned):')
+    expect(calls[0]!.system).toContain(`${CARD.darkMagician}|Dark Magician|Dunkler Magier|main|2|0`)
+    expect(calls[1]!.system).toContain('Cards (catalogCardId|name|section|quantity|owned):')
+    expect(calls[1]!.system).toContain(`${CARD.darkMagician}|Dark Magician|main|2|0`)
+    expect(calls[1]!.system).not.toContain('Dunkler Magier')
   })
 
   it('adds no deck block to an unlinked conversation', async () => {

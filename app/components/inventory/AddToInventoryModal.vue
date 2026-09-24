@@ -45,7 +45,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const { cardName } = useCardText()
+const { cardName, cardValue } = useCardText()
 const apiError = useApiError()
 const { languageItems, conditionItems, editionItems } = useCardOptionItems()
 
@@ -170,7 +170,7 @@ async function save() {
             {{ cardName(card) }}
           </p>
           <p class="text-xs text-gray-500">
-            {{ card.type }}
+            {{ cardValue('type', card.type) }}
           </p>
         </div>
 

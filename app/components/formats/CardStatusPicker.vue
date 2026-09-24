@@ -25,7 +25,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const { cardName } = useCardText()
+const { cardName, cardValue } = useCardText()
 
 const search = ref('')
 const results = ref<CatalogSearchItem[]>([])
@@ -130,7 +130,7 @@ function removeCard(id: number) {
           @click="addCard(card)"
         >
           <span class="text-sm text-gray-900">{{ cardName(card) }}</span>
-          <span class="text-xs text-gray-500">{{ card.type }}</span>
+          <span class="text-xs text-gray-500">{{ cardValue('type', card.type) }}</span>
         </button>
       </li>
     </ul>

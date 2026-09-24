@@ -45,6 +45,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const { cardValueOptions } = useCardText()
 const count = useCount()
 const apiError = useApiError()
 const validationText = useValidationText()
@@ -302,6 +303,10 @@ const { data: facets } = await useFetch<{
 })
 
 const setItems = computed(() => (facets.value?.sets ?? []).map(set => ({ label: set.name, value: set.id })))
+// Filter values stay English (the rule engine matches them); labels follow the card language.
+const typeItems = computed(() => cardValueOptions('type', facets.value?.types ?? []))
+const attributeItems = computed(() => cardValueOptions('attribute', facets.value?.attributes ?? []))
+const raceItems = computed(() => cardValueOptions('race', facets.value?.races ?? []))
 const setNames = computed(() => Object.fromEntries((facets.value?.sets ?? []).map(set => [set.id, set.name])))
 
 // --- Rule list -------------------------------------------------------------
@@ -631,7 +636,8 @@ async function save() {
               <USelectMenu
                 v-model="rule.filter.types"
                 multiple
-                :items="facets.types"
+                value-key="value"
+                :items="typeItems"
                 :disabled="readonly"
                 :placeholder="t('formats.editor.types')"
                 :aria-label="t('formats.editor.types')"
@@ -640,7 +646,8 @@ async function save() {
               <USelectMenu
                 v-model="rule.filter.attributes"
                 multiple
-                :items="facets.attributes"
+                value-key="value"
+                :items="attributeItems"
                 :disabled="readonly"
                 :placeholder="t('formats.editor.attributes')"
                 :aria-label="t('formats.editor.attributes')"
@@ -649,7 +656,8 @@ async function save() {
               <USelectMenu
                 v-model="rule.filter.races"
                 multiple
-                :items="facets.races"
+                value-key="value"
+                :items="raceItems"
                 :disabled="readonly"
                 :placeholder="t('formats.editor.races')"
                 :aria-label="t('formats.editor.races')"

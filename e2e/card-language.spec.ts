@@ -94,4 +94,39 @@ test.describe('card language', () => {
     await expect(detail.getByText('Für diese Karte gibt es keinen deutschen Kartentext.')).toBeVisible()
     await expect(detail.getByText('Englisch:', { exact: false })).toHaveCount(0)
   })
+
+  test('card data labels follow the card language; filter values stay English (#34 F3d)', async ({ page }) => {
+    const warnings = trackHydrationWarnings(page)
+    await registerAndLogin(page)
+
+    // German: the attribute filter offers "FINSTERNIS" and filters by DARK.
+    await page.goto('/catalog')
+    await page.waitForLoadState('networkidle')
+    const attribute = page.getByRole('combobox', { name: 'Attribut' })
+    await expect(attribute.locator('option', { hasText: 'FINSTERNIS' })).toHaveAttribute('value', 'DARK')
+    await expect(attribute.locator('option', { hasText: /^DARK$/ })).toHaveCount(0)
+    await attribute.selectOption({ label: 'FINSTERNIS' })
+    await expect(page).toHaveURL(/attribute=DARK/)
+    const tile = page.getByRole('button', { name: CARD.darkMagician, exact: true })
+    await expect(tile.getByText('FINSTERNIS', { exact: true })).toBeVisible()
+    await expect(tile.getByText('Normales Monster', { exact: true })).toBeVisible()
+
+    // English interface, German cards: still German labels (also in the first server render).
+    await page.request.patch('/api/profile', { data: { locale: 'en', cardLocale: 'de' } })
+    await page.goto('/catalog?attribute=DARK')
+    await page.waitForLoadState('networkidle')
+    await expect(page.getByRole('combobox', { name: 'Attribute' }).locator('option', { hasText: 'FINSTERNIS' })).toHaveAttribute('value', 'DARK')
+    await expect(page.getByRole('button', { name: CARD.darkMagician, exact: true }).getByText('FINSTERNIS', { exact: true })).toBeVisible()
+
+    // English cards: the stored values.
+    await page.request.patch('/api/profile', { data: { cardLocale: 'en' } })
+    await page.goto('/catalog?attribute=DARK')
+    await page.waitForLoadState('networkidle')
+    await expect(page.getByRole('combobox', { name: 'Attribute' }).locator('option', { hasText: /^DARK$/ })).toHaveAttribute('value', 'DARK')
+    const englishTile = page.getByRole('button', { name: CARD_EN.darkMagician, exact: true })
+    await expect(englishTile.getByText('DARK', { exact: true })).toBeVisible()
+    await expect(englishTile.getByText('Normal Monster', { exact: true })).toBeVisible()
+
+    expect(warnings).toEqual([])
+  })
 })

@@ -31,7 +31,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const { cardName } = useCardText()
+const { cardName, cardValue } = useCardText()
 const {
   languageItems,
   conditionItems,
@@ -200,7 +200,7 @@ function onPicked(card: PickedCatalogCard) {
           {{ selected ? cardName(selected) : t('quickEntry.status.ohne_treffer') }}
         </p>
         <p class="truncate text-xs text-gray-500">
-          <span v-if="selected">{{ selected.type }} · </span>{{ valuesLabel }}
+          <span v-if="selected">{{ cardValue('type', selected.type) }} · </span>{{ valuesLabel }}
         </p>
         <p
           v-if="row.conflict"

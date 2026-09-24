@@ -11,7 +11,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const { cardName } = useCardText()
+const { cardName, cardValue } = useCardText()
 const apiError = useApiError()
 
 const noteDraft = ref(props.item.note ?? '')
@@ -81,7 +81,7 @@ async function remove() {
           {{ cardName(item) }}
         </p>
         <p class="text-xs text-gray-500">
-          {{ item.type }}
+          {{ cardValue('type', item.type) }}
         </p>
         <p
           v-if="item.owned !== undefined"

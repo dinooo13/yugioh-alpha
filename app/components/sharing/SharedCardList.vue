@@ -18,7 +18,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const { cardName } = useCardText()
+const { cardName, cardValue } = useCardText()
 
 const searchInput = ref('')
 let debounceTimer: ReturnType<typeof setTimeout> | undefined
@@ -47,7 +47,7 @@ function nextPage() {
 }
 
 function cardMetaLine(card: SharedCardListItem): string {
-  return [card.type, card.level !== null ? t('card.stars', { level: card.level }) : null, card.attribute]
+  return [cardValue('type', card.type), card.level !== null ? t('card.stars', { level: card.level }) : null, card.attribute ? cardValue('attribute', card.attribute) : null]
     .filter(Boolean)
     .join(' · ')
 }

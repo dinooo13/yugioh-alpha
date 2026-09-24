@@ -160,7 +160,7 @@ describe('EntryReviewTable', () => {
     expect(text).toContain('Dark Magician')
     expect(text).toContain('Kein Treffer')
     expect(text).toContain('Standardwerte')
-    expect(text).toContain('Normal Monster · EN · Neuwertig (Near Mint) · Unlimitiert')
+    expect(text).toContain('Normales Monster · EN · Neuwertig (Near Mint) · Unlimitiert')
   })
 
   it('explains a contradicting set code on the row', async () => {

@@ -8,7 +8,7 @@ import type { AssistantMessageInput, ChatTurnEvent } from '../../../../utils/ass
 import { requireUser } from '../../../../utils/session'
 import { claimTurnLock, isTurnInFlight, releaseTurnLock } from '../../../../utils/assistant-turn-lock'
 import { ASSISTANT_MESSAGE_TOTAL_BYTES_MAX } from '../../../../../shared/assistant-chat'
-import { resolveUiLocale } from '../../../../utils/ui-locale'
+import { resolveCardLocale, resolveUiLocale } from '../../../../utils/ui-locale'
 
 // A little over the encoded-image cap plus the rest of the JSON body (text
 // field, array brackets, field names) — generous enough for any legitimate
@@ -68,10 +68,12 @@ export default defineEventHandler(async (event) => {
   }
 
   // The interface language of this request decides the reply language and
-  // the fallback texts saved into the conversation (ADR 0014) — per turn,
-  // so switching the language mid-conversation takes effect right away.
-  // Resolved before the lock below is claimed, so it can't leak it.
+  // the fallback texts saved into the conversation (ADR 0014), the card
+  // language which names the model calls cards by (ADR 0015) — per turn, so
+  // switching either mid-conversation takes effect right away. Resolved
+  // before the lock below is claimed, so it can't leak it.
   const locale = await resolveUiLocale(event)
+  const cardLocale = await resolveCardLocale(event)
 
   // Claimed right after the check, before `readBody` — otherwise two
   // near-simultaneous submits could both pass the check while the first is
@@ -108,7 +110,7 @@ export default defineEventHandler(async (event) => {
   const abortController = new AbortController()
   stream.onClosed(() => abortController.abort())
 
-  runChatTurn(db, user.id, id, { ...input, locale }, model, async (turnEvent) => {
+  runChatTurn(db, user.id, id, { ...input, locale, cardLocale }, model, async (turnEvent) => {
     await stream.push({ event: sseEventName(turnEvent), data: JSON.stringify(sseEventData(turnEvent)) })
   }, abortController.signal)
     .catch(() => {
