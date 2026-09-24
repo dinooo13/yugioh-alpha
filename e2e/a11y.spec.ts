@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 import { registerAndLogin } from './helpers/auth'
+import { CARD } from './helpers/cards'
 
 // Passcode from the seeded E2E catalog fixture (server/db/fixtures/catalog-fixture.ts).
 const DARK_MAGICIAN = 46986414
@@ -74,17 +75,17 @@ test.describe('accessibility basics', () => {
     }
 
     for (const name of [
-      'Eine Kopie von Dark Magician aus dem Main Deck entfernen',
-      'Eine Kopie von Dark Magician zum Main Deck hinzufügen',
-      'Optionen für Dark Magician',
-      'Dark Magician aus dem Main Deck entfernen',
+      `Eine Kopie von ${CARD.darkMagician} aus dem Main Deck entfernen`,
+      `Eine Kopie von ${CARD.darkMagician} zum Main Deck hinzufügen`,
+      `Optionen für ${CARD.darkMagician}`,
+      `${CARD.darkMagician} aus dem Main Deck entfernen`,
       'Weitere Aktionen',
     ]) {
       await expectTapTarget(name)
     }
 
     await page.getByRole('button', { name: 'Karten hinzufügen', exact: true }).click()
-    await expect(page.getByRole('button', { name: 'Dark Magician zum Main Deck hinzufügen', exact: true })).toBeVisible()
-    await expectTapTarget('Dark Magician zum Main Deck hinzufügen')
+    await expect(page.getByRole('button', { name: `${CARD.darkMagician} zum Main Deck hinzufügen`, exact: true })).toBeVisible()
+    await expectTapTarget(`${CARD.darkMagician} zum Main Deck hinzufügen`)
   })
 })

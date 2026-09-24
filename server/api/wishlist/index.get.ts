@@ -2,6 +2,7 @@ import { getQuery } from 'h3'
 import { useDb } from '../../db'
 import { listWishlist } from '../../utils/wishlist'
 import { requireUser } from '../../utils/session'
+import { resolveCardLocale } from '../../utils/ui-locale'
 
 function parseListQuery(rawQuery: Record<string, unknown>) {
   const first = (value: unknown) => (Array.isArray(value) ? value[0] : value)
@@ -19,5 +20,8 @@ function parseListQuery(rawQuery: Record<string, unknown>) {
 export default defineEventHandler(async (event) => {
   const user = await requireUser(event)
 
-  return listWishlist(useDb(), user.id, parseListQuery(getQuery(event)))
+  return listWishlist(useDb(), user.id, {
+    ...parseListQuery(getQuery(event)),
+    cardLocale: await resolveCardLocale(event),
+  })
 })

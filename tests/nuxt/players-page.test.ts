@@ -68,6 +68,7 @@ describe('public profile page', () => {
         cover: {
           catalogCardId: 89631139,
           name: 'Blue-Eyes White Dragon',
+          nameDe: null,
           imageSmall: 'https://images.example/cards_small/89631139.jpg',
           imageLarge: 'https://images.example/cards/89631139.jpg',
         },
@@ -195,6 +196,7 @@ describe('public deck page', () => {
         main: [{
           catalogCardId: 89631139,
           name: 'Blue-Eyes White Dragon',
+          nameDe: null,
           type: 'Normal Monster',
           frameType: 'normal',
           attribute: 'LIGHT',

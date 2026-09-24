@@ -31,6 +31,8 @@ export interface ProfileUpdateInput {
   bio?: string | null
   /** `null` resets to "not chosen" (cookie / Accept-Language decide again). */
   locale?: AppLocale | null
+  /** Card language (ADR 0015); `null` resets it to "follow the interface language". */
+  cardLocale?: AppLocale | null
 }
 
 export type ProfileRow = typeof userProfile.$inferSelect
@@ -154,8 +156,10 @@ export function ensureProfile(db: Db, userId: string): ProfileRow {
  * 400 'displayName must be at most 60 characters'
  * 400 'bio must be at most 500 characters'
  * 400 'locale must be one of de, en'                       (null resets it)
+ * 400 'cardLocale must be one of de, en'                   (null resets it)
  * Each 400 carries `data.code` (handle_invalid, handle_reserved,
- * display_name_required, display_name_too_long, bio_too_long, invalid_locale).
+ * display_name_required, display_name_too_long, bio_too_long, invalid_locale,
+ * invalid_card_locale).
  * Unknown keys are ignored, mirroring validateDeckUpdateInput.
  */
 export function validateProfileUpdateInput(body: unknown): ProfileUpdateInput {
@@ -223,6 +227,13 @@ export function validateProfileUpdateInput(body: unknown): ProfileUpdateInput {
     input.locale = body.locale
   }
 
+  if (body.cardLocale !== undefined) {
+    if (body.cardLocale !== null && !isAppLocale(body.cardLocale)) {
+      badRequest(`cardLocale must be one of ${APP_LOCALES.join(', ')}`, 'invalid_card_locale')
+    }
+    input.cardLocale = body.cardLocale
+  }
+
   return input
 }
 
@@ -245,6 +256,7 @@ export function updateProfile(db: Db, userId: string, patch: ProfileUpdateInput)
       displayName: patch.displayName ?? current.displayName,
       bio: patch.bio !== undefined ? patch.bio : current.bio,
       locale: patch.locale !== undefined ? patch.locale : current.locale,
+      cardLocale: patch.cardLocale !== undefined ? patch.cardLocale : current.cardLocale,
       updatedAt: now,
     })
     .where(eq(userProfile.userId, userId))
@@ -323,6 +335,7 @@ export function toOwnProfile(row: ProfileRow): OwnProfile {
     inventoryVisibility: row.inventoryVisibility,
     wishlistVisibility: row.wishlistVisibility,
     locale: row.locale ?? null,
+    cardLocale: row.cardLocale ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   }

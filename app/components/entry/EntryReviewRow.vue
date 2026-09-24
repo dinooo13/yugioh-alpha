@@ -13,6 +13,7 @@ import type { EntryCandidate, EntryDefaults, EntryRow } from '~/utils/card-entry
 interface PickedCatalogCard {
   id: number
   name: string
+  nameDe: string | null
   type: string
   imageUrlSmall: string | null
   printings: Array<{ id: string, cardId: number, setName: string, rarity: string | null }>
@@ -30,6 +31,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const { cardName } = useCardText()
 const {
   languageItems,
   conditionItems,
@@ -58,7 +60,7 @@ const statusMeta = computed(() => {
 
 const candidateItems = computed(() => props.row.candidates.map(candidate => ({
   label: t('quickEntry.row.candidate', {
-    name: candidate.name,
+    name: cardName(candidate),
     matchedBy: t(`quickEntry.matchedBy.${candidate.matchedBy}`),
     score: Math.round(candidate.score * 100),
   }),
@@ -138,6 +140,7 @@ function onPicked(card: PickedCatalogCard) {
   const candidate: EntryCandidate = {
     cardId: card.id,
     name: card.name,
+    nameDe: card.nameDe,
     type: card.type,
     frameType: null,
     imageSmall: card.imageUrlSmall ?? null,
@@ -174,7 +177,7 @@ function onPicked(card: PickedCatalogCard) {
     <div class="flex items-start gap-3">
       <CardThumb
         :src="selected?.imageSmall"
-        :alt="selected?.name ?? row.query"
+        :alt="selected ? cardName(selected) : row.query"
         size="sm"
       />
 
@@ -194,7 +197,7 @@ function onPicked(card: PickedCatalogCard) {
           />
         </div>
         <p class="mt-1 truncate text-sm font-medium text-gray-900">
-          {{ selected ? selected.name : t('quickEntry.status.ohne_treffer') }}
+          {{ selected ? cardName(selected) : t('quickEntry.status.ohne_treffer') }}
         </p>
         <p class="truncate text-xs text-gray-500">
           <span v-if="selected">{{ selected.type }} · </span>{{ valuesLabel }}

@@ -11,6 +11,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const { cardName } = useCardText()
 const apiError = useApiError()
 
 const noteDraft = ref(props.item.note ?? '')
@@ -71,13 +72,13 @@ async function remove() {
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
       <CardThumb
         :src="item.imageSmall"
-        :alt="item.name"
+        :alt="cardName(item)"
         size="md"
       />
 
       <div class="min-w-0 flex-1">
         <p class="truncate text-sm font-medium text-gray-900">
-          {{ item.name }}
+          {{ cardName(item) }}
         </p>
         <p class="text-xs text-gray-500">
           {{ item.type }}
@@ -98,7 +99,7 @@ async function remove() {
         <UInput
           v-model="noteDraft"
           :placeholder="t('wishlist.row.notePlaceholder')"
-          :aria-label="t('wishlist.row.noteFor', { name: item.name })"
+          :aria-label="t('wishlist.row.noteFor', { name: cardName(item) })"
           class="mt-1.5 max-w-xs"
           maxlength="200"
           @blur="onNoteBlur"
@@ -112,13 +113,13 @@ async function remove() {
           variant="outline"
           size="xs"
           :disabled="isSaving || item.quantity <= 1"
-          :aria-label="t('wishlist.row.decrease', { name: item.name })"
+          :aria-label="t('wishlist.row.decrease', { name: cardName(item) })"
           class="tap-target"
           @click="setQuantity(item.quantity - 1)"
         />
         <span
           class="w-8 text-center text-sm font-semibold tabular-nums"
-          :aria-label="t('wishlist.row.quantityOf', { name: item.name })"
+          :aria-label="t('wishlist.row.quantityOf', { name: cardName(item) })"
         >
           {{ item.quantity }}
         </span>
@@ -128,7 +129,7 @@ async function remove() {
           variant="outline"
           size="xs"
           :disabled="isSaving"
-          :aria-label="t('wishlist.row.increase', { name: item.name })"
+          :aria-label="t('wishlist.row.increase', { name: cardName(item) })"
           class="tap-target"
           @click="setQuantity(item.quantity + 1)"
         />

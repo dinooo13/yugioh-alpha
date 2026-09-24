@@ -1,0 +1,1 @@
+ALTER TABLE `user_profile` ADD `card_locale` text;

@@ -26,6 +26,7 @@ interface DeckCardRow {
   owned: number
   usedInDeck: number
   shortfall: number
+  nameDe?: string | null
 }
 
 function row(overrides: Partial<DeckCardRow> & { name: string, section: DeckSection }): DeckCardRow {
@@ -279,6 +280,41 @@ describe('deck editor', () => {
     expect(buttonFor('Stardust Dragon', 'Main Deck').attributes('disabled')).toBeDefined()
     expect(buttonFor('Stardust Dragon', 'Extra Deck').attributes('disabled')).toBeUndefined()
     expect(buttonFor('Stardust Dragon', 'Side Deck').attributes('disabled')).toBeUndefined()
+  })
+
+  it('names deck rows and add-panel cards in the card language (ADR 0015)', async () => {
+    state.deck = deckDetail({
+      main: [row({ name: 'Dark Magician', nameDe: 'Dunkler Magier', section: 'main', quantity: 2, owned: 2, usedInDeck: 2 })],
+    })
+    state.source = {
+      items: [{
+        catalogCardId: 44508094,
+        name: 'Stardust Dragon',
+        nameDe: 'Sternenstaubdrache',
+        type: 'Synchro Monster',
+        attribute: 'WIND',
+        race: 'Dragon',
+        level: 8,
+        imageSmall: null,
+        totalQuantity: 1,
+      }],
+      total: 1,
+    }
+
+    const german = await mountSuspended(DeckEditorPage)
+    expect(german.text()).toContain('Dunkler Magier')
+    expect(german.text()).toContain('Sternenstaubdrache')
+    expect(german.text()).not.toContain('Dark Magician')
+    expect(german.find('[aria-label="Sternenstaubdrache zum Extra Deck hinzufügen"]').exists()).toBe(true)
+    german.unmount()
+
+    useState('card-locale-choice').value = 'en'
+    const english = await mountSuspended(DeckEditorPage)
+    expect(english.text()).toContain('Dark Magician')
+    expect(english.text()).toContain('Stardust Dragon')
+    expect(english.text()).not.toContain('Dunkler Magier')
+    english.unmount()
+    useState('card-locale-choice').value = null
   })
 
   it('offers a quantity stepper and a remove action per deck row', async () => {

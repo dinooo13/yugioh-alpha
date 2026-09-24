@@ -15,6 +15,7 @@ interface InventoryItem {
   edition: string
   note: string | null
   cardName: string
+  cardNameDe?: string | null
   cardType: string
   imageUrlSmall: string | null
   setName: string | null
@@ -24,6 +25,7 @@ interface InventoryItem {
 interface CatalogCard {
   id: number
   name: string
+  nameDe?: string | null
   type: string
   imageUrlSmall?: string | null
   printings?: Array<{
@@ -76,6 +78,9 @@ function emptyFacets(): SearchFacets {
 usePageTitle('inventory.title')
 
 const { t } = useI18n()
+const { cardName } = useCardText()
+// A "Liste" row in the card language (ADR 0015).
+const listItemName = (item: InventoryItem) => cardName({ name: item.cardName, nameDe: item.cardNameDe })
 const count = useCount()
 const apiError = useApiError()
 
@@ -363,6 +368,7 @@ function openEdit(item: InventoryItem) {
   selectedCard.value = {
     id: item.catalogCardId,
     name: item.cardName,
+    nameDe: item.cardNameDe ?? null,
     type: item.cardType,
     imageUrlSmall: item.imageUrlSmall,
     printings: item.printingId
@@ -379,7 +385,7 @@ async function removeItem(item: InventoryItem) {
   errorMessage.value = ''
   const confirmed = await confirm({
     title: t('inventory.confirm.remove.title'),
-    description: t('inventory.confirm.remove.description', { name: item.cardName }),
+    description: t('inventory.confirm.remove.description', { name: listItemName(item) }),
   })
   if (!confirmed) {
     return
@@ -405,12 +411,13 @@ function openPreview(item: SearchResultItem) {
 
 // Name for the "Nur: …" chip, remembered from the preview so it shows before
 // the filtered list has loaded.
-const cardFilterSource = ref<{ id: number, name: string } | null>(null)
+const cardFilterSource = ref<{ id: number, name: string, nameDe?: string | null } | null>(null)
 const cardFilterName = computed(() => {
   if (cardFilterSource.value && cardFilterSource.value.id === cardFilter.value) {
-    return cardFilterSource.value.name
+    return cardName(cardFilterSource.value)
   }
-  return items.value[0]?.cardName ?? t('inventory.cardFilter.fallbackName')
+  const first = items.value[0]
+  return first ? listItemName(first) : t('inventory.cardFilter.fallbackName')
 })
 
 // "In Liste bearbeiten": show this card's individual rows in "Liste".
@@ -428,7 +435,7 @@ async function editInList(item: SearchResultItem) {
   }
   filters.value.q = ''
   debouncedQ.value = ''
-  cardFilterSource.value = { id: item.catalogCardId, name: item.name }
+  cardFilterSource.value = { id: item.catalogCardId, name: item.name, nameDe: item.nameDe }
   await setQuery({ view: undefined, collectionId: undefined, card: String(item.catalogCardId) }, { push: true })
 }
 

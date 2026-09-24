@@ -679,8 +679,13 @@ describe('set_deck_format (write tool)', () => {
     })
     // … the model only reads the English text.
     const { issueDetails: _issueDetails, ...modelValidation } = (outcome.action.payload.preview as { validation: Record<string, unknown> }).validation
-    expect(outcome.result).toMatchObject({ status: 'pending_confirmation', preview: { ...preview, validation: modelValidation } })
+    // … and the missing cards without their display-only German name (ADR 0015, F3c).
+    const payloadMissing = (outcome.action.payload.preview as { missing: Array<Record<string, unknown>> }).missing
+    expect(payloadMissing).toEqual([expect.objectContaining({ catalogCardId: CARD.darkMagician, nameDe: null })])
+    const modelMissing = payloadMissing.map(({ nameDe: _nameDe, ...card }) => card)
+    expect(outcome.result).toMatchObject({ status: 'pending_confirmation', preview: { ...preview, validation: modelValidation, missing: modelMissing } })
     expect((outcome.result as { preview: { validation: object } }).preview.validation).not.toHaveProperty('issueDetails')
+    expect((outcome.result as { preview: { missing: object[] } }).preview.missing[0]).not.toHaveProperty('nameDe')
     expect(outcome.action.summary).toContain('no format → Streng')
 
     expect(getDeckDetail(db, 'user-a', deck.id).format).toBeNull()

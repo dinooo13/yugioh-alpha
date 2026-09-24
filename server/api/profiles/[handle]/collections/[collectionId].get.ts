@@ -2,6 +2,7 @@ import { createError, getQuery, getRouterParam, setHeader } from 'h3'
 import { useDb } from '../../../../db'
 import { getProfileByHandle, toPublicProfile } from '../../../../utils/profiles'
 import { getOptionalUser } from '../../../../utils/session'
+import { resolveCardLocale } from '../../../../utils/ui-locale'
 import { requireViewableCollection } from '../../../../utils/sharing'
 import { listSharedCollection, parseSharedCardListQuery } from '../../../../utils/shared-views'
 import type { SharedCardListResponse } from '../../../../../shared/sharing'
@@ -34,7 +35,10 @@ export default defineEventHandler(async (event): Promise<SharedCardListResponse>
     expectedOwnerUserId: profile.userId,
   })
 
-  const page = listSharedCollection(db, profile.userId, row.id, parseSharedCardListQuery(query))
+  const page = listSharedCollection(db, profile.userId, row.id, {
+    ...parseSharedCardListQuery(query),
+    cardLocale: await resolveCardLocale(event),
+  })
 
   return {
     owner: toPublicProfile(profile),

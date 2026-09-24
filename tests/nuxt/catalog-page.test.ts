@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { DOMWrapper } from '@vue/test-utils'
+import { DOMWrapper, flushPromises } from '@vue/test-utils'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
 import CatalogPage from '~/pages/catalog.vue'
 import { setTestLocale } from './fixtures/locale'
@@ -11,11 +11,67 @@ function body() {
   return new DOMWrapper(document.body)
 }
 
+// Every mounted page is unmounted before the body is cleared: a page left
+// mounted (with its teleported modal) would re-render into the cleared body
+// on the next route change.
+const mounted: Array<{ unmount: () => void }> = []
+
+async function mountPage(options: { route?: string } = {}) {
+  const component = await mountSuspended(CatalogPage, options)
+  mounted.push(component)
+  return component
+}
+
 afterEach(async () => {
+  for (const component of mounted.splice(0)) {
+    component.unmount()
+  }
   document.body.innerHTML = ''
   catalogState.total = 1
+  useState('card-locale-choice').value = null
+  vi.unstubAllGlobals()
+  await useRouter().replace('/catalog')
   await setTestLocale('de')
 })
+
+function cardDetail(overrides: { nameDe?: string | null, descDe?: string | null } = {}) {
+  return {
+    card: {
+      id: 1,
+      name: 'Blue-Eyes White Dragon',
+      nameDe: 'Blauäugiger w. Drache',
+      type: 'Normal Monster',
+      frameType: 'normal',
+      desc: 'This legendary dragon is a powerful engine of destruction.',
+      descDe: 'Dieser legendäre Drache ist eine mächtige Zerstörungsmaschine.',
+      race: 'Dragon',
+      archetype: null,
+      attribute: 'LIGHT',
+      atk: 3000,
+      def: 2500,
+      level: 8,
+      linkval: null,
+      scale: null,
+      linkMarkers: null,
+      banlistInfo: null,
+      cardPrices: null,
+      tcgDate: null,
+      ocgDate: null,
+      ygoprodeckUrl: null,
+      ...overrides,
+    },
+    printings: [],
+    images: [],
+  }
+}
+
+async function openDetail(detail: ReturnType<typeof cardDetail>) {
+  vi.stubGlobal('$fetch', vi.fn(() => Promise.resolve(detail)))
+  // The detail opens through the route (`?card=`), then loads the card.
+  const component = await mountPage({ route: '/catalog?card=1' })
+  await flushPromises()
+  return component
+}
 
 mockNuxtImport('useFetch', () => {
   return vi.fn((url: string | (() => string | null)) => {
@@ -39,6 +95,7 @@ mockNuxtImport('useFetch', () => {
           items: [{
             id: 1,
             name: 'Blue-Eyes White Dragon',
+            nameDe: 'Blauäugiger w. Drache',
             type: 'Normal Monster',
             frameType: 'normal',
             attribute: 'LIGHT',
@@ -68,12 +125,14 @@ mockNuxtImport('useFetch', () => {
 
 describe('catalog page', () => {
   it('renders German catalog controls and result tiles', async () => {
-    const component = await mountSuspended(CatalogPage)
+    const component = await mountPage()
 
     expect(component.text()).toContain('Katalog')
     expect(component.find('input[aria-label="Karten suchen"]').exists()).toBe(true)
     expect(component.find('select[aria-label="Typ"]').exists()).toBe(true)
-    expect(component.text()).toContain('Blue-Eyes White Dragon')
+    // German card names by default: the card language follows the interface (ADR 0015).
+    expect(component.text()).toContain('Blauäugiger w. Drache')
+    expect(component.text()).not.toContain('Blue-Eyes White Dragon')
 
     // The set filter used to be a native `<select>` with 1000+ unsearchable
     // options (UX review #5) — now a searchable `USelectMenu`.
@@ -82,33 +141,32 @@ describe('catalog page', () => {
   })
 
   it('opens the add-to-inventory modal pre-filled with the clicked card (#6)', async () => {
-    const component = await mountSuspended(CatalogPage)
+    const component = await mountPage()
 
     const addButton = component.findAll('button').find(btn => btn.text() === 'Zum Inventar')
     expect(addButton).toBeTruthy()
     await addButton!.trigger('click')
 
     expect(body().text()).toContain('Karte hinzufügen')
-    expect(body().text()).toContain('Blue-Eyes White Dragon')
+    expect(body().text()).toContain('Blauäugiger w. Drache')
     expect(body().text()).toContain('Drucksprache')
     expect(body().text()).toContain('Neuwertig (Near Mint)')
   })
 
   it('shows the result count with a thousands separator and the right plural', async () => {
-    const one = await mountSuspended(CatalogPage)
+    const one = await mountPage()
     expect(one.text()).toContain('1 Karte')
     expect(one.text()).not.toContain('1 Karten')
-    one.unmount()
 
     catalogState.total = 13_000
-    const many = await mountSuspended(CatalogPage)
+    const many = await mountPage()
     expect(many.text()).toContain('13.000 Karten')
   })
 
   it('renders in English', async () => {
     await setTestLocale('en')
     catalogState.total = 13_000
-    const component = await mountSuspended(CatalogPage)
+    const component = await mountPage()
 
     const text = component.text()
     expect(text).toContain('Catalog')
@@ -116,6 +174,8 @@ describe('catalog page', () => {
     expect(text).toContain('Add to inventory')
     expect(text).toContain('Add to wishlist')
     expect(text).toContain('Lv 8')
+    expect(text).toContain('Blue-Eyes White Dragon')
+    expect(text).not.toContain('Blauäugiger')
     expect(component.find('input[aria-label="Search cards"]').exists()).toBe(true)
     expect(component.find('select[aria-label="Type"]').exists()).toBe(true)
     expect(text).not.toContain('Karten')
@@ -129,5 +189,49 @@ describe('catalog page', () => {
     expect(modal).toContain('Printing language')
     expect(modal).toContain('Near Mint')
     expect(modal).not.toContain('Neuwertig')
+  })
+
+  it('shows English card names in a German interface when the profile says so', async () => {
+    useState('card-locale-choice').value = 'en'
+    const component = await mountPage()
+
+    expect(component.text()).toContain('Katalog')
+    expect(component.text()).toContain('Blue-Eyes White Dragon')
+    expect(component.text()).not.toContain('Blauäugiger')
+  })
+
+  it('shows the German name, the English name, the German text and its source in the detail', async () => {
+    await openDetail(cardDetail())
+    const detail = body().text()
+
+    expect(detail).toContain('Blauäugiger w. Drache')
+    expect(detail).toContain('Englisch: Blue-Eyes White Dragon')
+    expect(detail).toContain('Dieser legendäre Drache')
+    expect(detail).not.toContain('powerful engine')
+    expect(detail).toContain('Deutsche Kartentexte: db-ygoresources-com/yugioh-card-history')
+    expect(body().find('a[href="https://github.com/db-ygoresources-com/yugioh-card-history"]').exists()).toBe(true)
+  })
+
+  it('falls back to the English text with a hint when a card has no German data', async () => {
+    await openDetail(cardDetail({ nameDe: null, descDe: null }))
+    const detail = body().text()
+
+    expect(detail).toContain('Blue-Eyes White Dragon')
+    expect(detail).not.toContain('Englisch:')
+    expect(detail).toContain('powerful engine')
+    expect(detail).toContain('Für diese Karte gibt es keinen deutschen Kartentext.')
+    expect(detail).not.toContain('Deutsche Kartentexte')
+  })
+
+  it('shows only English in the detail in English', async () => {
+    await setTestLocale('en')
+    await openDetail(cardDetail())
+    const detail = body().text()
+
+    expect(detail).toContain('Blue-Eyes White Dragon')
+    expect(detail).toContain('powerful engine')
+    expect(detail).not.toContain('Blauäugiger')
+    expect(detail).not.toContain('English:')
+    expect(detail).not.toContain('German card texts')
   })
 })

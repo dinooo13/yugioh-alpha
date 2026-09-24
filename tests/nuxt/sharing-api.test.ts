@@ -417,6 +417,7 @@ describe('listVisibleDecks', () => {
     expect(decks.find(item => item.id === deckId)?.cover).toEqual({
       catalogCardId: CARD.darkMagician,
       name: 'Dark Magician',
+      nameDe: null,
       imageSmall: 'https://images.example/cards_small/46986414.jpg',
       imageLarge: 'https://images.example/cards/46986414.jpg',
     })

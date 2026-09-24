@@ -26,7 +26,15 @@
     },
     "settings": {
       "title": "Einstellungen",
-      "languageDescription": "Die Sprache von Menüs, Schaltflächen und Hinweisen."
+      "languageDescription": "Die Sprache von Menüs, Schaltflächen und Hinweisen.",
+      "cardLanguage": "Kartensprache",
+      "cardLanguageDescription": "Die Sprache von Kartennamen und Kartentexten. Kartenbilder bleiben englisch.",
+      "cardLanguageOption": {
+        "follow": "Wie Anzeigesprache ({language})",
+        "de": "Deutsch",
+        "en": "Englisch"
+      },
+      "cardLanguageSaveFailed": "Kartensprache konnte nicht gespeichert werden"
     }
   }
 }

@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { registerAndLogin } from './helpers/auth'
+import { CARD } from './helpers/cards'
 
 test.describe('Schnellerfassung', () => {
   test('turns a pasted list into reviewed inventory entries', async ({ page }) => {
@@ -31,9 +32,9 @@ test.describe('Schnellerfassung', () => {
     await page.getByRole('button', { name: 'Übersicht' }).click()
 
     // 2 loose copies + 1 from the SDY-006 printing row.
-    await expect(page.getByText('Dark Magician').first()).toBeVisible()
+    await expect(page.getByText(CARD.darkMagician).first()).toBeVisible()
     await expect(page.getByText('×3 ges.')).toBeVisible()
-    await expect(page.getByText('Pot of Greed').first()).toBeVisible()
+    await expect(page.getByText(CARD.potOfGreed).first()).toBeVisible()
   })
 
   test('recognizes German card names (ADR 0015)', async ({ page }) => {
@@ -46,9 +47,9 @@ test.describe('Schnellerfassung', () => {
     await expect(page.getByText('2 gesamt')).toBeVisible()
     await expect(page.getByText('2 sicher')).toBeVisible()
     await expect(page.getByText('0 ohne Treffer')).toBeVisible()
-    // The display language arrives with F3c; the match is the English card.
-    await expect(page.getByText('Dark Magician').first()).toBeVisible()
-    await expect(page.getByText('Pot of Greed').first()).toBeVisible()
+    // The matched cards, shown with their German names (card language, F3c).
+    await expect(page.getByText(CARD.darkMagician).first()).toBeVisible()
+    await expect(page.getByText(CARD.potOfGreed).first()).toBeVisible()
   })
 
   // Photo/voice input moved to the chat assistant (see e2e/assistant-chat.spec.ts,

@@ -446,6 +446,8 @@ export const userProfile = sqliteTable(
       .$type<WishlistVisibility>(),
     // UI language chosen by the user (ADR 0014); null = not chosen → cookie / Accept-Language decide.
     locale: text('locale').$type<AppLocale>(),
+    // Card language chosen by the user (ADR 0015); null = follow the interface language.
+    cardLocale: text('card_locale').$type<AppLocale>(),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
     updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull(),
   },

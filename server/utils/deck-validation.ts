@@ -8,6 +8,7 @@
 import { inArray } from 'drizzle-orm'
 import type { useDb } from '../db'
 import { catalogCard, catalogPrinting } from '../db/schema'
+import { cardNameDeSql } from './card-translation-sql'
 import { defaultSectionForCard } from '../../shared/deck-sections'
 import { DEFAULT_MAX_COPIES, evaluateDeck } from '../../shared/rule-formats'
 import type {
@@ -35,6 +36,7 @@ export function loadCardDataForValidation(db: Db, cardIds: number[]): Map<number
     .select({
       id: catalogCard.id,
       name: catalogCard.name,
+      nameDe: cardNameDeSql(),
       type: catalogCard.type,
       frameType: catalogCard.frameType,
       attribute: catalogCard.attribute,
@@ -71,20 +73,27 @@ export function loadCardDataForValidation(db: Db, cardIds: number[]): Map<number
   return byId
 }
 
-/** Catalog card names by id — used for rule summaries in the format editor. */
-export function loadCardNames(db: Db, cardIds: number[]): Record<number, string> {
+/**
+ * English and German catalog card names by id (ADR 0015) — the format
+ * editor's rule summaries and the assistant's proposal rows. `cardNamesDe`
+ * only has the cards with a German name.
+ */
+export function loadCardNameRecords(db: Db, cardIds: number[]): { cardNames: Record<number, string>, cardNamesDe: Record<number, string> } {
   const uniqueIds = [...new Set(cardIds)]
   if (uniqueIds.length === 0) {
-    return {}
+    return { cardNames: {}, cardNamesDe: {} }
   }
 
   const rows = db
-    .select({ id: catalogCard.id, name: catalogCard.name })
+    .select({ id: catalogCard.id, name: catalogCard.name, nameDe: cardNameDeSql() })
     .from(catalogCard)
     .where(inArray(catalogCard.id, uniqueIds))
     .all()
 
-  return Object.fromEntries(rows.map(row => [row.id, row.name]))
+  return {
+    cardNames: Object.fromEntries(rows.map(row => [row.id, row.name])),
+    cardNamesDe: Object.fromEntries(rows.flatMap(row => (row.nameDe ? [[row.id, row.nameDe]] : []))),
+  }
 }
 
 /** Card ids that do not exist in the catalog. */

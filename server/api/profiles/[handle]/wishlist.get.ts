@@ -2,6 +2,7 @@ import { createError, getQuery, getRouterParam, setHeader } from 'h3'
 import { useDb } from '../../../db'
 import { getProfileByHandle, toPublicProfile } from '../../../utils/profiles'
 import { getOptionalUser } from '../../../utils/session'
+import { resolveCardLocale } from '../../../utils/ui-locale'
 import { parsePageQuery } from '../../../utils/shared-views'
 import { canViewWishlist, listPublicWishlist } from '../../../utils/wishlist'
 import type { SharedWishlistResponse } from '../../../../shared/sharing'
@@ -27,7 +28,10 @@ export default defineEventHandler(async (event): Promise<SharedWishlistResponse>
     throw createError({ statusCode: 404, statusMessage: 'Wishlist not found' })
   }
 
-  const page = listPublicWishlist(db, profile.userId, parsePageQuery(getQuery(event)))
+  const page = listPublicWishlist(db, profile.userId, {
+    ...parsePageQuery(getQuery(event)),
+    cardLocale: await resolveCardLocale(event),
+  })
 
   return { ...page, owner: toPublicProfile(profile) }
 })

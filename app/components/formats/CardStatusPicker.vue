@@ -2,11 +2,13 @@
 // Picks individual catalog cards for a `card_status` rule: a debounced search
 // against /api/catalog/cards plus removable chips for the selected cards.
 // Names of already-selected cards come from the format response
-// (`cardNames`), so editing a saved rule never shows bare passcodes.
+// (`cardNames`, already in the card language), so editing a saved rule never
+// shows bare passcodes.
 
 interface CatalogSearchItem {
   id: number
   name: string
+  nameDe: string | null
   type: string
 }
 
@@ -23,6 +25,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const { cardName } = useCardText()
 
 const search = ref('')
 const results = ref<CatalogSearchItem[]>([])
@@ -61,7 +64,7 @@ function nameFor(id: number): string {
 
 function addCard(card: CatalogSearchItem) {
   if (!props.modelValue.includes(card.id)) {
-    emit('resolved', [{ id: card.id, name: card.name }])
+    emit('resolved', [{ id: card.id, name: cardName(card) }])
     emit('update:modelValue', [...props.modelValue, card.id])
   }
   search.value = ''
@@ -126,7 +129,7 @@ function removeCard(id: number) {
           :disabled="disabled"
           @click="addCard(card)"
         >
-          <span class="text-sm text-gray-900">{{ card.name }}</span>
+          <span class="text-sm text-gray-900">{{ cardName(card) }}</span>
           <span class="text-xs text-gray-500">{{ card.type }}</span>
         </button>
       </li>

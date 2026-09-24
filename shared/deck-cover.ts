@@ -11,6 +11,8 @@
 export interface DeckCover {
   catalogCardId: number
   name: string
+  /** Official German name (ADR 0015); null when there is none. */
+  nameDe: string | null
   imageSmall: string | null
   imageLarge: string | null
 }

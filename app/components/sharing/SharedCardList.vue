@@ -18,6 +18,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const { cardName } = useCardText()
 
 const searchInput = ref('')
 let debounceTimer: ReturnType<typeof setTimeout> | undefined
@@ -99,7 +100,7 @@ function cardMetaLine(card: SharedCardListItem): string {
       >
         <CardThumb
           :src="card.imageSmall"
-          :alt="card.name"
+          :alt="cardName(card)"
           size="sm"
           :src-large="card.imageLarge"
           enlargeable
@@ -107,7 +108,7 @@ function cardMetaLine(card: SharedCardListItem): string {
 
         <div class="min-w-0 flex-1">
           <p class="truncate text-sm font-medium text-gray-900">
-            {{ card.name }}
+            {{ cardName(card) }}
           </p>
           <p class="truncate text-xs text-gray-500">
             {{ cardMetaLine(card) }}

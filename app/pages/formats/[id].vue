@@ -8,6 +8,8 @@ interface RuleFormatDetail {
   isBuiltin: boolean
   rules: RuleSet
   cardNames: Record<string, string>
+  /** German names (ADR 0015) of the cards that have one. */
+  cardNamesDe?: Record<string, string>
   createdAt: string
   updatedAt: string
 }
@@ -18,6 +20,7 @@ const formatId = computed(() => String(route.params.id ?? ''))
 const errorMessage = ref('')
 
 const { t, locale } = useI18n()
+const { cardLocale, cardName } = useCardText()
 const apiError = useApiError()
 const cloneFormatRequest = useFormatClone()
 const { formatName, formatDescription, localizedRules } = useFormatLabel()
@@ -32,11 +35,18 @@ usePageTitle(() => (format.value ? formatName(format.value) : t('formats.detail.
 // rule labels); a user's own format as it is.
 const editorValues = computed(() => {
   const current = format.value
-  if (!current || !current.isBuiltin) {
+  if (!current) {
     return current
+  }
+  // Rule summaries name cards in the card language (ADR 0015).
+  const cardNames = Object.fromEntries(Object.entries(current.cardNames).map(([id, name]) =>
+    [id, cardName({ name, nameDe: current.cardNamesDe?.[id] })]))
+  if (!current.isBuiltin) {
+    return { ...current, cardNames }
   }
   return {
     ...current,
+    cardNames,
     name: formatName(current),
     description: formatDescription(current),
     rules: localizedRules(current, current.rules),
@@ -44,8 +54,11 @@ const editorValues = computed(() => {
 })
 
 // The editor copies its initial values once; a built-in's translated text
-// follows a language switch by re-mounting it.
-const editorKey = computed(() => (format.value?.isBuiltin ? `${format.value.id}-${locale.value}` : format.value?.id))
+// follows a language switch by re-mounting it, and card names follow the
+// card language the same way.
+const editorKey = computed(() => (format.value?.isBuiltin
+  ? `${format.value.id}-${locale.value}-${cardLocale.value}`
+  : `${format.value?.id}-${cardLocale.value}`))
 
 const loadErrorDescription = computed(() => (error.value ? apiError(error.value, 'formats.detail.loadFailedDescription') : undefined))
 

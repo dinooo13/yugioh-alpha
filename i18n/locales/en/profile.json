@@ -26,7 +26,15 @@
     },
     "settings": {
       "title": "Settings",
-      "languageDescription": "The language of menus, buttons and messages."
+      "languageDescription": "The language of menus, buttons and messages.",
+      "cardLanguage": "Card language",
+      "cardLanguageDescription": "The language of card names and card texts. Card images stay in English.",
+      "cardLanguageOption": {
+        "follow": "Same as interface ({language})",
+        "de": "German",
+        "en": "English"
+      },
+      "cardLanguageSaveFailed": "Couldn't save the card language"
     }
   }
 }

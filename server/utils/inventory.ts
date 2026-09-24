@@ -11,7 +11,9 @@ import {
 } from '../db/schema'
 import { CARD_CONDITIONS, CARD_EDITIONS, PRINTING_LANGUAGES, UNASSIGNED_COLLECTION_ID } from '../../shared/inventory'
 import type { CardCondition, CardEdition, PrintingLanguage } from '../../shared/inventory'
+import type { AppLocale } from '../../shared/locale'
 import { cardNameMatches, escapedLike, escapeLikeTerm } from './card-name-search'
+import { cardNameDeSql, cardSortKey } from './card-translation-sql'
 import { assertCollectionOwnedByUser } from './collections'
 
 type Db = ReturnType<typeof useDb>
@@ -540,6 +542,7 @@ export function listOwnedCards(db: Db, userId: string, options: InventoryListOpt
       createdAt: ownedCard.createdAt,
       updatedAt: ownedCard.updatedAt,
       cardName: catalogCard.name,
+      cardNameDe: cardNameDeSql(),
       cardType: catalogCard.type,
       imageUrlSmall: sql<string | null>`min(${catalogCardImage.imageUrlSmall})`,
       setName: catalogSet.name,
@@ -591,7 +594,11 @@ export function ownedQuantitiesByCard(db: Db, userId: string, catalogCardIds: nu
   return new Map(rows.map(row => [row.catalogCardId, row.owned ?? 0]))
 }
 
-export function searchCatalogCards(db: Db, q = '') {
+/**
+ * Up to 20 catalog cards by name (English or German) or passcode, sorted by
+ * the name in `cardLocale` (ADR 0015), each with its printings.
+ */
+export function searchCatalogCards(db: Db, q = '', cardLocale: AppLocale = 'en') {
   const term = q.trim()
   const where = term
     ? or(cardNameMatches(term), escapedLike(sql`${catalogCard.id}`, `%${escapeLikeTerm(term)}%`))
@@ -601,6 +608,7 @@ export function searchCatalogCards(db: Db, q = '') {
     .select({
       id: catalogCard.id,
       name: catalogCard.name,
+      nameDe: cardNameDeSql(),
       type: catalogCard.type,
       imageUrlSmall: sql<string | null>`min(${catalogCardImage.imageUrlSmall})`,
     })
@@ -608,7 +616,7 @@ export function searchCatalogCards(db: Db, q = '') {
     .leftJoin(catalogCardImage, eq(catalogCardImage.cardId, catalogCard.id))
     .where(where)
     .groupBy(catalogCard.id)
-    .orderBy(catalogCard.name)
+    .orderBy(cardSortKey(cardLocale))
     .limit(20)
     .all()
 

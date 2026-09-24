@@ -1,7 +1,8 @@
 import { createError, getRouterParam } from 'h3'
 import { useDb } from '../../db'
-import { getDeckDetail } from '../../utils/decks'
+import { getDeckDetail, inCardLocale } from '../../utils/decks'
 import { requireUser } from '../../utils/session'
+import { resolveCardLocale } from '../../utils/ui-locale'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
@@ -11,5 +12,5 @@ export default defineEventHandler(async (event) => {
 
   const user = await requireUser(event)
 
-  return getDeckDetail(useDb(), user.id, id)
+  return inCardLocale(getDeckDetail(useDb(), user.id, id), await resolveCardLocale(event))
 })

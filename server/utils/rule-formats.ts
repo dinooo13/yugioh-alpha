@@ -16,7 +16,7 @@ import {
   validateRuleSet,
 } from '../../shared/rule-formats'
 import type { BuiltinFormatId, RuleSet } from '../../shared/rule-formats'
-import { loadCardNames, missingCatalogCardIds } from './deck-validation'
+import { loadCardNameRecords, missingCatalogCardIds } from './deck-validation'
 
 type Db = ReturnType<typeof useDb>
 
@@ -45,6 +45,8 @@ export interface RuleFormatDetail {
   rules: RuleSet
   /** Names of every catalog card the rules reference, for the editor UI. */
   cardNames: Record<number, string>
+  /** Their German names (ADR 0015), for the cards that have one. */
+  cardNamesDe: Record<number, string>
   createdAt: Date
   updatedAt: Date
 }
@@ -339,7 +341,7 @@ function toDetail(db: Db, row: typeof ruleFormat.$inferSelect): RuleFormatDetail
     description: row.description,
     isBuiltin: row.isBuiltin,
     rules,
-    cardNames: loadCardNames(db, referencedCardIds(rules)),
+    ...loadCardNameRecords(db, referencedCardIds(rules)),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   }

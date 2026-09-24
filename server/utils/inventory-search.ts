@@ -3,6 +3,7 @@ import type { SQL } from 'drizzle-orm'
 import type { useDb } from '../db'
 import { catalogCard, catalogCardImage, catalogPrinting, ownedCard } from '../db/schema'
 import { cardNameMatches, cardTextMatches } from './card-name-search'
+import { cardNameDeSql } from './card-translation-sql'
 import { CONDITIONS, EDITIONS, LANGUAGES } from './inventory'
 import type { InventoryCondition, InventoryEdition, InventoryLanguage } from './inventory'
 import { UNASSIGNED_COLLECTION_ID } from '../../shared/inventory'
@@ -206,6 +207,8 @@ export function buildInventorySearchWhere(userId: string, filters: InventorySear
 export interface InventoryCardDisplay {
   catalogCardId: number
   name: string
+  /** Official German name (ADR 0015); null when there is none. */
+  nameDe: string | null
   type: string
   attribute: string | null
   race: string | null
@@ -232,6 +235,7 @@ export function loadInventoryCardDisplay(db: Db, catalogCardIds: number[]): Map<
     .select({
       catalogCardId: catalogCard.id,
       name: catalogCard.name,
+      nameDe: cardNameDeSql(),
       type: catalogCard.type,
       attribute: catalogCard.attribute,
       race: catalogCard.race,

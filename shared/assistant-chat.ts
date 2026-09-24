@@ -134,7 +134,8 @@ export interface AssistantDeckPreview {
    * (missing on previews stored before #34 F2d, which show `issues`).
    */
   validation: { legal: boolean, issues: string[], issueDetails?: ValidationIssue[] } | null
-  missing: Array<{ catalogCardId: number, name: string, needed: number, owned: number }>
+  /** `nameDe` (ADR 0015) is display only and missing on previews stored before #34 F3c. */
+  missing: Array<{ catalogCardId: number, name: string, nameDe?: string | null, needed: number, owned: number }>
 }
 
 // --- Limits, shared by client-side validation and the server ------------------

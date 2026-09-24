@@ -12,20 +12,25 @@ import {
 } from '../../../utils/inventory-search'
 import type { InventorySearchSort } from '../../../utils/inventory-search'
 import { requireUser } from '../../../utils/session'
+import { cardSortKey } from '../../../utils/card-translation-sql'
+import { resolveCardLocale } from '../../../utils/ui-locale'
+import type { AppLocale } from '../../../../shared/locale'
 
 const totalQuantitySql = sql<number>`sum(${ownedCard.quantity})`
 
-function buildOrderBy(sort: InventorySearchSort): SQL[] {
+// "By name" sorts by the name in the card language (ADR 0015).
+function buildOrderBy(sort: InventorySearchSort, cardLocale: AppLocale): SQL[] {
+  const nameKey = cardSortKey(cardLocale)
   switch (sort) {
     case '-name':
-      return [desc(catalogCard.name)]
+      return [desc(nameKey)]
     case 'quantity':
-      return [desc(totalQuantitySql), asc(catalogCard.name)]
+      return [desc(totalQuantitySql), asc(nameKey)]
     case 'newest':
       return [desc(catalogCard.tcgDate)]
     case 'name':
     default:
-      return [asc(catalogCard.name)]
+      return [asc(nameKey)]
   }
 }
 
@@ -49,7 +54,7 @@ export default defineEventHandler(async (event) => {
     .innerJoin(catalogCard, eq(ownedCard.catalogCardId, catalogCard.id))
     .where(where)
     .groupBy(ownedCard.catalogCardId)
-    .orderBy(...buildOrderBy(filters.sort))
+    .orderBy(...buildOrderBy(filters.sort, await resolveCardLocale(event)))
     .limit(filters.pageSize)
     .offset((filters.page - 1) * filters.pageSize)
     .all()
@@ -103,6 +108,7 @@ export default defineEventHandler(async (event) => {
     return {
       catalogCardId: row.catalogCardId,
       name: display?.name ?? '',
+      nameDe: display?.nameDe ?? null,
       type: display?.type ?? '',
       attribute: display?.attribute ?? null,
       race: display?.race ?? null,

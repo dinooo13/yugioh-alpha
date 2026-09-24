@@ -1,7 +1,7 @@
 import type { OwnProfile } from '~~/shared/sharing'
 import { DEFAULT_APP_LOCALE, isAppLocale, UI_LOCALE_COOKIE } from '~~/shared/locale'
 import type { AppLocale } from '~~/shared/locale'
-import { uiLocaleCookieOptions } from '~/utils/ui-locale'
+import { CARD_LOCALE_CHOICE_STATE, uiLocaleCookieOptions } from '~/utils/ui-locale'
 
 /**
  * The active interface language and a way to change it (ADR 0014).
@@ -11,12 +11,16 @@ import { uiLocaleCookieOptions } from '~/utils/ui-locale'
  *   layout loads it): `PATCH /api/profile { locale }` first; a failure
  *   throws and nothing switches, so the caller can show an error;
  * - then switches vue-i18n and writes the `ui_locale` cookie (for signed-in
- *   users too, so the choice survives a sign-out).
+ *   users too, so the choice survives a sign-out);
+ * - when the card language follows the interface language (ADR 0015),
+ *   refetches the page data, so lists the server sorted by card name come
+ *   back in the new language's order.
  */
 export function useUiLocale() {
   const { locale: i18nLocale, setLocale } = useI18n()
   const cookie = useCookie<string | null>(UI_LOCALE_COOKIE, uiLocaleCookieOptions())
   const { data: ownProfile } = useNuxtData<OwnProfile | null>('own-profile')
+  const cardLocaleChoice = useState<AppLocale | null>(CARD_LOCALE_CHOICE_STATE, () => null)
 
   const locale = computed<AppLocale>(() => isAppLocale(i18nLocale.value) ? i18nLocale.value : DEFAULT_APP_LOCALE)
 
@@ -30,6 +34,10 @@ export function useUiLocale() {
     cookie.value = next
     if (i18nLocale.value !== next) {
       await setLocale(next)
+      if (cardLocaleChoice.value === null) {
+        // Not awaited: the interface has switched; the data follows.
+        void refreshNuxtData()
+      }
     }
   }
 

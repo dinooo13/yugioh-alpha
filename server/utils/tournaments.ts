@@ -500,7 +500,7 @@ function buildDeckSnapshot(
   }
 
   const toSnapshotCards = (rows: typeof detail.sections.main): TournamentDeckSnapshotCard[] =>
-    rows.map(row => ({ catalogCardId: row.catalogCardId, name: row.name, quantity: row.quantity }))
+    rows.map(row => ({ catalogCardId: row.catalogCardId, name: row.name, nameDe: row.nameDe, quantity: row.quantity }))
 
   const allRows = [...detail.sections.main, ...detail.sections.extra, ...detail.sections.side]
 

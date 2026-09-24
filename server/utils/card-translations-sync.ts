@@ -15,11 +15,12 @@ import type { useDb } from '../db'
 import { catalogCard, catalogCardTranslation, catalogSync, type CardTranslationSource } from '../db/schema'
 import { chunkRows } from './catalog-sync'
 import { readTarGzEntries } from './tar-gz-reader'
+import { CARD_TRANSLATION_REPO, CARD_TRANSLATION_REPO_URL } from '../../shared/card-text'
 
 type Db = ReturnType<typeof useDb>
 
-export const TRANSLATION_REPO = 'db-ygoresources-com/yugioh-card-history'
-export const TRANSLATION_REPO_URL = `https://github.com/${TRANSLATION_REPO}`
+export const TRANSLATION_REPO = CARD_TRANSLATION_REPO
+export const TRANSLATION_REPO_URL = CARD_TRANSLATION_REPO_URL
 export const TRANSLATION_SOURCE: CardTranslationSource = 'ygoresources-git'
 
 /** Folder in the repo per locale. English comes from YGOPRODeck. */

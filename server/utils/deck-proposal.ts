@@ -22,7 +22,7 @@ import type { RuleSet } from '../../shared/rule-formats'
 import type { AssistantDeckPreview } from '../../shared/assistant-chat'
 import { getDeckDetail } from './decks'
 import type { DeckCardInput } from './decks'
-import { loadCardNames, validateDeckCards } from './deck-validation'
+import { loadCardNameRecords, validateDeckCards } from './deck-validation'
 import { ownedQuantitiesByCard } from './inventory'
 import { requireAccessibleFormat } from './rule-formats'
 
@@ -55,6 +55,7 @@ function keyOf(catalogCardId: number, section: DeckSection): string {
 export function previewDeckProposal(db: Db, userId: string, input: DeckProposalInput): AssistantDeckPreview {
   const quantities = new Map<string, { catalogCardId: number, section: DeckSection, quantity: number }>()
   const names: Record<number, string> = {}
+  const namesDe: Record<number, string> = {}
   let formatId: string | null = null
 
   if (input.deckId) {
@@ -64,6 +65,9 @@ export function previewDeckProposal(db: Db, userId: string, input: DeckProposalI
       for (const row of detail.sections[section]) {
         quantities.set(keyOf(row.catalogCardId, section), { catalogCardId: row.catalogCardId, section, quantity: row.quantity })
         names[row.catalogCardId] = row.name
+        if (row.nameDe) {
+          namesDe[row.catalogCardId] = row.nameDe
+        }
       }
     }
     for (const change of input.changes ?? []) {
@@ -86,7 +90,9 @@ export function previewDeckProposal(db: Db, userId: string, input: DeckProposalI
 
   const entries = [...quantities.values()].filter(entry => entry.quantity > 0)
   const cardIds = [...new Set(entries.map(entry => entry.catalogCardId))]
-  Object.assign(names, loadCardNames(db, cardIds.filter(id => !(id in names))))
+  const loaded = loadCardNameRecords(db, cardIds.filter(id => !(id in names)))
+  Object.assign(names, loaded.cardNames)
+  Object.assign(namesDe, loaded.cardNamesDe)
 
   const counts = { main: 0, extra: 0, side: 0, total: 0 }
   const neededByCard = new Map<number, number>()
@@ -113,6 +119,8 @@ export function previewDeckProposal(db: Db, userId: string, input: DeckProposalI
     .map(([catalogCardId, needed]) => ({
       catalogCardId,
       name: names[catalogCardId] ?? `#${catalogCardId}`,
+      // Display only (ADR 0015): the action card shows it in German card language.
+      nameDe: namesDe[catalogCardId] ?? null,
       needed,
       owned: owned.get(catalogCardId) ?? 0,
     }))

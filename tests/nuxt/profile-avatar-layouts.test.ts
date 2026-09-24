@@ -46,6 +46,7 @@ function profile(overrides: Partial<OwnProfile> = {}): OwnProfile {
     inventoryVisibility: 'private',
     wishlistVisibility: 'private',
     locale: null,
+    cardLocale: null,
     createdAt: '2025-01-01T00:00:00.000Z',
     updatedAt: '2025-01-01T00:00:00.000Z',
     ...overrides,

@@ -52,6 +52,8 @@ export const MAX_SNAPSHOT_ISSUES = 10
 export interface TournamentDeckSnapshotCard {
   catalogCardId: number
   name: string
+  /** Official German name (ADR 0015); missing in snapshots taken before #34 F3c. */
+  nameDe?: string | null
   quantity: number
 }
 

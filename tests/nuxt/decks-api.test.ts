@@ -787,10 +787,12 @@ describe('deck cover', () => {
     const deck = createDeck(db, 'user-a', { name: 'Deck', description: null })
     addCard(deck.id, CARD.potOfGreed, 'main', '2025-01-01T10:00:00Z')
     addCard(deck.id, CARD.darkMagician, 'main', '2025-01-01T11:00:00Z')
+    seedGermanNames(db, { [CARD.darkMagician]: 'Dunkler Magier' })
 
     expect(coverOf(deck.id)).toEqual({
       catalogCardId: CARD.darkMagician,
       name: 'Dark Magician',
+      nameDe: 'Dunkler Magier',
       imageSmall: IMAGE.darkMagicianSmall,
       imageLarge: IMAGE.darkMagicianLarge,
     })
@@ -829,7 +831,7 @@ describe('deck cover', () => {
     const deck = createDeck(db, 'user-a', { name: 'Deck', description: null })
     addCard(deck.id, CARD.decodeTalker, 'extra', '2025-01-01T10:00:00Z')
 
-    expect(coverOf(deck.id)).toEqual({ catalogCardId: CARD.decodeTalker, name: 'Decode Talker', imageSmall: null, imageLarge: null })
+    expect(coverOf(deck.id)).toEqual({ catalogCardId: CARD.decodeTalker, name: 'Decode Talker', nameDe: null, imageSmall: null, imageLarge: null })
   })
 
   it('loads covers for several decks at once and skips decks without one', () => {
@@ -897,6 +899,7 @@ describe('deck cover', () => {
       expect(updated.cover).toEqual({
         catalogCardId: CARD.potOfGreed,
         name: 'Pot of Greed',
+        nameDe: null,
         imageSmall: IMAGE.potOfGreedSmall,
         imageLarge: 'https://images.example/cards/55144522.jpg',
       })
@@ -1050,6 +1053,7 @@ describe('pickDeckCover', () => {
     return {
       catalogCardId: 1,
       name: 'Karte',
+      nameDe: null,
       imageSmall: null,
       imageLarge: null,
       section: 'main',
@@ -1069,7 +1073,7 @@ describe('pickDeckCover', () => {
       candidate({ catalogCardId: 10, name: 'A' }),
       candidate({ catalogCardId: 20, name: 'B' }),
     ])
-    expect(cover).toEqual({ catalogCardId: 10, name: 'A', imageSmall: null, imageLarge: null })
+    expect(cover).toEqual({ catalogCardId: 10, name: 'A', nameDe: null, imageSmall: null, imageLarge: null })
   })
 
   it('ranks Main monsters over Main spells/traps over Extra cards, regardless of order', () => {

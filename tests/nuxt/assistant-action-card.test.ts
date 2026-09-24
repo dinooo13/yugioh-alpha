@@ -250,6 +250,64 @@ describe('AssistantActionCard', () => {
     })
   })
 
+  describe('card language (ADR 0015)', () => {
+    afterEach(async () => {
+      useState('card-locale-choice').value = null
+      await setTestLocale('de')
+    })
+
+    function germanNamesAction(): AssistantActionView {
+      const action = deckAction()
+      action.payload = {
+        ...action.payload,
+        changes: [
+          { catalogCardId: 46986414, section: 'main', quantity: 3, name: 'Dark Magician', nameDe: 'Dunkler Magier' },
+          { catalogCardId: 4343, section: 'main', quantity: 1, name: 'Raigeki', nameDe: null },
+        ],
+        preview: {
+          formatId: 'fmt-1',
+          formatName: 'Streng',
+          counts: { main: 41, extra: 0, side: 0, total: 41 },
+          validation: {
+            legal: false,
+            issues: ['Dark Magician is forbidden in this format.'],
+            issueDetails: [{
+              severity: 'error',
+              code: 'card_forbidden',
+              message: 'Dark Magician is forbidden in this format.',
+              params: { cardId: 46986414, cardName: 'Dark Magician', cardNameDe: 'Dunkler Magier' },
+              cardId: 46986414,
+            }],
+          },
+          missing: [{ catalogCardId: 46986414, name: 'Dark Magician', nameDe: 'Dunkler Magier', needed: 3, owned: 1 }],
+        },
+      }
+      return action
+    }
+
+    async function detailsText(action: AssistantActionView) {
+      const component = await mountSuspended(ActionCard, { props: { action } })
+      const toggle = component.findAll('button').find(button => button.text().match(/Details anzeigen|Show details/))
+      await toggle!.trigger('click')
+      return component.text()
+    }
+
+    it('shows rows, missing cards and issues with German names, English for cards without one', async () => {
+      const text = await detailsText(germanNamesAction())
+      expect(text).toContain('Dunkler Magier')
+      expect(text).toContain('Raigeki')
+      expect(text).toContain('Dunkler Magier: 3 benötigt, 1 im Besitz')
+      expect(text).not.toContain('Dark Magician')
+    })
+
+    it('shows the English names when the card language is English', async () => {
+      useState('card-locale-choice').value = 'en'
+      const text = await detailsText(germanNamesAction())
+      expect(text).toContain('Dark Magician: 3 benötigt, 1 im Besitz')
+      expect(text).not.toContain('Dunkler Magier')
+    })
+  })
+
   describe('in English', () => {
     afterEach(() => setTestLocale('de'))
 

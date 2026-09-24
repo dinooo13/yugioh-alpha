@@ -1,7 +1,8 @@
 import { createError, getRouterParam, readBody, setResponseStatus } from 'h3'
 import { useDb } from '../../../db'
-import { duplicateDeck, validateDuplicateDeckInput } from '../../../utils/decks'
+import { duplicateDeck, inCardLocale, validateDuplicateDeckInput } from '../../../utils/decks'
 import { requireUser } from '../../../utils/session'
+import { resolveCardLocale } from '../../../utils/ui-locale'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
@@ -14,5 +15,5 @@ export default defineEventHandler(async (event) => {
   const detail = duplicateDeck(useDb(), user.id, id, input)
 
   setResponseStatus(event, 201)
-  return detail
+  return inCardLocale(detail, await resolveCardLocale(event))
 })

@@ -41,6 +41,7 @@ function item(overrides: Partial<WishlistItemView> = {}): WishlistItemView {
     id: 'wish-1',
     catalogCardId: 1,
     name: 'Kuriboh',
+    nameDe: null,
     type: 'Effect Monster',
     imageSmall: null,
     quantity: 1,
