@@ -473,7 +473,7 @@ Round 4 (#88): one card detail overlay for the catalog and the inventory —
 the floating tilt/foil card with the card text in the card language; the
 catalog adds the English name, printings and actions, the inventory the
 owned quantity per collection with notes (#87: no source credit in the UI,
-ADR 0017).
+ADR 0017). #63: the catalog filters use the inventory's multi-select menus.
 
 ## Recommended Build Order
 
