@@ -2,6 +2,7 @@ import { and, asc, count, desc, eq, inArray, isNotNull, ne, sql } from 'drizzle-
 import type { useDb } from '../db'
 import { catalogCard, catalogCardImage, catalogPrinting, catalogSet } from '../db/schema'
 import type { AppLocale } from '../../shared/locale'
+import { activeCatalogCard } from './card-name-search'
 import { cardDescDeSql, cardNameDeSql, cardSortKey } from './card-translation-sql'
 import { buildCardListWhere, type CardListQuery } from './catalog-query'
 
@@ -94,8 +95,9 @@ export async function searchCatalog(db: Db, filters: CardListQuery, cardLocale: 
 
 export async function getCatalogCardDetail(db: Db, id: number) {
   // An explicit column list: the internal join/search columns (`konamiId`,
-  // `nameSearch`, ADR 0015) stay out of the API.
-  const card = await db
+  // `nameSearch`, ADR 0015) stay out of the API. A retired card (ADR 0019)
+  // still resolves by id; only the flag and its replacement are exposed.
+  const row = await db
     .select({
       id: catalogCard.id,
       name: catalogCard.name,
@@ -119,14 +121,18 @@ export async function getCatalogCardDetail(db: Db, id: number) {
       ocgDate: catalogCard.ocgDate,
       ygoprodeckUrl: catalogCard.ygoprodeckUrl,
       syncedAt: catalogCard.syncedAt,
+      retiredAt: catalogCard.retiredAt,
+      replacedById: catalogCard.replacedById,
     })
     .from(catalogCard)
     .where(eq(catalogCard.id, id))
     .get()
 
-  if (!card) {
+  if (!row) {
     return null
   }
+  const { retiredAt, ...rest } = row
+  const card = { ...rest, retired: retiredAt !== null }
 
   const printings = await db
     .select({
@@ -159,11 +165,12 @@ export async function getCatalogFacets(db: Db) {
     db
       .selectDistinct({ value: catalogCard.type })
       .from(catalogCard)
+      .where(activeCatalogCard())
       .orderBy(asc(catalogCard.type)),
     db
       .selectDistinct({ value: catalogCard.attribute })
       .from(catalogCard)
-      .where(isNotNull(catalogCard.attribute))
+      .where(and(activeCatalogCard(), isNotNull(catalogCard.attribute)))
       .orderBy(asc(catalogCard.attribute)),
     db
       .selectDistinct({ value: catalogCard.race })
@@ -172,12 +179,12 @@ export async function getCatalogFacets(db: Db) {
       // 13 chars by the ygoprodeck sync, e.g. "Abidos the Th") — not a real
       // monster race, so it doesn't belong in the "Monsterart" facet (UX
       // review #17).
-      .where(and(isNotNull(catalogCard.race), ne(catalogCard.type, 'Skill Card')))
+      .where(and(activeCatalogCard(), isNotNull(catalogCard.race), ne(catalogCard.type, 'Skill Card')))
       .orderBy(asc(catalogCard.race)),
     db
       .selectDistinct({ value: catalogCard.level })
       .from(catalogCard)
-      .where(isNotNull(catalogCard.level))
+      .where(and(activeCatalogCard(), isNotNull(catalogCard.level)))
       .orderBy(asc(catalogCard.level)),
     db
       .select({ id: catalogSet.id, name: catalogSet.name })

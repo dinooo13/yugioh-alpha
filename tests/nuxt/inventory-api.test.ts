@@ -253,6 +253,22 @@ describe('inventory persistence helpers', () => {
       expect(Object.keys(card!).sort()).toEqual(['id', 'imageUrlSmall', 'name', 'nameDe', 'type'])
     })
 
+    it('leaves retired cards out of the picker (ADR 0019)', () => {
+      db.insert(schema.catalogCard).values({
+        id: 101402024,
+        name: 'Dark Magician',
+        type: 'Normal Monster',
+        desc: 'Placeholder.',
+        syncedAt: new Date(),
+        retiredAt: new Date(),
+        replacedById: 46986414,
+      }).run()
+
+      expect(searchCatalogCards(db, 'Dark Magician').map(card => card.id)).toEqual([46986414])
+      expect(searchCatalogCards(db, '101402024')).toEqual([])
+      expect(searchCatalogCards(db).map(card => card.id)).not.toContain(101402024)
+    })
+
     it('lists only unassigned rows for "__none__"', () => {
       const result = listOwnedCards(db, 'user-a', { collectionId: '__none__' })
       expect(result.total).toBe(1)
