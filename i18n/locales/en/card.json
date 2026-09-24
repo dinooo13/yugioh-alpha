@@ -9,7 +9,6 @@
     "atkDef": "ATK {atk} / DEF {def}",
     "englishName": "English: {name}",
     "germanTextMissing": "There is no German text for this card.",
-    "translationSource": "German card texts: {source}",
     "totalQuantity": "×{count} total",
     "retired": {
       "badge": "No longer in the catalog",

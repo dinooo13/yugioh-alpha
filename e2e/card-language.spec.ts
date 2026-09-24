@@ -5,7 +5,8 @@ import { CARD, CARD_EN } from './helpers/cards'
 
 // Card language (#34 F3c, ADR 0015): card names and texts follow the
 // interface language unless the profile picks one, SSR renders the right
-// names on the first load, and the detail credits the German source.
+// names on the first load, and the detail shows the German text (without a
+// source credit in the UI since #87; the README names the source).
 
 async function searchCatalog(page: Page, query: string) {
   await page.goto('/catalog')
@@ -73,7 +74,7 @@ test.describe('card language', () => {
     expect(warnings).toEqual([])
   })
 
-  test('the detail shows the German text, the English name and the source; a card without German data stays English', async ({ page }) => {
+  test('the detail shows the German text and the English name, but no source credit; a card without German data stays English', async ({ page }) => {
     await registerAndLogin(page)
 
     await searchCatalog(page, 'Dark Magician')
@@ -83,9 +84,7 @@ test.describe('card language', () => {
     await expect(detail.getByRole('heading', { name: CARD.darkMagician, level: 3 })).toBeVisible()
     await expect(detail.getByText(`Englisch: ${CARD_EN.darkMagician}`)).toBeVisible()
     await expect(detail.getByText('Hexer', { exact: false }).first()).toBeVisible()
-    await expect(detail.getByText('Deutsche Kartentexte:')).toBeVisible()
-    await expect(detail.getByRole('link', { name: 'db-ygoresources-com/yugioh-card-history' }))
-      .toHaveAttribute('href', 'https://github.com/db-ygoresources-com/yugioh-card-history')
+    await expect(detail.getByText('Deutsche Kartentexte')).toHaveCount(0)
 
     // Raigeki has no German data in the fixture: English name and text, and a hint.
     await searchCatalog(page, 'Raigeki')

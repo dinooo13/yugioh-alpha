@@ -202,7 +202,7 @@ describe('catalog page', () => {
     expect(component.text()).not.toContain('Blauäugiger')
   })
 
-  it('shows the German name, the English name, the German text and its source in the detail', async () => {
+  it('shows the German name, the English name, the German text and no source credit in the detail', async () => {
     await openDetail(cardDetail())
     const detail = body().text()
 
@@ -210,8 +210,9 @@ describe('catalog page', () => {
     expect(detail).toContain('Englisch: Blue-Eyes White Dragon')
     expect(detail).toContain('Dieser legendäre Drache')
     expect(detail).not.toContain('powerful engine')
-    expect(detail).toContain('Deutsche Kartentexte: db-ygoresources-com/yugioh-card-history')
-    expect(body().find('a[href="https://github.com/db-ygoresources-com/yugioh-card-history"]').exists()).toBe(true)
+    // No source credit in the UI (#87, ADR 0017); the README names the source.
+    expect(detail).not.toContain('Deutsche Kartentexte')
+    expect(body().find('a[href*="yugioh-card-history"]').exists()).toBe(false)
   })
 
   it('falls back to the English text with a hint when a card has no German data', async () => {

@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { CARD_TRANSLATION_REPO, CARD_TRANSLATION_REPO_URL } from '~~/shared/card-text'
 import { cardFrame } from '~/utils/card-frame'
 
 interface CatalogFacets {
@@ -658,22 +657,6 @@ async function onAddedToInventory() {
               <p class="mt-2 whitespace-pre-line text-sm leading-6 text-default">
                 {{ cardDesc(detail.card) }}
               </p>
-              <i18n-t
-                v-if="cardLocale === 'de' && (hasGermanText(detail.card) || englishName(detail.card))"
-                keypath="card.translationSource"
-                tag="p"
-                scope="global"
-                class="mt-2 text-xs text-muted"
-              >
-                <template #source>
-                  <a
-                    :href="CARD_TRANSLATION_REPO_URL"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="break-all font-medium text-primary hover:underline"
-                  >{{ CARD_TRANSLATION_REPO }}</a>
-                </template>
-              </i18n-t>
             </section>
 
             <section v-if="detail.printings.length > 0">
