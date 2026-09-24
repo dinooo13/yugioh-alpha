@@ -99,6 +99,13 @@
       "when": 1790227646555,
       "tag": "0013_user_profile_card_locale",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1790245382609,
+      "tag": "0014_owned_card_drop_collector_details",
+      "breakpoints": true
     }
   ]
 }

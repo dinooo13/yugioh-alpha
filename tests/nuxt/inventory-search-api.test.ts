@@ -10,6 +10,7 @@ import { assertCollectionOwnedByUser, createCollection } from '../../server/util
 import {
   buildInventorySearchWhere,
   loadInventoryCardDisplay,
+  loadInventorySearchFacets,
   parseInventorySearchQuery,
   UNASSIGNED_COLLECTION_ID,
 } from '../../server/utils/inventory-search'
@@ -175,69 +176,36 @@ function runInventorySearch(db: TestDb, userId: string, rawQuery: Record<string,
   return { items, total, page: filters.page, pageSize: filters.pageSize }
 }
 
-// Mirrors `server/api/inventory/search/facets.get.ts` — distinct owned
-// catalog/ownership values, scoped to the user.
-function getFacets(db: TestDb, userId: string) {
-  function unique(values: Array<string | null | undefined>): string[] {
-    return Array.from(new Set(values.filter((v): v is string => typeof v === 'string' && v !== ''))).sort()
-  }
-
-  const catalogRows = db
-    .selectDistinct({
-      type: schema.catalogCard.type,
-      attribute: schema.catalogCard.attribute,
-      race: schema.catalogCard.race,
-      level: schema.catalogCard.level,
-    })
-    .from(schema.ownedCard)
-    .innerJoin(schema.catalogCard, eq(schema.ownedCard.catalogCardId, schema.catalogCard.id))
-    .where(eq(schema.ownedCard.userId, userId))
-    .all()
-
-  const ownershipRows = db
-    .selectDistinct({
-      language: schema.ownedCard.language,
-      condition: schema.ownedCard.condition,
-      edition: schema.ownedCard.edition,
-    })
-    .from(schema.ownedCard)
-    .where(eq(schema.ownedCard.userId, userId))
-    .all()
-
-  return {
-    types: unique(catalogRows.map(r => r.type)),
-    attributes: unique(catalogRows.map(r => r.attribute)),
-    races: unique(catalogRows.map(r => r.race)),
-    levels: Array.from(new Set(catalogRows.map(r => r.level).filter((l): l is number => l !== null))).sort((a, b) => a - b),
-    languages: unique(ownershipRows.map(r => r.language)),
-    conditions: unique(ownershipRows.map(r => r.condition)),
-    editions: unique(ownershipRows.map(r => r.edition)),
-  }
-}
-
 describe('parseInventorySearchQuery', () => {
-  it('clamps paging and drops invalid enum/level values', () => {
+  it('clamps paging and drops invalid level values', () => {
     const filters = parseInventorySearchQuery({
       page: '0',
       pageSize: '999',
-      condition: 'bogus',
       level: 'abc',
     })
 
     expect(filters.page).toBe(1)
     expect(filters.pageSize).toBe(60)
-    expect(filters.condition).toEqual([])
     expect(filters.level).toEqual([])
   })
 
   it('parses CSV and repeated multi-value facets', () => {
     const filters = parseInventorySearchQuery({
       type: 'A,B',
-      language: ['en', 'de'],
+      race: ['Dragon', 'Spellcaster'],
     })
 
     expect(filters.type).toEqual(['A', 'B'])
-    expect(filters.language).toEqual(['en', 'de'])
+    expect(filters.race).toEqual(['Dragon', 'Spellcaster'])
+  })
+
+  it('ignores the former set and collector filters (ADR 0017)', () => {
+    const filters = parseInventorySearchQuery({ condition: 'played', setId: 'lob', language: 'de', edition: 'first' })
+
+    expect(filters).toEqual(parseInventorySearchQuery({}))
+    for (const key of ['setId', 'language', 'condition', 'edition']) {
+      expect(filters).not.toHaveProperty(key)
+    }
   })
 })
 
@@ -296,7 +264,6 @@ describe('inventory search aggregation (in-memory db)', () => {
     }))
     await addOwnedCard(db, 'user-a', validateInventoryInput({
       catalog_card_id: 46986414,
-      language: 'de',
       quantity: 2,
     }))
 
@@ -317,7 +284,6 @@ describe('inventory search aggregation (in-memory db)', () => {
     }))
     await addOwnedCard(db, 'user-a', validateInventoryInput({
       catalog_card_id: 46986414,
-      language: 'de',
       quantity: 2,
     }))
 
@@ -345,21 +311,11 @@ describe('inventory search aggregation (in-memory db)', () => {
     expect(result.items[0]).toMatchObject({ catalogCardId: 55144522, type: 'Spell Card' })
   })
 
-  it('filters by ownership facet (condition)', async () => {
+  it('ignores ?condition=, ?setId= and ?language= (ADR 0017)', async () => {
     seedCards(db, [{ id: 46986414, name: 'Dark Magician', type: 'Normal Monster' }])
+    await addOwnedCard(db, 'user-a', validateInventoryInput({ catalog_card_id: 46986414, quantity: 2 }))
 
-    await addOwnedCard(db, 'user-a', validateInventoryInput({
-      catalog_card_id: 46986414,
-      condition: 'near_mint',
-      quantity: 2,
-    }))
-    await addOwnedCard(db, 'user-a', validateInventoryInput({
-      catalog_card_id: 46986414,
-      condition: 'played',
-      quantity: 5,
-    }))
-
-    const result = runInventorySearch(db, 'user-a', { condition: 'near_mint' })
+    const result = runInventorySearch(db, 'user-a', { condition: 'played', setId: 'X', language: 'de' })
 
     expect(result.items).toHaveLength(1)
     expect(result.items[0]).toMatchObject({ catalogCardId: 46986414, totalQuantity: 2 })
@@ -376,7 +332,6 @@ describe('inventory search aggregation (in-memory db)', () => {
     }))
     await addOwnedCard(db, 'user-a', validateInventoryInput({
       catalog_card_id: 46986414,
-      language: 'de',
       quantity: 2,
     }))
 
@@ -596,47 +551,46 @@ describe('inventory search facets', () => {
     seedUsers(db)
   })
 
-  it('returns only distinct owned values, scoped to the user', async () => {
+  it('returns only distinct owned catalog values, scoped to the user', async () => {
     seedCards(db, [
       { id: 46986414, name: 'Dark Magician', type: 'Normal Monster', attribute: 'DARK', race: 'Spellcaster', level: 7 },
       { id: 55144522, name: 'Pot of Greed', type: 'Spell Card' },
     ])
-    await addOwnedCard(db, 'user-a', validateInventoryInput({
-      catalog_card_id: 46986414,
-      language: 'en',
-      condition: 'near_mint',
-    }))
-    await addOwnedCard(db, 'user-a', validateInventoryInput({
-      catalog_card_id: 46986414,
-      language: 'de',
-      condition: 'near_mint',
-    }))
+    const box1 = await createCollection(db, 'user-a', { name: 'Box 1', description: null })
+    await addOwnedCard(db, 'user-a', validateInventoryInput({ catalog_card_id: 46986414 }))
+    await addOwnedCard(db, 'user-a', validateInventoryInput({ catalog_card_id: 46986414, collection_id: box1.id }))
     // Different user — must not leak into user-a's facets.
-    await addOwnedCard(db, 'user-b', validateInventoryInput({ catalog_card_id: 55144522, language: 'ja' }))
+    await addOwnedCard(db, 'user-b', validateInventoryInput({ catalog_card_id: 55144522 }))
 
-    const facets = getFacets(db, 'user-a')
+    expect(loadInventorySearchFacets(db, 'user-a')).toEqual({
+      types: ['Normal Monster'],
+      attributes: ['DARK'],
+      races: ['Spellcaster'],
+      levels: [7],
+    })
+  })
 
-    expect(facets.types).toEqual(['Normal Monster'])
-    expect(facets.attributes).toEqual(['DARK'])
+  it('leaves the Skill Card character out of the races', async () => {
+    seedCards(db, [
+      { id: 46986414, name: 'Dark Magician', type: 'Normal Monster', race: 'Spellcaster' },
+      { id: 300000001, name: 'Skill', type: 'Skill Card', race: 'Yami Yugi' },
+    ])
+    await addOwnedCard(db, 'user-a', validateInventoryInput({ catalog_card_id: 46986414 }))
+    await addOwnedCard(db, 'user-a', validateInventoryInput({ catalog_card_id: 300000001 }))
+
+    const facets = loadInventorySearchFacets(db, 'user-a')
+    expect(facets.types).toEqual(['Normal Monster', 'Skill Card'])
     expect(facets.races).toEqual(['Spellcaster'])
-    expect(facets.levels).toEqual([7])
-    expect(facets.languages.sort()).toEqual(['de', 'en'])
-    expect(facets.conditions).toEqual(['near_mint'])
   })
 
   it('returns empty arrays for a user with no owned cards', () => {
     seedCards(db, [{ id: 46986414, name: 'Dark Magician', type: 'Normal Monster' }])
 
-    const facets = getFacets(db, 'user-a')
-
-    expect(facets).toEqual({
+    expect(loadInventorySearchFacets(db, 'user-a')).toEqual({
       types: [],
       attributes: [],
       races: [],
       levels: [],
-      languages: [],
-      conditions: [],
-      editions: [],
     })
   })
 })

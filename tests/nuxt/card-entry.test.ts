@@ -147,7 +147,7 @@ describe('suggestCatalogMatches', () => {
     seedTrickyNames(db)
   })
 
-  it('matches an exact name with full confidence and returns its printings', () => {
+  it('matches an exact name with full confidence, without printings (ADR 0017)', () => {
     const [best, ...rest] = suggestCatalogMatches(db, parseEntryLine('Dark Magician'))
 
     expect(best).toMatchObject({
@@ -158,12 +158,7 @@ describe('suggestCatalogMatches', () => {
       score: 1,
     })
     expect(best!.imageSmall).toContain(String(CATALOG_FIXTURE_IDS.darkMagician))
-    expect(best!.printings.map(printing => printing.setCode)).toEqual(['LOB-005', 'SDY-006'])
-    expect(best!.printings[0]).toMatchObject({
-      id: 'LOB-005',
-      setName: 'Legend of Blue Eyes White Dragon',
-      rarity: 'Ultra Rare',
-    })
+    expect(best).not.toHaveProperty('printings')
     expect(rest.every(candidate => candidate.score <= best!.score)).toBe(true)
   })
 
@@ -275,7 +270,6 @@ describe('suggestCatalogMatches with German names (ADR 0015)', () => {
       matchedBy: 'exact',
       score: 1,
     })
-    expect(best!.printings.map(printing => printing.setCode)).toEqual(['LOB-005', 'SDY-006'])
   })
 
   it('folds umlauts and punctuation in German names', () => {
