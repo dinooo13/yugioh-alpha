@@ -4,6 +4,8 @@
 
 Accepted
 
+Extended by [0019](0019-retired-catalog-cards.md): the sync now retires cards YGOPRODeck no longer lists and re-points references to their replacement.
+
 ## Context
 
 Phase 1 of the [Roadmap](../Roadmap.md) requires a global card catalog: the
