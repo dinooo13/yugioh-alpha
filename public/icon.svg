@@ -1,4 +1,22 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="112" fill="#6D5DF6"/>
-  <path d="M148 140h62l46 88 46-88h62l-78 140v92h-60v-92z" fill="#fff"/>
+  <defs>
+    <radialGradient id="glow" cx="50%" cy="46%" r="60%">
+      <stop offset="0" stop-color="#6d5df6" stop-opacity=".45"/>
+      <stop offset="1" stop-color="#6d5df6" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8b7cf8"/>
+      <stop offset=".55" stop-color="#5a3fee"/>
+      <stop offset="1" stop-color="#2a1a86"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="#0a0a1a"/>
+  <rect width="512" height="512" rx="112" fill="url(#glow)"/>
+  <circle cx="256" cy="256" r="178" fill="none" stroke="#e8b52e" stroke-opacity=".28" stroke-width="3"/>
+  <circle cx="256" cy="256" r="160" fill="none" stroke="#9787f8" stroke-opacity=".22" stroke-width="2" stroke-dasharray="4 10"/>
+  <g transform="translate(256 256) rotate(-8)">
+    <rect x="-103" y="-150" width="206" height="300" rx="14" fill="url(#card)" stroke="#e8b52e" stroke-width="6"/>
+    <rect x="-85" y="-132" width="170" height="264" rx="6" fill="none" stroke="#f5df8f" stroke-opacity=".35" stroke-width="2"/>
+    <path d="M-78-84H-22V-78H-32L0-26 44-78H36V-84H70V-78H60L13-2V72H34V80H-34V72H-13V-2L-64-78H-78Z" fill="#0a0a1a"/>
+  </g>
 </svg>
