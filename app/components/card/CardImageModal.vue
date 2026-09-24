@@ -26,16 +26,13 @@ const open = defineModel<boolean>('open', { default: false })
     :description="description"
   >
     <template #body>
-      <div class="space-y-4">
-        <!-- As wide as a 70vh-tall card, so a tall scan never overflows the screen. -->
-        <CardFloatingImage
-          :src="src"
-          :alt="title"
-          :no-image-label="noImageLabel"
-          class="mx-auto w-[min(100%,calc(70vh*59/86))]"
-        />
-        <slot />
-      </div>
+      <!-- As wide as a 70vh-tall card, so a tall scan never overflows the screen. -->
+      <CardFloatingImage
+        :src="src"
+        :alt="title"
+        :no-image-label="noImageLabel"
+        class="mx-auto w-[min(100%,calc(70vh*59/86))]"
+      />
     </template>
   </UModal>
 </template>

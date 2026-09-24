@@ -17,7 +17,48 @@ function body() {
 
 afterEach(() => {
   document.body.innerHTML = ''
+  vi.unstubAllGlobals()
 })
+
+// The card detail overlay (#88) loads the card from the catalog and the
+// per-collection notes from the inventory.
+function stubOverlayFetch() {
+  vi.stubGlobal('$fetch', vi.fn((url: string) => {
+    if (url === '/api/catalog/cards/89631139') {
+      return Promise.resolve({
+        card: {
+          id: 89631139,
+          name: 'Blue-Eyes White Dragon',
+          nameDe: null,
+          type: 'Normal Monster',
+          frameType: 'normal',
+          desc: 'This legendary dragon is a powerful engine of destruction.',
+          descDe: 'Dieser legendäre Drache ist eine mächtige Zerstörungsmaschine.',
+          race: 'Dragon',
+          archetype: null,
+          attribute: 'LIGHT',
+          atk: 3000,
+          def: 2500,
+          level: 8,
+          linkval: null,
+          scale: null,
+          linkMarkers: null,
+          banlistInfo: null,
+          cardPrices: null,
+          tcgDate: '2002-03-08',
+          ocgDate: null,
+          ygoprodeckUrl: null,
+        },
+        printings: [{ setCode: 'LOB-001', setName: 'Legend of Blue Eyes White Dragon', rarity: 'Ultra Rare', price: null }],
+        images: [],
+      })
+    }
+    if (url === '/api/inventory') {
+      return Promise.resolve({ items: [{ collectionId: 'box-1', quantity: 3, note: 'Oben links' }], total: 1 })
+    }
+    return Promise.reject(new Error(`unexpected ${url}`))
+  }))
+}
 
 // All tests share one router — unmount each page so an earlier one doesn't
 // re-render on a later test's navigation (runs before the cleanup above).
@@ -157,13 +198,25 @@ describe('inventory search panel (Übersicht)', () => {
     expect(image.attributes('srcset')).toContain('https://images.example/bewd-small.jpg')
     expect(image.classes()).toContain('object-contain')
 
-    // Clicking the artwork opens the preview modal with a catalog link.
+    // Clicking the artwork opens the card detail overlay (#88): the card
+    // text, what the user owns per collection with the notes, and a
+    // catalog link — but none of the catalog-only sections.
+    stubOverlayFetch()
     await component.find('[aria-label="Blue-Eyes White Dragon vergrößern"]').trigger('click')
     await nextTick()
     await vi.waitFor(() => {
       expect(body().find('a[href="/catalog?card=89631139"]').exists()).toBe(true)
+      expect(body().text()).toContain('Dieser legendäre Drache')
+      expect(body().text()).toContain('Oben links')
     })
-    expect(body().text()).toContain('Im Katalog öffnen')
+    const overlay = body().find('[role="dialog"]').text()
+    expect(overlay).toContain('Im Katalog öffnen')
+    expect(overlay).toContain('Kartentext')
+    expect(overlay).toContain('Im Inventar')
+    expect(overlay).toContain('Box 1')
+    expect(overlay).toContain('×3')
+    expect(overlay).not.toContain('Printings')
+    expect(overlay).not.toContain('LOB-001')
   })
 
   it('renders tile skeletons while the search is loading', async () => {
@@ -259,6 +312,7 @@ describe('view and card filter in the URL', () => {
     })
     await nextTick()
 
+    stubOverlayFetch()
     await component.find('[aria-label="Blue-Eyes White Dragon vergrößern"]').trigger('click')
     await vi.waitFor(() => {
       expect(body().text()).toContain('In Liste bearbeiten')

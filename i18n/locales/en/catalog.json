@@ -31,13 +31,6 @@
       "noCatalog": "No catalog imported yet",
       "noCatalogDescription": "Run the catalog sync first so cards can be searched and filtered here."
     },
-    "addToInventory": "Add to inventory",
-    "detail": {
-      "fallbackTitle": "Card",
-      "notFound": "Card not found",
-      "notFoundDescription": "Couldn't load the card details.",
-      "cardText": "Card text",
-      "printings": "Printings"
-    }
+    "addToInventory": "Add to inventory"
   }
 }

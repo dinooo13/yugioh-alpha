@@ -6,13 +6,19 @@
     "level": "Level {level}",
     "levelShort": "Lv {level}",
     "stars": "Stufe {level}",
-    "atkDef": "ATK {atk} / DEF {def}",
     "englishName": "Englisch: {name}",
     "germanTextMissing": "Für diese Karte gibt es keinen deutschen Kartentext.",
     "totalQuantity": "×{count} ges.",
     "retired": {
       "badge": "Nicht mehr im Katalog",
       "hint": "YGOPRODeck führt diese Karte nicht mehr. Deine Einträge bleiben erhalten, in der Suche taucht sie aber nicht mehr auf."
+    },
+    "detail": {
+      "fallbackTitle": "Karte",
+      "notFound": "Karte nicht gefunden",
+      "notFoundDescription": "Der Detaildatensatz konnte nicht geladen werden.",
+      "cardText": "Kartentext",
+      "printings": "Printings"
     },
     "field": {
       "quantity": "Anzahl",

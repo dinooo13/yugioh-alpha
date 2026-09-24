@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { cardFrame } from '~/utils/card-frame'
+import type { CardDetailSummary } from '~/utils/card-detail'
 
 interface CatalogFacets {
   types: string[]
@@ -30,50 +31,12 @@ interface CatalogSearchResponse {
   pageSize: number
 }
 
-interface CatalogCardDetail {
-  card: {
-    id: number
-    name: string
-    nameDe: string | null
-    type: string
-    frameType: string | null
-    desc: string
-    descDe: string | null
-    race: string | null
-    archetype: string | null
-    attribute: string | null
-    atk: number | null
-    def: number | null
-    level: number | null
-    linkval: number | null
-    scale: number | null
-    linkMarkers: string[] | null
-    banlistInfo: Record<string, string> | null
-    cardPrices: Record<string, string> | null
-    tcgDate: string | null
-    ocgDate: string | null
-    ygoprodeckUrl: string | null
-  }
-  printings: Array<{
-    setCode: string
-    setName: string
-    rarity: string | null
-    price: string | null
-  }>
-  images: Array<{
-    id: number
-    imageUrl: string
-    imageUrlSmall: string | null
-    imageUrlCropped: string | null
-  }>
-}
-
 const PAGE_SIZE = 24
 
 usePageTitle('catalog.title')
 
 const { t } = useI18n()
-const { cardLocale, cardName, cardDesc, englishName, hasGermanText, cardValueOptions } = useCardText()
+const { cardName, cardValueOptions } = useCardText()
 const count = useCount()
 
 const route = useRoute()
@@ -177,10 +140,6 @@ const {
   default: () => ({ items: [], total: 0, page: 1, pageSize: PAGE_SIZE }),
 })
 
-const detail = ref<CatalogCardDetail | null>(null)
-const detailPending = ref(false)
-const detailError = ref<Error | null>(null)
-
 watch([type, attribute, race, level, setId, sort, debouncedSearch], () => {
   page.value = 1
 })
@@ -201,30 +160,13 @@ watch([debouncedSearch, type, attribute, race, level, setId, sort, page], async 
   })
 }, { flush: 'post' })
 
+// What the grid already knows about the open card, shown while its detail loads.
+const selectedSummary = computed(() => cards.value.items.find(card => card.id === selectedCardId.value) ?? null)
+
 const totalPages = computed(() => Math.max(1, Math.ceil((cards.value?.total ?? 0) / PAGE_SIZE)))
 // Locale-formatted and pluralized, so a one-hit search reads "1 Karte" and
 // the full catalog "13.000 Karten" (UX review #10).
 const cardsTotalLabel = computed(() => count('catalog.resultCount', cards.value.total))
-
-watch(selectedCardId, async (cardId) => {
-  detail.value = null
-  detailError.value = null
-
-  if (!Number.isFinite(cardId)) {
-    return
-  }
-
-  detailPending.value = true
-  try {
-    detail.value = await $fetch<CatalogCardDetail>(`/api/catalog/cards/${cardId}`)
-  }
-  catch (error) {
-    detailError.value = error instanceof Error ? error : new Error(String(error))
-  }
-  finally {
-    detailPending.value = false
-  }
-}, { immediate: true })
 
 function openCard(cardId: number) {
   router.replace({ query: { ...route.query, card: String(cardId) } })
@@ -265,9 +207,11 @@ async function reloadCards() {
 // remembering the name and searching for it again on another page.
 const { data: collectionsData, refresh: refreshCollectionsAfterAdd } = await useCollections()
 const isAddToInventoryOpen = ref(false)
-const addingCard = ref<CatalogCardSummary | null>(null)
+const addingCard = ref<CardDetailSummary | null>(null)
 
-function openAddToInventory(card: CatalogCardSummary) {
+// From a grid tile or from the card detail; in the detail, the add dialog
+// opens on top of it and closing it returns there.
+function openAddToInventory(card: CardDetailSummary) {
   addingCard.value = card
   isAddToInventoryOpen.value = true
 }
@@ -549,153 +493,30 @@ async function onAddedToInventory() {
       />
     </div>
 
-    <USlideover
+    <CardDetailModal
       :open="isDetailOpen"
+      :card-id="isDetailOpen ? selectedCardId : null"
+      :preview="selectedSummary"
+      variant="catalog"
       @update:open="value => { if (!value) closeCard() }"
     >
-      <template #content>
-        <div class="h-full overflow-y-auto p-6">
-          <div class="mb-5 flex items-center justify-between gap-3">
-            <!-- A section label; the card's name is the display heading below. -->
-            <h2 class="eyebrow truncate">
-              {{ t('catalog.detail.fallbackTitle') }}
-            </h2>
-            <UButton
-              icon="i-lucide-x"
-              color="neutral"
-              variant="ghost"
-              :aria-label="t('common.close')"
-              class="tap-target"
-              @click="closeCard"
-            />
-          </div>
-
-          <div
-            v-if="detailPending"
-            class="space-y-4"
-          >
-            <USkeleton class="aspect-[3/4.2] w-full rounded-md" />
-            <USkeleton class="h-6 w-2/3" />
-            <USkeleton class="h-24 w-full" />
-          </div>
-
-          <UAlert
-            v-else-if="detailError"
-            color="error"
-            icon="i-lucide-circle-alert"
-            :title="t('catalog.detail.notFound')"
-            :description="t('catalog.detail.notFoundDescription')"
-          />
-
-          <article
-            v-else-if="detail"
-            class="space-y-6"
-          >
-            <CardThumb
-              :src="detail.images[0]?.imageUrlSmall"
-              :src-large="detail.images[0]?.imageUrl"
-              :alt="cardName(detail.card)"
-              :frame="cardFrame(detail.card)?.frame"
-              :pendulum="cardFrame(detail.card)?.pendulum"
-              size="full"
-              sizes="320px"
-              loading="eager"
-              class="mx-auto max-w-[17.5rem] rounded-[4.5%/3.1%] shadow-glow-primary"
-            />
-
-            <div class="space-y-3">
-              <div>
-                <h3 class="font-display text-2xl leading-tight font-semibold tracking-[0.01em] break-words text-highlighted hyphens-auto">
-                  {{ cardName(detail.card) }}
-                </h3>
-                <p
-                  v-if="englishName(detail.card)"
-                  class="mt-1 text-sm text-muted"
-                >
-                  {{ t('card.englishName', { name: englishName(detail.card) }) }}
-                </p>
-              </div>
-              <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
-                <CardTypeChip
-                  :type="detail.card.type"
-                  :frame-type="detail.card.frameType"
-                />
-                <CardAttributeOrb
-                  v-if="detail.card.attribute"
-                  :attribute="detail.card.attribute"
-                />
-                <span
-                  v-if="detail.card.level"
-                  class="inline-flex items-center gap-1 text-xs font-medium text-toned"
-                >
-                  <UIcon
-                    name="i-lucide-star"
-                    class="size-3.5 text-secondary"
-                    aria-hidden="true"
-                  />
-                  {{ t('card.level', { level: detail.card.level }) }}
-                </span>
-              </div>
-              <p
-                v-if="detail.card.atk !== null || detail.card.def !== null"
-                class="font-numeric text-base font-semibold tracking-[0.04em] text-highlighted tabular-nums"
-              >
-                {{ t('card.atkDef', { atk: detail.card.atk ?? '-', def: detail.card.def ?? '-' }) }}
-              </p>
-            </div>
-
-            <section>
-              <h4 class="text-sm font-semibold text-highlighted">
-                {{ t('catalog.detail.cardText') }}
-              </h4>
-              <p
-                v-if="cardLocale === 'de' && !hasGermanText(detail.card)"
-                class="mt-2 text-xs text-muted"
-              >
-                {{ t('card.germanTextMissing') }}
-              </p>
-              <p class="mt-2 whitespace-pre-line text-sm leading-6 text-default">
-                {{ cardDesc(detail.card) }}
-              </p>
-            </section>
-
-            <section v-if="detail.printings.length > 0">
-              <h4 class="text-sm font-semibold text-highlighted">
-                {{ t('catalog.detail.printings') }}
-              </h4>
-              <ul class="mt-2 divide-y divide-default overflow-hidden rounded-lg border border-default">
-                <li
-                  v-for="printing in detail.printings"
-                  :key="printing.setCode"
-                  class="p-3 text-sm"
-                >
-                  <p class="font-medium text-highlighted">
-                    {{ printing.setName }}
-                  </p>
-                  <p class="mt-1 text-muted">
-                    {{ printing.setCode }}
-                    <template v-if="printing.rarity">
-                      · {{ printing.rarity }}
-                    </template>
-                  </p>
-                </li>
-              </ul>
-            </section>
-
-            <section class="grid grid-cols-2 gap-3 text-sm text-toned">
-              <div v-if="detail.card.tcgDate">
-                <span class="font-medium text-highlighted">TCG</span>
-                <p>{{ detail.card.tcgDate }}</p>
-              </div>
-              <div v-if="detail.card.ocgDate">
-                <span class="font-medium text-highlighted">OCG</span>
-                <p>{{ detail.card.ocgDate }}</p>
-              </div>
-            </section>
-          </article>
-        </div>
+      <template #actions="{ card }">
+        <UButton
+          icon="i-lucide-archive-restore"
+          color="primary"
+          :label="t('catalog.addToInventory')"
+          :disabled="!card"
+          class="tap-target"
+          @click="card ? openAddToInventory(card) : undefined"
+        />
+        <WishlistAddToWishlistButton
+          v-if="isDetailOpen"
+          :catalog-card-id="selectedCardId"
+          :in-wishlist="isWishlisted(selectedCardId)"
+          @changed="value => onWishlistChanged(selectedCardId, value)"
+        />
       </template>
-    </USlideover>
+    </CardDetailModal>
 
     <InventoryAddToInventoryModal
       v-model:open="isAddToInventoryOpen"

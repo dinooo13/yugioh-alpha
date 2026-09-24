@@ -31,13 +31,6 @@
       "noCatalog": "Noch kein Katalog importiert",
       "noCatalogDescription": "Starte zuerst den Katalog-Sync, damit Karten hier durchsucht und gefiltert werden können."
     },
-    "addToInventory": "Zum Inventar",
-    "detail": {
-      "fallbackTitle": "Karte",
-      "notFound": "Karte nicht gefunden",
-      "notFoundDescription": "Der Detaildatensatz konnte nicht geladen werden.",
-      "cardText": "Kartentext",
-      "printings": "Printings"
-    }
+    "addToInventory": "Zum Inventar"
   }
 }
