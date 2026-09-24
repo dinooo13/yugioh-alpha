@@ -1,10 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DOMWrapper, flushPromises } from '@vue/test-utils'
+import { nextTick } from 'vue'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
 import CatalogPage from '~/pages/catalog.vue'
 import { setTestLocale } from './fixtures/locale'
 
-const catalogState = vi.hoisted(() => ({ total: 1 }))
+const catalogState = vi.hoisted(() => ({
+  total: 1,
+  // One `pending` for the card search across mounts, so a test can flip the
+  // grid to its loading skeletons (#98).
+  searchPending: null as null | { value: boolean },
+}))
 
 // UModal teleports its content to <body> (same note as in collections-ui.test.ts).
 function body() {
@@ -28,6 +34,9 @@ afterEach(async () => {
   }
   document.body.innerHTML = ''
   catalogState.total = 1
+  if (catalogState.searchPending) {
+    catalogState.searchPending.value = false
+  }
   useState('card-locale-choice').value = null
   vi.unstubAllGlobals()
   await useRouter().replace('/catalog')
@@ -109,7 +118,7 @@ mockNuxtImport('useFetch', () => {
           page: 1,
           pageSize: 24,
         }),
-        pending: ref(false),
+        pending: (catalogState.searchPending ??= ref(false)),
         error: ref(null),
         refresh: vi.fn(),
       }
@@ -153,6 +162,29 @@ describe('catalog page', () => {
     expect(body().text()).toContain('Sammlung')
     // No collector details since ADR 0017.
     expect(body().text()).not.toContain('Drucksprache')
+  })
+
+  it('keeps a wishlist toggle that finishes while the grid reloads (#98)', async () => {
+    const component = await mountPage()
+    let finish!: () => void
+    vi.stubGlobal('$fetch', vi.fn(() => new Promise<void>((resolve) => {
+      finish = resolve
+    })))
+
+    const wishlistButton = component.findAll('button').find(btn => btn.text() === 'Zur Wunschliste')
+    await wishlistButton!.trigger('click')
+
+    // A new search starts: the tiles make way for skeletons…
+    catalogState.searchPending!.value = true
+    await nextTick()
+    expect(component.text()).not.toContain('Zur Wunschliste')
+
+    // …the toggle finishes meanwhile, and the new grid shows it.
+    finish()
+    await flushPromises()
+    catalogState.searchPending!.value = false
+    await nextTick()
+    expect(component.text()).toContain('Auf der Wunschliste')
   })
 
   it('shows the result count with a thousands separator and the right plural', async () => {

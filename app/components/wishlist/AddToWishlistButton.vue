@@ -1,43 +1,25 @@
 <script setup lang="ts">
-const props = defineProps<{
-  catalogCardId: number
+/**
+ * The "Zur Wunschliste / Auf der Wunschliste" toggle. Presentational: the
+ * page owns the state and the request (`useWishlistToggle`, #98), so a
+ * toggle survives the button being unmounted.
+ */
+withDefaults(defineProps<{
   inWishlist: boolean
-}>()
+  loading?: boolean
+  error?: string
+  size?: 'xs' | 'md'
+}>(), {
+  loading: false,
+  error: undefined,
+  size: 'xs',
+})
 
-const emit = defineEmits<{
-  changed: [inWishlist: boolean]
+defineEmits<{
+  toggle: []
 }>()
 
 const { t } = useI18n()
-const apiError = useApiError()
-
-const isSaving = ref(false)
-const errorMessage = ref('')
-
-async function toggle() {
-  if (isSaving.value) {
-    return
-  }
-
-  isSaving.value = true
-  errorMessage.value = ''
-  try {
-    if (props.inWishlist) {
-      await $fetch(`/api/wishlist/card/${props.catalogCardId}`, { method: 'DELETE' })
-      emit('changed', false)
-    }
-    else {
-      await $fetch('/api/wishlist', { method: 'POST', body: { catalogCardId: props.catalogCardId } })
-      emit('changed', true)
-    }
-  }
-  catch (error) {
-    errorMessage.value = apiError(error, 'wishlist.errors.updateFailed')
-  }
-  finally {
-    isSaving.value = false
-  }
-}
 </script>
 
 <template>
@@ -46,17 +28,17 @@ async function toggle() {
       :icon="inWishlist ? 'i-lucide-heart-off' : 'i-lucide-heart'"
       color="neutral"
       variant="outline"
-      size="xs"
-      :loading="isSaving"
+      :size="size"
+      :loading="loading"
       :label="inWishlist ? t('wishlist.button.onList') : t('wishlist.button.add')"
       class="tap-target"
-      @click="toggle"
+      @click="$emit('toggle')"
     />
     <p
-      v-if="errorMessage"
+      v-if="error"
       class="text-xs text-error"
     >
-      {{ errorMessage }}
+      {{ error }}
     </p>
   </div>
 </template>
