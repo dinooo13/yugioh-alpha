@@ -2,15 +2,8 @@ import { randomUUID } from 'node:crypto'
 import { and, desc, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm'
 import { createError } from 'h3'
 import type { useDb } from '../db'
-import {
-  catalogCard,
-  catalogCardImage,
-  catalogPrinting,
-  catalogSet,
-  ownedCard,
-} from '../db/schema'
-import { CARD_CONDITIONS, CARD_EDITIONS, PRINTING_LANGUAGES, UNASSIGNED_COLLECTION_ID } from '../../shared/inventory'
-import type { CardCondition, CardEdition, PrintingLanguage } from '../../shared/inventory'
+import { catalogCard, catalogCardImage, ownedCard } from '../db/schema'
+import { UNASSIGNED_COLLECTION_ID } from '../../shared/inventory'
 import type { AppLocale } from '../../shared/locale'
 import { cardNameMatches, escapedLike, escapeLikeTerm } from './card-name-search'
 import { cardNameDeSql, cardSortKey } from './card-translation-sql'
@@ -18,25 +11,18 @@ import { assertCollectionOwnedByUser } from './collections'
 
 type Db = ReturnType<typeof useDb>
 
-export const LANGUAGES = PRINTING_LANGUAGES
-export const CONDITIONS = CARD_CONDITIONS
-export const EDITIONS = CARD_EDITIONS
 // Upper bound for a single owned-card stack. Guards against a typo (or a
 // misparsed entry line) turning into a five-digit quantity.
 export const MAX_QUANTITY = 999
 
-export type InventoryLanguage = PrintingLanguage
-export type InventoryCondition = CardCondition
-export type InventoryEdition = CardEdition
-
+/**
+ * One owned-card stack (ADR 0017): a catalog card in a collection (or none),
+ * with a quantity and a note. No printing, language, condition or edition.
+ */
 export interface InventoryInput {
   catalogCardId: number
-  printingId: string | null
   collectionId: string | null
   quantity: number
-  language: InventoryLanguage
-  condition: InventoryCondition
-  edition: InventoryEdition
   note: string | null
 }
 
@@ -99,20 +85,12 @@ function normalizeOptionalString(value: unknown, field: string): string | null {
   return trimmed === '' ? null : trimmed
 }
 
-function normalizeEnum<T extends readonly string[]>(
-  value: unknown,
-  field: string,
-  allowed: T,
-  fallback: T[number],
-): T[number] {
-  const normalized = value === undefined || value === null || value === '' ? fallback : value
-  if (typeof normalized !== 'string' || !allowed.includes(normalized)) {
-    badRequest(`${field} is not supported`)
-  }
-
-  return normalized
-}
-
+/**
+ * Validates a create body. Unknown keys are silently ignored — in particular
+ * the former collector fields (`printing_id`/`printingId`, `language`,
+ * `condition`, `edition`; ADR 0017), which old PWA clients, E2E seeds and
+ * already stored `add_to_inventory` assistant actions may still send.
+ */
 export function validateInventoryInput(body: unknown): InventoryInput {
   if (!isRecord(body)) {
     badRequest('Request body must be an object')
@@ -120,16 +98,16 @@ export function validateInventoryInput(body: unknown): InventoryInput {
 
   return {
     catalogCardId: normalizePositiveInteger(body.catalog_card_id ?? body.catalogCardId, 'catalog_card_id'),
-    printingId: normalizeOptionalString(body.printing_id ?? body.printingId, 'printing_id'),
     collectionId: normalizeOptionalString(body.collection_id ?? body.collectionId, 'collection_id'),
     quantity: normalizePositiveInteger(body.quantity, 'quantity', 1, MAX_QUANTITY),
-    language: normalizeEnum(body.language, 'language', LANGUAGES, 'en'),
-    condition: normalizeEnum(body.condition, 'condition', CONDITIONS, 'near_mint'),
-    edition: normalizeEnum(body.edition, 'edition', EDITIONS, 'unlimited'),
     note: normalizeOptionalString(body.note, 'note'),
   }
 }
 
+/**
+ * Validates a PATCH body. Like `validateInventoryInput`, unknown keys —
+ * including the former collector fields — are silently ignored.
+ */
 export function validateInventoryUpdateInput(body: unknown): Partial<InventoryInput> {
   if (!isRecord(body)) {
     badRequest('Request body must be an object')
@@ -139,23 +117,11 @@ export function validateInventoryUpdateInput(body: unknown): Partial<InventoryIn
   if (body.catalog_card_id !== undefined || body.catalogCardId !== undefined) {
     input.catalogCardId = normalizePositiveInteger(body.catalog_card_id ?? body.catalogCardId, 'catalog_card_id')
   }
-  if (body.printing_id !== undefined || body.printingId !== undefined) {
-    input.printingId = normalizeOptionalString(body.printing_id ?? body.printingId, 'printing_id')
-  }
   if (body.collection_id !== undefined || body.collectionId !== undefined) {
     input.collectionId = normalizeOptionalString(body.collection_id ?? body.collectionId, 'collection_id')
   }
   if (body.quantity !== undefined) {
     input.quantity = normalizePositiveInteger(body.quantity, 'quantity', undefined, MAX_QUANTITY)
-  }
-  if (body.language !== undefined) {
-    input.language = normalizeEnum(body.language, 'language', LANGUAGES, 'en')
-  }
-  if (body.condition !== undefined) {
-    input.condition = normalizeEnum(body.condition, 'condition', CONDITIONS, 'near_mint')
-  }
-  if (body.edition !== undefined) {
-    input.edition = normalizeEnum(body.edition, 'edition', EDITIONS, 'unlimited')
   }
   if (body.note !== undefined) {
     input.note = normalizeOptionalString(body.note, 'note')
@@ -164,33 +130,19 @@ export function validateInventoryUpdateInput(body: unknown): Partial<InventoryIn
   return input
 }
 
-export function ensureCatalogCardExists(db: Db, catalogCardId: number, printingId?: string | null) {
+export function ensureCatalogCardExists(db: Db, catalogCardId: number) {
   const card = db.select({ id: catalogCard.id }).from(catalogCard).where(eq(catalogCard.id, catalogCardId)).get()
   if (!card) {
     badRequest('catalog_card_id does not exist')
   }
-
-  if (printingId) {
-    const printing = db
-      .select({ id: catalogPrinting.id })
-      .from(catalogPrinting)
-      .where(and(eq(catalogPrinting.id, printingId), eq(catalogPrinting.cardId, catalogCardId)))
-      .get()
-    if (!printing) {
-      badRequest('printing_id does not exist for catalog_card_id')
-    }
-  }
 }
 
+// The owned-card grain (ADR 0017): one row per (user, catalog card, collection).
 function sameTupleWhere(userId: string, input: InventoryInput, exceptId?: string) {
   const clauses = [
     eq(ownedCard.userId, userId),
     eq(ownedCard.catalogCardId, input.catalogCardId),
-    input.printingId ? eq(ownedCard.printingId, input.printingId) : isNull(ownedCard.printingId),
     input.collectionId ? eq(ownedCard.collectionId, input.collectionId) : isNull(ownedCard.collectionId),
-    eq(ownedCard.language, input.language),
-    eq(ownedCard.condition, input.condition),
-    eq(ownedCard.edition, input.edition),
   ]
 
   if (exceptId) {
@@ -202,10 +154,18 @@ function sameTupleWhere(userId: string, input: InventoryInput, exceptId?: string
 
 export type OwnedCardRow = typeof ownedCard.$inferSelect
 
+/** An owned-card row as the API returns it: without the unused collector columns (ADR 0017). */
+export type OwnedCardView = Omit<OwnedCardRow, 'printingId' | 'language' | 'condition' | 'edition'>
+
+export function toOwnedCardView(row: OwnedCardRow): OwnedCardView {
+  const { printingId: _printingId, language: _language, condition: _condition, edition: _edition, ...view } = row
+  return view
+}
+
 /**
  * Writes one owned-card row, merging into an existing row with the same
  * ownership tuple instead of creating a duplicate. Assumes the input was
- * already validated (catalog/printing existence, collection ownership) —
+ * already validated (catalog card existence, collection ownership) —
  * `addOwnedCard` does that per request, the bulk endpoint does it for every
  * item up front so the whole batch can run inside one transaction.
  */
@@ -237,12 +197,8 @@ function upsertOwnedCardRow(
       id: randomUUID(),
       userId,
       catalogCardId: input.catalogCardId,
-      printingId: input.printingId,
       collectionId: input.collectionId,
       quantity: input.quantity,
-      language: input.language,
-      condition: input.condition,
-      edition: input.edition,
       note: input.note,
       createdAt: now,
       updatedAt: now,
@@ -253,13 +209,13 @@ function upsertOwnedCardRow(
   return { row: created!, merged: false }
 }
 
-export async function addOwnedCard(db: Db, userId: string, input: InventoryInput) {
-  ensureCatalogCardExists(db, input.catalogCardId, input.printingId)
+export async function addOwnedCard(db: Db, userId: string, input: InventoryInput): Promise<OwnedCardView> {
+  ensureCatalogCardExists(db, input.catalogCardId)
   if (input.collectionId) {
     assertCollectionOwnedByUser(db, userId, input.collectionId)
   }
 
-  return upsertOwnedCardRow(db, userId, input).row
+  return toOwnedCardView(upsertOwnedCardRow(db, userId, input).row)
 }
 
 export const INVENTORY_BULK_MAX_ITEMS = 200
@@ -275,7 +231,7 @@ export interface InventoryBulkItemError {
 export interface InventoryBulkResult {
   created: number
   merged: number
-  items: OwnedCardRow[]
+  items: OwnedCardView[]
 }
 
 /**
@@ -309,7 +265,7 @@ function clientItemError(error: unknown): Omit<InventoryBulkItemError, 'index'> 
 
 /**
  * Validates a whole bulk payload before anything is written: shape, per-item
- * fields (same validators as the single-card endpoint), catalog/printing
+ * fields (same validators as the single-card endpoint), catalog card
  * existence, and collection ownership. Fails with a single 400 carrying every
  * offending item's index, so the review UI can mark the exact rows.
  */
@@ -335,7 +291,7 @@ export function validateInventoryBulkInput(db: Db, userId: string, body: unknown
   rawItems.forEach((rawItem, index) => {
     try {
       const input = validateInventoryInput(rawItem)
-      ensureCatalogCardExists(db, input.catalogCardId, input.printingId)
+      ensureCatalogCardExists(db, input.catalogCardId)
       if (input.collectionId) {
         assertCollectionOwnedByUser(db, userId, input.collectionId)
       }
@@ -372,13 +328,13 @@ export function addOwnedCardsBulkSync(
   userId: string,
   inputs: InventoryInput[],
 ): InventoryBulkResult {
-  const items: OwnedCardRow[] = []
+  const items: OwnedCardView[] = []
   let created = 0
   let merged = 0
 
   for (const input of inputs) {
     const result = upsertOwnedCardRow(db, userId, input)
-    items.push(result.row)
+    items.push(toOwnedCardView(result.row))
     if (result.merged) {
       merged += 1
     }
@@ -409,7 +365,7 @@ export async function updateOwnedCard(
   userId: string,
   id: string,
   patch: Partial<InventoryInput>,
-) {
+): Promise<OwnedCardView> {
   if (patch.quantity !== undefined && patch.quantity < 1) {
     badRequest('quantity must be a positive integer', 'quantity_invalid')
   }
@@ -426,16 +382,12 @@ export async function updateOwnedCard(
 
   const input: InventoryInput = {
     catalogCardId: patch.catalogCardId ?? current.catalogCardId,
-    printingId: patch.printingId !== undefined ? patch.printingId : current.printingId,
     collectionId: patch.collectionId !== undefined ? patch.collectionId : current.collectionId,
     quantity: patch.quantity ?? current.quantity,
-    language: patch.language ?? (current.language as InventoryLanguage),
-    condition: patch.condition ?? (current.condition as InventoryCondition),
-    edition: patch.edition ?? (current.edition as InventoryEdition),
     note: patch.note !== undefined ? patch.note : current.note,
   }
 
-  ensureCatalogCardExists(db, input.catalogCardId, input.printingId)
+  ensureCatalogCardExists(db, input.catalogCardId)
   if (input.collectionId) {
     assertCollectionOwnedByUser(db, userId, input.collectionId)
   }
@@ -455,19 +407,15 @@ export async function updateOwnedCard(
       .returning()
       .all()
     db.delete(ownedCard).where(eq(ownedCard.id, id)).run()
-    return merged!
+    return toOwnedCardView(merged!)
   }
 
   const [updated] = db
     .update(ownedCard)
     .set({
       catalogCardId: input.catalogCardId,
-      printingId: input.printingId,
       collectionId: input.collectionId,
       quantity: input.quantity,
-      language: input.language,
-      condition: input.condition,
-      edition: input.edition,
       note: input.note,
       updatedAt: now,
     })
@@ -475,7 +423,7 @@ export async function updateOwnedCard(
     .returning()
     .all()
 
-  return updated!
+  return toOwnedCardView(updated!)
 }
 
 export async function deleteOwnedCard(db: Db, userId: string, id: string) {
@@ -532,12 +480,8 @@ export function listOwnedCards(db: Db, userId: string, options: InventoryListOpt
     .select({
       id: ownedCard.id,
       catalogCardId: ownedCard.catalogCardId,
-      printingId: ownedCard.printingId,
       collectionId: ownedCard.collectionId,
       quantity: ownedCard.quantity,
-      language: ownedCard.language,
-      condition: ownedCard.condition,
-      edition: ownedCard.edition,
       note: ownedCard.note,
       createdAt: ownedCard.createdAt,
       updatedAt: ownedCard.updatedAt,
@@ -545,13 +489,9 @@ export function listOwnedCards(db: Db, userId: string, options: InventoryListOpt
       cardNameDe: cardNameDeSql(),
       cardType: catalogCard.type,
       imageUrlSmall: sql<string | null>`min(${catalogCardImage.imageUrlSmall})`,
-      setName: catalogSet.name,
-      rarity: catalogPrinting.rarity,
     })
     .from(ownedCard)
     .innerJoin(catalogCard, eq(ownedCard.catalogCardId, catalogCard.id))
-    .leftJoin(catalogPrinting, eq(ownedCard.printingId, catalogPrinting.id))
-    .leftJoin(catalogSet, eq(catalogPrinting.setId, catalogSet.id))
     .leftJoin(catalogCardImage, eq(catalogCardImage.cardId, catalogCard.id))
     .where(where)
     .groupBy(ownedCard.id)
@@ -572,9 +512,9 @@ export function listOwnedCards(db: Db, userId: string, options: InventoryListOpt
 
 /**
  * Total owned copies per catalog card for one user, summed across every
- * collection, printing, condition, language, and edition (see docs/adr/0002:
- * deck availability is "a simple sum by catalog_card_id"). Cards the user
- * does not own at all are absent from the map.
+ * collection (see docs/adr/0002 and 0017: deck availability is "a simple
+ * sum by catalog_card_id"). Cards the user does not own at all are absent
+ * from the map.
  */
 export function ownedQuantitiesByCard(db: Db, userId: string, catalogCardIds: number[]): Map<number, number> {
   if (catalogCardIds.length === 0) {
@@ -596,7 +536,7 @@ export function ownedQuantitiesByCard(db: Db, userId: string, catalogCardIds: nu
 
 /**
  * Up to 20 catalog cards by name (English or German) or passcode, sorted by
- * the name in `cardLocale` (ADR 0015), each with its printings.
+ * the name in `cardLocale` (ADR 0015), for the inventory's card picker.
  */
 export function searchCatalogCards(db: Db, q = '', cardLocale: AppLocale = 'en') {
   const term = q.trim()
@@ -604,7 +544,7 @@ export function searchCatalogCards(db: Db, q = '', cardLocale: AppLocale = 'en')
     ? or(cardNameMatches(term), escapedLike(sql`${catalogCard.id}`, `%${escapeLikeTerm(term)}%`))
     : undefined
 
-  const cards = db
+  return db
     .select({
       id: catalogCard.id,
       name: catalogCard.name,
@@ -619,26 +559,4 @@ export function searchCatalogCards(db: Db, q = '', cardLocale: AppLocale = 'en')
     .orderBy(cardSortKey(cardLocale))
     .limit(20)
     .all()
-
-  if (cards.length === 0) {
-    return []
-  }
-
-  const cardIds = new Set(cards.map(card => card.id))
-  const printings = db
-    .select({
-      id: catalogPrinting.id,
-      cardId: catalogPrinting.cardId,
-      setName: catalogSet.name,
-      rarity: catalogPrinting.rarity,
-    })
-    .from(catalogPrinting)
-    .innerJoin(catalogSet, eq(catalogPrinting.setId, catalogSet.id))
-    .all()
-    .filter(printing => cardIds.has(printing.cardId))
-
-  return cards.map(card => ({
-    ...card,
-    printings: printings.filter(printing => printing.cardId === card.id),
-  }))
 }

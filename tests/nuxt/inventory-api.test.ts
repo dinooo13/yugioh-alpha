@@ -12,6 +12,7 @@ import {
   searchCatalogCards,
   updateOwnedCard,
   validateInventoryInput,
+  validateInventoryUpdateInput,
 } from '../../server/utils/inventory'
 import { seedGermanNames } from './fixtures/german-names'
 
@@ -23,6 +24,8 @@ function createTestDb() {
 }
 
 type TestDb = ReturnType<typeof createTestDb>
+
+const COLLECTOR_KEYS = ['printingId', 'language', 'condition', 'edition']
 
 function seedCatalog(db: TestDb) {
   const now = new Date()
@@ -87,21 +90,33 @@ function seedCatalog(db: TestDb) {
 
 describe('inventory validation', () => {
   it('normalizes valid inventory input with defaults', () => {
-    expect(validateInventoryInput({ catalog_card_id: '46986414' })).toMatchObject({
+    expect(validateInventoryInput({ catalog_card_id: '46986414' })).toEqual({
       catalogCardId: 46986414,
-      printingId: null,
+      collectionId: null,
       quantity: 1,
-      language: 'en',
-      condition: 'near_mint',
-      edition: 'unlimited',
       note: null,
     })
   })
 
-  it('rejects invalid quantity, missing card id, and unsupported language', () => {
+  it('ignores the former collector fields (ADR 0017)', () => {
+    const input = validateInventoryInput({
+      catalog_card_id: 46986414,
+      printing_id: 'NOPE-001',
+      printingId: 'LOB-005',
+      language: 'xx',
+      condition: 'played',
+      edition: 'first',
+      quantity: 2,
+    })
+    expect(input).toEqual({ catalogCardId: 46986414, collectionId: null, quantity: 2, note: null })
+
+    const patch = validateInventoryUpdateInput({ printing_id: 'LOB-005', language: 'de', condition: 'played', edition: 'first', quantity: 3 })
+    expect(patch).toEqual({ quantity: 3 })
+  })
+
+  it('rejects invalid quantity and a missing card id', () => {
     expect(() => validateInventoryInput({ catalog_card_id: 46986414, quantity: 0 })).toThrow()
     expect(() => validateInventoryInput({ quantity: 1 })).toThrow()
-    expect(() => validateInventoryInput({ catalog_card_id: 46986414, language: 'xx' })).toThrow()
   })
 
   it('gives the user-typed quantity errors a translatable code', () => {
@@ -134,41 +149,52 @@ describe('inventory persistence helpers', () => {
     seedCatalog(db)
   })
 
-  it('adds and upserts owned cards by the ownership tuple', async () => {
-    await addOwnedCard(db, 'user-a', validateInventoryInput({
+  it('adds and upserts owned cards by card and collection only (ADR 0017)', async () => {
+    const first = await addOwnedCard(db, 'user-a', validateInventoryInput({
       catalog_card_id: 46986414,
       printing_id: 'LOB-005',
       quantity: 1,
       language: 'en',
     }))
+    // A different printing and language used to be a separate row; now it merges.
     const updated = await addOwnedCard(db, 'user-a', validateInventoryInput({
       catalog_card_id: 46986414,
-      printing_id: 'LOB-005',
       quantity: 2,
-      language: 'en',
+      language: 'de',
+      edition: 'first',
     }))
 
     const rows = db.select().from(schema.ownedCard).all()
     expect(rows).toHaveLength(1)
+    expect(updated.id).toBe(first.id)
     expect(updated.quantity).toBe(3)
+    expect(rows[0]).toMatchObject({ printingId: null, language: 'en', condition: 'near_mint', edition: 'unlimited' })
   })
 
-  it('rejects unknown catalog cards and printings', async () => {
+  it('returns owned cards without the collector columns', async () => {
+    const created = await addOwnedCard(db, 'user-a', validateInventoryInput({ catalog_card_id: 46986414, note: 'Binder' }))
+    const patched = await updateOwnedCard(db, 'user-a', created.id, validateInventoryUpdateInput({ quantity: 4 }))
+
+    for (const row of [created, patched]) {
+      for (const key of COLLECTOR_KEYS) {
+        expect(row).not.toHaveProperty(key)
+      }
+      expect(row).toMatchObject({ catalogCardId: 46986414, note: 'Binder' })
+    }
+    expect(patched.quantity).toBe(4)
+  })
+
+  it('rejects unknown catalog cards', async () => {
     await expect(addOwnedCard(db, 'user-a', validateInventoryInput({
       catalog_card_id: 1,
-    }))).rejects.toMatchObject({ statusCode: 400 })
-
-    await expect(addOwnedCard(db, 'user-a', validateInventoryInput({
-      catalog_card_id: 46986414,
-      printing_id: 'NOPE-001',
     }))).rejects.toMatchObject({ statusCode: 400 })
   })
 
   it('lists only the current user inventory with catalog display data', async () => {
     await addOwnedCard(db, 'user-a', validateInventoryInput({
       catalog_card_id: 46986414,
-      printing_id: 'LOB-005',
       quantity: 2,
+      note: 'Binder',
     }))
     await addOwnedCard(db, 'user-b', validateInventoryInput({
       catalog_card_id: 55144522,
@@ -181,9 +207,12 @@ describe('inventory persistence helpers', () => {
     expect(result.items[0]).toMatchObject({
       cardName: 'Dark Magician',
       imageUrlSmall: 'https://images.example/dm-small.jpg',
-      setName: 'Legend of Blue Eyes White Dragon',
       quantity: 2,
+      note: 'Binder',
     })
+    for (const key of [...COLLECTOR_KEYS, 'setName', 'rarity']) {
+      expect(result.items[0]).not.toHaveProperty(key)
+    }
   })
 
   describe('list filters', () => {
@@ -192,7 +221,7 @@ describe('inventory persistence helpers', () => {
       db.insert(schema.collection).values({ id: 'col-1', userId: 'user-a', name: 'Box 1', createdAt: now, updatedAt: now }).run()
       // Dark Magician: one row in Box 1, one without a collection.
       await addOwnedCard(db, 'user-a', validateInventoryInput({ catalog_card_id: 46986414, collection_id: 'col-1', quantity: 2 }))
-      await addOwnedCard(db, 'user-a', validateInventoryInput({ catalog_card_id: 46986414, language: 'de', quantity: 1 }))
+      await addOwnedCard(db, 'user-a', validateInventoryInput({ catalog_card_id: 46986414, quantity: 1 }))
       // Pot of Greed: in Box 1 only.
       await addOwnedCard(db, 'user-a', validateInventoryInput({ catalog_card_id: 55144522, collection_id: 'col-1', quantity: 1 }))
       // Another user's unassigned row never leaks in.
@@ -219,6 +248,11 @@ describe('inventory persistence helpers', () => {
       expect(searchCatalogCards(db, '_')).toEqual([])
     })
 
+    it('returns picker cards without printings (#75)', () => {
+      const [card] = searchCatalogCards(db, 'Dark Magician')
+      expect(Object.keys(card!).sort()).toEqual(['id', 'imageUrlSmall', 'name', 'nameDe', 'type'])
+    })
+
     it('lists only unassigned rows for "__none__"', () => {
       const result = listOwnedCards(db, 'user-a', { collectionId: '__none__' })
       expect(result.total).toBe(1)
@@ -237,23 +271,26 @@ describe('inventory persistence helpers', () => {
     })
   })
 
-  it('updates own rows, merges tuple collisions, and rejects quantity below one', async () => {
+  it('updates own rows, merges collisions, and rejects quantity below one', async () => {
+    const now = new Date()
+    db.insert(schema.collection).values({ id: 'col-1', userId: 'user-a', name: 'Box 1', createdAt: now, updatedAt: now }).run()
     const first = await addOwnedCard(db, 'user-a', validateInventoryInput({
       catalog_card_id: 46986414,
-      language: 'en',
-      condition: 'near_mint',
+      collection_id: 'col-1',
       quantity: 1,
     }))
     const second = await addOwnedCard(db, 'user-a', validateInventoryInput({
       catalog_card_id: 46986414,
-      language: 'de',
-      condition: 'near_mint',
       quantity: 2,
     }))
 
     await expect(updateOwnedCard(db, 'user-a', first.id, { quantity: 0 })).rejects.toMatchObject({ statusCode: 400 })
 
-    const merged = await updateOwnedCard(db, 'user-a', first.id, { language: 'de' })
+    // A language change is ignored now; moving the stack out of Box 1 collides and merges.
+    const unchanged = await updateOwnedCard(db, 'user-a', first.id, validateInventoryUpdateInput({ language: 'de' }))
+    expect(unchanged.id).toBe(first.id)
+
+    const merged = await updateOwnedCard(db, 'user-a', first.id, validateInventoryUpdateInput({ collectionId: null }))
     expect(merged.id).toBe(second.id)
     expect(merged.quantity).toBe(3)
     expect(db.select().from(schema.ownedCard).where(eq(schema.ownedCard.userId, 'user-a')).all()).toHaveLength(1)

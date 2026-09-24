@@ -256,13 +256,17 @@ export const ownedCard = sqliteTable(
     catalogCardId: integer('catalog_card_id')
       .notNull()
       .references(() => catalogCard.id, { onDelete: 'cascade' }),
+    // Unused since ADR 0017: always NULL. Kept because dropping an FK column
+    // would need a table rebuild.
     printingId: text('printing_id')
       .references(() => catalogPrinting.id, { onDelete: 'set null' }),
-    // Owning storage location, or NULL = unassigned ("Alle Karten" only).
+    // Owning storage location, or NULL = unassigned (not in any collection).
     // Deleting a collection sets this back to NULL so owned cards survive.
     collectionId: text('collection_id')
       .references(() => collection.id, { onDelete: 'set null' }),
     quantity: integer('quantity').notNull().default(1),
+    // Unused since ADR 0017: `language`, `condition` and `edition` always hold
+    // their defaults. Writes never set them, reads never select them.
     language: text('language').notNull().default('en'),
     condition: text('condition').notNull().default('near_mint'),
     edition: text('edition').notNull().default('unlimited'),

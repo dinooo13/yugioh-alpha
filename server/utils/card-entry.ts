@@ -3,7 +3,7 @@ import type { SQL } from 'drizzle-orm'
 import { createError } from 'h3'
 import { foldCardName } from '../../shared/card-name-fold'
 import type { useDb } from '../db'
-import { catalogCard, catalogCardImage, catalogCardTranslation, catalogPrinting, catalogSet } from '../db/schema'
+import { catalogCard, catalogCardImage, catalogCardTranslation, catalogPrinting } from '../db/schema'
 import { escapedLike, escapeLikeTerm } from './card-name-search'
 
 type Db = ReturnType<typeof useDb>
@@ -42,13 +42,6 @@ export interface ParsedEntryLine {
   passcode?: number
 }
 
-export interface EntryCandidatePrinting {
-  id: string
-  setCode: string
-  setName: string
-  rarity: string | null
-}
-
 export interface EntryCandidate {
   cardId: number
   name: string
@@ -60,7 +53,6 @@ export interface EntryCandidate {
   /** 0..1 confidence; 1 for passcode/set code/exact name hits. */
   score: number
   matchedBy: EntryMatchedBy
-  printings: EntryCandidatePrinting[]
 }
 
 export interface EntrySuggestResult {
@@ -214,7 +206,7 @@ interface CandidateRow {
 /**
  * Prefilter query: no joins, no grouping, and only a bounded sort, so a
  * 14k-card catalog scan stays in the single-digit millisecond range. Display
- * data (images, printings) is fetched for the final ranked ids only.
+ * data (images, German names) is fetched for the final ranked ids only.
  */
 function selectCards(db: Db, where: SQL, limit: number, orderBy?: SQL): CandidateRow[] {
   const query = db
@@ -316,35 +308,6 @@ function imagesByCardId(db: Db, cardIds: number[]): Map<number, string | null> {
   return byCardId
 }
 
-function printingsByCardId(db: Db, cardIds: number[]): Map<number, EntryCandidatePrinting[]> {
-  const byCardId = new Map<number, EntryCandidatePrinting[]>()
-  if (cardIds.length === 0) {
-    return byCardId
-  }
-
-  const rows = db
-    .select({
-      id: catalogPrinting.id,
-      cardId: catalogPrinting.cardId,
-      setCode: catalogPrinting.setCode,
-      setName: catalogSet.name,
-      rarity: catalogPrinting.rarity,
-    })
-    .from(catalogPrinting)
-    .innerJoin(catalogSet, eq(catalogPrinting.setId, catalogSet.id))
-    .where(inArray(catalogPrinting.cardId, cardIds))
-    .orderBy(catalogPrinting.setCode)
-    .all()
-
-  for (const row of rows) {
-    const list = byCardId.get(row.cardId) ?? []
-    list.push({ id: row.id, setCode: row.setCode, setName: row.setName, rarity: row.rarity })
-    byCardId.set(row.cardId, list)
-  }
-
-  return byCardId
-}
-
 function tokenize(query: string): string[] {
   const tokens = query
     .split(/[^\p{L}\p{N}]+/u)
@@ -389,7 +352,6 @@ function rankCandidates(candidates: ScoredCandidate[], limit: number): ScoredCan
 function withDisplayData(db: Db, ranked: ScoredCandidate[]): EntryCandidate[] {
   const cardIds = ranked.map(candidate => candidate.cardId)
   const images = imagesByCardId(db, cardIds)
-  const printings = printingsByCardId(db, cardIds)
   const germanNames = germanNamesByCardId(db, cardIds)
 
   return ranked.map(candidate => ({
@@ -401,7 +363,6 @@ function withDisplayData(db: Db, ranked: ScoredCandidate[]): EntryCandidate[] {
     imageSmall: images.get(candidate.cardId) ?? null,
     score: Math.round(candidate.score * 1000) / 1000,
     matchedBy: candidate.matchedBy,
-    printings: printings.get(candidate.cardId) ?? [],
   }))
 }
 

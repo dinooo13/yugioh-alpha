@@ -1,11 +1,9 @@
 import { and, asc, eq, inArray, isNull, or, sql } from 'drizzle-orm'
 import type { SQL } from 'drizzle-orm'
 import type { useDb } from '../db'
-import { catalogCard, catalogCardImage, catalogPrinting, ownedCard } from '../db/schema'
+import { catalogCard, catalogCardImage, ownedCard } from '../db/schema'
 import { cardNameMatches, cardTextMatches } from './card-name-search'
 import { cardNameDeSql } from './card-translation-sql'
-import { CONDITIONS, EDITIONS, LANGUAGES } from './inventory'
-import type { InventoryCondition, InventoryEdition, InventoryLanguage } from './inventory'
 import { UNASSIGNED_COLLECTION_ID } from '../../shared/inventory'
 
 export { UNASSIGNED_COLLECTION_ID }
@@ -27,10 +25,6 @@ export interface InventorySearchFilters {
   attribute: string[]
   race: string[]
   level: number[]
-  setId?: string
-  language: InventoryLanguage[]
-  condition: InventoryCondition[]
-  edition: InventoryEdition[]
   // A collection id owned by the caller, or `UNASSIGNED_COLLECTION_ID`.
   collectionId?: string
   sort: InventorySearchSort
@@ -66,11 +60,6 @@ function toIntArray(raw: unknown): number[] {
   return toStringArray(raw)
     .map(value => Number(value))
     .filter(value => Number.isInteger(value))
-}
-
-function toEnumArray<T extends readonly string[]>(raw: unknown, allowed: T): Array<T[number]> {
-  const allowedSet = new Set<string>(allowed)
-  return toStringArray(raw).filter((value): value is T[number] => allowedSet.has(value))
 }
 
 function toTrimmedString(raw: unknown): string | undefined {
@@ -109,7 +98,8 @@ function clampInt(value: number, min: number, max: number): number {
 
 /**
  * Coerces raw query params (as returned by h3's `getQuery`) into a typed,
- * clamped filter set. Never throws — unknown enum values are dropped and
+ * clamped filter set. Never throws — unknown params (including the former
+ * `setId`/`language`/`condition`/`edition` filters, ADR 0017) are ignored and
  * invalid paging falls back to defaults, matching the project's hand-rolled
  * (no Zod) validation style.
  */
@@ -123,10 +113,6 @@ export function parseInventorySearchQuery(rawQuery: Record<string, unknown>): In
     attribute: toStringArray(rawQuery.attribute),
     race: toStringArray(rawQuery.race),
     level: toIntArray(rawQuery.level),
-    setId: toTrimmedString(rawQuery.setId),
-    language: toEnumArray(rawQuery.language, LANGUAGES),
-    condition: toEnumArray(rawQuery.condition, CONDITIONS),
-    edition: toEnumArray(rawQuery.edition, EDITIONS),
     collectionId: toTrimmedString(rawQuery.collectionId),
     sort: toSort(rawQuery.sort),
     page: toPositiveInt(rawQuery.page, DEFAULT_PAGE),
@@ -170,24 +156,6 @@ export function buildInventorySearchWhere(userId: string, filters: InventorySear
     clauses.push(inArray(catalogCard.level, filters.level) as SQL)
   }
 
-  if (filters.language.length > 0) {
-    clauses.push(inArray(ownedCard.language, filters.language) as SQL)
-  }
-  if (filters.condition.length > 0) {
-    clauses.push(inArray(ownedCard.condition, filters.condition) as SQL)
-  }
-  if (filters.edition.length > 0) {
-    clauses.push(inArray(ownedCard.edition, filters.edition) as SQL)
-  }
-
-  if (filters.setId) {
-    clauses.push(sql`EXISTS (
-      SELECT 1 FROM ${catalogPrinting}
-      WHERE ${catalogPrinting.cardId} = ${ownedCard.catalogCardId}
-        AND ${catalogPrinting.setId} = ${filters.setId}
-    )`)
-  }
-
   if (filters.collectionId) {
     clauses.push(
       filters.collectionId === UNASSIGNED_COLLECTION_ID
@@ -202,6 +170,54 @@ export function buildInventorySearchWhere(userId: string, filters: InventorySear
   }
 
   return and(...clauses) as SQL
+}
+
+export interface InventorySearchFacets {
+  types: string[]
+  attributes: string[]
+  races: string[]
+  levels: number[]
+}
+
+function isNonEmptyString(value: string | null | undefined): value is string {
+  return typeof value === 'string' && value !== ''
+}
+
+function uniqueSortedStrings(values: Array<string | null | undefined>): string[] {
+  return Array.from(new Set(values.filter(isNonEmptyString))).sort((a, b) => a.localeCompare(b))
+}
+
+/**
+ * The filter options of the inventory search: the distinct catalog values
+ * over every card the user owns. Only catalog properties — the inventory has
+ * no set, language, condition or edition filters (ADR 0017).
+ */
+export function loadInventorySearchFacets(db: Db, userId: string): InventorySearchFacets {
+  const rows = db
+    .selectDistinct({
+      type: catalogCard.type,
+      attribute: catalogCard.attribute,
+      race: catalogCard.race,
+      level: catalogCard.level,
+    })
+    .from(ownedCard)
+    .innerJoin(catalogCard, eq(ownedCard.catalogCardId, catalogCard.id))
+    .where(eq(ownedCard.userId, userId))
+    .all()
+
+  const levels = Array.from(
+    new Set(rows.map(row => row.level).filter((level): level is number => level !== null)),
+  ).sort((a, b) => a - b)
+
+  return {
+    types: uniqueSortedStrings(rows.map(row => row.type)),
+    attributes: uniqueSortedStrings(rows.map(row => row.attribute)),
+    // Skill Cards store the story character's (truncated) name in `race`, not
+    // a real monster race — excluded from the "Monsterart" facet (UX review
+    // #17), matching `getCatalogFacets` in server/utils/catalog-search.ts.
+    races: uniqueSortedStrings(rows.filter(row => row.type !== 'Skill Card').map(row => row.race)),
+    levels,
+  }
 }
 
 export interface InventoryCardDisplay {

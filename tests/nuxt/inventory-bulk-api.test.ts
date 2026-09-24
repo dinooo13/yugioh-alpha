@@ -61,16 +61,14 @@ describe('bulk inventory validation', () => {
     })
 
     expect(inputs).toHaveLength(2)
-    expect(inputs[0]).toMatchObject({
+    // The former collector fields are ignored (ADR 0017).
+    expect(inputs[0]).toEqual({
       catalogCardId: CATALOG_FIXTURE_IDS.darkMagician,
-      printingId: 'SDY-006',
       collectionId: null,
       quantity: 1,
-      language: 'en',
-      condition: 'near_mint',
-      edition: 'unlimited',
+      note: null,
     })
-    expect(inputs[1]).toMatchObject({ collectionId: 'col-a', language: 'de', quantity: 2 })
+    expect(inputs[1]).toEqual({ catalogCardId: CATALOG_FIXTURE_IDS.potOfGreed, collectionId: 'col-a', quantity: 2, note: null })
   })
 
   it('rejects a malformed envelope', () => {
@@ -113,10 +111,11 @@ describe('bulk inventory validation', () => {
         items: [
           item(),
           item({ quantity: 0 }),
-          item({ language: 'xx' }),
+          // Unknown collector values are ignored, not rejected (ADR 0017).
+          item({ language: 'xx', printing_id: 'LOB-001' }),
           { quantity: 1 },
           item({ catalog_card_id: 999999999 }),
-          item({ printing_id: 'LOB-001' }),
+          item({ collection_id: 'nope' }),
         ],
       })
     }
@@ -125,9 +124,9 @@ describe('bulk inventory validation', () => {
     }
 
     expect(thrown?.statusCode).toBe(400)
-    expect(thrown?.data?.errors?.map(entry => entry.index)).toEqual([1, 2, 3, 4, 5])
+    expect(thrown?.data?.errors?.map(entry => entry.index)).toEqual([1, 3, 4, 5])
     expect(thrown?.data?.errors?.[0]?.message).toContain('quantity')
-    expect(thrown?.data?.errors?.[4]?.message).toContain('printing_id')
+    expect(thrown?.data?.errors?.[2]?.message).toContain('catalog_card_id')
   })
 
   it('rejects a collection owned by another user', () => {
@@ -194,19 +193,24 @@ describe('bulk inventory writes', () => {
     expect(db.select().from(schema.ownedCard).all()[0]?.quantity).toBe(5)
   })
 
-  it('keeps different printings and collections apart', async () => {
+  it('keeps collections apart; items that only differed by printing/language merge', async () => {
     const inputs = validateInventoryBulkInput(db, 'user-a', {
       items: [
         item({ quantity: 1 }),
-        item({ quantity: 1, printing_id: 'SDY-006' }),
+        item({ quantity: 1, printing_id: 'SDY-006', language: 'de' }),
         item({ quantity: 1, collection_id: 'col-a' }),
       ],
     })
 
     const result = await addOwnedCardsBulk(db, 'user-a', inputs)
 
-    expect(result).toMatchObject({ created: 3, merged: 0 })
-    expect(db.select().from(schema.ownedCard).all()).toHaveLength(3)
+    expect(result).toMatchObject({ created: 2, merged: 1 })
+    const rows = db.select().from(schema.ownedCard).all()
+    expect(rows).toHaveLength(2)
+    expect(rows.find(row => row.collectionId === null)).toMatchObject({ quantity: 2, printingId: null, language: 'en' })
+    for (const key of ['printingId', 'language', 'condition', 'edition']) {
+      expect(result.items[0]).not.toHaveProperty(key)
+    }
   })
 
   it('rolls the whole batch back when a write fails', async () => {
