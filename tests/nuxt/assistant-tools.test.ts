@@ -18,6 +18,7 @@ import {
 import type { ToolOutcome } from '../../server/utils/assistant-tools'
 import { getAssistantLimits } from '../../server/utils/assistant-limits'
 import type { AssistantActionKind } from '../../shared/assistant-chat'
+import { seedGermanNames } from './fixtures/german-names'
 
 const CARD = {
   darkMagician: 46986414,
@@ -168,6 +169,16 @@ describe('search_catalog', () => {
       ],
       truncated: false,
     })
+  })
+
+  it('finds cards by their German name, with wildcards literal (ADR 0015)', async () => {
+    seedGermanNames(db, { [CARD.darkMagician]: 'Dunkler Magier' })
+
+    const german = await tool('search_catalog').run({ db, userId: 'user-a' }, { query: 'Dunkler' })
+    expect(german.result).toMatchObject({ items: [expect.objectContaining({ id: CARD.darkMagician, name: 'Dark Magician' })] })
+
+    const wildcard = await tool('search_catalog').run({ db, userId: 'user-a' }, { query: '%' })
+    expect(wildcard.result).toMatchObject({ items: [] })
   })
 
   it('rejects non-object arguments', async () => {

@@ -36,6 +36,21 @@ test.describe('Schnellerfassung', () => {
     await expect(page.getByText('Pot of Greed').first()).toBeVisible()
   })
 
+  test('recognizes German card names (ADR 0015)', async ({ page }) => {
+    await registerAndLogin(page)
+    await page.goto('/inventory/quick-entry')
+
+    await page.getByLabel('Kartenliste').fill('2x Dunkler Magier\nTopf der Gier')
+    await page.getByRole('button', { name: 'Karten erkennen' }).click()
+
+    await expect(page.getByText('2 gesamt')).toBeVisible()
+    await expect(page.getByText('2 sicher')).toBeVisible()
+    await expect(page.getByText('0 ohne Treffer')).toBeVisible()
+    // The display language arrives with F3c; the match is the English card.
+    await expect(page.getByText('Dark Magician').first()).toBeVisible()
+    await expect(page.getByText('Pot of Greed').first()).toBeVisible()
+  })
+
   // Photo/voice input moved to the chat assistant (see e2e/assistant-chat.spec.ts,
   // added alongside docs in the following stage) — /inventory/quick-entry now only
   // links there instead of offering its own Foto/Sprache modes.

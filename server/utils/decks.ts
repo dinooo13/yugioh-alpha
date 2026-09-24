@@ -1,11 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import { and, asc, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm'
 import type { SQL } from 'drizzle-orm'
-import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core'
 import { createError } from 'h3'
 import type { useDb } from '../db'
 import { catalogCard, catalogCardImage, deck, deckCard, ruleFormat } from '../db/schema'
 import { ownedQuantitiesByCard } from './inventory'
+import { cardNameMatches, escapedLike, escapeLikeTerm } from './card-name-search'
 import { evaluateDeck } from '../../shared/rule-formats'
 import type { DeckValidation, DeckWarning, RuleSet } from '../../shared/rule-formats'
 import { loadCardDataForValidation } from './deck-validation'
@@ -143,15 +143,6 @@ function notFound(message = 'Deck not found', code = 'deck_not_found'): never {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
-}
-
-// Escapes SQLite LIKE wildcards so a user's search term matches literally.
-function escapeLikeTerm(term: string): string {
-  return term.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_')
-}
-
-function likeCondition(column: AnySQLiteColumn, pattern: string): SQL {
-  return sql`${column} like ${pattern} escape '\\'`
 }
 
 export function validateDeckInput(body: unknown): DeckInput {
@@ -1105,15 +1096,15 @@ export function listDecks(db: Db, userId: string, options: DeckListOptions = {})
 
   const q = options.q?.trim()
   if (q) {
-    const pattern = `%${escapeLikeTerm(q)}%`
-    // Matches the deck name or the name of any card contained in the deck.
+    // Matches the deck name or the (English or German, ADR 0015) name of any
+    // card contained in the deck.
     clauses.push(or(
-      likeCondition(deck.name, pattern),
+      escapedLike(deck.name, `%${escapeLikeTerm(q)}%`),
       sql`exists (
         select 1 from ${deckCard}
         inner join ${catalogCard} on ${catalogCard.id} = ${deckCard.catalogCardId}
         where ${deckCard.deckId} = ${deck.id}
-          and ${catalogCard.name} like ${pattern} escape '\\'
+          and ${cardNameMatches(q)}
       )`,
     ) as SQL)
   }

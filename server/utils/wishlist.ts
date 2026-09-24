@@ -1,11 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import { and, asc, eq, sql } from 'drizzle-orm'
 import type { SQL } from 'drizzle-orm'
-import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core'
 import { createError } from 'h3'
 import type { useDb } from '../db'
 import { catalogCard, catalogCardImage, wishlistItem } from '../db/schema'
 import { ownedQuantitiesByCard } from './inventory'
+import { cardNameMatches } from './card-name-search'
 import type { WishlistItemView, WishlistResponse, WishlistVisibility } from '../../shared/sharing'
 
 type Db = ReturnType<typeof useDb>
@@ -32,15 +32,6 @@ function notFound(message = 'Wishlist item not found'): never {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
-}
-
-// Escapes SQLite LIKE wildcards so a user's search term matches literally.
-function escapeLikeTerm(term: string): string {
-  return term.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_')
-}
-
-function likeCondition(column: AnySQLiteColumn, pattern: string): SQL {
-  return sql`${column} like ${pattern} escape '\\'`
 }
 
 function normalizeCatalogCardId(value: unknown): number {
@@ -290,7 +281,7 @@ export function listWishlist(db: Db, userId: string, options: WishlistListOption
 
   const clauses: SQL[] = [eq(wishlistItem.userId, userId)]
   if (q) {
-    clauses.push(likeCondition(catalogCard.name, `%${escapeLikeTerm(q)}%`))
+    clauses.push(cardNameMatches(q))
   }
   const where = and(...clauses) as SQL
 

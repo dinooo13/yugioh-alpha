@@ -1,8 +1,8 @@
 import { and, asc, eq, inArray, isNull, or, sql } from 'drizzle-orm'
 import type { SQL } from 'drizzle-orm'
-import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core'
 import type { useDb } from '../db'
 import { catalogCard, catalogCardImage, catalogPrinting, ownedCard } from '../db/schema'
+import { cardNameMatches, cardTextMatches } from './card-name-search'
 import { CONDITIONS, EDITIONS, LANGUAGES } from './inventory'
 import type { InventoryCondition, InventoryEdition, InventoryLanguage } from './inventory'
 import { UNASSIGNED_COLLECTION_ID } from '../../shared/inventory'
@@ -133,15 +133,6 @@ export function parseInventorySearchQuery(rawQuery: Record<string, unknown>): In
   }
 }
 
-// Escapes SQLite LIKE wildcards so a user's search term is matched literally.
-function escapeLikeTerm(term: string): string {
-  return term.replace(/[\\%_]/g, match => `\\${match}`)
-}
-
-function likeCondition(column: AnySQLiteColumn, term: string): SQL {
-  return sql`${column} LIKE ${term} ESCAPE '\\'`
-}
-
 /**
  * Builds the Drizzle WHERE condition for the aggregated inventory search,
  * scoped to `userId`. Pure and HTTP-free so it can be unit tested directly.
@@ -156,12 +147,12 @@ export function buildInventorySearchWhere(userId: string, filters: InventorySear
   const clauses: SQL[] = [eq(ownedCard.userId, userId)]
 
   if (filters.q) {
-    const likeTerm = `%${escapeLikeTerm(filters.q)}%`
-    const nameLike = likeCondition(catalogCard.name, likeTerm)
+    // Bilingual: English and German names (and texts with `inText`), ADR 0015.
+    const nameMatches = cardNameMatches(filters.q)
     clauses.push(
       filters.inText
-        ? (or(nameLike, likeCondition(catalogCard.desc, likeTerm)) as SQL)
-        : nameLike,
+        ? (or(nameMatches, cardTextMatches(filters.q)) as SQL)
+        : nameMatches,
     )
   }
 

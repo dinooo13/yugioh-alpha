@@ -6,6 +6,7 @@ import { CATALOG_FIXTURE_IDS, seedCatalogFixture } from '../../server/db/fixture
 import * as schema from '../../server/db/schema'
 import {
   MAX_ENTRY_LINES,
+  normalizeCardName,
   parseEntryLine,
   parseEntryText,
   parseSuggestLimit,
@@ -256,6 +257,61 @@ describe('suggestCatalogMatches', () => {
   })
 })
 
+describe('suggestCatalogMatches with German names (ADR 0015)', () => {
+  let db: TestDb
+
+  beforeAll(() => {
+    db = createTestDb()
+    seedCatalogFixture(db)
+  })
+
+  it('matches a German name exactly, with the English and German names in the candidate', () => {
+    const [best] = suggestCatalogMatches(db, parseEntryLine('2x Dunkler Magier'))
+
+    expect(best).toMatchObject({
+      cardId: CATALOG_FIXTURE_IDS.darkMagician,
+      name: 'Dark Magician',
+      nameDe: 'Dunkler Magier',
+      matchedBy: 'exact',
+      score: 1,
+    })
+    expect(best!.printings.map(printing => printing.setCode)).toEqual(['LOB-005', 'SDY-006'])
+  })
+
+  it('folds umlauts and punctuation in German names', () => {
+    for (const line of ['Blauäugiger w. Drache', 'blauaugiger w drache', 'BLAUÄUGIGER W. DRACHE']) {
+      expect(suggestCatalogMatches(db, parseEntryLine(line))[0], line).toMatchObject({
+        cardId: CATALOG_FIXTURE_IDS.blueEyesWhiteDragon,
+        matchedBy: 'exact',
+        score: 1,
+      })
+    }
+  })
+
+  it('still finds misspelled German names', () => {
+    const [best] = suggestCatalogMatches(db, parseEntryLine('Dunkler Magir'))
+
+    expect(best).toMatchObject({ cardId: CATALOG_FIXTURE_IDS.darkMagician, matchedBy: 'fuzzy' })
+    expect(best!.score).toBeGreaterThanOrEqual(0.85)
+  })
+
+  it('ranks German prefix hits like English ones', () => {
+    const candidates = suggestCatalogMatches(db, parseEntryLine('Blauäugiger'))
+
+    expect(candidates.map(candidate => candidate.cardId)).toEqual([
+      CATALOG_FIXTURE_IDS.blueEyesWhiteDragon,
+      CATALOG_FIXTURE_IDS.blueEyesUltimateDragon,
+    ])
+    expect(candidates.every(candidate => candidate.matchedBy === 'prefix')).toBe(true)
+  })
+
+  it('reports nameDe as null for a card without German data', () => {
+    const [best] = suggestCatalogMatches(db, parseEntryLine('Raigeki'))
+
+    expect(best).toMatchObject({ cardId: CATALOG_FIXTURE_IDS.raigeki, nameDe: null, matchedBy: 'exact' })
+  })
+})
+
 describe('suggestCatalogMatches candidate pool', () => {
   it('still surfaces the exact match when a token floods the catalog', () => {
     const db = createTestDb()
@@ -300,6 +356,32 @@ describe('resolveEntryLine', () => {
       query: 'Dark Magician',
     })
     expect(resolveEntryLine(db, parseEntryLine('2x Kuriboh'))).toMatchObject({ quantity: 2, query: 'Kuriboh' })
+  })
+
+  it('keeps a leading number that belongs to a German card name', () => {
+    // Hypothetical German name, only to give "7 Colored Fish" a German twin
+    // that starts with a number as well.
+    db.insert(schema.catalogCardTranslation).values({
+      cardId: 23771716,
+      locale: 'de',
+      name: '7 bunte Fische',
+      nameSearch: '7buntefische',
+      source: 'ygoresources-git',
+      syncedAt: SYNCED_AT,
+    }).run()
+
+    const resolved = resolveEntryLine(db, parseEntryLine('7 Bunte Fische'))
+
+    expect(resolved).toMatchObject({ quantity: 1, query: '7 Bunte Fische' })
+    expect(suggestCatalogMatches(db, resolved)[0]).toMatchObject({ cardId: 23771716, matchedBy: 'exact' })
+  })
+})
+
+describe('normalizeCardName', () => {
+  it('uses the shared folding, so ß and umlauts compare', () => {
+    expect(normalizeCardName('Straße')).toBe('strasse')
+    expect(normalizeCardName('STRASSE')).toBe('strasse')
+    expect(normalizeCardName('Blauäugiger w. Drache')).toBe('blauaugigerwdrache')
   })
 })
 
