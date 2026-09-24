@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { SharedCardListResponse } from '~~/shared/sharing'
+import type { SharedCollectionResponse } from '~~/shared/sharing'
 
 definePageMeta({ layout: 'public' })
 
@@ -19,7 +19,7 @@ const query = computed(() => ({
   pageSize: 24,
 }))
 
-const { data, pending, error } = await useFetch<SharedCardListResponse>(
+const { data, pending, error } = await useFetch<SharedCollectionResponse>(
   () => `/api/profiles/${route.params.handle}/collections/${route.params.id}`,
   {
     query,
