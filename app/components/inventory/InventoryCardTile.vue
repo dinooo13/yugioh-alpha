@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { breakdownKey, breakdownLabel, cardSubtitle } from '~/utils/inventory-search-result'
+import { breakdownKey, breakdownLabel } from '~/utils/inventory-search-result'
+import { cardFrame } from '~/utils/card-frame'
 import type { InventorySearchResultItem } from '~/utils/inventory-search-result'
 
 const props = defineProps<{
@@ -15,15 +16,15 @@ const showInline = computed(() => breakdown.value.length <= 2)
 const { t } = useI18n()
 const { cardName, cardValue } = useCardText()
 
-const subtitle = computed(() => cardSubtitle(props.item, cardValue))
+const frame = computed(() => cardFrame(props.item))
 </script>
 
 <template>
-  <article class="group flex min-w-0 flex-col overflow-hidden rounded-lg border border-default bg-default shadow-sm transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md">
+  <article class="group panel flex min-w-0 flex-col transition-[translate,box-shadow,border-color] duration-200 ease-out-expo hover:border-primary/40 hover:shadow-lift motion-safe:hover:-translate-y-0.5">
     <button
       type="button"
       :aria-label="t('card.enlarge', { name: cardName(item) })"
-      class="block w-full cursor-zoom-in focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+      class="block w-full cursor-zoom-in rounded-t-xl p-2 pb-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
       @click="emit('preview')"
     >
       <!-- Not `enlargeable`: the tile's own preview modal shows more than the scan. -->
@@ -31,22 +32,35 @@ const subtitle = computed(() => cardSubtitle(props.item, cardValue))
         :src="item.imageSmall"
         :src-large="item.imageLarge"
         :alt="cardName(item)"
+        :frame="frame?.frame"
+        :pendulum="frame?.pendulum"
         size="full"
+        foil
         sizes="(min-width: 1280px) 270px, (min-width: 640px) 30vw, 48vw"
       />
     </button>
 
-    <div class="space-y-2 p-3">
-      <div class="space-y-0.5">
-        <h2 class="line-clamp-2 text-sm font-semibold leading-5 text-highlighted group-hover:text-primary sm:text-base">
-          {{ cardName(item) }}
-        </h2>
-        <p class="truncate text-xs text-muted">
-          {{ subtitle }}
-        </p>
+    <div class="flex flex-1 flex-col gap-2 p-3">
+      <h2 class="line-clamp-2 text-sm font-semibold leading-5 text-highlighted transition-colors group-hover:text-primary sm:text-base">
+        {{ cardName(item) }}
+      </h2>
+      <div class="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1.5">
+        <CardTypeChip
+          :type="item.type"
+          size="xs"
+        />
+        <CardAttributeOrb
+          v-if="item.attribute"
+          :attribute="item.attribute"
+          size="xs"
+        />
+        <span
+          v-if="item.race"
+          class="min-w-0 truncate text-[0.6875rem] text-muted"
+        >{{ cardValue('race', item.race) }}</span>
       </div>
 
-      <p class="text-sm font-semibold tabular-nums text-highlighted">
+      <p class="font-numeric text-sm font-semibold tracking-[0.04em] text-highlighted tabular-nums">
         {{ t('card.totalQuantity', { count: item.totalQuantity }) }}
       </p>
 

@@ -72,7 +72,10 @@ const { data, pending } = await useFetch<{ items: CatalogCard[] }>('/api/invento
         />
         <span class="min-w-0">
           <span class="block truncate text-sm font-medium text-highlighted">{{ cardName(card) }}</span>
-          <span class="block truncate text-xs text-muted">{{ cardValue('type', card.type) }}</span>
+          <span class="flex min-w-0 items-center gap-1.5 text-xs text-muted">
+            <CardFrameDot :type="card.type" />
+            <span class="truncate">{{ cardValue('type', card.type) }}</span>
+          </span>
         </span>
       </button>
 

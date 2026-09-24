@@ -16,7 +16,14 @@
  *
  * The visible strings default to the interface language (`card.noImage`,
  * `card.enlarge`); callers may override them.
+ *
+ * Duel Arena (ADR 0016): real card corners, a hairline edge so scans don't
+ * bleed into a dark page, and an original "arcane card back" as the
+ * placeholder — with a stripe in the card's `frame` color when known. `foil`
+ * adds a sheen that sweeps across on hover of the surrounding `.group`.
  */
+import type { CardFrame } from '~/utils/card-frame'
+
 type CardThumbSize = 'xs' | 'sm' | 'md' | 'lg' | 'full'
 
 const props = withDefaults(defineProps<{
@@ -29,6 +36,10 @@ const props = withDefaults(defineProps<{
   enlargeLabel?: string
   noImageLabel?: string
   loading?: 'lazy' | 'eager'
+  /** The card's frame (`cardFrame()`), for the placeholder's color stripe. */
+  frame?: CardFrame | null
+  pendulum?: boolean
+  foil?: boolean
 }>(), {
   src: null,
   srcLarge: null,
@@ -38,6 +49,9 @@ const props = withDefaults(defineProps<{
   enlargeLabel: undefined,
   noImageLabel: undefined,
   loading: 'lazy',
+  frame: null,
+  pendulum: false,
+  foil: false,
 })
 
 const { t } = useI18n()
@@ -78,9 +92,10 @@ const resolvedNoImageLabel = computed(() => props.noImageLabel ?? t('card.noImag
 const rootClasses = computed(() => [WIDTH_CLASSES[props.size], !isFull.value && 'shrink-0'])
 
 const frameClasses = computed(() => [
-  'block aspect-[59/86] w-full overflow-hidden bg-elevated',
-  isFull.value ? 'rounded-md' : 'rounded',
-  canEnlarge.value && 'cursor-zoom-in focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
+  'relative block aspect-[59/86] w-full overflow-hidden rounded-[4.5%/3.1%] bg-elevated ring-1 ring-default',
+  isFull.value && 'shadow-sm',
+  props.foil && showImage.value && 'foil',
+  canEnlarge.value && 'cursor-zoom-in focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
 ])
 
 // The modal is only mounted once someone actually asks for it, so long card
@@ -121,14 +136,25 @@ function onClick() {
         v-else
         role="img"
         :aria-label="t('card.noImageFor', { name: alt, label: resolvedNoImageLabel })"
-        class="flex h-full w-full flex-col items-center justify-center gap-1 px-1 text-center text-xs text-muted"
+        :data-frame="frame ?? undefined"
+        :data-pendulum="frame && pendulum ? '' : undefined"
+        class="card-back flex h-full w-full flex-col items-center justify-center gap-1 px-1 text-center text-xs"
       >
+        <span
+          v-if="frame"
+          class="frame-stripe absolute inset-x-0 top-0 h-[3.5%] min-h-0.5"
+          aria-hidden="true"
+        />
         <UIcon
           name="i-lucide-image-off"
           :class="size === 'xs' ? 'size-3' : isFull ? 'size-6' : 'size-4'"
+          class="opacity-80"
           aria-hidden="true"
         />
-        <span v-if="size === 'lg' || isFull">{{ resolvedNoImageLabel }}</span>
+        <span
+          v-if="size === 'lg' || isFull"
+          class="font-medium"
+        >{{ resolvedNoImageLabel }}</span>
       </div>
     </component>
 

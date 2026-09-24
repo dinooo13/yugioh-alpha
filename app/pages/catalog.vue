@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { CARD_TRANSLATION_REPO, CARD_TRANSLATION_REPO_URL } from '~~/shared/card-text'
+import { cardFrame } from '~/utils/card-frame'
 
 interface CatalogFacets {
   types: string[]
@@ -73,7 +74,7 @@ const PAGE_SIZE = 24
 usePageTitle('catalog.title')
 
 const { t } = useI18n()
-const { cardLocale, cardName, cardDesc, englishName, hasGermanText, cardValue, cardValueOptions } = useCardText()
+const { cardLocale, cardName, cardDesc, englishName, hasGermanText, cardValueOptions } = useCardText()
 const count = useCount()
 
 const route = useRoute()
@@ -285,7 +286,7 @@ async function onAddedToInventory() {
         :description="t('catalog.description')"
       />
 
-      <section class="space-y-3 border-y border-default py-4">
+      <section class="panel space-y-3 p-3 sm:p-4">
         <div class="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_repeat(3,minmax(10rem,12rem))]">
           <UInput
             v-model="searchInput"
@@ -298,7 +299,7 @@ async function onAddedToInventory() {
           <select
             v-model="type"
             :aria-label="t('catalog.filters.type')"
-            class="h-10 min-w-0 w-full rounded-md border border-default bg-default px-3 text-sm text-default shadow-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+            class="h-10 min-w-0 w-full rounded-md border border-default bg-default px-3 text-sm text-default shadow-xs outline-none transition-colors hover:border-accented focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/25"
           >
             <option value="">
               {{ t('catalog.filters.type') }}
@@ -315,7 +316,7 @@ async function onAddedToInventory() {
           <select
             v-model="attribute"
             :aria-label="t('catalog.filters.attribute')"
-            class="h-10 min-w-0 w-full rounded-md border border-default bg-default px-3 text-sm text-default shadow-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+            class="h-10 min-w-0 w-full rounded-md border border-default bg-default px-3 text-sm text-default shadow-xs outline-none transition-colors hover:border-accented focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/25"
           >
             <option value="">
               {{ t('catalog.filters.attribute') }}
@@ -332,7 +333,7 @@ async function onAddedToInventory() {
           <select
             v-model="level"
             :aria-label="t('catalog.filters.level')"
-            class="h-10 min-w-0 w-full rounded-md border border-default bg-default px-3 text-sm text-default shadow-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+            class="h-10 min-w-0 w-full rounded-md border border-default bg-default px-3 text-sm text-default shadow-xs outline-none transition-colors hover:border-accented focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/25"
           >
             <option value="">
               {{ t('catalog.filters.level') }}
@@ -351,7 +352,7 @@ async function onAddedToInventory() {
           <select
             v-model="race"
             :aria-label="t('catalog.filters.race')"
-            class="h-10 min-w-0 w-full rounded-md border border-default bg-default px-3 text-sm text-default shadow-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+            class="h-10 min-w-0 w-full rounded-md border border-default bg-default px-3 text-sm text-default shadow-xs outline-none transition-colors hover:border-accented focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/25"
           >
             <option value="">
               {{ t('catalog.filters.race') }}
@@ -395,7 +396,7 @@ async function onAddedToInventory() {
         {{ t('catalog.sort.label') }}
         <select
           v-model="sort"
-          class="h-9 rounded-md border border-default bg-default px-2 text-sm text-default shadow-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+          class="h-9 rounded-md border border-default bg-default px-2 text-sm text-default shadow-xs outline-none transition-colors hover:border-accented focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/25"
         >
           <option value="name">
             {{ t('catalog.sort.nameAsc') }}
@@ -435,7 +436,7 @@ async function onAddedToInventory() {
       <USkeleton
         v-for="index in 12"
         :key="index"
-        class="aspect-[3/4.6] rounded-md"
+        class="aspect-[3/4.9] rounded-xl"
       />
     </div>
 
@@ -456,7 +457,7 @@ async function onAddedToInventory() {
         role="button"
         tabindex="0"
         :aria-label="cardName(card)"
-        class="group min-w-0 cursor-pointer overflow-hidden rounded-md border border-default bg-default text-left shadow-sm transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md"
+        class="group panel flex min-w-0 cursor-pointer flex-col text-left transition-[translate,box-shadow,border-color] duration-200 ease-out-expo hover:border-primary/40 hover:shadow-lift focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus motion-safe:hover:-translate-y-0.5"
         @click="openCard(card.id)"
         @keydown.enter="openCard(card.id)"
         @keydown.space.prevent="openCard(card.id)"
@@ -465,34 +466,40 @@ async function onAddedToInventory() {
         <CardThumb
           :src="card.imageSmall"
           :alt="cardName(card)"
+          :frame="cardFrame(card)?.frame"
+          :pendulum="cardFrame(card)?.pendulum"
           size="full"
+          foil
+          class="p-2 pb-0"
         />
-        <div class="space-y-1 p-3">
-          <h2 class="line-clamp-2 min-h-10 text-sm font-semibold leading-5 text-highlighted group-hover:text-primary">
+        <div class="flex flex-1 flex-col gap-2 p-3">
+          <h2 class="line-clamp-2 min-h-10 text-sm font-semibold leading-5 text-highlighted transition-colors group-hover:text-primary">
             {{ cardName(card) }}
           </h2>
-          <p class="truncate text-xs text-muted">
-            {{ cardValue('type', card.type) }}
-          </p>
-          <div class="flex flex-wrap gap-1">
-            <UBadge
+          <div class="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1.5">
+            <CardTypeChip
+              :type="card.type"
+              :frame-type="card.frameType"
+              size="xs"
+            />
+            <CardAttributeOrb
               v-if="card.attribute"
-              size="sm"
-              color="neutral"
-              variant="soft"
-            >
-              {{ cardValue('attribute', card.attribute) }}
-            </UBadge>
-            <UBadge
+              :attribute="card.attribute"
+              size="xs"
+            />
+            <span
               v-if="card.level"
-              size="sm"
-              color="neutral"
-              variant="soft"
+              class="inline-flex items-center gap-1 font-numeric text-[0.6875rem] font-semibold tracking-[0.04em] text-toned tabular-nums"
             >
+              <UIcon
+                name="i-lucide-star"
+                class="size-3 text-secondary"
+                aria-hidden="true"
+              />
               {{ t('card.levelShort', { level: card.level }) }}
-            </UBadge>
+            </span>
           </div>
-          <div class="flex flex-wrap gap-1">
+          <div class="mt-auto flex flex-wrap gap-1 pt-1">
             <UButton
               icon="i-lucide-archive-restore"
               color="primary"
@@ -548,8 +555,9 @@ async function onAddedToInventory() {
       <template #content>
         <div class="h-full overflow-y-auto p-6">
           <div class="mb-5 flex items-center justify-between gap-3">
-            <h2 class="truncate text-lg font-semibold text-highlighted">
-              {{ detail ? cardName(detail.card) : t('catalog.detail.fallbackTitle') }}
+            <!-- A section label; the card's name is the display heading below. -->
+            <h2 class="eyebrow truncate">
+              {{ t('catalog.detail.fallbackTitle') }}
             </h2>
             <UButton
               icon="i-lucide-x"
@@ -586,34 +594,50 @@ async function onAddedToInventory() {
               :src="detail.images[0]?.imageUrlSmall"
               :src-large="detail.images[0]?.imageUrl"
               :alt="cardName(detail.card)"
+              :frame="cardFrame(detail.card)?.frame"
+              :pendulum="cardFrame(detail.card)?.pendulum"
               size="full"
               sizes="320px"
               loading="eager"
-              class="mx-auto max-w-xs"
+              class="mx-auto max-w-[17.5rem] rounded-[4.5%/3.1%] shadow-glow-primary"
             />
 
-            <div class="space-y-2">
-              <h3 class="text-xl font-semibold text-highlighted">
-                {{ cardName(detail.card) }}
-              </h3>
-              <p
-                v-if="englishName(detail.card)"
-                class="text-sm text-muted"
-              >
-                {{ t('card.englishName', { name: englishName(detail.card) }) }}
-              </p>
-              <p class="text-sm text-toned">
-                {{ cardValue('type', detail.card.type) }}
-                <template v-if="detail.card.attribute">
-                  · {{ cardValue('attribute', detail.card.attribute) }}
-                </template>
-                <template v-if="detail.card.level">
-                  · {{ t('card.level', { level: detail.card.level }) }}
-                </template>
-              </p>
+            <div class="space-y-3">
+              <div>
+                <h3 class="font-display text-2xl leading-tight font-semibold tracking-[0.01em] break-words text-highlighted hyphens-auto">
+                  {{ cardName(detail.card) }}
+                </h3>
+                <p
+                  v-if="englishName(detail.card)"
+                  class="mt-1 text-sm text-muted"
+                >
+                  {{ t('card.englishName', { name: englishName(detail.card) }) }}
+                </p>
+              </div>
+              <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+                <CardTypeChip
+                  :type="detail.card.type"
+                  :frame-type="detail.card.frameType"
+                />
+                <CardAttributeOrb
+                  v-if="detail.card.attribute"
+                  :attribute="detail.card.attribute"
+                />
+                <span
+                  v-if="detail.card.level"
+                  class="inline-flex items-center gap-1 text-xs font-medium text-toned"
+                >
+                  <UIcon
+                    name="i-lucide-star"
+                    class="size-3.5 text-secondary"
+                    aria-hidden="true"
+                  />
+                  {{ t('card.level', { level: detail.card.level }) }}
+                </span>
+              </div>
               <p
                 v-if="detail.card.atk !== null || detail.card.def !== null"
-                class="text-sm text-toned"
+                class="font-numeric text-base font-semibold tracking-[0.04em] text-highlighted tabular-nums"
               >
                 {{ t('card.atkDef', { atk: detail.card.atk ?? '-', def: detail.card.def ?? '-' }) }}
               </p>
@@ -654,7 +678,7 @@ async function onAddedToInventory() {
               <h4 class="text-sm font-semibold text-highlighted">
                 {{ t('catalog.detail.printings') }}
               </h4>
-              <ul class="mt-2 divide-y divide-default rounded-md border border-default">
+              <ul class="mt-2 divide-y divide-default overflow-hidden rounded-lg border border-default">
                 <li
                   v-for="printing in detail.printings"
                   :key="printing.setCode"

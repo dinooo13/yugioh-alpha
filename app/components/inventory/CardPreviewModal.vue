@@ -32,26 +32,26 @@ const isMonster = computed(() => props.item ? props.item.atk !== null || props.i
         v-if="isMonster"
         class="flex justify-center gap-6 text-sm"
       >
-        <div class="flex gap-1">
-          <dt class="text-muted">
+        <div class="flex items-baseline gap-1.5">
+          <dt class="eyebrow">
             ATK
           </dt>
-          <dd class="font-semibold tabular-nums text-highlighted">
+          <dd class="font-numeric text-base font-bold tracking-[0.04em] text-highlighted tabular-nums">
             {{ item.atk ?? '?' }}
           </dd>
         </div>
-        <div class="flex gap-1">
-          <dt class="text-muted">
+        <div class="flex items-baseline gap-1.5">
+          <dt class="eyebrow">
             DEF
           </dt>
-          <dd class="font-semibold tabular-nums text-highlighted">
+          <dd class="font-numeric text-base font-bold tracking-[0.04em] text-highlighted tabular-nums">
             {{ item.def ?? '?' }}
           </dd>
         </div>
       </dl>
 
-      <div class="space-y-1 rounded-md border border-default p-3">
-        <p class="text-sm font-semibold tabular-nums text-highlighted">
+      <div class="space-y-1 rounded-lg border border-default bg-elevated/40 p-3">
+        <p class="font-numeric text-sm font-semibold tracking-[0.04em] text-highlighted tabular-nums">
           {{ t('card.totalQuantity', { count: item.totalQuantity }) }}
         </p>
         <div
