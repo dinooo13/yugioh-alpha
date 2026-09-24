@@ -12,7 +12,7 @@ withDefaults(defineProps<{
   description?: string
   icon?: string
   headingLevel?: 2 | 3
-  /** White card with a border; off when the state sits inside a card already. */
+  /** A panel with a border; off when the state sits inside a card already. */
   bordered?: boolean
 }>(), {
   description: undefined,
@@ -25,17 +25,25 @@ withDefaults(defineProps<{
 <template>
   <div
     class="flex flex-col items-center px-6 py-12 text-center"
-    :class="{ 'rounded-md border border-default bg-default': bordered }"
+    :class="{ 'panel border': bordered }"
   >
+    <!-- A "summoning circle": a slowly turning dashed gold ring around the
+         icon (still under reduced motion). -->
     <div
       v-if="icon"
-      class="mb-4 flex size-12 items-center justify-center rounded-full bg-elevated text-muted"
+      class="relative mb-5 flex size-16 items-center justify-center"
     >
-      <UIcon
-        :name="icon"
-        class="size-6"
+      <span
+        class="absolute inset-0 rounded-full border border-dashed border-secondary/45 motion-safe:animate-[spin_40s_linear_infinite]"
         aria-hidden="true"
       />
+      <span class="flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary ring-1 ring-primary/20">
+        <UIcon
+          :name="icon"
+          class="size-6"
+          aria-hidden="true"
+        />
+      </span>
     </div>
     <component
       :is="`h${headingLevel}`"

@@ -13,19 +13,12 @@ watch(() => route.fullPath, () => {
 </script>
 
 <template>
-  <div class="flex min-h-dvh flex-col bg-muted lg:flex-row">
+  <div class="arena-canvas flex min-h-dvh flex-col lg:flex-row">
     <LayoutSkipLink />
 
-    <header class="flex items-center justify-between border-b border-default bg-default px-4 py-3 lg:hidden">
-      <NuxtLink
-        to="/"
-        class="flex items-center gap-2.5"
-      >
-        <div class="flex size-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-inverted">
-          Y
-        </div>
-        <span class="text-base font-semibold text-highlighted">yugioh alpha</span>
-      </NuxtLink>
+    <!-- 56px tall (h-14): assistant/[id].vue sizes the chat against it. -->
+    <header class="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between border-b border-default bg-default/80 px-4 backdrop-blur-md lg:hidden">
+      <LayoutBrandMark to="/" />
       <UButton
         icon="i-lucide-menu"
         color="neutral"
@@ -34,20 +27,24 @@ watch(() => route.fullPath, () => {
         class="tap-target"
         @click="() => { isMobileNavOpen = true }"
       />
+      <div
+        class="gold-hairline absolute inset-x-0 -bottom-px"
+        aria-hidden="true"
+      />
     </header>
 
-    <aside class="hidden w-64 shrink-0 flex-col border-r border-default bg-default lg:flex">
-      <NuxtLink
-        to="/"
-        class="flex items-center gap-2.5 px-5 py-5"
-      >
-        <div class="flex size-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-inverted">
-          Y
-        </div>
-        <span class="text-base font-semibold text-highlighted">yugioh alpha</span>
-      </NuxtLink>
+    <!-- Always dark, in both modes (ADR 0016). -->
+    <aside class="dark arena-island sticky top-0 hidden h-dvh w-64 shrink-0 flex-col scheme-dark lg:flex">
+      <div class="px-5 pt-6 pb-5">
+        <LayoutBrandMark to="/" />
+      </div>
 
       <LayoutSidebarContent />
+
+      <div
+        class="gold-hairline-y absolute inset-y-0 right-0"
+        aria-hidden="true"
+      />
     </aside>
 
     <USlideover
@@ -55,6 +52,12 @@ watch(() => route.fullPath, () => {
       side="left"
       :title="t('app.header.menu')"
       class="lg:hidden"
+      :ui="{
+        content: 'dark arena-island scheme-dark max-w-72',
+        header: 'border-b border-default',
+        title: 'font-display text-lg tracking-[0.04em] text-highlighted',
+        body: 'flex flex-col p-0 sm:p-0',
+      }"
     >
       <template #body>
         <LayoutSidebarContent />

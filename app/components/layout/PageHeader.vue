@@ -6,17 +6,23 @@
  * Convention: list pages put their item count in `description` (use
  * `pluralize`), other pages a one-sentence explanation.
  *
+ * The title is set in the display face (ADR 0016); `hyphens-auto` lets long
+ * German words break at a syllable instead of overflowing on phones.
+ *
  * Deliberately not Nuxt UI's `UPageHeader`, which adds a bottom border,
  * vertical padding and a much larger title.
  */
 withDefaults(defineProps<{
   title?: string
   description?: string
+  /** Small label above the title (e.g. the section a detail page belongs to). */
+  eyebrow?: string
   /** Single-line title with ellipsis — for user-provided names. */
   truncate?: boolean
 }>(), {
   title: undefined,
   description: undefined,
+  eyebrow: undefined,
   truncate: false,
 })
 </script>
@@ -26,9 +32,15 @@ withDefaults(defineProps<{
     <!-- `flex-1`, so content in the default slot (e.g. a toolbar) can span
          the full width; the actions box stays pinned right. -->
     <div class="min-w-0 flex-1">
+      <p
+        v-if="eyebrow"
+        class="eyebrow mb-1.5"
+      >
+        {{ eyebrow }}
+      </p>
       <h1
-        class="text-2xl font-semibold text-highlighted"
-        :class="truncate ? 'truncate' : 'break-words'"
+        class="font-display text-[1.625rem] leading-tight font-semibold tracking-[0.01em] text-highlighted sm:text-3xl"
+        :class="truncate ? 'truncate' : 'break-words hyphens-auto'"
       >
         <slot name="title">
           {{ title }}
@@ -36,7 +48,7 @@ withDefaults(defineProps<{
       </h1>
       <p
         v-if="description || $slots.description"
-        class="mt-1 text-sm text-muted"
+        class="mt-1.5 text-sm text-muted"
       >
         <slot name="description">
           {{ description }}

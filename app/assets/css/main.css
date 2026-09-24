@@ -71,6 +71,8 @@
   --color-attr-wind: #37a86b;
   --color-attr-divine: #d8a51c;
 
+  /* The always-dark surfaces (`arena-island`): sidebar, drawer, banners. */
+  --color-island: #0a0a1a;
   /* Modal and slideover backdrop, in both modes. */
   --color-scrim: rgb(10 10 26 / 0.7);
   /* Text on a saturated primary-500+ fill (white on brand-500: 4.62:1). */
@@ -90,6 +92,8 @@
 @theme inline {
   --shadow-panel: var(--app-shadow-panel);
   --shadow-lift: var(--app-shadow-lift);
+  /* `outline-focus`, `ring-focus`: violet in light mode, gold in dark. */
+  --color-focus: var(--app-focus);
   --shadow-glow-primary: 0 0 0 1px color-mix(in oklab, var(--ui-primary) 55%, transparent), 0 0 24px -6px color-mix(in oklab, var(--ui-primary) 60%, transparent);
   --shadow-glow-gold: 0 0 0 1px color-mix(in oklab, var(--ui-secondary) 55%, transparent), 0 0 22px -6px color-mix(in oklab, var(--ui-secondary) 50%, transparent);
 }
@@ -124,7 +128,9 @@
   --app-focus: var(--color-brand-600);
   --app-shadow-panel: 0 1px 2px rgb(20 20 43 / 0.06), 0 1px 1px rgb(20 20 43 / 0.04);
   --app-shadow-lift: 0 14px 30px -14px rgb(20 20 43 / 0.35);
-  --app-lattice: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M16 .5 31.5 16 16 31.5.5 16Z' fill='none' stroke='%2314142b' stroke-opacity='.045'/%3E%3C/svg%3E");
+  --app-lattice: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M16 .5 31.5 16 16 31.5.5 16Z' fill='none' stroke='%2314142b' stroke-opacity='.05'/%3E%3C/svg%3E");
+  --app-glow-violet: color-mix(in oklab, var(--color-brand-500) 12%, transparent);
+  --app-glow-gold: color-mix(in oklab, var(--color-millennium-400) 9%, transparent);
 }
 
 /* Repeats Nuxt UI's dark roles: the unlayered `:root` block above would
@@ -147,13 +153,18 @@
   --app-focus: var(--color-millennium-400);
   --app-shadow-panel: inset 0 1px 0 rgb(255 255 255 / 0.035), 0 10px 30px -18px rgb(0 0 0 / 0.8);
   --app-shadow-lift: 0 18px 40px -16px rgb(0 0 0 / 0.85), 0 0 0 1px color-mix(in oklab, var(--ui-primary) 35%, transparent);
-  --app-lattice: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M16 .5 31.5 16 16 31.5.5 16Z' fill='none' stroke='%23ffffff' stroke-opacity='.03'/%3E%3C/svg%3E");
+  --app-lattice: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M16 .5 31.5 16 16 31.5.5 16Z' fill='none' stroke='%23ffffff' stroke-opacity='.045'/%3E%3C/svg%3E");
+  --app-glow-violet: color-mix(in oklab, var(--color-brand-500) 22%, transparent);
+  --app-glow-gold: color-mix(in oklab, var(--color-millennium-400) 8%, transparent);
 }
 
-/* Plain links and custom controls; Nuxt UI components bring their own ring. */
-:where(a, button, [role="button"], [tabindex]:not([tabindex="-1"]), summary, select):focus-visible {
-  outline: 2px solid var(--app-focus);
-  outline-offset: 2px;
+/* Plain links and custom controls. In `base`, so a component's own focus
+   utilities (Nuxt UI's rings, `focus-visible:outline-none`) still win. */
+@layer base {
+  :where(a, button, [role="button"], [tabindex]:not([tabindex="-1"]), summary, select):focus-visible {
+    outline: 2px solid var(--app-focus);
+    outline-offset: 2px;
+  }
 }
 
 ::selection {
@@ -172,5 +183,106 @@
     min-width: 2.75rem;
     min-height: 2.75rem;
     justify-content: center;
+  }
+}
+
+/* ------------------------------------------------------------------------
+ * Building blocks (ADR 0016). Ceremony at the edges, calm in the middle:
+ * `panel` is the standard surface; the canvas, islands, hairlines and the
+ * summon button are reserved for shells, heroes and one CTA per page.
+ * --------------------------------------------------------------------- */
+
+/* The standard surface: cards, sections, list containers. */
+@utility panel {
+  background-color: var(--ui-bg);
+  border: 1px solid var(--ui-border);
+  border-radius: calc(var(--ui-radius) * 3);
+  box-shadow: var(--shadow-panel);
+}
+
+/* Small label above a title or a group. */
+@utility eyebrow {
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--ui-text-muted);
+}
+
+/* The page's one hero CTA: a lit arcane gradient on top of `bg-primary`. */
+@utility btn-summon {
+  background-image: linear-gradient(180deg, var(--color-brand-500), var(--color-brand-700));
+  box-shadow: var(--shadow-glow-primary), inset 0 1px 0 rgb(255 255 255 / 0.18);
+
+  &:hover:not(:disabled, [aria-disabled="true"]) {
+    filter: brightness(1.12);
+  }
+}
+
+@layer components {
+  /* Page background: stadium lights (violet top right, a gold ember bottom
+     left) over a faint rhombus lattice that fades out towards the bottom. */
+  .arena-canvas {
+    position: relative;
+    isolation: isolate;
+    background-color: var(--app-canvas);
+  }
+
+  .arena-canvas::before,
+  .arena-canvas::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+  }
+
+  .arena-canvas::before {
+    background:
+      radial-gradient(1100px 560px at 85% -10%, var(--app-glow-violet), transparent 60%),
+      radial-gradient(800px 480px at -10% 110%, var(--app-glow-gold), transparent 60%);
+  }
+
+  .arena-canvas::after {
+    background-image: var(--app-lattice);
+    mask-image: radial-gradient(1200px 700px at 70% 0%, #000 0%, transparent 75%);
+  }
+
+  /* An always-dark surface (sidebar, drawer, hero panes, banners): put it on
+     an element that also carries `dark`. `color` is set again, so text that
+     inherits picks up the island's own tokens. */
+  .arena-island {
+    position: relative;
+    isolation: isolate;
+    color: var(--ui-text);
+    background-color: var(--color-island);
+    background-image:
+      radial-gradient(420px 260px at 0% 0%, color-mix(in oklab, var(--color-brand-500) 16%, transparent), transparent 70%),
+      var(--app-lattice);
+  }
+
+  /* A thin gold line that marks an edge: under a header, beside the sidebar. */
+  .gold-hairline {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--ui-secondary) 70%, transparent), transparent);
+  }
+
+  .gold-hairline-y {
+    width: 1px;
+    background: linear-gradient(180deg, transparent, color-mix(in oklab, var(--color-millennium-400) 45%, transparent) 30%, color-mix(in oklab, var(--color-millennium-400) 45%, transparent) 70%, transparent);
+  }
+}
+
+@media (forced-colors: active) {
+  .arena-canvas::before,
+  .arena-canvas::after,
+  .gold-hairline,
+  .gold-hairline-y {
+    display: none;
+  }
+
+  .arena-island {
+    background-image: none;
   }
 }

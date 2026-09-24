@@ -12,13 +12,8 @@ const appLocale = computed<AppLocale>(() => isAppLocale(locale.value) ? locale.v
 // Color mode (ADR 0016): dark unless the `ygo-color-mode` cookie says light.
 // @nuxtjs/color-mode only sets the `<html>` class from its inline script, so
 // the server renders it (and `theme-color`) from the cookie itself; on the
-// client both follow the toggle. Only head markup depends on the mode, never
-// the page body, so hydration can't mismatch.
-const colorMode = useColorMode()
-const colorModeCookie = useCookie<string | null>('ygo-color-mode')
-const isDark = computed(() => import.meta.server
-  ? colorModeCookie.value !== 'light'
-  : colorMode.value !== 'light')
+// client both follow the toggle.
+const { isDark } = useIsDark()
 
 useHead({
   htmlAttrs: {

@@ -28,6 +28,10 @@
     "localeSwitch": {
       "label": "Interface language",
       "saveFailed": "Couldn't save the language"
+    },
+    "colorMode": {
+      "switchToLight": "Switch to light mode",
+      "switchToDark": "Switch to dark mode"
     }
   }
 }
