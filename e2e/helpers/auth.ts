@@ -29,6 +29,9 @@ export async function registerAndLogin(page: Page, options: RegisterAndLoginOpti
   const password = options.password ?? 'super-secret-123'
 
   await page.goto('/register')
+  // Typing before hydration is lost: v-model resets the fields when Vue
+  // takes over the server-rendered form ("Bitte fülle alle Felder aus.").
+  await page.waitForLoadState('networkidle')
   await page.getByLabel('Name').fill(name)
   await page.getByLabel('E-Mail').fill(email)
   await page.getByLabel('Passwort').fill(password)
