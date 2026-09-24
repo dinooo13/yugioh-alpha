@@ -2,8 +2,8 @@
 
 ## Status
 
-Proposed — a redesign proposal for the owner's review
-(`feat/redesign-duel-arena`). Becomes Accepted once it is merged.
+Accepted — approved by the owner after reviewing the redesign
+(PR #79, `feat/redesign-duel-arena`).
 
 Implemented on the branch, including two changes from the owner's first
 review: the sidebar and the mobile drawer follow the color mode (decision

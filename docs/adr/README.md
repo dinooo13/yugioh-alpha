@@ -23,4 +23,4 @@ mark the old as superseded.
 | [0013](0013-english-url-scheme.md) | English URL scheme and permanent redirects from German paths | Accepted |
 | [0014](0014-ui-internationalisation.md) | UI internationalisation (German and English) | Accepted |
 | [0015](0015-german-card-data.md) | German card data and card display language | Accepted (implemented: F3a–F3c) |
-| [0016](0016-visual-design-system.md) | Visual design system and theming (Duel Arena) | Proposed |
+| [0016](0016-visual-design-system.md) | Visual design system and theming (Duel Arena) | Accepted |
