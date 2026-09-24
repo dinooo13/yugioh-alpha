@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { registerAndLogin } from './helpers/auth'
+import { registerAndLogin, waitForHydration } from './helpers/auth'
 import { CARD } from './helpers/cards'
 
 test.describe('catalog seed', () => {
@@ -7,6 +7,7 @@ test.describe('catalog seed', () => {
     await registerAndLogin(page)
 
     await page.goto('/catalog')
+    await waitForHydration(page)
     await page.getByLabel('Karten suchen').fill('Dark Magician')
 
     await expect(page.getByRole('heading', { name: CARD.darkMagician })).toBeVisible()
@@ -16,6 +17,7 @@ test.describe('catalog seed', () => {
     await registerAndLogin(page)
 
     await page.goto('/catalog')
+    await waitForHydration(page)
     await page.getByLabel('Karten suchen').fill('Dunkler Magier')
 
     // Shown in the card language, which follows the German interface (F3c).

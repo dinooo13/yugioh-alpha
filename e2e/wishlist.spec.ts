@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { registerAndLogin } from './helpers/auth'
+import { registerAndLogin, waitForHydration } from './helpers/auth'
 import { CARD } from './helpers/cards'
 
 test.describe('wishlist', () => {
@@ -8,7 +8,12 @@ test.describe('wishlist', () => {
     const profile = await (await page.request.get('/api/profile')).json()
 
     await page.goto('/catalog')
+    await waitForHydration(page)
+    // Wait for the debounced search: while it loads, the card grid is
+    // replaced, and a wishlist toggle clicked before that is lost.
+    const searched = page.waitForResponse(response => response.url().includes('/api/catalog/cards?q=Kuriboh'))
     await page.getByLabel('Karten suchen').fill('Kuriboh')
+    await searched
 
     // Scope to the card tile (an `<article aria-label="<name>">`, see
     // app/pages/catalog.vue) — "Zur Wunschliste" itself is not unique
@@ -49,6 +54,7 @@ test.describe('wishlist', () => {
 
     // Publish the wishlist and check it from an anonymous context.
     await page.goto('/profile')
+    await waitForHydration(page)
     await page.getByLabel('Wunschliste öffentlich zeigen').click()
     // Same "Gespeichert" feedback as the profile form above it — previously
     // this switch gave no confirmation at all (UX review #22).
@@ -67,6 +73,7 @@ test.describe('wishlist', () => {
 
     // Remove it again — the list goes back to its empty state.
     await page.goto('/wishlist')
+    await waitForHydration(page)
     await page.getByRole('button', { name: 'Entfernen', exact: true }).click()
     await expect(page.getByText('Noch keine Karten auf der Wunschliste.')).toBeVisible()
   })

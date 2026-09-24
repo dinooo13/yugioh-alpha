@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { registerAndLogin } from './helpers/auth'
+import { registerAndLogin, waitForHydration } from './helpers/auth'
 import { acceptConfirm } from './helpers/confirm'
 import { CARD } from './helpers/cards'
 
@@ -24,6 +24,7 @@ test.describe('rule formats', () => {
 
     // --- Create a custom format --------------------------------------------
     await page.goto('/formats')
+    await waitForHydration(page)
     await expect(page.getByRole('heading', { name: 'Offizielle Formate' })).toBeVisible()
     await expect(page.getByText('Noch keine eigenen Formate')).toBeVisible()
 
@@ -57,6 +58,7 @@ test.describe('rule formats', () => {
 
     // --- Build a deck ------------------------------------------------------
     await page.goto('/decks')
+    await waitForHydration(page)
     await page.getByRole('button', { name: 'Neues Deck' }).first().click()
     await page.getByLabel('Deckname').fill('Format-Test')
     await page.getByRole('button', { name: 'Erstellen' }).click()
@@ -117,6 +119,7 @@ test.describe('rule formats', () => {
 
     // --- Delete the custom format ------------------------------------------
     await page.goto('/formats')
+    await waitForHydration(page)
     await expect(page.getByRole('heading', { name: 'Offizielle Formate' })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Meine Formate' })).toBeVisible()
     await expect(page.getByRole('heading', { name: 'TCG Advanced' })).toBeVisible()
@@ -135,6 +138,7 @@ test.describe('rule formats', () => {
     await registerAndLogin(page)
 
     await page.goto('/formats/goat')
+    await waitForHydration(page)
     await expect(page.getByRole('heading', { name: 'GOAT Format' })).toBeVisible()
     await expect(page.getByText('Offizielle Banliste (GOAT)')).toBeVisible()
     await expect(page.getByText('Nur Karten bis Juni 2005')).toBeVisible()

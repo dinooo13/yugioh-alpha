@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { registerAndLogin } from './helpers/auth'
+import { registerAndLogin, waitForHydration } from './helpers/auth'
 import { acceptConfirm } from './helpers/confirm'
 import { CARD } from './helpers/cards'
 
@@ -63,12 +63,14 @@ test.describe('Chat assistant', () => {
 
     // --- applied for real: 1 seeded + 2 proposed = 3 -----------------------
     await page.goto('/inventory')
+    await waitForHydration(page)
     await page.getByRole('button', { name: 'Übersicht', exact: true }).click()
     await expect(page.getByText(CARD.darkMagician).first()).toBeVisible()
     await expect(page.getByText('×3 ges.')).toBeVisible()
 
     // --- new conversation, image input --------------------------------------
     await page.goto('/assistant')
+    await waitForHydration(page)
     // A conversation exists now, so this redirects into it — the aside with
     // the conversation list (and "Neue Unterhaltung") is only reachable from
     // inside a thread, not from the bare empty state.
@@ -123,6 +125,7 @@ test.describe('Chat assistant', () => {
       expect(createResponse.ok()).toBe(true)
       const { id } = await createResponse.json() as { id: string }
       await page.goto(`/assistant/${id}`)
+      await waitForHydration(page)
 
       const nachricht = page.getByLabel('Nachricht', { exact: true })
       const senden = page.getByRole('button', { name: 'Senden', exact: true })
@@ -199,6 +202,7 @@ test.describe('Chat assistant', () => {
     await context.addCookies([{ name: 'ui_locale', value: 'en', url: baseURL! }])
 
     await page.goto('/assistant')
+    await waitForHydration(page)
     await expect(page.getByRole('heading', { name: 'Assistant', exact: true })).toBeVisible()
     await page.getByRole('button', { name: 'New conversation', exact: true }).click()
     await expect(page).toHaveURL(/\/assistant\/[0-9a-f-]+$/)

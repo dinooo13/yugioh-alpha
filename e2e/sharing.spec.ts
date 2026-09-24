@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { logout, registerAndLogin, uniqueEmail } from './helpers/auth'
+import { loginViaForm, logout, registerAndLogin, uniqueEmail, waitForHydration } from './helpers/auth'
 import { CARD } from './helpers/cards'
 
 // Passcodes from the seeded E2E catalog fixture
@@ -25,6 +25,7 @@ test.describe('sharing', () => {
     const deck = await deckResponse.json()
 
     await page.goto(`/decks/${deck.id}`)
+    await waitForHydration(page)
     await page.getByRole('button', { name: 'Teilen' }).click()
     await page.getByRole('radio', { name: 'Nur über Link' }).click()
 
@@ -79,6 +80,7 @@ test.describe('sharing', () => {
 
     // A opens the deck's share modal, keeps it private, and grants access to B.
     await page.goto(`/decks/${deck.id}`)
+    await waitForHydration(page)
     await page.getByRole('button', { name: 'Teilen' }).click()
     await expect(page.getByRole('radio', { name: 'Privat' })).toBeChecked()
 
@@ -124,6 +126,7 @@ test.describe('sharing', () => {
     expect(inventoryResponse.ok()).toBe(true)
 
     await page.goto('/profile')
+    await waitForHydration(page)
     await page.getByRole('button', { name: 'Teilen' }).click()
     await page.getByRole('radio', { name: 'Öffentlich' }).click()
     await expect(page.getByRole('radio', { name: 'Öffentlich' })).toBeChecked()
@@ -132,6 +135,7 @@ test.describe('sharing', () => {
     const anonPage = await anonContext.newPage()
 
     await anonPage.goto(`/players/${profileA.handle}`)
+    await waitForHydration(anonPage)
     await expect(anonPage.getByRole('heading', { name: 'Inventar' })).toBeVisible()
     await anonPage.getByRole('link', { name: 'Inventar ansehen' }).click()
 
@@ -148,6 +152,7 @@ test.describe('sharing', () => {
 
     // A hides the inventory again; the anonymous page then 404s.
     await page.goto('/profile')
+    await waitForHydration(page)
     await page.getByRole('button', { name: 'Teilen' }).click()
     await page.getByRole('radio', { name: 'Privat' }).click()
     await expect(page.getByRole('radio', { name: 'Privat' })).toBeChecked()
@@ -185,6 +190,7 @@ test.describe('sharing', () => {
     await logout(pageB)
 
     await page.goto(`/decks/${deck.id}`)
+    await waitForHydration(page)
     await page.getByRole('button', { name: 'Teilen' }).click()
     await page.getByLabel('Spieler suchen').fill(profileB.handle)
     await page.getByRole('button', { name: 'Hinzufügen' }).click()
@@ -205,9 +211,7 @@ test.describe('sharing', () => {
     await expect(pageB).toHaveURL(/\/login\?redirect=/)
     expect(new URL(pageB.url()).searchParams.get('redirect')).toBe(deckPath)
 
-    await pageB.getByLabel('E-Mail').fill(userB.email)
-    await pageB.getByLabel('Passwort').fill(userB.password)
-    await pageB.getByRole('button', { name: 'Anmelden' }).click()
+    await loginViaForm(pageB, userB)
 
     // Signed in, the same grant now resolves — landing back on the deck the
     // login link was clicked from, not the dashboard.

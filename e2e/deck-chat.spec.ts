@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { registerAndLogin } from './helpers/auth'
+import { registerAndLogin, waitForHydration } from './helpers/auth'
 
 // Passcodes from the seeded E2E catalog fixture
 // (server/db/fixtures/catalog-fixture.ts).
@@ -36,6 +36,7 @@ test.describe('Deck assistance in the chat', () => {
 
     // --- Deck editor → "Mit KI bearbeiten" ---------------------------------
     await page.goto(`/decks/${deck.id}`)
+    await waitForHydration(page)
     await page.getByRole('link', { name: 'Mit KI bearbeiten', exact: true }).click()
     await expect(page).toHaveURL(/\/assistant\/[0-9a-f-]+$/)
 

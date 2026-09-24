@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { registerAndLogin } from './helpers/auth'
+import { registerAndLogin, waitForHydration } from './helpers/auth'
 import { CARD } from './helpers/cards'
 
 test.describe('Schnellerfassung', () => {
@@ -7,6 +7,7 @@ test.describe('Schnellerfassung', () => {
     await registerAndLogin(page)
 
     await page.goto('/inventory')
+    await waitForHydration(page)
     await page.getByRole('link', { name: 'Schnellerfassung' }).click()
     await expect(page).toHaveURL('/inventory/quick-entry')
 
@@ -29,6 +30,7 @@ test.describe('Schnellerfassung', () => {
     await expect(page.getByText('Noch nichts zu prüfen')).toBeVisible()
 
     await page.goto('/inventory')
+    await waitForHydration(page)
     await page.getByRole('button', { name: 'Übersicht' }).click()
 
     // 2 loose copies + 1 from the SDY-006 printing row.
@@ -40,6 +42,7 @@ test.describe('Schnellerfassung', () => {
   test('recognizes German card names (ADR 0015)', async ({ page }) => {
     await registerAndLogin(page)
     await page.goto('/inventory/quick-entry')
+    await waitForHydration(page)
 
     await page.getByLabel('Kartenliste').fill('2x Dunkler Magier\nTopf der Gier')
     await page.getByRole('button', { name: 'Karten erkennen' }).click()

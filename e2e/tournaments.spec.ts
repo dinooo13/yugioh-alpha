@@ -1,32 +1,7 @@
 import { expect, test } from '@playwright/test'
 import type { Locator } from '@playwright/test'
-import { registerAndLogin, uniqueEmail } from './helpers/auth'
+import { registerAndLogin, uniqueEmail, waitForHydration } from './helpers/auth'
 import { acceptConfirm, cancelConfirm } from './helpers/confirm'
-
-/**
- * `fill` followed by a value check, with one retry.
- *
- * Right after a fresh navigation (`page.goto`) into a page guarded by the
- * global auth middleware, the client re-runs that middleware once during
- * hydration — a `getAuthSession` round trip that can still be settling the
- * form when Playwright's `fill` lands, silently discarding it. The window is
- * a few tens of milliseconds and never repeats once past it, so a single
- * retry is enough to make this deterministic instead of racy: if the value
- * didn't stick, the disruptive re-render has already happened, and refilling
- * lands cleanly. Without this, an unlucky fill can submit an empty field and
- * fail validation instead of creating the record (e.g. "Bitte einen Namen
- * angeben.").
- */
-async function fillReliably(locator: Locator, value: string) {
-  await locator.fill(value)
-  try {
-    await expect(locator).toHaveValue(value, { timeout: 1000 })
-  }
-  catch {
-    await locator.fill(value)
-    await expect(locator).toHaveValue(value)
-  }
-}
 
 // Passcodes from the seeded E2E catalog fixture
 // (server/db/fixtures/catalog-fixture.ts).
@@ -79,13 +54,14 @@ test.describe('tournaments', () => {
 
     // --- Empty state, create the tournament ---------------------------------
     await page.goto('/tournaments')
+    await waitForHydration(page)
     await expect(page.getByText('Noch keine Turniere')).toBeVisible()
 
     // "Neues Turnier" is a `<UButton to="...">`, rendered as a link, not a button.
     await page.getByRole('link', { name: 'Neues Turnier' }).first().click()
     await expect(page).toHaveURL('/tournaments/new')
 
-    await fillReliably(page.getByLabel('Turniername'), 'Freitagsturnier')
+    await page.getByLabel('Turniername').fill('Freitagsturnier')
     await page.getByLabel('Format').click()
     await page.getByRole('option', { name: 'Ohne Banliste' }).click()
     await page.getByLabel('Paarungssystem').click()
@@ -108,7 +84,7 @@ test.describe('tournaments', () => {
       // first, otherwise a fast `fill` can land before the clear and be
       // immediately overwritten, submitting an empty name.
       await expect(guestNameField).toHaveValue('')
-      await fillReliably(guestNameField, name)
+      await guestNameField.fill(name)
       await page.getByRole('button', { name: 'Teilnehmer hinzufügen' }).click()
       await expect(participantRow(page, name)).toBeVisible()
     }
@@ -192,6 +168,7 @@ test.describe('tournaments', () => {
 
     // --- History filter (#32: role and status are independent axes) ----------
     await page.goto('/tournaments')
+    await waitForHydration(page)
     // Default view is "Meine Turniere" + "Aktiv" — the now-finished tournament
     // is not an active one, so it's not here.
     await expect(page.getByRole('heading', { name: 'Freitagsturnier' })).toHaveCount(0)
@@ -239,7 +216,8 @@ test.describe('tournaments', () => {
     // Organizer creates the tournament and adds B by e-mail.
     const organizer = await registerAndLogin(page)
     await page.goto('/tournaments/new')
-    await fillReliably(page.getByLabel('Turniername'), 'Einladungsturnier')
+    await waitForHydration(page)
+    await page.getByLabel('Turniername').fill('Einladungsturnier')
     await page.getByRole('button', { name: 'Turnier anlegen' }).click()
     await expect(page).toHaveURL(/\/tournaments\/[0-9a-f-]{36}$/)
     const tournamentUrl = page.url()
@@ -252,10 +230,12 @@ test.describe('tournaments', () => {
 
     // B sees the tournament under "Teilnahmen" and can open it.
     await bPage.goto('/tournaments')
+    await waitForHydration(bPage)
     await bPage.getByRole('button', { name: 'Teilnahmen' }).click()
     await expect(bPage.getByRole('heading', { name: 'Einladungsturnier' })).toBeVisible()
 
     await bPage.goto(tournamentUrl)
+    await waitForHydration(bPage)
     await expect(bPage.getByRole('heading', { name: 'Einladungsturnier' })).toBeVisible()
     await expect(bPage.getByText('Du nimmst an diesem Turnier teil. Änderungen nimmt die Turnierleitung vor.')).toBeVisible()
 
@@ -288,13 +268,14 @@ test.describe('tournaments', () => {
     await registerAndLogin(page)
 
     await page.goto('/tournaments/new')
-    await fillReliably(page.getByLabel('Turniername'), 'Bestätigungsturnier')
+    await waitForHydration(page)
+    await page.getByLabel('Turniername').fill('Bestätigungsturnier')
     await page.getByRole('button', { name: 'Turnier anlegen' }).click()
     await expect(page).toHaveURL(/\/tournaments\/[0-9a-f-]{36}$/)
 
     await page.getByRole('button', { name: 'Als Gast' }).click()
     const guestNameField = page.getByLabel('Name')
-    await fillReliably(guestNameField, 'Wegwerf Gast')
+    await guestNameField.fill('Wegwerf Gast')
     await page.getByRole('button', { name: 'Teilnehmer hinzufügen' }).click()
     await expect(participantRow(page, 'Wegwerf Gast')).toBeVisible()
 
@@ -313,7 +294,7 @@ test.describe('tournaments', () => {
     // Two participants and a completed round are needed to reach "Turnier
     // abschließen" — add one back and play it out.
     await expect(guestNameField).toHaveValue('')
-    await fillReliably(guestNameField, 'Mitspieler')
+    await guestNameField.fill('Mitspieler')
     await page.getByRole('button', { name: 'Teilnehmer hinzufügen' }).click()
     await expect(participantRow(page, 'Mitspieler')).toBeVisible()
 
@@ -370,7 +351,7 @@ test.describe('tournaments', () => {
 
     // --- Registration: participant cards + "Konto" legend ---------------------
     await page.goto(`/tournaments/${tournament.id}`)
-    await page.waitForLoadState('networkidle')
+    await waitForHydration(page)
 
     await expect(participantRow(page, 'Gast Anton')).toBeVisible()
     // The column headers are dropped on phones — each card labels itself.
@@ -382,7 +363,7 @@ test.describe('tournaments', () => {
     const startResponse = await page.request.post(`/api/tournaments/${tournament.id}/start`)
     expect(startResponse.ok()).toBe(true)
     await page.reload()
-    await page.waitForLoadState('networkidle')
+    await waitForHydration(page)
 
     await expectTouchTarget(page.getByRole('button', { name: 'Optionen für Gast Anton' }), 'Optionen für Gast Anton')
     await expectTouchTarget(matchRow(page, 1).getByRole('button', { name: '2:0' }), '2:0', { width: false })
