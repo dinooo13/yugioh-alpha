@@ -1,5 +1,5 @@
 import { relations } from 'drizzle-orm'
-import { sqliteTable, text, integer, index, primaryKey, uniqueIndex } from 'drizzle-orm/sqlite-core'
+import { sqliteTable, text, integer, index, primaryKey, uniqueIndex, type AnySQLiteColumn } from 'drizzle-orm/sqlite-core'
 import type { AssistantActionKind } from '../../shared/assistant-chat'
 import type { RuleSet } from '../../shared/rule-formats'
 import type { AppLocale } from '../../shared/locale'
@@ -108,6 +108,15 @@ export const catalogCard = sqliteTable(
     // `foldCardName(name)` (shared/card-name-fold.ts): lowercase, no accents,
     // no spaces or punctuation. '' until the startup backfill has run.
     nameSearch: text('name_search').notNull().default(''),
+    // Retired cards (ADR 0019): NULL = active, i.e. listed by the latest
+    // YGOPRODeck sync. Otherwise the time of the sync that first found the
+    // card missing. Catalog-wide searches hide retired rows; references and
+    // lookups by id keep resolving them. No index: almost every row is NULL.
+    retiredAt: integer('retired_at', { mode: 'timestamp' }),
+    // The active card this retired row was renumbered to (same Konami id, or
+    // the same name and type), or NULL. The sync moves references to it.
+    replacedById: integer('replaced_by_id')
+      .references((): AnySQLiteColumn => catalogCard.id, { onDelete: 'set null' }),
   },
   table => [
     index('idx_catalog_card_name').on(table.name),
