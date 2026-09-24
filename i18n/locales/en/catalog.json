@@ -8,10 +8,6 @@
       "label": "Search cards"
     },
     "filters": {
-      "type": "Type",
-      "attribute": "Attribute",
-      "level": "Level",
-      "race": "Monster type",
       "set": "Set",
       "allSets": "All sets",
       "reset": "Reset"

@@ -100,14 +100,18 @@ test.describe('card language', () => {
     const warnings = trackHydrationWarnings(page)
     await registerAndLogin(page)
 
-    // German: the attribute filter offers "FINSTERNIS" and filters by DARK.
+    // German: the attribute menu offers "FINSTERNIS" and filters by DARK
+    // (a multi-select USelectMenu since #63: it stays open after a pick).
     await page.goto('/catalog')
     await page.waitForLoadState('networkidle')
-    const attribute = page.getByRole('combobox', { name: 'Attribut' })
-    await expect(attribute.locator('option', { hasText: 'FINSTERNIS' })).toHaveAttribute('value', 'DARK')
-    await expect(attribute.locator('option', { hasText: /^DARK$/ })).toHaveCount(0)
-    await attribute.selectOption({ label: 'FINSTERNIS' })
+    const attribute = page.getByRole('button', { name: 'Attribut', exact: true })
+    await attribute.click()
+    await expect(page.getByRole('option', { name: 'FINSTERNIS', exact: true })).toBeVisible()
+    await expect(page.getByRole('option', { name: 'DARK', exact: true })).toHaveCount(0)
+    await page.getByRole('option', { name: 'FINSTERNIS', exact: true }).click()
+    await page.keyboard.press('Escape')
     await expect(page).toHaveURL(/attribute=DARK/)
+    await expect(attribute).toHaveText('FINSTERNIS')
     const tile = page.getByRole('article', { name: CARD.darkMagician, exact: true })
     await expect(tile.getByText('FINSTERNIS', { exact: true })).toBeVisible()
     await expect(tile.getByText('Normales Monster', { exact: true })).toBeVisible()
@@ -116,14 +120,14 @@ test.describe('card language', () => {
     await page.request.patch('/api/profile', { data: { locale: 'en', cardLocale: 'de' } })
     await page.goto('/catalog?attribute=DARK')
     await page.waitForLoadState('networkidle')
-    await expect(page.getByRole('combobox', { name: 'Attribute' }).locator('option', { hasText: 'FINSTERNIS' })).toHaveAttribute('value', 'DARK')
+    await expect(page.getByRole('button', { name: 'Attribute', exact: true })).toHaveText('FINSTERNIS')
     await expect(page.getByRole('article', { name: CARD.darkMagician, exact: true }).getByText('FINSTERNIS', { exact: true })).toBeVisible()
 
     // English cards: the stored values.
     await page.request.patch('/api/profile', { data: { cardLocale: 'en' } })
     await page.goto('/catalog?attribute=DARK')
     await page.waitForLoadState('networkidle')
-    await expect(page.getByRole('combobox', { name: 'Attribute' }).locator('option', { hasText: /^DARK$/ })).toHaveAttribute('value', 'DARK')
+    await expect(page.getByRole('button', { name: 'Attribute', exact: true })).toHaveText('DARK')
     const englishTile = page.getByRole('article', { name: CARD_EN.darkMagician, exact: true })
     await expect(englishTile.getByText('DARK', { exact: true })).toBeVisible()
     await expect(englishTile.getByText('Normal Monster', { exact: true })).toBeVisible()
