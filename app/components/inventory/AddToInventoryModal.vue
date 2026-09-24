@@ -1,17 +1,15 @@
 <script setup lang="ts">
+/**
+ * "Karte hinzufügen": adds copies of a picked card (inventory picker,
+ * catalog). Adding to a card's existing row merges into it (ADR 0017).
+ * Owned copies are edited in the card's detail panel
+ * (`InventoryOwnedCardEditor`, #135), not here.
+ */
 interface CatalogCardOption {
   id: number
   name: string
   nameDe?: string | null
   type: string
-}
-
-interface OwnedCardInitialValues {
-  id?: string
-  catalogCardId: number
-  collectionId: string | null
-  quantity: number
-  note: string | null
 }
 
 interface CollectionOption {
@@ -22,7 +20,6 @@ interface CollectionOption {
 const props = defineProps<{
   open: boolean
   card: CatalogCardOption | null
-  initialValues?: OwnedCardInitialValues | null
   collections?: CollectionOption[]
   presetCollectionId?: string | null
 }>()
@@ -47,8 +44,6 @@ const form = reactive({
 const isSubmitting = ref(false)
 const errorMessage = ref('')
 
-const isEditing = computed(() => Boolean(props.initialValues?.id))
-const title = computed(() => isEditing.value ? t('inventory.addModal.editTitle') : t('inventory.addModal.addTitle'))
 const collectionItems = computed(() => [
   { label: t('inventory.noCollectionOption'), value: noCollectionValue },
   ...(props.collections ?? []).map(collection => ({
@@ -63,24 +58,22 @@ const openProxy = computed({
 })
 
 watch(
-  () => [props.open, props.card?.id, props.initialValues?.id] as const,
+  () => [props.open, props.card?.id] as const,
   () => {
     if (!props.open) {
       return
     }
 
-    form.quantity = props.initialValues?.quantity ?? 1
-    form.collectionId = props.initialValues
-      ? (props.initialValues.collectionId ?? noCollectionValue)
-      : (props.presetCollectionId ?? noCollectionValue)
-    form.note = props.initialValues?.note ?? ''
+    form.quantity = 1
+    form.collectionId = props.presetCollectionId ?? noCollectionValue
+    form.note = ''
     errorMessage.value = ''
   },
   { immediate: true },
 )
 
 async function save() {
-  const catalogCardId = props.initialValues?.catalogCardId ?? props.card?.id
+  const catalogCardId = props.card?.id
   if (!catalogCardId) {
     errorMessage.value = t('inventory.addModal.noCard')
     return
@@ -97,18 +90,10 @@ async function save() {
   }
 
   try {
-    if (props.initialValues?.id) {
-      await $fetch(`/api/inventory/${props.initialValues.id}`, {
-        method: 'PATCH',
-        body: payload,
-      })
-    }
-    else {
-      await $fetch('/api/inventory', {
-        method: 'POST',
-        body: payload,
-      })
-    }
+    await $fetch('/api/inventory', {
+      method: 'POST',
+      body: payload,
+    })
 
     emit('saved')
     openProxy.value = false
@@ -125,7 +110,7 @@ async function save() {
 <template>
   <UModal
     v-model:open="openProxy"
-    :title="title"
+    :title="t('inventory.addModal.addTitle')"
   >
     <template #body>
       <form
@@ -143,12 +128,14 @@ async function save() {
 
         <div class="grid gap-4 sm:grid-cols-2">
           <UFormField :label="t('card.field.quantity')">
-            <UInput
-              v-model.number="form.quantity"
+            <CardQuantityStepper
+              v-model="form.quantity"
+              :min="1"
+              size="md"
               name="quantity"
-              type="number"
-              min="1"
-              class="w-full"
+              :input-label="t('card.field.quantity')"
+              :decrease-label="t('inventory.addModal.decrease')"
+              :increase-label="t('inventory.addModal.increase')"
             />
           </UFormField>
 
@@ -192,7 +179,7 @@ async function save() {
             type="submit"
             icon="i-lucide-save"
             :loading="isSubmitting"
-            :label="isEditing ? t('common.save') : t('common.add')"
+            :label="t('common.add')"
           />
         </div>
       </form>

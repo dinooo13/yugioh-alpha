@@ -14,13 +14,13 @@
     },
     "view": {
       "list": "Liste",
-      "overview": "Übersicht"
+      "gallery": "Galerie"
     },
     "search": {
       "placeholder": "Im Inventar suchen...",
       "label": "Inventar durchsuchen",
       "inText": "Auch im Kartentext suchen",
-      "facetsOverviewOnly": "Diese Filter wirken nur in \"Übersicht\". \"Liste\" filtert nach Suchtext und Sammlung.",
+      "facetsGalleryOnly": "Diese Filter wirken nur in \"Galerie\". \"Liste\" filtert nach Suchtext und Sammlung.",
       "reset": "Reset",
       "sortLabel": "Sortierung",
       "sort": {
@@ -30,7 +30,7 @@
         "newest": "Neueste"
       }
     },
-    "overview": {
+    "gallery": {
       "loadFailed": "Die Suche konnte nicht geladen werden",
       "tryAgain": "Bitte versuche es erneut.",
       "empty": "Inventar ist leer",
@@ -40,21 +40,11 @@
     "list": {
       "loading": "Inventar wird geladen",
       "noMatches": "Keine Treffer",
-      "noMatchesDescription": "Passe die Suche an oder entferne den Kartenfilter.",
+      "noMatchesDescription": "Passe die Suche an.",
       "noUnassigned": "Keine Karten ohne Sammlung",
       "noUnassignedDescription": "Jede Karte in deinem Inventar ist einer Sammlung zugeordnet.",
       "emptyCollection": "Noch keine Karten in dieser Sammlung",
       "empty": "Keine Karten im Inventar"
-    },
-    "cardFilter": {
-      "label": "Nur: {name}",
-      "clear": "Kartenfilter entfernen",
-      "fallbackName": "Karte"
-    },
-    "row": {
-      "collectionFor": "Sammlung für {name}",
-      "edit": "Karte bearbeiten",
-      "remove": "Karte entfernen"
     },
     "breakdown": {
       "toggle": "Aufschlüsselung",
@@ -63,9 +53,24 @@
       "unnamedCollection": "Unbenannte Sammlung"
     },
     "preview": {
-      "editInList": "In Liste bearbeiten",
       "openInCatalog": "Im Katalog öffnen",
       "owned": "Im Inventar"
+    },
+    "editor": {
+      "quantity": "Anzahl in {collection}",
+      "decrease": "Eine Kopie weniger in {collection}",
+      "increase": "Eine Kopie mehr in {collection}",
+      "collection": "Sammlung ändern (jetzt: {collection})",
+      "remove": "Aus {collection} entfernen",
+      "addNote": "Notiz hinzufügen",
+      "editNote": "Notiz bearbeiten",
+      "noteFor": "Notiz für {collection}",
+      "addToCollection": "Zu Sammlung hinzufügen",
+      "notOwned": "Diese Karte ist nicht mehr in deinem Inventar.",
+      "loadFailed": "Deine Kopien konnten nicht geladen werden.",
+      "saveFailed": "Die Änderung konnte nicht gespeichert werden.",
+      "merged": "Mit den Kopien in {collection} zusammengelegt.",
+      "status": "{collection}: {count} Kopie | {collection}: {count} Kopien"
     },
     "picker": {
       "title": "Karte aus dem Katalog wählen",
@@ -76,19 +81,16 @@
     },
     "addModal": {
       "addTitle": "Karte hinzufügen",
-      "editTitle": "Karte bearbeiten",
       "noCard": "Bitte zuerst eine Karte auswählen.",
-      "saveFailed": "Die Karte konnte nicht gespeichert werden."
+      "saveFailed": "Die Karte konnte nicht gespeichert werden.",
+      "decrease": "Eine weniger",
+      "increase": "Eine mehr"
     },
     "confirm": {
-      "remove": {
-        "title": "Karte entfernen",
-        "description": "{name} aus dem Inventar entfernen?"
+      "removeRow": {
+        "title": "Aus Sammlung entfernen",
+        "description": "{name} aus {collection} entfernen?"
       }
-    },
-    "errors": {
-      "assignFailed": "Die Sammlung konnte nicht geändert werden.",
-      "removeFailed": "Die Karte konnte nicht entfernt werden."
     }
   }
 }

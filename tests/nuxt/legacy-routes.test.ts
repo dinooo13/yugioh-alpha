@@ -40,7 +40,7 @@ const REDIRECTS: ReadonlyArray<readonly [string, string]> = [
   ['/assistent/c1?prompt=Hallo%20Welt', '/assistant/c1?prompt=Hallo%20Welt'],
   ['/katalog?card=42&q=Dunkler', '/catalog?card=42&q=Dunkler'],
   // Inventory view values.
-  ['/inventar?view=uebersicht&collectionId=c1', '/inventory?view=overview&collectionId=c1'],
+  ['/inventar?view=uebersicht&collectionId=c1', '/inventory?view=gallery&collectionId=c1'],
   ['/inventar?view=liste', '/inventory?view=list'],
   ['/inventar?collectionId=__none__', '/inventory?collectionId=__none__'],
   // The former one-shot deck builder: one hop straight to the assistant (ADR 0021: plain, no intent added).
@@ -74,6 +74,7 @@ const NOT_LEGACY = [
   // Every English path.
   '/inventory',
   '/inventory?view=overview',
+  '/inventory?view=gallery',
   '/inventory/quick-entry',
   '/catalog',
   '/assistant',

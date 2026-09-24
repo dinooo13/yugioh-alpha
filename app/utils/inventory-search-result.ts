@@ -1,7 +1,7 @@
 import type { CardValueKind } from '~/utils/card-values'
 
 // Shape of one aggregated row from `GET /api/inventory/search`, shared by the
-// "Übersicht" tile and its preview modal.
+// "Galerie" tile and its detail panel (#135).
 export interface InventoryCollectionBreakdown {
   collectionId: string | null
   collectionName: string | null

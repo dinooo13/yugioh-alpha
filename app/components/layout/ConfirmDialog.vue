@@ -20,9 +20,14 @@ function resolve(result: boolean) {
 </script>
 
 <template>
+  <!-- Above every other overlay: a confirm is often asked from inside one
+       (the inventory's detail panel, the share dialog), and a page's modals
+       are teleported after this layout-level one, so without a z-index it
+       would open behind them. -->
   <UModal
     v-model:open="open"
     :title="request?.title ?? t('common.confirm')"
+    :ui="{ overlay: 'z-[60]', content: 'z-[60]' }"
   >
     <template #body>
       <p class="text-sm leading-6 text-toned">

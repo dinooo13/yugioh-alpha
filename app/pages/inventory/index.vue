@@ -2,6 +2,7 @@
 import type { LocationQueryRaw } from 'vue-router'
 import { UNASSIGNED_COLLECTION_ID } from '~~/shared/inventory'
 import type { InventorySearchFilters } from '~/components/inventory/InventorySearchPanel.vue'
+import type { CardDetailPreview } from '~/utils/card-detail'
 import type { InventorySearchResultItem } from '~/utils/inventory-search-result'
 
 interface InventoryItem {
@@ -13,6 +14,9 @@ interface InventoryItem {
   cardName: string
   cardNameDe?: string | null
   cardType: string
+  cardAttribute: string | null
+  cardTextExcerpt: string | null
+  cardTextExcerptDe?: string | null
   cardRetired?: boolean
   imageUrlSmall: string | null
 }
@@ -60,10 +64,7 @@ usePageTitle('inventory.title')
 
 const { t } = useI18n()
 const { cardName } = useCardText()
-// A "Liste" row in the card language (ADR 0015).
-const listItemName = (item: InventoryItem) => cardName({ name: item.cardName, nameDe: item.cardNameDe })
 const count = useCount()
-const apiError = useApiError()
 
 const route = useRoute()
 const router = useRouter()
@@ -72,20 +73,28 @@ const pageSize = 20
 const isPickerOpen = ref(false)
 const isEntryOpen = ref(false)
 const selectedCard = ref<CatalogCard | null>(null)
-const editingItem = ref<InventoryItem | null>(null)
-const errorMessage = ref('')
 
 // The URL is the single source of truth for the page's scope and view, so
 // deep links, reloads and Back/Forward all restore them:
 // - `?collectionId=` — a collection id or `__none__` (cards without one);
 //   absent = all cards. Drives both views, the header and the presets.
-// - `?view=overview` — absent = "Liste" (`list`).
-// - `?card=` — "Liste" only: the rows of one catalog card ("In Liste
-//   bearbeiten" from the Übersicht preview).
+// - `?view=gallery` — "Galerie"; absent = "Liste" (`list`). The former
+//   `view=overview` ("Übersicht", before #135) is still accepted and
+//   rewritten on load.
 // Defaults are never written, so the plain page stays at `/inventory`.
-function setQuery(patch: LocationQueryRaw, { push = false } = {}) {
-  const query = { ...route.query, ...patch }
-  return push ? router.push({ query }) : router.replace({ query })
+// (The former `?card=` list filter is gone with #135: the detail panel
+// edits a card's rows. A leftover one is dropped on load.)
+// Patches build on the one still being navigated to, so two in a row (e.g.
+// on load: a stale collection and the old view value) don't undo each other.
+let pendingQuery: LocationQueryRaw | null = null
+function setQuery(patch: LocationQueryRaw) {
+  const query = { ...(pendingQuery ?? route.query), ...patch }
+  pendingQuery = query
+  return router.replace({ query }).finally(() => {
+    if (pendingQuery === query) {
+      pendingQuery = null
+    }
+  })
 }
 
 const collectionId = computed({
@@ -98,18 +107,18 @@ const collectionId = computed({
   },
 })
 
-const mode = computed<'list' | 'overview'>({
-  get: () => route.query.view === 'overview' ? 'overview' : 'list',
+const mode = computed<'list' | 'gallery'>({
+  get: () => route.query.view === 'gallery' || route.query.view === 'overview' ? 'gallery' : 'list',
   set: (value) => {
-    // The card filter only exists in "Liste"; leaving it drops the filter.
-    setQuery(value === 'overview' ? { view: 'overview', card: undefined } : { view: undefined })
+    setQuery({ view: value === 'gallery' ? 'gallery' : undefined })
   },
 })
 
-const cardFilter = computed(() => {
-  const raw = route.query.card
-  const id = typeof raw === 'string' ? Number(raw) : Number.NaN
-  return Number.isInteger(id) && id > 0 ? id : undefined
+// Old links: `view=overview` → `view=gallery`, and no `card` any more.
+onMounted(() => {
+  if (route.query.view === 'overview' || route.query.card !== undefined) {
+    setQuery({ view: route.query.view === 'overview' ? 'gallery' : route.query.view ?? undefined, card: undefined })
+  }
 })
 
 const filters = ref<SearchFilters>({
@@ -141,7 +150,6 @@ const listQuery = computed(() => ({
   page: page.value,
   pageSize,
   collectionId: collectionId.value || undefined,
-  catalogCardId: cardFilter.value,
 }))
 
 const { data, pending, refresh } = await useFetch<{ items: InventoryItem[], total: number }>('/api/inventory', {
@@ -204,28 +212,17 @@ async function onCollectionDeleted() {
   await Promise.all([refresh(), refreshCollections(), refreshSearch()])
 }
 
-const noAssignmentValue = '__no_collection__'
-const assignItems = computed(() => [
-  { label: t('inventory.noCollectionOption'), value: noAssignmentValue },
-  ...collectionOptions.value.map(c => ({ label: c.name, value: c.id })),
-])
-
-async function assignToCollection(item: InventoryItem, value: string) {
-  errorMessage.value = ''
-  try {
-    await $fetch(`/api/inventory/${item.id}`, {
-      method: 'PATCH',
-      body: { collectionId: value === noAssignmentValue ? null : value },
-    })
-    await Promise.all([refresh(), refreshCollections(), refreshSearch()])
+// A "Liste" row's collection as text; hidden when the page is scoped to one
+// collection (or to none) anyway.
+function rowCollectionLabel(item: InventoryItem): string {
+  if (!item.collectionId) {
+    return t('inventory.breakdown.noCollection')
   }
-  catch (error) {
-    errorMessage.value = apiError(error, 'inventory.errors.assignFailed')
-  }
+  return collectionOptions.value.find(c => c.id === item.collectionId)?.name ?? t('inventory.breakdown.unnamedCollection')
 }
 
 // Any filter or scope change resets both views back to page 1.
-watch([debouncedQ, collectionId, cardFilter], () => {
+watch([debouncedQ, collectionId], () => {
   page.value = 1
   filters.value.page = 1
 })
@@ -244,7 +241,7 @@ watch(
   { deep: true },
 )
 
-// Whether any of the panel's facets is set — they only affect "Übersicht".
+// Whether any of the panel's facets is set — they only affect "Galerie".
 const hasActiveFacets = computed(() => Boolean(
   filters.value.type.length
   || filters.value.attribute.length
@@ -255,28 +252,21 @@ const hasActiveFacets = computed(() => Boolean(
 // Search text or facets (not the collection, which is the page's scope).
 const hasActiveSearchFilters = computed(() => Boolean(filters.value.q) || hasActiveFacets.value)
 
-// Same, but including the collection scope — used for the Übersicht empty
+// Same, but including the collection scope — used for the Galerie empty
 // state ("leer" vs. "keine Treffer").
 const hasAnyFilter = computed(() => hasActiveSearchFilters.value || Boolean(collectionId.value))
 
 // The moment the user actually starts searching/filtering, default to the
-// aggregated "Übersicht" view (the toggle still lets them switch back) —
-// except while "Liste" shows one card's rows ("In Liste bearbeiten"), where
-// typing a search replaces the card filter instead (below). Selecting a
-// collection never switches the view.
+// aggregated "Galerie" view (the toggle still lets them switch back).
+// Selecting a collection never switches the view.
 watch(hasActiveSearchFilters, (active, wasActive) => {
-  if (active && !wasActive && !cardFilter.value && mode.value === 'list') {
-    mode.value = 'overview'
-  }
-})
-watch(debouncedQ, (value) => {
-  if (value && cardFilter.value) {
-    setQuery({ card: undefined })
+  if (active && !wasActive && mode.value === 'list') {
+    mode.value = 'gallery'
   }
 })
 
 const searchPageSize = 24
-// Note: in "Übersicht" a collection keeps every card with at least one copy
+// Note: in "Galerie" a collection keeps every card with at least one copy
 // in it, and the totals/breakdown still span all collections — "Liste"
 // filters row by row (see server/utils/inventory-search.ts vs. inventory.ts).
 const searchQuery = computed(() => ({
@@ -320,89 +310,56 @@ const facets = computed<SearchFacets>(() => ({
 
 function openAdd(card: CatalogCard) {
   selectedCard.value = card
-  editingItem.value = null
   isPickerOpen.value = false
   isEntryOpen.value = true
 }
 
-function openEdit(item: InventoryItem) {
-  selectedCard.value = {
-    id: item.catalogCardId,
-    name: item.cardName,
-    nameDe: item.cardNameDe ?? null,
-    type: item.cardType,
-    imageUrlSmall: item.imageUrlSmall,
-  }
-  editingItem.value = item
-  isEntryOpen.value = true
+async function refreshAll() {
+  await Promise.all([refresh(), refreshCollections(), refreshSearch(), refreshFacets()])
 }
 
-const { confirm } = useConfirm()
-
-async function removeItem(item: InventoryItem) {
-  errorMessage.value = ''
-  const confirmed = await confirm({
-    title: t('inventory.confirm.remove.title'),
-    description: t('inventory.confirm.remove.description', { name: listItemName(item) }),
-  })
-  if (!confirmed) {
-    return
-  }
-
-  try {
-    await $fetch(`/api/inventory/${item.id}`, { method: 'DELETE' })
-    await Promise.all([refresh(), refreshCollections(), refreshSearch(), refreshFacets()])
-  }
-  catch (error) {
-    errorMessage.value = apiError(error, 'inventory.errors.removeFailed')
-  }
+// After each write in the detail panel: one refresh of everything behind it
+// once a burst of edits ("+ + +") has settled.
+let refreshTimer: ReturnType<typeof setTimeout> | undefined
+function scheduleRefresh() {
+  clearTimeout(refreshTimer)
+  refreshTimer = setTimeout(() => {
+    refreshTimer = undefined
+    refreshAll()
+  }, 150)
 }
-
-// "Übersicht": clicking a tile's artwork opens the card detail overlay (#88).
-const previewItem = ref<SearchResultItem | null>(null)
-const isPreviewOpen = ref(false)
-
-function openPreview(item: SearchResultItem) {
-  previewItem.value = item
-  isPreviewOpen.value = true
-}
-
-// Name for the "Nur: …" chip, remembered from the preview so it shows before
-// the filtered list has loaded.
-const cardFilterSource = ref<{ id: number, name: string, nameDe?: string | null } | null>(null)
-const cardFilterName = computed(() => {
-  if (cardFilterSource.value && cardFilterSource.value.id === cardFilter.value) {
-    return cardName(cardFilterSource.value)
-  }
-  const first = items.value[0]
-  return first ? listItemName(first) : t('inventory.cardFilter.fallbackName')
+onBeforeUnmount(() => {
+  clearTimeout(refreshTimer)
+  clearTimeout(qTimeout)
 })
 
-// "In Liste bearbeiten": show this card's individual rows in "Liste".
-// Filters by catalog id rather than by name, so "Dark Magician" doesn't also
-// match "Dark Magician Girl". The collection scope is dropped because the
-// preview's breakdown spans every collection. A push (not a replace), so
-// Back returns to the Übersicht.
-async function editInList(item: SearchResultItem) {
-  isPreviewOpen.value = false
-  // Clear the search text right away (no debounce) — the list must not be
-  // narrowed by a leftover name search, and a later non-empty search would
-  // drop the card filter again.
-  if (qTimeout) {
-    clearTimeout(qTimeout)
+// The card detail panel (#88, #135): the same overlay with the same editor
+// from a "Galerie" tile and from a "Liste" row. It always shows all the
+// card's rows; from a row, that row is highlighted.
+const detail = ref<{ cardId: number, preview: CardDetailPreview, focusRowId: string | null } | null>(null)
+const isDetailOpen = ref(false)
+
+function openFromGallery(item: SearchResultItem) {
+  detail.value = { cardId: item.catalogCardId, preview: item, focusRowId: null }
+  isDetailOpen.value = true
+}
+
+function openFromList(item: InventoryItem) {
+  detail.value = {
+    cardId: item.catalogCardId,
+    preview: {
+      name: item.cardName,
+      nameDe: item.cardNameDe,
+      type: item.cardType,
+      attribute: item.cardAttribute,
+      level: null,
+      atk: null,
+      def: null,
+      imageSmall: item.imageUrlSmall,
+    },
+    focusRowId: item.id,
   }
-  filters.value.q = ''
-  debouncedQ.value = ''
-  cardFilterSource.value = { id: item.catalogCardId, name: item.name, nameDe: item.nameDe }
-  await setQuery({ view: undefined, collectionId: undefined, card: String(item.catalogCardId) }, { push: true })
-}
-
-function clearCardFilter() {
-  setQuery({ card: undefined })
-}
-
-async function onSaved() {
-  await Promise.all([refresh(), refreshCollections(), refreshSearch(), refreshFacets()])
+  isDetailOpen.value = true
 }
 </script>
 
@@ -459,11 +416,11 @@ async function onSaved() {
             @click="() => { mode = 'list' }"
           />
           <UButton
-            :label="t('inventory.view.overview')"
-            :color="mode === 'overview' ? 'primary' : 'neutral'"
-            :variant="mode === 'overview' ? 'subtle' : 'outline'"
-            :aria-pressed="mode === 'overview'"
-            @click="() => { mode = 'overview' }"
+            :label="t('inventory.view.gallery')"
+            :color="mode === 'gallery' ? 'primary' : 'neutral'"
+            :variant="mode === 'gallery' ? 'subtle' : 'outline'"
+            :aria-pressed="mode === 'gallery'"
+            @click="() => { mode = 'gallery' }"
           />
         </UFieldGroup>
       </div>
@@ -483,13 +440,6 @@ async function onSaved() {
       </div>
     </div>
 
-    <p
-      v-if="errorMessage"
-      class="text-sm text-error"
-    >
-      {{ errorMessage }}
-    </p>
-
     <!-- Filterleiste ist modusunabhängig sichtbar (UX review #16) — vorher
          verschwand sie kommentarlos beim Wechsel auf "Liste". -->
     <InventorySearchPanel
@@ -500,20 +450,23 @@ async function onSaved() {
       v-if="mode === 'list' && hasActiveFacets"
       class="text-xs text-muted"
     >
-      {{ t('inventory.search.facetsOverviewOnly') }}
+      {{ t('inventory.search.facetsGalleryOnly') }}
     </p>
 
-    <!-- Übersicht: aggregated, faceted inventory-wide search -->
+    <!-- Galerie: aggregated, faceted inventory-wide search -->
     <div
-      v-if="mode === 'overview'"
+      v-if="mode === 'gallery'"
       class="space-y-4"
     >
       <p class="text-sm text-muted">
         {{ count('inventory.cardCount', searchTotal) }}
       </p>
 
+      <!-- Skeletons only before there is anything to show: a refresh after
+           an edit in the detail panel keeps the tiles (and so the tile the
+           panel returns focus to). -->
       <div
-        v-if="searchPending"
+        v-if="searchPending && searchItems.length === 0"
         class="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 xl:grid-cols-4"
       >
         <USkeleton
@@ -531,8 +484,8 @@ async function onSaved() {
           v-if="searchError"
           color="error"
           variant="subtle"
-          :title="t('inventory.overview.loadFailed')"
-          :description="t('inventory.overview.tryAgain')"
+          :title="t('inventory.gallery.loadFailed')"
+          :description="t('inventory.gallery.tryAgain')"
           class="m-4"
         >
           <template #actions>
@@ -549,7 +502,7 @@ async function onSaved() {
         <LayoutEmptyState
           v-else-if="!hasAnyFilter"
           icon="i-lucide-archive"
-          :title="t('inventory.overview.empty')"
+          :title="t('inventory.gallery.empty')"
           :description="t('inventory.emptyDescription')"
           :bordered="false"
         >
@@ -565,8 +518,8 @@ async function onSaved() {
         <LayoutEmptyState
           v-else
           icon="i-lucide-search-x"
-          :title="t('inventory.overview.noMatches')"
-          :description="t('inventory.overview.noMatchesDescription')"
+          :title="t('inventory.gallery.noMatches')"
+          :description="t('inventory.gallery.noMatchesDescription')"
           :bordered="false"
         />
       </div>
@@ -574,12 +527,13 @@ async function onSaved() {
       <div
         v-else
         class="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 xl:grid-cols-4"
+        :aria-busy="searchPending || undefined"
       >
         <InventoryCardTile
           v-for="result in searchItems"
           :key="result.catalogCardId"
           :item="result"
-          @preview="openPreview(result)"
+          @open="openFromGallery(result)"
         />
       </div>
 
@@ -596,37 +550,15 @@ async function onSaved() {
       </div>
     </div>
 
-    <!-- Liste: the existing raw per-row inventory list -->
+    <!-- Liste: one row per card and collection, for reading; a row opens
+         the card's detail panel. -->
     <div
       v-else
       class="space-y-4"
     >
-      <div
-        v-if="cardFilter"
-        class="flex items-center gap-1"
-      >
-        <UBadge
-          color="neutral"
-          variant="subtle"
-          size="lg"
-          icon="i-lucide-filter"
-          :label="t('inventory.cardFilter.label', { name: cardFilterName })"
-          class="max-w-full truncate"
-        />
-        <UButton
-          icon="i-lucide-x"
-          color="neutral"
-          variant="ghost"
-          size="xs"
-          class="tap-target"
-          :aria-label="t('inventory.cardFilter.clear')"
-          @click="clearCardFilter"
-        />
-      </div>
-
       <div class="panel overflow-hidden">
         <ul
-          v-if="pending"
+          v-if="pending && items.length === 0"
           class="divide-y divide-default"
           aria-busy="true"
           :aria-label="t('inventory.list.loading')"
@@ -645,7 +577,7 @@ async function onSaved() {
         </ul>
 
         <LayoutEmptyState
-          v-else-if="items.length === 0 && (cardFilter || debouncedQ)"
+          v-else-if="items.length === 0 && debouncedQ"
           icon="i-lucide-search-x"
           :title="t('inventory.list.noMatches')"
           :description="t('inventory.list.noMatchesDescription')"
@@ -679,16 +611,15 @@ async function onSaved() {
         <ul
           v-else
           class="divide-y divide-default"
+          :aria-busy="pending || undefined"
         >
           <InventoryListRow
             v-for="item in items"
             :key="item.id"
             :item="item"
-            :assign-items="assignItems"
-            :no-assignment-value="noAssignmentValue"
-            @assign="(value: string) => assignToCollection(item, value)"
-            @edit="openEdit(item)"
-            @remove="removeItem(item)"
+            :collection-label="rowCollectionLabel(item)"
+            :show-collection="!collectionId"
+            @open="openFromList(item)"
           />
         </ul>
       </div>
@@ -720,41 +651,30 @@ async function onSaved() {
       :card="selectedCard"
       :collections="collectionOptions"
       :preset-collection-id="activeCollection?.id ?? null"
-      :initial-values="editingItem && {
-        id: editingItem.id,
-        catalogCardId: editingItem.catalogCardId,
-        collectionId: editingItem.collectionId,
-        quantity: editingItem.quantity,
-        note: editingItem.note,
-      }"
-      @saved="onSaved"
+      @saved="refreshAll"
     />
 
     <CardDetailModal
-      v-model:open="isPreviewOpen"
-      :card-id="previewItem?.catalogCardId ?? null"
-      :preview="previewItem"
+      v-model:open="isDetailOpen"
+      :card-id="detail?.cardId ?? null"
+      :preview="detail?.preview ?? null"
       variant="inventory"
     >
       <template #context>
-        <InventoryOwnedCardSummary
-          v-if="previewItem"
-          :item="previewItem"
+        <InventoryOwnedCardEditor
+          v-if="detail"
+          :key="detail.cardId"
+          :catalog-card-id="detail.cardId"
+          :card-label="cardName(detail.preview)"
+          :collections="collectionOptions"
+          :focus-row-id="detail.focusRowId"
+          :after-write="scheduleRefresh"
         />
       </template>
       <template #actions>
         <UButton
-          v-if="previewItem"
-          icon="i-lucide-list"
-          :label="t('inventory.preview.editInList')"
-          color="neutral"
-          variant="outline"
-          class="tap-target"
-          @click="editInList(previewItem)"
-        />
-        <UButton
-          v-if="previewItem"
-          :to="`/catalog?card=${previewItem.catalogCardId}`"
+          v-if="detail"
+          :to="`/catalog?card=${detail.cardId}`"
           icon="i-lucide-book-open"
           :label="t('inventory.preview.openInCatalog')"
           color="neutral"

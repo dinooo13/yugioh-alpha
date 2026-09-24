@@ -6,6 +6,8 @@ Accepted
 
 The `/decks/assistent` target is plain `/assistant` since [ADR 0021](0021-no-deck-link-in-assistant-conversations.md).
 
+The inventory's `view=overview` is `view=gallery` since #135; the page still accepts `overview`, and `/inventar?view=uebersicht` redirects to `gallery`.
+
 ## Context
 
 Every page URL used German slugs (`/inventar`, `/katalog`, `/spieler/:handle`,

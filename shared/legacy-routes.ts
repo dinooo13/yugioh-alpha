@@ -25,9 +25,13 @@ const PLAYER_SECTIONS: Readonly<Record<string, string>> = {
   inventar: 'inventory',
   sammlungen: 'collections',
 }
-/** `?view=` values of the inventory page. */
+/**
+ * `?view=` values of the inventory page. "Übersicht" is "Galerie" since
+ * #135 (`view=gallery`); the target skips the intermediate `overview`, so the
+ * redirect stays one hop (the page still accepts `overview`).
+ */
 const INVENTORY_VIEWS: Readonly<Record<string, string>> = {
-  uebersicht: 'overview',
+  uebersicht: 'gallery',
   liste: 'list',
 }
 

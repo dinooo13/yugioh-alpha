@@ -187,8 +187,9 @@ describe('inventory collection scope from the URL', () => {
   it('drops an unknown ?collectionId= once the collections are loaded', async () => {
     await mountSuspended(InventoryPage, { route: '/inventory?collectionId=gone&view=overview' })
 
+    // The former `view=overview` is rewritten to `gallery` too (#135).
     await vi.waitFor(() => {
-      expect(currentQuery()).toEqual({ view: 'overview' })
+      expect(currentQuery()).toEqual({ view: 'gallery' })
     })
   })
 })

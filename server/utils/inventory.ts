@@ -3,17 +3,17 @@ import { and, desc, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm'
 import { createError } from 'h3'
 import type { useDb } from '../db'
 import { catalogCard, catalogCardImage, ownedCard } from '../db/schema'
-import { UNASSIGNED_COLLECTION_ID } from '../../shared/inventory'
+import { CARD_TEXT_EXCERPT_LENGTH, MAX_OWNED_QUANTITY, UNASSIGNED_COLLECTION_ID } from '../../shared/inventory'
 import type { AppLocale } from '../../shared/locale'
 import { activeCatalogCard, cardNameMatches, escapedLike, escapeLikeTerm } from './card-name-search'
-import { cardNameDeSql, cardSortKey } from './card-translation-sql'
+import { cardDescDeSql, cardNameDeSql, cardSortKey } from './card-translation-sql'
 import { assertCollectionOwnedByUser } from './collections'
 
 type Db = ReturnType<typeof useDb>
 
-// Upper bound for a single owned-card stack. Guards against a typo (or a
-// misparsed entry line) turning into a five-digit quantity.
-export const MAX_QUANTITY = 999
+// Upper bound for a single owned-card stack (`MAX_OWNED_QUANTITY`, shared
+// with the UI's quantity steppers).
+export const MAX_QUANTITY = MAX_OWNED_QUANTITY
 
 /**
  * One owned-card stack (ADR 0017): a catalog card in a collection (or none),
@@ -32,7 +32,8 @@ export interface InventoryListOptions {
   pageSize?: number
   // A collection id owned by the caller, or `UNASSIGNED_COLLECTION_ID`.
   collectionId?: string
-  // Only rows of this catalog card ("In Liste bearbeiten" from the Übersicht).
+  // Only the rows of this catalog card, for the inventory's detail panel
+  // (`InventoryOwnedCardEditor`).
   catalogCardId?: number
 }
 
@@ -360,6 +361,21 @@ export async function addOwnedCardsBulk(
   return db.transaction(tx => addOwnedCardsBulkSync(tx as unknown as Db, userId, inputs))
 }
 
+/**
+ * The distinct, trimmed, non-blank notes in order, one per line; `null` when
+ * none is left. Used when an edit moves a row into another row's tuple.
+ */
+export function joinNotes(...notes: Array<string | null | undefined>): string | null {
+  const distinct: string[] = []
+  for (const note of notes) {
+    const trimmed = note?.trim()
+    if (trimmed && !distinct.includes(trimmed)) {
+      distinct.push(trimmed)
+    }
+  }
+  return distinct.length > 0 ? distinct.join('\n') : null
+}
+
 export async function updateOwnedCard(
   db: Db,
   userId: string,
@@ -400,7 +416,9 @@ export async function updateOwnedCard(
       .update(ownedCard)
       .set({
         quantity: colliding.quantity + input.quantity,
-        note: input.note ?? colliding.note,
+        // Both notes survive, the target's first (like migration 0014's
+        // merge, ADR 0017 §3); the moved row's note used to overwrite it.
+        note: joinNotes(colliding.note, input.note),
         updatedAt: now,
       })
       .where(eq(ownedCard.id, colliding.id))
@@ -439,9 +457,9 @@ export async function deleteOwnedCard(db: Db, userId: string, id: string) {
 }
 
 /**
- * Parses `GET /api/inventory`'s query string. `catalogCardId` is ignored
- * unless it is a positive integer (a stale or hand-edited `?card=` must not
- * turn into a 400).
+ * Parses `GET /api/inventory`'s query string. `catalogCardId` (the rows of
+ * one card, for the inventory's detail panel) is ignored unless it is a
+ * positive integer, so a malformed value never turns into a 400.
  */
 export function parseInventoryListQuery(query: Record<string, unknown>): InventoryListOptions {
   const catalogCardId = typeof query.catalogCardId === 'string' ? Number(query.catalogCardId) : Number.NaN
@@ -488,6 +506,11 @@ export function listOwnedCards(db: Db, userId: string, options: InventoryListOpt
       cardName: catalogCard.name,
       cardNameDe: cardNameDeSql(),
       cardType: catalogCard.type,
+      cardAttribute: catalogCard.attribute,
+      // The start of the card text for the "Liste" row, in both languages
+      // (ADR 0015; the client picks one). `substr` counts characters.
+      cardTextExcerpt: sql<string>`substr(${catalogCard.desc}, 1, ${CARD_TEXT_EXCERPT_LENGTH})`,
+      cardTextExcerptDe: sql<string | null>`substr(${cardDescDeSql()}, 1, ${CARD_TEXT_EXCERPT_LENGTH})`,
       cardRetiredAt: catalogCard.retiredAt,
       imageUrlSmall: sql<string | null>`min(${catalogCardImage.imageUrlSmall})`,
     })

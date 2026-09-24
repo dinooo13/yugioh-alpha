@@ -225,6 +225,10 @@ describe('owner and shared views with German names', () => {
     const owned = listOwnedCards(db, 'user-a')
     expect(owned.items.find(item => item.catalogCardId === ID.darkMagician)?.cardNameDe).toBe('Dunkler Magier')
     expect(owned.items.find(item => item.catalogCardId === ID.raigeki)?.cardNameDe).toBeNull()
+    // The "Liste" row's card text excerpt in both languages (#135).
+    expect(owned.items.find(item => item.catalogCardId === ID.darkMagician)?.cardTextExcerptDe).toContain('Hexer')
+    expect(owned.items.find(item => item.catalogCardId === ID.darkMagician)?.cardTextExcerpt).toContain('ultimate wizard')
+    expect(owned.items.find(item => item.catalogCardId === ID.raigeki)?.cardTextExcerptDe).toBeNull()
 
     expect(listWishlist(db, 'user-a', { cardLocale: 'de' }).items.map(item => item.nameDe ?? item.name))
       .toEqual(['Dunkler Magier', 'Raigeki', 'Wiedergeburt'])

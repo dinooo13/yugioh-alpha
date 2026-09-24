@@ -101,7 +101,7 @@ test.describe('responsive layout at 390px', () => {
   // UX feedback: the "Liste" table collapsed its name column to 0px at 390px
   // and both views cropped the card art. Measures CSS boxes only — images are
   // hotlinked, so their natural size isn't reliable in CI.
-  test('inventory Liste und Übersicht sind bei 390px nutzbar', async ({ page }) => {
+  test('inventory Liste und Galerie sind bei 390px nutzbar', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 })
     await registerAndLogin(page)
 
@@ -113,22 +113,21 @@ test.describe('responsive layout at 390px', () => {
     await page.goto('/inventory')
     await page.waitForLoadState('networkidle')
 
-    // Liste (default view)
-    const name = page.getByText(CARD.darkMagician, { exact: true }).first()
+    // Liste (default view): the name is the row's button (#135).
+    const name = page.getByRole('button', { name: CARD.darkMagician, exact: true })
     await expect(name).toBeVisible()
     const nameBox = await name.boundingBox()
     expect(nameBox!.width).toBeGreaterThanOrEqual(100)
 
-    await expect(page.getByRole('combobox', { name: `Sammlung für ${CARD.darkMagician}` })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Karte bearbeiten' })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Karte entfernen' })).toBeVisible()
+    await expect(page.getByTestId('card-text-excerpt')).toBeVisible()
+    await expect(page.locator('main li').getByText('(keine Sammlung)')).toBeVisible()
 
     const thumbnailBox = await page.getByRole('img', { name: CARD.darkMagician }).first().boundingBox()
     expect(thumbnailBox).not.toBeNull()
     expect(thumbnailBox!.width / thumbnailBox!.height).toBeGreaterThan(0.686 - 0.03)
     expect(thumbnailBox!.width / thumbnailBox!.height).toBeLessThan(0.686 + 0.03)
 
-    const listOverflow = await page.locator(`ul:has([aria-label="Sammlung für ${CARD.darkMagician}"])`).evaluate(el => ({
+    const listOverflow = await page.locator(`ul:has(button:text-is("${CARD.darkMagician}"))`).evaluate(el => ({
       scrollWidth: el.scrollWidth,
       clientWidth: el.clientWidth,
     }))
@@ -140,17 +139,34 @@ test.describe('responsive layout at 390px', () => {
     }))
     expect(documentOverflow.scrollWidth).toBeLessThanOrEqual(documentOverflow.clientWidth)
 
-    // Übersicht
-    await page.getByRole('button', { name: 'Übersicht' }).click()
-    const tile = page.getByRole('button', { name: `${CARD.darkMagician} vergrößern` })
+    // Galerie
+    await page.getByRole('button', { name: 'Galerie' }).click()
+    const tile = page.locator('article').filter({ has: page.getByRole('button', { name: CARD.darkMagician, exact: true }) })
     await expect(tile).toBeVisible()
     const tileBox = await tile.boundingBox()
     expect(tileBox!.width).toBeGreaterThanOrEqual(150)
     await expect(page.getByText('×3 ges.')).toBeVisible()
 
-    await tile.click()
-    const preview = page.getByRole('dialog')
-    await expect(preview.getByRole('link', { name: 'Im Katalog öffnen' })).toBeVisible()
+    // The detail panel: no horizontal scroll, touch-sized controls.
+    await tile.getByRole('button', { name: CARD.darkMagician, exact: true }).click()
+    const panel = page.getByRole('dialog')
+    await expect(panel.getByRole('link', { name: 'Im Katalog öffnen' })).toBeVisible()
+    await expect(panel.getByRole('spinbutton', { name: 'Anzahl in (keine Sammlung)' })).toHaveValue('3')
+    await page.evaluate(() => Promise.all(document.getAnimations().map(animation => animation.finished)))
+    for (const control of [
+      panel.getByRole('button', { name: 'Eine Kopie weniger in (keine Sammlung)' }),
+      panel.getByRole('button', { name: 'Eine Kopie mehr in (keine Sammlung)' }),
+      panel.getByRole('button', { name: 'Aus (keine Sammlung) entfernen' }),
+    ]) {
+      const box = await control.boundingBox()
+      expect(box!.width).toBeGreaterThanOrEqual(44)
+      expect(box!.height).toBeGreaterThanOrEqual(44)
+    }
+    const panelOverflow = await panel.evaluate((el) => {
+      const scroller = el.querySelector('[data-slot="body"]') ?? el
+      return { scrollWidth: scroller.scrollWidth, clientWidth: scroller.clientWidth }
+    })
+    expect(panelOverflow.scrollWidth).toBeLessThanOrEqual(panelOverflow.clientWidth)
   })
 
   test('hamburger opens a drawer with navigation and the user block', async ({ page }) => {
