@@ -7,19 +7,13 @@ import type { InventorySearchResultItem } from '~/utils/inventory-search-result'
 interface InventoryItem {
   id: string
   catalogCardId: number
-  printingId: string | null
   collectionId: string | null
   quantity: number
-  language: string
-  condition: string
-  edition: string
   note: string | null
   cardName: string
   cardNameDe?: string | null
   cardType: string
   imageUrlSmall: string | null
-  setName: string | null
-  rarity: string | null
 }
 
 interface CatalogCard {
@@ -28,12 +22,6 @@ interface CatalogCard {
   nameDe?: string | null
   type: string
   imageUrlSmall?: string | null
-  printings?: Array<{
-    id: string
-    cardId: number
-    setName: string
-    rarity: string | null
-  }>
 }
 
 interface SearchFilters extends InventorySearchFilters {
@@ -56,10 +44,6 @@ interface SearchFacets {
   attributes: string[]
   races: string[]
   levels: number[]
-  sets: Array<{ id: string, name: string }>
-  languages: string[]
-  conditions: string[]
-  editions: string[]
 }
 
 function emptyFacets(): SearchFacets {
@@ -68,10 +52,6 @@ function emptyFacets(): SearchFacets {
     attributes: [],
     races: [],
     levels: [],
-    sets: [],
-    languages: [],
-    conditions: [],
-    editions: [],
   }
 }
 
@@ -138,10 +118,6 @@ const filters = ref<SearchFilters>({
   attribute: [],
   race: [],
   level: [],
-  setId: '',
-  language: [],
-  condition: [],
-  edition: [],
   sort: 'name',
   page: 1,
 })
@@ -259,10 +235,6 @@ watch(
     filters.value.attribute,
     filters.value.race,
     filters.value.level,
-    filters.value.setId,
-    filters.value.language,
-    filters.value.condition,
-    filters.value.edition,
     filters.value.sort,
   ],
   () => {
@@ -276,11 +248,7 @@ const hasActiveFacets = computed(() => Boolean(
   filters.value.type.length
   || filters.value.attribute.length
   || filters.value.race.length
-  || filters.value.level.length
-  || filters.value.setId
-  || filters.value.language.length
-  || filters.value.condition.length
-  || filters.value.edition.length,
+  || filters.value.level.length,
 ))
 
 // Search text or facets (not the collection, which is the page's scope).
@@ -317,10 +285,6 @@ const searchQuery = computed(() => ({
   attribute: filters.value.attribute.length ? filters.value.attribute.join(',') : undefined,
   race: filters.value.race.length ? filters.value.race.join(',') : undefined,
   level: filters.value.level.length ? filters.value.level.join(',') : undefined,
-  setId: filters.value.setId || undefined,
-  language: filters.value.language.length ? filters.value.language.join(',') : undefined,
-  condition: filters.value.condition.length ? filters.value.condition.join(',') : undefined,
-  edition: filters.value.edition.length ? filters.value.edition.join(',') : undefined,
   collectionId: collectionId.value || undefined,
   sort: filters.value.sort,
   page: filters.value.page,
@@ -351,10 +315,6 @@ const facets = computed<SearchFacets>(() => ({
   attributes: facetsData.value?.attributes ?? [],
   races: facetsData.value?.races ?? [],
   levels: facetsData.value?.levels ?? [],
-  sets: facetsData.value?.sets ?? [],
-  languages: facetsData.value?.languages ?? [],
-  conditions: facetsData.value?.conditions ?? [],
-  editions: facetsData.value?.editions ?? [],
 }))
 
 function openAdd(card: CatalogCard) {
@@ -371,9 +331,6 @@ function openEdit(item: InventoryItem) {
     nameDe: item.cardNameDe ?? null,
     type: item.cardType,
     imageUrlSmall: item.imageUrlSmall,
-    printings: item.printingId
-      ? [{ id: item.printingId, cardId: item.catalogCardId, setName: item.setName ?? '', rarity: item.rarity }]
-      : [],
   }
   editingItem.value = item
   isEntryOpen.value = true
@@ -765,12 +722,8 @@ async function onSaved() {
       :initial-values="editingItem && {
         id: editingItem.id,
         catalogCardId: editingItem.catalogCardId,
-        printingId: editingItem.printingId,
         collectionId: editingItem.collectionId,
         quantity: editingItem.quantity,
-        language: editingItem.language,
-        condition: editingItem.condition,
-        edition: editingItem.edition,
         note: editingItem.note,
       }"
       @saved="onSaved"

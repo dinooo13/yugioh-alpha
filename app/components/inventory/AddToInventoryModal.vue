@@ -1,28 +1,16 @@
 <script setup lang="ts">
-
-interface PrintingOption {
-  id: string
-  setName: string
-  rarity: string | null
-}
-
 interface CatalogCardOption {
   id: number
   name: string
   nameDe?: string | null
   type: string
-  printings?: PrintingOption[]
 }
 
 interface OwnedCardInitialValues {
   id?: string
   catalogCardId: number
-  printingId: string | null
   collectionId: string | null
   quantity: number
-  language: string
-  condition: string
-  edition: string
   note: string | null
 }
 
@@ -47,17 +35,11 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const { cardName, cardValue } = useCardText()
 const apiError = useApiError()
-const { languageItems, conditionItems, editionItems } = useCardOptionItems()
 
-const noPrintingValue = '__no_printing__'
 const noCollectionValue = '__no_collection__'
 
 const form = reactive({
   quantity: 1,
-  language: 'en',
-  condition: 'near_mint',
-  edition: 'unlimited',
-  printingId: noPrintingValue,
   collectionId: noCollectionValue,
   note: '',
 })
@@ -67,13 +49,6 @@ const errorMessage = ref('')
 
 const isEditing = computed(() => Boolean(props.initialValues?.id))
 const title = computed(() => isEditing.value ? t('inventory.addModal.editTitle') : t('inventory.addModal.addTitle'))
-const printingItems = computed(() => [
-  { label: t('inventory.addModal.noPrinting'), value: noPrintingValue },
-  ...(props.card?.printings ?? []).map(printing => ({
-    label: `${printing.id}${printing.setName ? ` · ${printing.setName}` : ''}${printing.rarity ? ` · ${printing.rarity}` : ''}`,
-    value: printing.id,
-  })),
-])
 const collectionItems = computed(() => [
   { label: t('inventory.noCollectionOption'), value: noCollectionValue },
   ...(props.collections ?? []).map(collection => ({
@@ -95,10 +70,6 @@ watch(
     }
 
     form.quantity = props.initialValues?.quantity ?? 1
-    form.language = props.initialValues?.language ?? 'en'
-    form.condition = props.initialValues?.condition ?? 'near_mint'
-    form.edition = props.initialValues?.edition ?? 'unlimited'
-    form.printingId = props.initialValues?.printingId ?? noPrintingValue
     form.collectionId = props.initialValues
       ? (props.initialValues.collectionId ?? noCollectionValue)
       : (props.presetCollectionId ?? noCollectionValue)
@@ -120,12 +91,8 @@ async function save() {
 
   const payload = {
     catalog_card_id: catalogCardId,
-    printing_id: form.printingId === noPrintingValue ? null : form.printingId,
     collection_id: form.collectionId === noCollectionValue ? null : form.collectionId,
     quantity: form.quantity,
-    language: form.language,
-    condition: form.condition,
-    edition: form.edition,
     note: form.note || null,
   }
 
@@ -184,47 +151,13 @@ async function save() {
             />
           </UFormField>
 
-          <UFormField :label="t('card.field.printingLanguage')">
+          <UFormField :label="t('card.field.collection')">
             <USelect
-              v-model="form.language"
-              :items="languageItems"
-            />
-          </UFormField>
-
-          <UFormField :label="t('card.field.condition')">
-            <USelect
-              v-model="form.condition"
-              :items="conditionItems"
-            />
-          </UFormField>
-
-          <UFormField
-            :label="t('card.field.edition')"
-            :help="t('inventory.addModal.editionHelp')"
-          >
-            <USelect
-              v-model="form.edition"
-              :items="editionItems"
+              v-model="form.collectionId"
+              :items="collectionItems"
             />
           </UFormField>
         </div>
-
-        <UFormField
-          :label="t('card.field.printing')"
-          :help="t('inventory.addModal.printingHelp')"
-        >
-          <USelect
-            v-model="form.printingId"
-            :items="printingItems"
-          />
-        </UFormField>
-
-        <UFormField :label="t('card.field.collection')">
-          <USelect
-            v-model="form.collectionId"
-            :items="collectionItems"
-          />
-        </UFormField>
 
         <UFormField :label="t('card.field.note')">
           <UTextarea

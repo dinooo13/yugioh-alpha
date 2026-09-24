@@ -17,7 +17,7 @@
     },
     "queueFull": {
       "title": "Prüfliste ist voll",
-      "description": "Die Prüfliste fasst {max} Zeilen — {dropped} Zeile(n) wurden nicht übernommen. Speichere zuerst die vorhandenen Zeilen."
+      "description": "Die Prüfliste fasst {max} Zeilen — {dropped} Zeile wurde nicht übernommen. Speichere zuerst die vorhandenen Zeilen. | Die Prüfliste fasst {max} Zeilen — {dropped} Zeilen wurden nicht übernommen. Speichere zuerst die vorhandenen Zeilen."
     },
     "errors": {
       "title": "Das hat nicht geklappt",
@@ -31,15 +31,9 @@
         "description": "{created} neu · {merged} zusammengeführt"
       }
     },
-    "field": {
-      "edition": "Edition"
-    },
     "defaults": {
-      "title": "Standardwerte",
-      "description": "Gelten für alle Zeilen, solange eine Zeile nichts anderes vorgibt.",
-      "printingLanguage": "Standard-Drucksprache",
-      "condition": "Standard-Zustand",
-      "edition": "Standard-Edition",
+      "title": "Standard-Sammlung",
+      "description": "Gilt für alle Zeilen, für die du keine eigene Sammlung wählst.",
       "collection": "Standard-Sammlung"
     },
     "summary": {
@@ -76,16 +70,14 @@
     },
     "row": {
       "candidate": "{name} · {matchedBy} {score}%",
-      "noPrinting": "Keine bestimmte Edition",
       "useDefault": "Standard",
       "conflict": "Set-Code und Name zeigen auf verschiedene Karten — bitte auswählen.",
       "quantityFor": "Anzahl für {line}",
-      "adjustValues": "Werte für {line} anpassen",
       "remove": "{line} entfernen",
       "pickCandidate": "Treffer auswählen...",
       "candidateFor": "Treffer für {line}",
+      "collectionFor": "Sammlung für {line}",
       "noSuggestions": "Keine Vorschläge — bitte im Katalog suchen.",
-      "printingFor": "Printing für {line}",
       "catalog": "Katalog"
     }
   }

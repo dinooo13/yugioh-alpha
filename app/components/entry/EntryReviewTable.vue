@@ -30,15 +30,11 @@ const emit = defineEmits<{
 
 const rows = defineModel<EntryRow[]>('rows', { required: true })
 
-const { t } = useI18n()
+const { t, n } = useI18n()
 const apiError = useApiError()
 const apiErrorCode = useApiErrorCode()
-const { languageItems, conditionItems, editionItems } = useCardOptionItems()
 
 const defaults = reactive<EntryDefaults>({
-  language: 'en',
-  condition: 'near_mint',
-  edition: 'unlimited',
   collectionId: NO_COLLECTION_VALUE,
 })
 
@@ -154,36 +150,12 @@ defineExpose({ defaults, summary, canSaveAll })
       <p class="mt-1 text-xs text-muted">
         {{ t('quickEntry.defaults.description') }}
       </p>
-      <div class="mt-3 grid gap-3 sm:grid-cols-4">
-        <UFormField :label="t('card.field.printingLanguage')">
-          <USelect
-            v-model="defaults.language"
-            :items="languageItems"
-            :aria-label="t('quickEntry.defaults.printingLanguage')"
-          />
-        </UFormField>
-        <UFormField :label="t('card.field.condition')">
-          <USelect
-            v-model="defaults.condition"
-            :items="conditionItems"
-            :aria-label="t('quickEntry.defaults.condition')"
-          />
-        </UFormField>
-        <UFormField :label="t('quickEntry.field.edition')">
-          <USelect
-            v-model="defaults.edition"
-            :items="editionItems"
-            :aria-label="t('quickEntry.defaults.edition')"
-          />
-        </UFormField>
-        <UFormField :label="t('card.field.collection')">
-          <USelect
-            v-model="defaults.collectionId"
-            :items="collectionItems"
-            :aria-label="t('quickEntry.defaults.collection')"
-          />
-        </UFormField>
-      </div>
+      <USelect
+        v-model="defaults.collectionId"
+        :items="collectionItems"
+        :aria-label="t('quickEntry.defaults.collection')"
+        class="mt-3 w-full sm:max-w-sm"
+      />
     </div>
 
     <div class="flex flex-col gap-3 panel p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -191,22 +163,22 @@ defineExpose({ defaults, summary, canSaveAll })
         <UBadge
           color="neutral"
           variant="subtle"
-          :label="t('quickEntry.summary.total', { count: summary.total })"
+          :label="t('quickEntry.summary.total', { count: n(summary.total, 'integer') })"
         />
         <UBadge
           color="success"
           variant="subtle"
-          :label="t('quickEntry.summary.sicher', { count: summary.sicher })"
+          :label="t('quickEntry.summary.sicher', { count: n(summary.sicher, 'integer') })"
         />
         <UBadge
           color="warning"
           variant="subtle"
-          :label="t('quickEntry.summary.unsicher', { count: summary.unsicher })"
+          :label="t('quickEntry.summary.unsicher', { count: n(summary.unsicher, 'integer') })"
         />
         <UBadge
           color="error"
           variant="subtle"
-          :label="t('quickEntry.summary.ohne_treffer', { count: summary.ohneTreffer })"
+          :label="t('quickEntry.summary.ohne_treffer', { count: n(summary.ohneTreffer, 'integer') })"
         />
       </div>
 
@@ -268,7 +240,6 @@ defineExpose({ defaults, summary, canSaveAll })
         v-for="row in rows"
         :key="row.id"
         :row="row"
-        :defaults="defaults"
         :collections="collections"
         @update="patch => updateRow(row.id, patch)"
         @remove="removeRow(row.id)"
