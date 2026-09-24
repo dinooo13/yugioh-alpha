@@ -5,9 +5,9 @@ import { getOptionalUser } from '../../../../utils/session'
 import { resolveCardLocale } from '../../../../utils/ui-locale'
 import { requireViewableCollection } from '../../../../utils/sharing'
 import { listSharedCollection, parseSharedCardListQuery } from '../../../../utils/shared-views'
-import type { SharedCardListResponse } from '../../../../../shared/sharing'
+import type { SharedCollectionResponse } from '../../../../../shared/sharing'
 
-export default defineEventHandler(async (event): Promise<SharedCardListResponse> => {
+export default defineEventHandler(async (event): Promise<SharedCollectionResponse> => {
   setHeader(event, 'Cache-Control', 'private, no-store')
   setHeader(event, 'Referrer-Policy', 'no-referrer')
 

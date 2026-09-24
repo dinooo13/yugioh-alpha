@@ -137,15 +137,25 @@ export interface SharedCardListItem {
   quantity: number
 }
 
-export interface SharedCardListResponse {
+interface SharedCardListPage {
   owner: PublicProfileSummary
-  source: { kind: 'inventory' | 'collection', id: string | null, name: string }
   items: SharedCardListItem[]
   total: number
   page: number
   pageSize: number
   isOwner: boolean
 }
+
+/** The owner's whole inventory. The UI titles it (`players.inventory.title`); the server sends no display name. */
+export interface SharedInventoryResponse extends SharedCardListPage {
+  source: { kind: 'inventory' }
+}
+
+export interface SharedCollectionResponse extends SharedCardListPage {
+  source: { kind: 'collection', id: string, name: string }
+}
+
+export type SharedCardListResponse = SharedInventoryResponse | SharedCollectionResponse
 
 export interface WishlistItemView {
   id: string

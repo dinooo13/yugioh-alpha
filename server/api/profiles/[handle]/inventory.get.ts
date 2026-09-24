@@ -5,9 +5,9 @@ import { getOptionalUser } from '../../../utils/session'
 import { resolveCardLocale } from '../../../utils/ui-locale'
 import { requireViewableInventory } from '../../../utils/sharing'
 import { listSharedInventory, parseSharedCardListQuery } from '../../../utils/shared-views'
-import type { SharedCardListResponse } from '../../../../shared/sharing'
+import type { SharedInventoryResponse } from '../../../../shared/sharing'
 
-export default defineEventHandler(async (event): Promise<SharedCardListResponse> => {
+export default defineEventHandler(async (event): Promise<SharedInventoryResponse> => {
   setHeader(event, 'Cache-Control', 'private, no-store')
   setHeader(event, 'Referrer-Policy', 'no-referrer')
 
@@ -36,7 +36,7 @@ export default defineEventHandler(async (event): Promise<SharedCardListResponse>
 
   return {
     owner: toPublicProfile(profile),
-    source: { kind: 'inventory', id: null, name: 'Alle Karten' },
+    source: { kind: 'inventory' },
     items: page.items,
     total: page.total,
     page: page.page,
