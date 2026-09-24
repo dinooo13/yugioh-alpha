@@ -1,7 +1,8 @@
-import { eq } from 'drizzle-orm'
+import { and, eq, inArray, isNotNull } from 'drizzle-orm'
 import { foldCardName } from '../../shared/card-name-fold'
 import type { useDb } from '../db'
 import { catalogCard, catalogCardImage, catalogPrinting, catalogSet, catalogSync } from '../db/schema'
+import { applyCatalogRetirement, type CatalogRetirementResult, type RetireGuard } from './catalog-retire'
 import { fetchAllCards, mapCardToRows, type MappedCard } from './ygoprodeck'
 
 type Db = ReturnType<typeof useDb>
@@ -13,6 +14,8 @@ const CHUNK_SIZE = 500
 export interface CatalogSyncResult {
   runId: number
   cardCount: number
+  /** Cards the response no longer lists, and the references moved (ADR 0019). */
+  retirement: CatalogRetirementResult
 }
 
 export function chunkRows<T>(items: T[], size: number): T[][] {
@@ -33,7 +36,9 @@ function upsertChunk(db: Db, mapped: MappedCard[]) {
       }
     }
 
-    for (const cardRow of mapped.map(m => m.card)) {
+    for (const mappedRow of mapped.map(m => m.card)) {
+      // A listed card is active: this un-retires a card that came back.
+      const cardRow = { ...mappedRow, retiredAt: null, replacedById: null }
       tx.insert(catalogCard)
         .values(cardRow)
         .onConflictDoUpdate({ target: catalogCard.id, set: cardRow })
@@ -63,16 +68,36 @@ function upsertChunk(db: Db, mapped: MappedCard[]) {
   })
 }
 
+/** How many of `ids` are retired right now. */
+function countRetired(db: Db, ids: number[]): number {
+  let count = 0
+  for (const chunk of chunkRows(ids, CHUNK_SIZE)) {
+    count += db
+      .select({ id: catalogCard.id })
+      .from(catalogCard)
+      .where(and(inArray(catalogCard.id, chunk), isNotNull(catalogCard.retiredAt)))
+      .all()
+      .length
+  }
+  return count
+}
+
 /**
  * Runs a full catalog sync: fetches every card from YGOPRODeck and upserts
  * it into the local catalog tables, in chunks, recording a `catalog_sync`
- * run so the outcome is observable. Idempotent — re-running converges to
+ * run so the outcome is observable. Then retires the cards the response no
+ * longer lists and moves references to their replacement
+ * (`applyCatalogRetirement`, ADR 0019). Idempotent — re-running converges to
  * the same rows rather than creating duplicates.
+ *
+ * A throw in the retirement step marks the run as `error`; the card upserts
+ * already committed stay.
  */
 export async function syncCatalog(
   db: Db,
-  deps: { fetchAllCards: typeof fetchAllCards } = { fetchAllCards },
+  options: { fetchAllCards?: typeof fetchAllCards, retireGuard?: RetireGuard } = {},
 ): Promise<CatalogSyncResult> {
+  const fetchCards = options.fetchAllCards ?? fetchAllCards
   const startedAt = new Date()
   const [run] = db
     .insert(catalogSync)
@@ -84,20 +109,29 @@ export async function syncCatalog(
   }
 
   try {
-    const cards = await deps.fetchAllCards()
+    const cards = await fetchCards()
     const syncedAt = new Date()
     const mapped = cards.map(card => mapCardToRows(card, syncedAt))
+    const seenIds = new Set(cards.map(card => card.id))
+    const restored = countRetired(db, [...seenIds])
 
     for (const batch of chunkRows(mapped, CHUNK_SIZE)) {
       upsertChunk(db, batch)
     }
+
+    const retirement = applyCatalogRetirement(db, {
+      seenIds,
+      now: syncedAt,
+      guard: options.retireGuard,
+      restored,
+    })
 
     db.update(catalogSync)
       .set({ status: 'success', cardCount: cards.length, finishedAt: new Date() })
       .where(eq(catalogSync.id, run.id))
       .run()
 
-    return { runId: run.id, cardCount: cards.length }
+    return { runId: run.id, cardCount: cards.length, retirement }
   }
   catch (error) {
     const message = error instanceof Error ? error.message : String(error)
