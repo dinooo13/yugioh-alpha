@@ -370,7 +370,7 @@ Status: F1 is implemented — every page moved to an English path (`/inventory`,
 `301` to their new one. See
 [`docs/adr/0013-english-url-scheme.md`](adr/0013-english-url-scheme.md).
 
-F2 is in progress, as four stacked PRs (F2a, F2b and F2c merged):
+F2 is implemented, as four stacked PRs:
 
 - F2a — foundation: `@nuxtjs/i18n` with per-namespace de/en catalogues, the
   locale resolution (profile → `ui_locale` cookie → Accept-Language → German)
@@ -388,8 +388,15 @@ F2 is in progress, as four stacked PRs (F2a, F2b and F2c merged):
   in English and shown by id through `useFormatLabel()`, copies named in the
   interface language, and tournament errors as `errors.api.<code>` with
   parameters
-- F2d — the assistant, the final lint and copy gates, and Accept-Language
-  detection switched on (until then an English browser still gets German)
+- F2d — the assistant: the prompt, tool descriptions and tool results are
+  English in one version, with a per-turn instruction to reply in the
+  interface language; tool activity (with deck names instead of deck IDs,
+  #53), action cards and assistant errors are rendered on the client from
+  structured events and codes; saved fallback texts are localized when
+  created. Plus the final gates (`no-raw-text` on every Vue file, no
+  `shared/plural` in the UI, a scan for hard-coded German in `app/` and
+  `shared/`) and Accept-Language detection switched on, so an English
+  browser gets the English UI without choosing it
 
 See [`docs/adr/0014-ui-internationalisation.md`](adr/0014-ui-internationalisation.md).
 F3 is open.

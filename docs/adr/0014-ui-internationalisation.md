@@ -4,6 +4,15 @@
 
 Accepted
 
+Implemented: F2 is complete with F2d (the assistant, the final gates and
+Accept-Language detection switched on). The whole UI is translated,
+`no-raw-text` covers `app/**/*.vue`, `~~/shared/plural` is off-limits in
+`app/`, and `tests/nuxt/no-hardcoded-copy.test.ts` scans `app/` and
+`shared/` for German literals. The assistant's model-facing text is English
+with a per-turn reply-language instruction; its tool activity, actions and
+errors reach the UI as structured values (codes, counts, ids — deck names
+resolved for display, #53).
+
 ## Context
 
 Issue #34 makes the app bilingual. F1 moved every page to language-neutral
