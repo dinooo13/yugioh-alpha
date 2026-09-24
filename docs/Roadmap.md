@@ -399,7 +399,21 @@ F2 is implemented, as four stacked PRs:
   browser gets the English UI without choosing it
 
 See [`docs/adr/0014-ui-internationalisation.md`](adr/0014-ui-internationalisation.md).
-F3 is open.
+
+F3 is in progress, as four stacked PRs:
+
+- F3a — the data layer (implemented): official German card names and texts
+  from the ygoresources card-history repo in `catalog_card_translation`,
+  joined through the new `catalog_card.konami_id` from YGOPRODeck; a folded
+  `name_search` on cards and translations; a streamed tarball sync that is
+  skipped when the repo's commit is unchanged (`catalog:sync-translations`,
+  `POST /api/admin/catalog/translations/sync`, and after every
+  `catalog:sync`); German fixture data for tests. No visible change yet
+- F3b — bilingual card search everywhere (open)
+- F3c — the card language setting and German names and texts in the UI (open)
+- F3d — card data labels and the assistant (open)
+
+See [`docs/adr/0015-german-card-data.md`](adr/0015-german-card-data.md).
 
 ## Recommended Build Order
 

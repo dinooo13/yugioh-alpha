@@ -22,3 +22,4 @@ mark the old as superseded.
 | [0012](0012-deck-cover-card.md) | Deck cover card chosen by the user | Accepted |
 | [0013](0013-english-url-scheme.md) | English URL scheme and permanent redirects from German paths | Accepted |
 | [0014](0014-ui-internationalisation.md) | UI internationalisation (German and English) | Accepted |
+| [0015](0015-german-card-data.md) | German card data and card display language | Accepted (implemented: F3a) |
