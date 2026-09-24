@@ -117,6 +117,8 @@ describe('CardThumb', () => {
       expect(body().find(`[role="dialog"] img[src="${LARGE}"]`).exists()).toBe(true)
     })
     expect(body().find('[role="dialog"]').text()).toContain('Dark Magician')
+    // The enlarged card is the floating one, with the foil sheen (ADR 0016).
+    expect(body().find(`[role="dialog"] .foil img[src="${LARGE}"]`).exists()).toBe(true)
   })
 
   it('is not a button when enlargeable but without an image', async () => {
