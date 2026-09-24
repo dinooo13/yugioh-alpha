@@ -370,7 +370,7 @@ Status: F1 is implemented — every page moved to an English path (`/inventory`,
 `301` to their new one. See
 [`docs/adr/0013-english-url-scheme.md`](adr/0013-english-url-scheme.md).
 
-F2 is in progress, as four stacked PRs (F2a and F2b merged):
+F2 is in progress, as four stacked PRs (F2a, F2b and F2c merged):
 
 - F2a — foundation: `@nuxtjs/i18n` with per-namespace de/en catalogues, the
   locale resolution (profile → `ui_locale` cookie → Accept-Language → German)
@@ -381,7 +381,12 @@ F2 is in progress, as four stacked PRs (F2a and F2b merged):
   wishlist, sharing, player pages): owned-copy labels from one
   `useCardOptionItems()`, "Drucksprache / Printing language", locale-formatted
   counts, and error codes (`data.code`) instead of raw server messages
-- F2c — decks, formats and tournaments, with validation messages as code +
+- F2c — decks, formats and tournaments (and the player deck page): deck
+  validation issues and deck warnings as code + parameters rendered by
+  `useValidationText()` (their `message` is canonical English for the
+  assistant model), the rule describer on the client, built-in formats stored
+  in English and shown by id through `useFormatLabel()`, copies named in the
+  interface language, and tournament errors as `errors.api.<code>` with
   parameters
 - F2d — the assistant, the final lint and copy gates, and Accept-Language
   detection switched on (until then an English browser still gets German)
