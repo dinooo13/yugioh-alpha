@@ -11,6 +11,10 @@
     "germanTextMissing": "Für diese Karte gibt es keinen deutschen Kartentext.",
     "translationSource": "Deutsche Kartentexte: {source}",
     "totalQuantity": "×{count} ges.",
+    "retired": {
+      "badge": "Nicht mehr im Katalog",
+      "hint": "YGOPRODeck führt diese Karte nicht mehr. Deine Einträge bleiben erhalten, in der Suche taucht sie aber nicht mehr auf."
+    },
     "field": {
       "quantity": "Anzahl",
       "collection": "Sammlung",

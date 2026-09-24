@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
+import { UApp } from '#components'
 import WishlistPage from '~/pages/wishlist.vue'
 import AddToWishlistButton from '~/components/wishlist/AddToWishlistButton.vue'
 import type { OwnProfile, WishlistItemView, WishlistResponse } from '~~/shared/sharing'
@@ -44,6 +45,7 @@ function item(overrides: Partial<WishlistItemView> = {}): WishlistItemView {
     nameDe: null,
     type: 'Effect Monster',
     imageSmall: null,
+    retired: false,
     quantity: 1,
     note: null,
     owned: 0,
@@ -68,6 +70,26 @@ describe('wishlist page', () => {
     const component = await mountSuspended(WishlistPage)
 
     expect(component.text()).toContain('Kuriboh')
+  })
+
+  it('marks a card YGOPRODeck no longer lists, and only that one (ADR 0019)', async () => {
+    state.wishlist = {
+      items: [item(), item({ id: 'wish-2', catalogCardId: 2, name: 'Old Placeholder', retired: true })],
+      total: 2,
+      page: 1,
+      pageSize: 24,
+    }
+
+    // The badge's tooltip needs the provider UApp gives the real app.
+    const component = await mountSuspended(defineComponent({
+      setup: () => () => h(UApp, null, { default: () => h(WishlistPage) }),
+    }))
+
+    const badges = component.findAll('[data-testid="card-retired-badge"]')
+    expect(badges).toHaveLength(1)
+    expect(badges[0]!.text()).toBe('Nicht mehr im Katalog')
+    const rows = component.findAll('li')
+    expect(rows.find(row => row.text().includes('Old Placeholder'))!.text()).toContain('Nicht mehr im Katalog')
   })
 
   it('removes a row via DELETE /api/wishlist/:id', async () => {

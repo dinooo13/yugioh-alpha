@@ -44,6 +44,9 @@ const frame = computed(() => cardFrame(props.item))
       <h2 class="line-clamp-2 text-sm font-semibold leading-5 text-highlighted transition-colors group-hover:text-primary sm:text-base">
         {{ cardName(item) }}
       </h2>
+      <div v-if="item.retired">
+        <CardRetiredBadge />
+      </div>
       <div class="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1.5">
         <CardTypeChip
           :type="item.type"

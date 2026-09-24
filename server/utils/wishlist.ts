@@ -135,6 +135,7 @@ function buildWishlistItemView(
       nameDe: cardNameDeSql(),
       type: catalogCard.type,
       imageSmall: sql<string | null>`min(${catalogCardImage.imageUrlSmall})`,
+      retiredAt: catalogCard.retiredAt,
     })
     .from(catalogCard)
     .leftJoin(catalogCardImage, eq(catalogCardImage.cardId, catalogCard.id))
@@ -149,6 +150,7 @@ function buildWishlistItemView(
     nameDe: card.nameDe,
     type: card.type,
     imageSmall: card.imageSmall,
+    retired: card.retiredAt !== null,
     quantity: row.quantity,
     note: row.note,
     createdAt: row.createdAt.toISOString(),
@@ -264,6 +266,7 @@ function wishlistCardRowsQuery(db: Db, where: SQL, page: number, pageSize: numbe
       nameDe: cardNameDeSql(),
       type: catalogCard.type,
       imageSmall: sql<string | null>`min(${catalogCardImage.imageUrlSmall})`,
+      retiredAt: catalogCard.retiredAt,
     })
     .from(wishlistItem)
     .innerJoin(catalogCard, eq(wishlistItem.catalogCardId, catalogCard.id))
@@ -309,6 +312,7 @@ export function listWishlist(db: Db, userId: string, options: WishlistListOption
       nameDe: row.nameDe,
       type: row.type,
       imageSmall: row.imageSmall,
+      retired: row.retiredAt !== null,
       quantity: row.quantity,
       note: row.note,
       owned: owned.get(row.catalogCardId) ?? 0,
@@ -342,6 +346,7 @@ export function listPublicWishlist(
       nameDe: row.nameDe,
       type: row.type,
       imageSmall: row.imageSmall,
+      retired: row.retiredAt !== null,
       quantity: row.quantity,
       note: row.note,
       createdAt: row.createdAt.toISOString(),

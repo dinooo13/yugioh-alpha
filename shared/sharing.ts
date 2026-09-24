@@ -165,6 +165,8 @@ export interface WishlistItemView {
   nameDe: string | null
   type: string
   imageSmall: string | null
+  /** YGOPRODeck no longer lists the card (ADR 0019); the item still resolves. */
+  retired: boolean
   quantity: number
   note: string | null
   /** Owner-only: copies already in the inventory. Absent in the public view. */

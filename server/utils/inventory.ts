@@ -488,6 +488,7 @@ export function listOwnedCards(db: Db, userId: string, options: InventoryListOpt
       cardName: catalogCard.name,
       cardNameDe: cardNameDeSql(),
       cardType: catalogCard.type,
+      cardRetiredAt: catalogCard.retiredAt,
       imageUrlSmall: sql<string | null>`min(${catalogCardImage.imageUrlSmall})`,
     })
     .from(ownedCard)
@@ -507,7 +508,10 @@ export function listOwnedCards(db: Db, userId: string, options: InventoryListOpt
     .where(where)
     .get()?.count ?? 0
 
-  return { items: rows, total, page, pageSize }
+  // `cardRetired`: YGOPRODeck no longer lists the card (ADR 0019).
+  const items = rows.map(({ cardRetiredAt, ...row }) => ({ ...row, cardRetired: cardRetiredAt !== null }))
+
+  return { items, total, page, pageSize }
 }
 
 /**

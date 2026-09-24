@@ -77,9 +77,12 @@ async function remove() {
       />
 
       <div class="min-w-0 flex-1">
-        <p class="truncate text-sm font-medium text-highlighted">
-          {{ cardName(item) }}
-        </p>
+        <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
+          <p class="min-w-0 truncate text-sm font-medium text-highlighted">
+            {{ cardName(item) }}
+          </p>
+          <CardRetiredBadge v-if="item.retired" />
+        </div>
         <p class="flex min-w-0 items-center gap-1.5 text-xs text-muted">
           <CardFrameDot :type="item.type" />
           <span class="truncate">{{ cardValue('type', item.type) }}</span>

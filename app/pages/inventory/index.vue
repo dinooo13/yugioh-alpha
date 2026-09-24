@@ -13,6 +13,7 @@ interface InventoryItem {
   cardName: string
   cardNameDe?: string | null
   cardType: string
+  cardRetired?: boolean
   imageUrlSmall: string | null
 }
 

@@ -117,6 +117,7 @@ export default defineEventHandler(async (event) => {
       def: display?.def ?? null,
       imageSmall: display?.imageSmall ?? null,
       imageLarge: display?.imageLarge ?? null,
+      retired: display?.retired ?? false,
       totalQuantity: row.totalQuantity,
       collectionBreakdown: breakdownByCardId.get(row.catalogCardId) ?? [],
     }

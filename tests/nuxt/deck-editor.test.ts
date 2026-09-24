@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { enableAutoUnmount, flushPromises } from '@vue/test-utils'
 import type { DOMWrapper } from '@vue/test-utils'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
-import { DecksDeckFormModal, UDropdownMenu, USelect } from '#components'
+import { DecksDeckFormModal, UApp, UDropdownMenu, USelect } from '#components'
 import DeckEditorPage from '~/pages/decks/[id].vue'
 import { optionLabels, selectWithOption } from './fixtures/select-wrapper'
 import type { DeckValidation } from '~~/shared/rule-formats'
@@ -27,6 +27,7 @@ interface DeckCardRow {
   usedInDeck: number
   shortfall: number
   nameDe?: string | null
+  retired?: boolean
 }
 
 function row(overrides: Partial<DeckCardRow> & { name: string, section: DeckSection }): DeckCardRow {
@@ -212,6 +213,28 @@ describe('deck editor', () => {
     const extraCount = component.find('[aria-label="Anzahl im Extra Deck"]')
     expect(extraCount.text()).toBe('16/15')
     expect(extraCount.attributes('data-state')).toBe('over')
+  })
+
+  it('marks a card YGOPRODeck no longer lists, and only that one (ADR 0019)', async () => {
+    state.source = { items: [], total: 0 }
+    state.deck = deckDetail({
+      main: [
+        row({ name: 'Dark Magician', section: 'main' }),
+        row({ name: 'Old Placeholder', section: 'main', catalogCardId: 101402013, retired: true }),
+      ],
+    })
+
+    // The badge's tooltip needs the provider UApp gives the real app.
+    const component = await mountSuspended(defineComponent({
+      setup: () => () => h(UApp, null, { default: () => h(DeckEditorPage) }),
+    }))
+
+    const badges = component.findAll('[data-testid="card-retired-badge"]')
+    expect(badges).toHaveLength(1)
+    expect(badges[0]!.text()).toBe('Nicht mehr im Katalog')
+    const rows = component.findAll('li')
+    expect(rows.find(item => item.text().includes('Old Placeholder'))!.text()).toContain('Nicht mehr im Katalog')
+    expect(rows.find(item => item.text().includes('Dark Magician'))!.text()).not.toContain('Nicht mehr im Katalog')
   })
 
   it('highlights a shortfall on the owned indicator', async () => {
