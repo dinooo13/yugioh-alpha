@@ -24,6 +24,12 @@ const { data: tournamentsData } = await useFetch<{ total: number }>('/api/tourna
   default: () => ({ total: 0 }),
 })
 
+// The "duelist card" greeting (ADR 0016); shares the layout's profile fetch.
+const { data: ownProfile } = await useOwnProfile()
+const greeting = computed(() => ownProfile.value?.displayName
+  ? t('dashboard.hero.greeting', { name: ownProfile.value.displayName })
+  : t('dashboard.hero.greetingNoName'))
+
 const inventoryCount = computed(() => collections.value?.allCount ?? 0)
 const deckCount = computed(() => decksData.value?.total ?? 0)
 const tournamentCount = computed(() => tournamentsData.value?.total ?? 0)
@@ -72,67 +78,119 @@ const cards = computed<OnboardingCard[]>(() => [
 </script>
 
 <template>
-  <div class="space-y-6">
-    <LayoutPageHeader
-      :title="t('dashboard.title')"
-      :description="t('dashboard.description')"
-    />
+  <div class="space-y-6 lg:space-y-8">
+    <!-- The "duelist card": who is playing, on a lit arena surface. -->
+    <section class="arena-surface relative overflow-hidden rounded-xl border border-default shadow-panel">
+      <LayoutArcaneRings class="absolute top-1/2 -right-28 size-[26rem] -translate-y-1/2 opacity-80 max-md:-top-24 max-md:-right-48 max-md:translate-y-0 xl:right-0" />
+      <div class="absolute top-1/2 right-20 hidden -translate-y-1/2 md:block xl:right-[9.5rem]">
+        <LayoutCardFan card-class="w-16 xl:w-[4.5rem]" />
+      </div>
 
-    <UAlert
-      v-if="isFirstRun"
-      color="primary"
-      variant="subtle"
-      icon="i-lucide-sparkles"
-      :title="t('dashboard.firstRun.title')"
-      :description="t('dashboard.firstRun.description')"
-    >
-      <template #actions>
-        <UButton
-          icon="i-lucide-zap"
-          :label="t('dashboard.firstRun.cta')"
-          to="/inventory/quick-entry"
+      <div class="relative flex flex-col gap-5 p-6 sm:flex-row sm:items-center sm:p-8 md:pe-56">
+        <ProfileAvatar
+          v-if="ownProfile"
+          :name="ownProfile.displayName"
+          :handle="ownProfile.handle"
+          size="3xl"
+          class="shrink-0 ring-2 ring-secondary/70 ring-offset-4 ring-offset-bg"
         />
-      </template>
-    </UAlert>
+        <div class="min-w-0">
+          <h1 class="text-[0.6875rem] font-semibold tracking-[0.18em] text-secondary uppercase">
+            {{ t('dashboard.title') }}
+          </h1>
+          <p class="mt-1.5 font-display text-[clamp(1.625rem,1.2rem+1.8vw,2.625rem)] leading-tight font-semibold break-words text-highlighted">
+            {{ greeting }}
+          </p>
+          <p
+            v-if="ownProfile"
+            class="mt-1 text-sm text-muted"
+          >
+            {{ t('sharing.handle', { handle: ownProfile.handle }) }}
+          </p>
+          <p class="mt-3 max-w-2xl text-sm leading-6 text-toned">
+            {{ t('dashboard.description') }}
+          </p>
+        </div>
+      </div>
+
+      <div
+        class="gold-hairline absolute inset-x-0 bottom-0"
+        aria-hidden="true"
+      />
+    </section>
+
+    <section
+      v-if="isFirstRun"
+      class="panel flex flex-col gap-4 p-5 shadow-glow-gold sm:flex-row sm:items-center sm:p-6"
+    >
+      <span class="flex size-11 shrink-0 items-center justify-center rounded-full bg-secondary/10 text-secondary ring-1 ring-secondary/30">
+        <UIcon
+          name="i-lucide-sparkles"
+          class="size-5"
+          aria-hidden="true"
+        />
+      </span>
+      <div class="min-w-0 flex-1">
+        <h2 class="text-base font-semibold text-highlighted">
+          {{ t('dashboard.firstRun.title') }}
+        </h2>
+        <p class="mt-1 text-sm leading-6 text-muted">
+          {{ t('dashboard.firstRun.description') }}
+        </p>
+      </div>
+      <UButton
+        icon="i-lucide-zap"
+        size="lg"
+        class="btn-summon shrink-0 justify-center"
+        :label="t('dashboard.firstRun.cta')"
+        to="/inventory/quick-entry"
+      />
+    </section>
 
     <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-      <div
+      <article
         v-for="card in cards"
         :key="card.to"
-        class="flex flex-col rounded-md border border-default bg-default p-5"
+        class="group panel relative flex flex-col p-5 transition-[box-shadow,border-color] duration-200 hover:border-primary/40 hover:shadow-lift"
       >
-        <div class="flex items-center gap-2.5">
-          <div class="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            <UIcon
-              :name="card.icon"
-              class="size-5"
-            />
-          </div>
-          <h2 class="text-base font-semibold text-highlighted">
+        <div class="flex items-center justify-between gap-3">
+          <h2 class="flex min-w-0 items-center gap-3 text-sm font-semibold text-highlighted">
+            <span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary ring-1 ring-primary/25">
+              <UIcon
+                :name="card.icon"
+                class="size-[1.125rem]"
+                aria-hidden="true"
+              />
+            </span>
             <NuxtLink
               :to="card.listTo"
-              class="hover:text-primary hover:underline"
+              class="truncate rounded-sm hover:text-primary hover:underline"
             >
               {{ card.title }}
             </NuxtLink>
           </h2>
+          <UIcon
+            name="i-lucide-arrow-up-right"
+            class="size-4 shrink-0 text-dimmed transition-colors group-hover:text-primary"
+            aria-hidden="true"
+          />
         </div>
 
-        <p class="mt-4 text-3xl font-semibold tabular-nums text-highlighted">
+        <p class="lp-counter mt-6 self-start">
           {{ n(card.count, 'integer') }}
         </p>
-        <p class="mt-1 text-sm text-muted">
+        <p class="mt-2 text-sm text-muted">
           {{ card.description }}
         </p>
 
         <UButton
-          class="mt-4 justify-center"
+          class="mt-5 justify-center"
           color="neutral"
           variant="outline"
           :label="card.cta"
           :to="card.to"
         />
-      </div>
+      </article>
     </div>
   </div>
 </template>

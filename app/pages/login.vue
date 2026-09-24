@@ -48,7 +48,7 @@ async function onSubmit() {
 
 <template>
   <div>
-    <h1 class="text-xl font-semibold text-highlighted">
+    <h1 class="font-display text-2xl leading-tight font-semibold tracking-[0.01em] text-highlighted">
       {{ t('auth.login.title') }}
     </h1>
     <p class="mt-1 text-sm text-muted">
@@ -96,6 +96,8 @@ async function onSubmit() {
         type="submit"
         :label="t('auth.login.submit')"
         block
+        size="lg"
+        class="btn-summon"
         :loading="loading"
       />
     </form>
