@@ -171,6 +171,7 @@ describe('AssistantActionCard', () => {
       kind: 'add_to_inventory',
       // Stored English since F2d — the card renders its own summary.
       summary: 'Add 2 card(s) to the inventory: Dark Magician x2, Pot of Greed x1',
+      // Stored before ADR 0017: the items still carry the collector fields.
       payload: {
         items: [
           { catalogCardId: 46986414, quantity: 2, language: 'de', condition: 'near_mint', edition: 'first', collectionId: null, printingId: null, note: null, name: 'Dark Magician' },
@@ -214,7 +215,7 @@ describe('AssistantActionCard', () => {
   }
 
   describe('in German', () => {
-    it('renders an add_to_inventory summary and rows from the payload, with option labels', async () => {
+    it('renders an add_to_inventory summary and rows from the payload, without collector details', async () => {
       const component = await mountSuspended(ActionCard, { props: { action: inventoryAction() } })
       expect(component.text()).toContain('2 Karte(n) zum Inventar hinzufügen: Dark Magician x2, Pot of Greed x1')
       expect(component.text()).not.toContain('Add 2 card(s)')
@@ -222,10 +223,11 @@ describe('AssistantActionCard', () => {
       const toggle = component.findAll('button').find(button => button.text().includes('Details anzeigen'))
       await toggle!.trigger('click')
       const headers = component.findAll('th').map(th => th.text())
-      expect(headers).toEqual(['Karte', 'Menge', 'Drucksprache', 'Zustand', 'Auflage'])
+      expect(headers).toEqual(['Karte', 'Menge'])
       const text = component.text()
-      expect(text).toContain('Neuwertig (Near Mint)')
-      expect(text).toContain('1. Auflage')
+      expect(text).not.toContain('Neuwertig')
+      expect(text).not.toContain('1. Auflage')
+      expect(text).not.toContain('Near Mint')
       expect(text).not.toContain('46986414')
     })
 
@@ -329,7 +331,7 @@ describe('AssistantActionCard', () => {
       expect(component.findAll('button').map(button => button.text())).toEqual(expect.arrayContaining(['Hide details', 'Apply', 'Reject']))
     })
 
-    it('renders an add_to_inventory proposal in English, rows via the card option labels', async () => {
+    it('renders an add_to_inventory proposal in English, without collector details', async () => {
       await setTestLocale('en')
       const component = await mountSuspended(ActionCard, { props: { action: inventoryAction() } })
       expect(component.text()).toContain('Add cards to the inventory')
@@ -337,9 +339,9 @@ describe('AssistantActionCard', () => {
 
       const toggle = component.findAll('button').find(button => button.text().includes('Show details'))
       await toggle!.trigger('click')
-      expect(component.findAll('th').map(th => th.text())).toEqual(['Card', 'Quantity', 'Printing language', 'Condition', 'Edition'])
-      expect(component.text()).toContain('Near Mint')
-      expect(component.text()).toContain('1st Edition')
+      expect(component.findAll('th').map(th => th.text())).toEqual(['Card', 'Quantity'])
+      expect(component.text()).not.toContain('Near Mint')
+      expect(component.text()).not.toContain('1st Edition')
     })
 
     it('uses the English singular for a one-card deck proposal', async () => {

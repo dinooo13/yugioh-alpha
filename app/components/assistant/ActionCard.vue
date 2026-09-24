@@ -18,7 +18,6 @@ const { t, n } = useI18n()
 const apiError = useApiError()
 const validationText = useValidationText()
 const { formatName } = useFormatLabel()
-const { languageLabel, conditionLabel, editionLabel } = useCardOptionItems()
 const { cardName } = useCardText()
 
 const isExpanded = ref(false)
@@ -139,7 +138,9 @@ const summary = computed(() => {
 
 // Payload fields the write tools actually produce (server/utils/assistant-tools.ts) —
 // only these are ever shown, whichever of them a given action kind carries.
-const FIELDS = ['name', 'catalogCardId', 'quantity', 'section', 'collectionId', 'language', 'condition', 'edition', 'printingId'] as const
+// `add_to_inventory` actions stored before ADR 0017 may still carry
+// `printingId`/`language`/`condition`/`edition`; those are not shown.
+const FIELDS = ['name', 'catalogCardId', 'quantity', 'section', 'collectionId'] as const
 type Field = typeof FIELDS[number]
 
 const columns = computed<Field[]>(() => {
@@ -162,15 +163,6 @@ function displayValue(column: Field, value: unknown): string {
   if (typeof value === 'string') {
     if (column === 'section' && (DECK_SECTIONS as readonly string[]).includes(value)) {
       return t(`decks.section.${value}`)
-    }
-    if (column === 'language') {
-      return languageLabel(value)
-    }
-    if (column === 'condition') {
-      return conditionLabel(value)
-    }
-    if (column === 'edition') {
-      return editionLabel(value)
     }
   }
   return String(value)
