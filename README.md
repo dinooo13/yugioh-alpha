@@ -71,7 +71,7 @@ curl -X POST http://localhost:3000/api/admin/catalog/sync \
   -H "Cookie: <your better-auth session cookie>"
 ```
 
-The sync is idempotent (upsert-based) and safe to re-run at any time to pick up new or updated cards. Card images are currently stored as remote YGOPRODeck URLs; a local image proxy/cache is planned as follow-up work (see the ADR).
+The sync is idempotent (upsert-based) and safe to re-run at any time to pick up new or updated cards. Cards YGOPRODeck no longer lists (renumbered pre-release placeholders, changed passcodes) are marked retired and hidden from search; inventory, decks and wishlists that use them move to the renumbered card (see [ADR 0019](docs/adr/0019-retired-catalog-cards.md)). Card images are currently stored as remote YGOPRODeck URLs; a local image proxy/cache is planned as follow-up work (see the ADR).
 
 ### German card data
 

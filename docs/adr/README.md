@@ -26,3 +26,4 @@ mark the old as superseded.
 | [0016](0016-visual-design-system.md) | Visual design system and theming (Duel Arena) | Accepted |
 | [0017](0017-inventory-without-collector-details.md) | Inventory without collector details | Accepted |
 | [0018](0018-product-name-ygo-alpha.md) | Product name "YGO Alpha" | Accepted |
+| [0019](0019-retired-catalog-cards.md) | Retired catalog cards | Accepted |
