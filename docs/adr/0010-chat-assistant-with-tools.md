@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted — the statement that `/decks/assistent` and the deck editor's "KI-Vorschläge" stay unchanged is superseded by [ADR 0011](0011-deck-assistance-in-chat.md)
+Accepted — the statement that `/decks/assistent` and the deck editor's "KI-Vorschläge" stay unchanged is superseded by [ADR 0011](0011-deck-assistance-in-chat.md). The engine parts (the provider `chat()`, the fake chat script mechanism, the message persistence format, the SSE loop) are superseded by [ADR 0020](0020-assistant-on-the-ai-sdk.md); the tools, pending actions, limits and the image policy stay.
 
 ## Context
 

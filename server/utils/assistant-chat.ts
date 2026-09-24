@@ -12,7 +12,7 @@ import { randomUUID } from 'node:crypto'
 import { and, asc, desc, eq, inArray, notExists } from 'drizzle-orm'
 import { createError } from 'h3'
 import type { useDb } from '../db'
-import { assistantAction, assistantConversation, assistantMessage, deck } from '../db/schema'
+import { assistantAction, assistantConversation, assistantMessage, collection, deck } from '../db/schema'
 import { DECK_SECTIONS } from '../../shared/deck-sections'
 import { getDeckDetail, requireOwnDeck } from './decks'
 import type {
@@ -20,7 +20,7 @@ import type {
   ChatModelInput,
   DeckAssistantModel,
 } from './deck-assistant-model'
-import { runTool, toolDefinitions } from './assistant-tools'
+import { insertPendingAction, runTool, serializeToolResult, toolDefinitions } from './assistant-tools'
 import type { AssistantProposedAction } from './assistant-tools'
 import { getAssistantLimits } from './assistant-limits'
 import type { AssistantLimits } from './assistant-limits'
@@ -63,7 +63,8 @@ const CONVERSATION_LIST_MAX = 50
 // `getAssistantLimits()` (server/utils/assistant-limits.ts) — configurable
 // via `runtimeConfig.assistant.limits` / `NUXT_ASSISTANT_LIMITS_*`.
 
-const TURN_TIMEOUT_MS = 5 * 60 * 1000
+/** A whole turn's deadline (both engines); a single model call has its own `limits.timeoutMs`. */
+export const TURN_TIMEOUT_MS = 5 * 60 * 1000
 
 function badRequest(message: string): never {
   throw createError({ statusCode: 400, statusMessage: message })
@@ -102,10 +103,10 @@ export interface AssistantMessageInput {
 // "Images (client)" decision — canvas-resized JPEG, or a passthrough
 // PNG/WebP) are accepted; anything else (e.g. `data:text/html`,
 // `data:application/pdf`) is rejected rather than forwarded to the model.
-const IMAGE_DATA_URL_PATTERN = /^data:image\/(?:jpe?g|png|webp)[;,]/i
+export const IMAGE_DATA_URL_PATTERN = /^data:image\/(?:jpe?g|png|webp)[;,]/i
 
 /** The decoded byte size of a `data:` URL's base64 payload (3/4 of its encoded character length, ignoring padding). */
-function decodedByteSizeOfDataUrl(dataUrl: string): number {
+export function decodedByteSizeOfDataUrl(dataUrl: string): number {
   const commaIndex = dataUrl.indexOf(',')
   const base64Length = commaIndex >= 0 ? dataUrl.length - commaIndex - 1 : dataUrl.length
   const paddingLength = dataUrl.endsWith('==') ? 2 : dataUrl.endsWith('=') ? 1 : 0
@@ -183,7 +184,7 @@ export function validateCreateConversationInput(body: unknown): CreateConversati
 
 // --- Conversation CRUD -----------------------------------------------------------
 
-function toConversationSummary(row: ConversationRow, deckRef: AssistantConversationSummary['deck']): AssistantConversationSummary {
+export function toConversationSummary(row: ConversationRow, deckRef: AssistantConversationSummary['deck']): AssistantConversationSummary {
   return {
     id: row.id,
     title: row.title,
@@ -194,7 +195,7 @@ function toConversationSummary(row: ConversationRow, deckRef: AssistantConversat
 }
 
 /** The linked deck's id and current name, or null — the FK is `ON DELETE SET NULL`, so a deleted deck simply unlinks. */
-function loadDeckRef(db: Db, deckId: string | null): AssistantConversationSummary['deck'] {
+export function loadDeckRef(db: Db, deckId: string | null): AssistantConversationSummary['deck'] {
   if (!deckId) {
     return null
   }
@@ -300,7 +301,7 @@ export function listConversations(db: Db, userId: string): AssistantConversation
   return rows.map(row => ({ id: row.id, title: row.title, updatedAt: row.updatedAt.toISOString() }))
 }
 
-function requireOwnConversation(db: Db, userId: string, conversationId: string): ConversationRow {
+export function requireOwnConversation(db: Db, userId: string, conversationId: string): ConversationRow {
   const row = db
     .select()
     .from(assistantConversation)
@@ -354,6 +355,53 @@ export function resolveDeckNames(db: Db, userId: string, ids: Array<string | nul
     .where(and(eq(deck.userId, userId), inArray(deck.id, unique)))
     .all()
   return new Map(rows.map(row => [row.id, row.name]))
+}
+
+/** The current names of the caller's own collections among `ids` (#69) — a foreign or deleted collection is simply missing. */
+export function resolveCollectionNames(db: Db, userId: string, ids: Array<string | null | undefined>): Map<string, string> {
+  const unique = [...new Set(ids.filter((id): id is string => typeof id === 'string' && id !== ''))]
+  if (unique.length === 0) {
+    return new Map()
+  }
+  const rows = db
+    .select({ id: collection.id, name: collection.name })
+    .from(collection)
+    .where(and(eq(collection.userId, userId), inArray(collection.id, unique)))
+    .all()
+  return new Map(rows.map(row => [row.id, row.name]))
+}
+
+function payloadCollectionIds(payload: Record<string, unknown>): string[] {
+  const items = Array.isArray(payload.items) ? payload.items : []
+  return items.flatMap(item => isRecord(item) && typeof item.collectionId === 'string' && item.collectionId !== '' ? [item.collectionId] : [])
+}
+
+/**
+ * Action views with their display-only names resolved when read (#69), so
+ * an action card never has to show a raw id: `display.deckName` for an
+ * action whose payload has a `deckId` but no `deckName` (stored before the
+ * payload carried it), and `display.collectionNames` for the collections
+ * `add_to_inventory` items go to. `null` = gone or not the caller's. One
+ * query per kind for all `rows`.
+ */
+export function hydrateActionViews(db: Db, userId: string, rows: ActionRow[]): AssistantActionView[] {
+  const deckIdsToResolve = rows.flatMap(row =>
+    typeof row.payload.deckId === 'string' && typeof row.payload.deckName !== 'string' ? [row.payload.deckId] : [])
+  const deckNames = resolveDeckNames(db, userId, deckIdsToResolve)
+  const collectionNames = resolveCollectionNames(db, userId, rows.flatMap(row => payloadCollectionIds(row.payload)))
+
+  return rows.map((row) => {
+    const view = toActionView(row)
+    const display: NonNullable<AssistantActionView['display']> = {}
+    if (typeof row.payload.deckId === 'string' && typeof row.payload.deckName !== 'string') {
+      display.deckName = deckNames.get(row.payload.deckId) ?? null
+    }
+    const ids = payloadCollectionIds(row.payload)
+    if (ids.length > 0) {
+      display.collectionNames = Object.fromEntries(ids.map(id => [id, collectionNames.get(id) ?? null]))
+    }
+    return Object.keys(display).length > 0 ? { ...view, display } : view
+  })
 }
 
 /** Adds the display-only `deckName` (#53) to a tool call that refers to one of the caller's decks. */
@@ -484,16 +532,9 @@ function truncate(text: string, max: number): string {
   return text.length > max ? `${text.slice(0, max - 1)}…` : text
 }
 
-// A result over budget is replaced with a small, valid JSON envelope instead
-// of being cut off mid-string — a truncated JSON document is not just
-// unreadable for a human, it's not parseable at all, so a model asked to
-// reason about "the tool result" gets a syntax-broken blob instead of data.
-function serializeToolResult(value: unknown, maxChars: number): string {
-  const json = JSON.stringify(value ?? null)
-  if (json.length <= maxChars) {
-    return json
-  }
-  return JSON.stringify(TOOL_TEXT.resultTooLarge)
+/** A conversation's title from its first user message (truncated). */
+export function conversationTitleFromText(text: string): string {
+  return truncate(text, CONVERSATION_TITLE_MAX_LENGTH)
 }
 
 /** Parses a tool call's accumulated `arguments` JSON, or reports that it failed to parse at all (see the caller: invalid JSON is a tool error, not silently `{}`). */
@@ -811,23 +852,8 @@ export async function runChatTurn(
         await emit({ type: 'tool_result', id: call.id, ok: summarized.ok, outcome: summarized.outcome })
 
         if (proposedAction) {
-          const now = new Date()
-          const [actionRow] = db
-            .insert(assistantAction)
-            .values({
-              id: randomUUID(),
-              conversationId,
-              messageId: assistantRow.id,
-              userId,
-              kind: proposedAction.kind,
-              payload: proposedAction.payload,
-              summary: proposedAction.summary,
-              status: 'pending',
-              createdAt: now,
-            })
-            .returning()
-            .all()
-          await emit({ type: 'action_proposed', action: toActionView(actionRow!) })
+          const actionRow = insertPendingAction(db, { conversationId, messageId: assistantRow.id, userId, action: proposedAction })
+          await emit({ type: 'action_proposed', action: toActionView(actionRow) })
         }
       }
     }

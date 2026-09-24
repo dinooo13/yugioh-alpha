@@ -8,9 +8,22 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   createFakeModel,
   createOpenAiCompatibleModel,
-  getDeckAssistantStatus,
   useDeckAssistantModel,
 } from '../../server/utils/deck-assistant-model'
+import { jsonSchema, streamText, tool } from 'ai'
+import {
+  AssistantToolError,
+  assistantErrorCode,
+  assistantStreamErrorText,
+  createOpenAiCompatibleLanguageModel,
+  fakeStreamParts,
+  fakeTurn,
+  getAssistantStatus,
+  toolErrorText,
+  useAssistantLanguageModel,
+} from '../../server/utils/assistant-model'
+import type { AssistantLanguageModel } from '../../server/utils/assistant-model'
+import { TOOL_TEXT } from '../../server/utils/assistant-prompts'
 import type {
   ChatMessage,
   ChatModelInput,
@@ -30,7 +43,7 @@ describe('assistant status/config resolution', () => {
 
     try {
       config.provider = 'fake'
-      expect(getDeckAssistantStatus()).toEqual({
+      expect(getAssistantStatus()).toEqual({
         enabled: true,
         provider: 'fake',
         model: 'fake',
@@ -45,7 +58,7 @@ describe('assistant status/config resolution', () => {
       config.baseUrl = ''
       config.apiKey = 'sk-test-key'
       config.model = ''
-      expect(getDeckAssistantStatus()).toEqual({
+      expect(getAssistantStatus()).toEqual({
         enabled: true,
         provider: 'openai',
         model: 'gpt-4o-mini',
@@ -58,14 +71,14 @@ describe('assistant status/config resolution', () => {
 
       // A configured vision model is reported separately.
       config.visionModel = 'gpt-4o'
-      expect(getDeckAssistantStatus().visionModel).toBe('gpt-4o')
+      expect(getAssistantStatus().visionModel).toBe('gpt-4o')
       config.visionModel = ''
 
       // No key, but a base URL explicitly pointed away from the default
       // (e.g. a keyless local Ollama server) still resolves to 'openai'.
       config.apiKey = ''
       config.baseUrl = 'http://localhost:11434/v1'
-      expect(getDeckAssistantStatus()).toEqual({
+      expect(getAssistantStatus()).toEqual({
         enabled: true,
         provider: 'openai',
         model: 'gpt-4o-mini',
@@ -76,7 +89,7 @@ describe('assistant status/config resolution', () => {
       })
 
       config.baseUrl = ''
-      expect(getDeckAssistantStatus()).toEqual({
+      expect(getAssistantStatus()).toEqual({
         enabled: false,
         provider: null,
         model: null,
@@ -357,7 +370,7 @@ describe('chat()', () => {
     await expect(model.chat(chatBaseInput, collectHandlers().handlers)).rejects.toMatchObject({ statusCode: 502 })
 
     const networkFailingFetch = (async () => {
-      throw new TypeError('fetch failed')
+      throw new TypeError('fetch failed', { cause: Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:1'), { code: 'ECONNREFUSED' }) })
     }) as unknown as typeof fetch
     const networkModel = createOpenAiCompatibleModel({ baseUrl: 'https://api.openai.com/v1', apiKey: 'sk-test', model: 'gpt-4o-mini', fetch: networkFailingFetch })
 
@@ -575,5 +588,182 @@ describe('fake model chat()', () => {
       const noDeckWord = await model.chat({ sessionId: 's', system: deckSystem, messages: [userText('Hallo')], tools: [] }, noopHandlers())
       expect(noDeckWord.text).toBe('Testantwort: Hallo')
     })
+  })
+})
+
+// --- The AI SDK model (server/utils/assistant-model.ts, ADR 0020) --------------------
+
+describe('createOpenAiCompatibleLanguageModel (@ai-sdk/openai-compatible)', () => {
+  interface Recorded { url: string, headers: Headers, body: Record<string, unknown> }
+
+  function sse(payloads: unknown[]): string {
+    return `${payloads.map(payload => `data: ${JSON.stringify(payload)}\n\n`).join('')}data: [DONE]\n\n`
+  }
+
+  function chunk(delta: Record<string, unknown>, finishReason: string | null = null) {
+    return { id: 'r1', object: 'chat.completion.chunk', created: 1, model: 'm', choices: [{ index: 0, delta, finish_reason: finishReason }] }
+  }
+
+  function fetchReturning(body: string, status = 200) {
+    const calls: Recorded[] = []
+    const fetchImpl = (async (url: string | URL | Request, init?: RequestInit) => {
+      calls.push({ url: String(url), headers: new Headers(init?.headers), body: JSON.parse(String(init?.body)) as Record<string, unknown> })
+      return new Response(body, { status, headers: { 'content-type': status === 200 ? 'text/event-stream' : 'application/json' } })
+    }) as typeof fetch
+    return { fetch: fetchImpl, calls }
+  }
+
+  const TOOL_CALL_STREAM = sse([
+    chunk({ role: 'assistant', reasoning_content: 'Ich sollte suchen.' }),
+    chunk({ tool_calls: [{ index: 0, id: 'call_1', type: 'function', function: { name: 'search_catalog', arguments: '{"que' } }] }),
+    chunk({ tool_calls: [{ index: 0, function: { arguments: 'ry":"Dark"}' } }] }),
+    chunk({}, 'tool_calls'),
+  ])
+
+  async function run(model: AssistantLanguageModel, hasImages = false) {
+    const result = streamText({
+      model: model.modelFor(hasImages),
+      prompt: 'Hallo',
+      tools: { search_catalog: tool({ inputSchema: jsonSchema({ type: 'object', properties: { query: { type: 'string' } } }) }) },
+      ...(model.providerOptions ? { providerOptions: model.providerOptions } : {}),
+      headers: { 'x-opencode-session': 'conversation-42' },
+      maxRetries: 0,
+      onError: () => {},
+    })
+    const parts = []
+    for await (const part of result.stream) {
+      parts.push(part)
+    }
+    return parts
+  }
+
+  it('sends reasoning_effort, x-opencode-session, the app\'s User-Agent and the key; parses streamed tool calls and reasoning', async () => {
+    const { fetch: fetchImpl, calls } = fetchReturning(TOOL_CALL_STREAM)
+    const model = createOpenAiCompatibleLanguageModel({ baseUrl: 'https://gateway.test/v1/', apiKey: 'sk-test', model: 'mimo', reasoningEffort: 'low', fetch: fetchImpl })
+
+    const parts = await run(model)
+
+    expect(calls[0]!.url).toBe('https://gateway.test/v1/chat/completions')
+    expect(calls[0]!.body).toMatchObject({ model: 'mimo', stream: true, reasoning_effort: 'low', tool_choice: 'auto' })
+    expect(calls[0]!.headers.get('x-opencode-session')).toBe('conversation-42')
+    expect(calls[0]!.headers.get('user-agent')).toMatch(/^ygo-alpha\/\S+/)
+    expect(calls[0]!.headers.get('authorization')).toBe('Bearer sk-test')
+    expect(parts).toContainEqual(expect.objectContaining({ type: 'tool-call', toolName: 'search_catalog', input: { query: 'Dark' } }))
+    expect(parts).toContainEqual(expect.objectContaining({ type: 'reasoning-delta', text: 'Ich sollte suchen.' }))
+    expect(parts).toContainEqual(expect.objectContaining({ type: 'finish-step', finishReason: 'tool-calls' }))
+  })
+
+  it('omits reasoning_effort and the Authorization header when neither is configured (keyless local servers)', async () => {
+    const { fetch: fetchImpl, calls } = fetchReturning(sse([chunk({ content: 'Hallo' }), chunk({}, 'stop')]))
+    await run(createOpenAiCompatibleLanguageModel({ baseUrl: 'http://localhost:11434/v1', model: 'llama', fetch: fetchImpl }))
+
+    expect(calls[0]!.body).not.toHaveProperty('reasoning_effort')
+    expect(calls[0]!.headers.has('authorization')).toBe(false)
+  })
+
+  it('uses the vision model for a turn with images, when one is configured', async () => {
+    const { fetch: fetchImpl, calls } = fetchReturning(sse([chunk({ content: 'x' }), chunk({}, 'stop')]))
+    const withVision = createOpenAiCompatibleLanguageModel({ baseUrl: 'https://g.test/v1', model: 'text-model', visionModel: 'vision-model', fetch: fetchImpl })
+    const withoutVision = createOpenAiCompatibleLanguageModel({ baseUrl: 'https://g.test/v1', model: 'text-model', fetch: fetchImpl })
+
+    await run(withVision, true)
+    await run(withVision, false)
+    await run(withoutVision, true)
+
+    expect(calls.map(call => call.body.model)).toEqual(['vision-model', 'text-model', 'text-model'])
+  })
+
+  it.each([
+    [401, 'assistant_misconfigured'],
+    [403, 'assistant_misconfigured'],
+    [429, 'assistant_busy'],
+    [500, 'assistant_unreachable'],
+  ])('maps a provider %i to %s', async (status, code) => {
+    const { fetch: fetchImpl } = fetchReturning(JSON.stringify({ error: { message: 'nope' } }), status)
+    const parts = await run(createOpenAiCompatibleLanguageModel({ baseUrl: 'https://g.test/v1', model: 'm', fetch: fetchImpl }))
+
+    const error = parts.find(part => part.type === 'error')
+    expect(error).toBeDefined()
+    expect(assistantErrorCode((error as { error: unknown }).error)).toBe(code)
+  })
+
+  it('maps a network failure to assistant_unreachable', async () => {
+    // Nothing listens on port 1: a real connection error from Node's fetch.
+    const parts = await run(createOpenAiCompatibleLanguageModel({ baseUrl: 'http://127.0.0.1:1/v1', model: 'm' }))
+    expect(assistantErrorCode((parts.find(part => part.type === 'error') as { error: unknown }).error)).toBe('assistant_unreachable')
+  })
+
+  it('resolves the configured model (or the fake) from runtimeConfig, and null when unconfigured', () => {
+    const config = useRuntimeConfig().assistant as { provider: string, baseUrl: string, apiKey: string, model: string }
+    const original = { ...config }
+    try {
+      config.provider = 'fake'
+      expect(useAssistantLanguageModel()?.id).toBe('fake')
+      config.provider = 'openai'
+      config.model = 'mimo-v2.6-pro'
+      expect(useAssistantLanguageModel()?.id).toBe('mimo-v2.6-pro')
+      config.provider = ''
+      config.apiKey = ''
+      config.baseUrl = ''
+      const originalEnvKey = process.env.OPENAI_API_KEY
+      delete process.env.OPENAI_API_KEY
+      expect(useAssistantLanguageModel()).toBeNull()
+      if (originalEnvKey !== undefined) {
+        process.env.OPENAI_API_KEY = originalEnvKey
+      }
+    }
+    finally {
+      Object.assign(config, original)
+    }
+  })
+})
+
+describe('the fake language model (NUXT_ASSISTANT_PROVIDER=fake)', () => {
+  const user = (text: string) => ({ role: 'user' as const, content: [{ type: 'text' as const, text }] })
+
+  it('ports the former script: search, answer after a result, image, echo', () => {
+    expect(fakeTurn({ prompt: [user('suche Dark Magician')] })).toEqual({ text: '', toolCalls: [{ toolName: 'search_catalog', input: { query: 'Dark Magician' } }] })
+    expect(fakeTurn({ prompt: [
+      user('suche Dark Magician'),
+      { role: 'assistant', content: [{ type: 'tool-call', toolCallId: '1', toolName: 'search_catalog', input: {} }] },
+      { role: 'tool', content: [{ type: 'tool-result', toolCallId: '1', toolName: 'search_catalog', output: { type: 'json', value: { items: [{ id: 1, name: 'Dark Magician' }] } } }] },
+    ] }).text).toBe('Ich habe 1 Karte gefunden: Dark Magician')
+    expect(fakeTurn({ prompt: [{ role: 'user', content: [{ type: 'file', mediaType: 'image/png', data: { type: 'url', url: new URL('data:image/png;base64,abc') } }] }] }))
+      .toEqual({ text: 'Auf dem Bild sehe ich: Dark Magician.', toolCalls: [{ toolName: 'search_catalog', input: { query: 'Dark Magician' } }] })
+    expect(fakeTurn({ prompt: [user('Hallo')] }).text).toBe('Testantwort: Hallo')
+  })
+
+  it('answers from the deck context block in the system prompt', () => {
+    const system = { role: 'system' as const, content: 'Deck ID: d1\nDeck name: Blue-Eyes Test\nCounts: Main 40 · Extra 5 · Side 2' }
+    expect(fakeTurn({ prompt: [system, user('Was ist in meinem Deck?')] }).text).toBe('Kontext-Deck: Blue-Eyes Test (47 Karten)')
+  })
+
+  it('streams one answer as language-model stream parts', () => {
+    const parts = fakeStreamParts({ text: 'Hallo', toolCalls: [{ toolName: 'list_formats', input: {} }] })
+    expect(parts.map(part => part.type)).toEqual(['stream-start', 'text-start', 'text-delta', 'text-end', 'tool-call', 'finish'])
+    expect(parts.at(-1)).toMatchObject({ finishReason: { unified: 'tool-calls' } })
+  })
+
+  it('has the two #54 test triggers', () => {
+    expect(fakeTurn({ prompt: [user('leere argumente')] }).toolCalls).toEqual([{ toolName: 'search_catalog', input: '' }])
+    expect(fakeTurn({ prompt: [user('leere argumente')], toolChoice: { type: 'none' } }).text).toBe('Ich kann das Werkzeug gerade nicht nutzen.')
+    expect(fakeTurn({ prompt: [user('text-werkzeug')] })).toEqual({ text: 'search_catalog {"query":"Dark Magician"}', toolCalls: [] })
+    expect(fakeTurn({ prompt: [{ role: 'system', content: TOOL_TEXT.textWrittenToolCallHint }, user('text-werkzeug')] }).toolCalls)
+      .toEqual([{ toolName: 'search_catalog', input: { query: 'Dark Magician' } }])
+  })
+})
+
+describe('tool error texts', () => {
+  it('reads our message out of the SDK\'s error objects and strings, else a generic text', () => {
+    expect(toolErrorText(new AssistantToolError('Deck not found'))).toBe('Deck not found')
+    expect(toolErrorText('AI_InvalidToolInputError: Invalid input for tool x: AI_TypeValidationError: Type validation failed: Value: {}.\nError message: AssistantToolError: The tool arguments were empty.')).toBe('The tool arguments were empty.')
+    expect(toolErrorText('AI_InvalidToolInputError: Invalid input for tool x: AI_JSONParseError: JSON parsing failed')).toBe(TOOL_TEXT.invalidArguments)
+    expect(toolErrorText('AI_NoSuchToolError: Model tried to call unavailable tool \'nope\'. Available tools: a.')).toBe(TOOL_TEXT.unknownTool('nope'))
+    expect(toolErrorText(new Error('boom'))).toBe(TOOL_TEXT.unexpectedError)
+  })
+
+  it('gives a tool part its error text and a turn-ending error its code', () => {
+    expect(assistantStreamErrorText(new AssistantToolError('Deck not found'))).toBe('Deck not found')
+    expect(assistantStreamErrorText(new Error('boom'))).toBe('unexpected')
   })
 })

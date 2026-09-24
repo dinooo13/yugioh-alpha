@@ -16,8 +16,8 @@ mark the old as superseded.
 | [0006](0006-ai-deck-assistant.md) | AI deck assistant | Superseded by [0011](0011-deck-assistance-in-chat.md) |
 | [0007](0007-sharing-and-profile-model.md) | Sharing and profile model | Accepted |
 | [0008](0008-tournament-model.md) | Tournament model | Accepted |
-| [0009](0009-openai-compatible-assistant-provider.md) | OpenAI-compatible assistant provider | Accepted (structured-output parts superseded by [0011](0011-deck-assistance-in-chat.md)) |
-| [0010](0010-chat-assistant-with-tools.md) | Chat assistant with tools | Accepted (partly superseded by [0011](0011-deck-assistance-in-chat.md)) |
+| [0009](0009-openai-compatible-assistant-provider.md) | OpenAI-compatible assistant provider | Accepted (structured-output parts superseded by [0011](0011-deck-assistance-in-chat.md), the no-SDK transport by [0020](0020-assistant-on-the-ai-sdk.md)) |
+| [0010](0010-chat-assistant-with-tools.md) | Chat assistant with tools | Accepted (partly superseded by [0011](0011-deck-assistance-in-chat.md); engine parts by [0020](0020-assistant-on-the-ai-sdk.md)) |
 | [0011](0011-deck-assistance-in-chat.md) | Deck assistance in the chat assistant | Accepted |
 | [0012](0012-deck-cover-card.md) | Deck cover card chosen by the user | Accepted |
 | [0013](0013-english-url-scheme.md) | English URL scheme and permanent redirects from German paths | Accepted |
@@ -27,3 +27,4 @@ mark the old as superseded.
 | [0017](0017-inventory-without-collector-details.md) | Inventory without collector details | Accepted |
 | [0018](0018-product-name-ygo-alpha.md) | Product name "YGO Alpha" | Accepted |
 | [0019](0019-retired-catalog-cards.md) | Retired catalog cards | Accepted |
+| [0020](0020-assistant-on-the-ai-sdk.md) | The chat assistant on the Vercel AI SDK | Accepted (84a: server engine) |

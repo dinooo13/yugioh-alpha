@@ -8,16 +8,22 @@ import { addOwnedCard, ownedQuantitiesByCard, validateInventoryInput } from '../
 import { createCollection } from '../../server/utils/collections'
 import { createDeck, getDeckDetail, listDecks, updateDeck, upsertDeckCard } from '../../server/utils/decks'
 import { createRuleFormat, deleteRuleFormat, seedBuiltinFormats, validateRuleFormatInput } from '../../server/utils/rule-formats'
+import { asSchema } from 'ai'
 import {
   applyAction,
   ASSISTANT_TOOLS,
+  buildAssistantToolSet,
   rejectAction,
   runTool,
   toolDefinitions,
 } from '../../server/utils/assistant-tools'
-import type { ToolOutcome } from '../../server/utils/assistant-tools'
+import type { AssistantToolSet, ToolOutcome } from '../../server/utils/assistant-tools'
+import { createConversation, resolveDeckNames, toActionView } from '../../server/utils/assistant-chat'
+import { AssistantToolError } from '../../server/utils/assistant-model'
+import { TOOL_TEXT } from '../../server/utils/assistant-prompts'
+import type { AssistantToolOutput } from '../../shared/assistant-ui'
 import { getAssistantLimits } from '../../server/utils/assistant-limits'
-import type { AssistantActionKind } from '../../shared/assistant-chat'
+import type { AssistantActionKind, AssistantActionView } from '../../shared/assistant-chat'
 import { seedGermanNames } from './fixtures/german-names'
 
 const CARD = {
@@ -1161,5 +1167,97 @@ describe('rejectAction', () => {
     const updated = rejectAction(db, 'user-a', row.id)
     expect(updated.status).toBe('rejected')
     expect(await statusOf(async () => rejectAction(db, 'user-a', row.id))).toBe(409)
+  })
+})
+
+describe('buildAssistantToolSet (the AI SDK engine, ADR 0020)', () => {
+  function seedConversation() {
+    const conversation = createConversation(db, 'user-a')
+    const now = new Date()
+    db.insert(schema.assistantMessage).values({ id: 'msg-1', conversationId: conversation.id, role: 'assistant', content: '', parts: [], createdAt: now }).run()
+    return conversation.id
+  }
+
+  function buildSet(overrides: Partial<Parameters<typeof buildAssistantToolSet>[0]> = {}) {
+    const actions: Array<{ toolCallId: string, view: AssistantActionView }> = []
+    const conversationId = overrides.conversationId ?? seedConversation()
+    const tools = buildAssistantToolSet({
+      db,
+      userId: 'user-a',
+      cardLocale: 'en',
+      conversationId,
+      messageId: 'msg-1',
+      limits: { toolResultChars: 60_000, toolResultItems: 100 },
+      actionView: toActionView,
+      deckName: deckId => resolveDeckNames(db, 'user-a', [deckId]).get(deckId),
+      onAction: (toolCallId, view) => actions.push({ toolCallId, view }),
+      ...overrides,
+    })
+    return { tools, actions }
+  }
+
+  const options = (toolCallId = 'call-1') => ({ toolCallId, messages: [], context: {} })
+
+  async function execute(tools: AssistantToolSet, name: keyof AssistantToolSet, input: Record<string, unknown>, toolCallId = 'call-1') {
+    return tools[name].execute!(input, options(toolCallId)) as Promise<AssistantToolOutput>
+  }
+
+  it('offers every registered tool with its flat schema unchanged — no nullable unions anywhere (#54)', async () => {
+    const { tools } = buildSet()
+    expect(Object.keys(tools)).toEqual(ASSISTANT_TOOLS.map(definition => definition.name))
+    const definitions = new Map(toolDefinitions().map(definition => [definition.function.name, definition.function]))
+    for (const [name, assistantTool] of Object.entries(tools)) {
+      const schemaJson = await asSchema(assistantTool.inputSchema).jsonSchema
+      expect(schemaJson).toEqual(definitions.get(name)!.parameters)
+      expect(assistantTool.description).toBe(definitions.get(name)!.description)
+    }
+    expect(JSON.stringify(await Promise.all(Object.values(tools).map(assistantTool => asSchema(assistantTool.inputSchema).jsonSchema)))).not.toMatch(/"type":\s*\[/)
+  })
+
+  it('rejects empty or non-object arguments with the emptyArguments text, but accepts {} where nothing is required', async () => {
+    const { tools } = buildSet()
+    const validate = (name: keyof AssistantToolSet, value: unknown) => asSchema(tools[name].inputSchema).validate!(value)
+
+    for (const value of [{}, '', null, [1]]) {
+      const result = await validate('search_catalog', value)
+      expect(result.success).toBe(false)
+      expect(!result.success && result.error.message).toBe(TOOL_TEXT.emptyArguments)
+    }
+    expect(await validate('list_formats', {})).toEqual({ success: true, value: {} })
+    expect(await validate('search_catalog', { query: 'Dark' })).toEqual({ success: true, value: { query: 'Dark' } })
+  })
+
+  it('runs a read tool; the model reads only the result, the chip also gets the deck\'s name (#53)', async () => {
+    const deck = createDeck(db, 'user-a', { name: 'Magier-Deck', description: null })
+    const { tools } = buildSet()
+
+    const output = await execute(tools, 'get_deck', { id: deck.id })
+
+    expect(output).toMatchObject({ deckName: 'Magier-Deck', result: { id: deck.id, name: 'Magier-Deck' } })
+    const modelOutput = await tools.get_deck.toModelOutput!({ toolCallId: 'call-1', input: { id: deck.id }, output })
+    expect(modelOutput).toEqual({ type: 'json', value: output.result })
+  })
+
+  it('throws an AssistantToolError with the English message a failing tool reports', async () => {
+    const { tools } = buildSet()
+    const error = await execute(tools, 'get_deck', { id: 'nope' }).catch((caught: unknown) => caught)
+    expect(error).toBeInstanceOf(AssistantToolError)
+    expect(JSON.parse(JSON.stringify(error))).toEqual({ error: 'Deck not found' })
+  })
+
+  it('caps an over-budget result with the resultTooLarge envelope', async () => {
+    const { tools } = buildSet({ limits: { toolResultChars: 10, toolResultItems: 100 } })
+    expect(await execute(tools, 'search_catalog', { query: 'a' })).toEqual({ result: TOOL_TEXT.resultTooLarge })
+  })
+
+  it('stores a write tool\'s proposal as a pending action of the turn\'s message and hands its view on with the call id', async () => {
+    const { tools, actions } = buildSet()
+
+    const output = await execute(tools, 'add_to_inventory', { items: [{ catalogCardId: CARD.darkMagician, quantity: 2 }] }, 'call-7')
+
+    expect(output.result).toMatchObject({ status: 'pending_confirmation' })
+    const row = db.select().from(schema.assistantAction).get()!
+    expect(row).toMatchObject({ messageId: 'msg-1', userId: 'user-a', status: 'pending', kind: 'add_to_inventory' })
+    expect(actions).toEqual([{ toolCallId: 'call-7', view: toActionView(row) }])
   })
 })

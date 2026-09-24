@@ -9,11 +9,19 @@
 // The server never trusts what a model returns: tool-call arguments are raw
 // JSON strings, validated by the tool layer (server/utils/assistant-tools.ts).
 
-import { readFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
 import { createError } from 'h3'
-import type { AssistantStatus } from '../../shared/assistant-chat'
 import { DEFAULT_ASSISTANT_TIMEOUT_MS, getAssistantLimits } from './assistant-limits'
+import {
+  ASSISTANT_USER_AGENT,
+  FAKE_MODEL_ID,
+  resolveApiKey,
+  resolveBaseUrl,
+  resolveModelId,
+  resolveProvider,
+  resolveReasoningEffort,
+  resolveVisionModel,
+  useAssistantRuntimeConfig,
+} from './assistant-model'
 
 // --- Chat (tool-calling, streamed) --------------------------------------------
 //
@@ -101,34 +109,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
-// --- Shared request plumbing (headers, package version) -----------------------
+// --- Shared request plumbing (headers) ----------------------------------------
 //
 // OpenCode Go rejects any request that lacks
 // `x-opencode-session`; other providers ignore it. `User-Agent` identifies
 // the app/version to whichever gateway is on the other end.
 
-function resolvePackageVersion(): string {
-  if (process.env.npm_package_version) {
-    return process.env.npm_package_version
-  }
-  try {
-    const pkgPath = fileURLToPath(new URL('../../package.json', import.meta.url))
-    const pkg = JSON.parse(readFileSync(pkgPath, 'utf8')) as { version?: string }
-    return pkg.version ?? '0.0.0'
-  }
-  catch {
-    return '0.0.0'
-  }
-}
-
-const PACKAGE_VERSION = resolvePackageVersion()
-const USER_AGENT = `ygo-alpha/${PACKAGE_VERSION}`
-
 function buildRequestHeaders(apiKey: string, sessionId: string): Record<string, string> {
   return {
     'content-type': 'application/json',
     'x-opencode-session': sessionId,
-    'user-agent': USER_AGENT,
+    'user-agent': ASSISTANT_USER_AGENT,
     ...(apiKey !== '' ? { authorization: `Bearer ${apiKey}` } : {}),
   }
 }
@@ -392,8 +383,6 @@ export function createOpenAiCompatibleModel(options: CreateOpenAiCompatibleModel
 
 // --- Fake model (deterministic, no network) ----------------------------------
 
-const FAKE_MODEL_ID = 'fake'
-
 // --- Fake chat (deterministic, scripted tool-calling for tests/E2E) ----------
 //
 // Drives a small, fixed script off the *last* user message's text/image, and
@@ -591,83 +580,13 @@ export function createFakeModel(): DeckAssistantModel {
   }
 }
 
-// --- Configuration resolution -------------------------------------------------
-
-export interface DeckAssistantRuntimeConfig {
-  provider: string
-  baseUrl: string
-  apiKey: string
-  model: string
-  reasoningEffort: string
-  /** NUXT_ASSISTANT_VISION_MODEL — used for chat turns with images; '' = use `model`. */
-  visionModel: string
-}
-
-type Provider = 'openai' | 'fake' | null
-
-const DEFAULT_BASE_URL = 'https://api.openai.com/v1'
-const DEFAULT_MODEL = 'gpt-4o-mini'
-
-function normalizeBaseUrl(value: string | undefined): string {
-  return (value ?? '').trim().replace(/\/+$/, '')
-}
-
-function resolveBaseUrl(config: DeckAssistantRuntimeConfig): string {
-  const trimmed = normalizeBaseUrl(config.baseUrl)
-  return trimmed !== '' ? trimmed : DEFAULT_BASE_URL
-}
-
-/** Whether the caller pointed the assistant at something other than the default OpenAI endpoint. */
-function hasCustomBaseUrl(config: DeckAssistantRuntimeConfig): boolean {
-  const trimmed = normalizeBaseUrl(config.baseUrl)
-  return trimmed !== '' && trimmed !== DEFAULT_BASE_URL
-}
-
-function resolveApiKey(config: DeckAssistantRuntimeConfig): string {
-  const trimmed = (config.apiKey ?? '').trim()
-  if (trimmed !== '') {
-    return trimmed
-  }
-  return (process.env.OPENAI_API_KEY ?? '').trim()
-}
-
-function resolveReasoningEffort(config: DeckAssistantRuntimeConfig): string | undefined {
-  const trimmed = (config.reasoningEffort ?? '').trim()
-  return trimmed !== '' ? trimmed : undefined
-}
-
-function resolveModelId(config: DeckAssistantRuntimeConfig): string {
-  const trimmed = (config.model ?? '').trim()
-  return trimmed !== '' ? trimmed : DEFAULT_MODEL
-}
-
-/** '' when unset (chat turns with images then use `model` as-is). */
-function resolveVisionModel(config: DeckAssistantRuntimeConfig): string {
-  return (config.visionModel ?? '').trim()
-}
-
-function resolveProvider(config: DeckAssistantRuntimeConfig): Provider {
-  const raw = (config.provider ?? '').trim().toLowerCase()
-  if (raw === 'fake') {
-    return 'fake'
-  }
-  if (raw === 'openai') {
-    return 'openai'
-  }
-  if (raw === '') {
-    // Auto: an API key (config or OPENAI_API_KEY) implies a real endpoint is
-    // wanted; so does a base URL explicitly changed away from the default,
-    // for keyless local servers (Ollama, LM Studio) that never carry a key.
-    const hasKey = resolveApiKey(config) !== ''
-    if (hasKey || hasCustomBaseUrl(config)) {
-      return 'openai'
-    }
-  }
-  return null
-}
+// --- Configuration ------------------------------------------------------------
+//
+// Resolution (provider auto-detection, OPENAI_API_KEY fallback, defaults)
+// lives in assistant-model.ts, shared with the AI SDK engine (ADR 0020).
 
 export function useDeckAssistantModel(): DeckAssistantModel | null {
-  const config = useRuntimeConfig().assistant as DeckAssistantRuntimeConfig
+  const config = useAssistantRuntimeConfig()
   const provider = resolveProvider(config)
 
   if (provider === 'fake') {
@@ -684,37 +603,4 @@ export function useDeckAssistantModel(): DeckAssistantModel | null {
     })
   }
   return null
-}
-
-export function getDeckAssistantStatus(): AssistantStatus {
-  const config = useRuntimeConfig().assistant as DeckAssistantRuntimeConfig
-  const provider = resolveProvider(config)
-
-  if (provider === 'fake') {
-    return { enabled: true, provider: 'fake', model: FAKE_MODEL_ID, baseUrl: null, chat: true, vision: true, visionModel: null }
-  }
-  if (provider === 'openai') {
-    const baseUrl = resolveBaseUrl(config)
-    let host = baseUrl
-    try {
-      host = new URL(baseUrl).host
-    }
-    catch {
-      // Keep the raw (already-validated-enough-to-configure) string if it
-      // somehow isn't a parseable URL — still never a secret.
-    }
-    const visionModel = resolveVisionModel(config)
-    return {
-      enabled: true,
-      provider: 'openai',
-      model: resolveModelId(config),
-      baseUrl: host,
-      chat: true,
-      // Every provider reachable here (a real OpenAI-compatible endpoint, or
-      // the fake) is treated as vision-capable — see ADR 0010.
-      vision: true,
-      visionModel: visionModel !== '' ? visionModel : null,
-    }
-  }
-  return { enabled: false, provider: null, model: null, baseUrl: null, chat: false, vision: false, visionModel: null }
 }
