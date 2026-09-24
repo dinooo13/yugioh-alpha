@@ -140,7 +140,7 @@ function onSaved(result: { created: number, merged: number }) {
       </template>
     </UAlert>
 
-    <div class="rounded-md border border-default bg-default p-4">
+    <div class="panel p-4">
       <div class="space-y-3">
         <UFormField
           :label="t('quickEntry.list.label')"

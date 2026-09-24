@@ -91,7 +91,7 @@ function cardMetaLine(card: SharedCardListItem): string {
 
     <ul
       v-else
-      class="divide-y divide-default rounded-md border border-default bg-default"
+      class="panel divide-y divide-default overflow-hidden"
     >
       <li
         v-for="card in items"

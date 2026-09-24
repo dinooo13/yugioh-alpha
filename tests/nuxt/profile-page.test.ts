@@ -70,7 +70,7 @@ describe('profile page', () => {
     // Both the form and the public-profile link live in the same card now
     // (UX review #23) — the link's closest bordered card ancestor is the
     // form's own parent, not a separate section further down the page.
-    expect(profileLink.element.closest('.rounded-md')).toBe(form.element.closest('.rounded-md'))
+    expect(profileLink.element.closest('.panel')).toBe(form.element.closest('.panel'))
   })
 
   it('warns that old shared links break once the handle is actually changed', async () => {

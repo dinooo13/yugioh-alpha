@@ -147,7 +147,7 @@ defineExpose({ defaults, summary, canSaveAll })
 
 <template>
   <div class="space-y-4">
-    <div class="rounded-md border border-default bg-default p-4">
+    <div class="panel p-4">
       <h2 class="text-sm font-semibold text-highlighted">
         {{ t('quickEntry.defaults.title') }}
       </h2>
@@ -186,7 +186,7 @@ defineExpose({ defaults, summary, canSaveAll })
       </div>
     </div>
 
-    <div class="flex flex-col gap-3 rounded-md border border-default bg-default p-4 sm:flex-row sm:items-center sm:justify-between">
+    <div class="flex flex-col gap-3 panel p-4 sm:flex-row sm:items-center sm:justify-between">
       <div class="flex flex-wrap items-center gap-2 text-sm">
         <UBadge
           color="neutral"
@@ -263,7 +263,7 @@ defineExpose({ defaults, summary, canSaveAll })
       </li>
     </ul>
 
-    <div class="divide-y divide-default overflow-hidden rounded-md border border-default bg-default">
+    <div class="divide-y divide-default panel overflow-hidden">
       <EntryReviewRow
         v-for="row in rows"
         :key="row.id"

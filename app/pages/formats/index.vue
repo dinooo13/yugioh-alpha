@@ -108,7 +108,7 @@ function ruleCountLabel(format: RuleFormatListItem) {
           <li
             v-for="format in builtins"
             :key="format.id"
-            class="flex flex-col rounded-md border border-default bg-default p-4"
+            class="panel flex flex-col p-4 transition-[box-shadow,border-color] duration-200 hover:border-primary/40 hover:shadow-lift"
           >
             <div class="flex items-start justify-between gap-2">
               <NuxtLink
@@ -186,7 +186,7 @@ function ruleCountLabel(format: RuleFormatListItem) {
           <li
             v-for="format in ownFormats"
             :key="format.id"
-            class="flex flex-col rounded-md border border-default bg-default p-4"
+            class="panel flex flex-col p-4 transition-[box-shadow,border-color] duration-200 hover:border-primary/40 hover:shadow-lift"
           >
             <NuxtLink
               :to="`/formats/${format.id}`"

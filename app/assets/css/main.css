@@ -73,6 +73,9 @@
 
   /* The night behind the arcane card back (always dark, like a real card). */
   --color-night: #0a0a1a;
+  /* Podium dots in the standings (gold is `secondary`). */
+  --color-medal-silver: #b8bccb;
+  --color-medal-bronze: #c47a45;
   /* Modal and slideover backdrop, in both modes. */
   --color-scrim: rgb(10 10 26 / 0.7);
   /* Text on a saturated primary-500+ fill (white on brand-500: 4.62:1). */

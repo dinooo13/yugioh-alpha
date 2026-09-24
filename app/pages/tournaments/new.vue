@@ -107,7 +107,7 @@ async function submit() {
     </div>
 
     <form
-      class="space-y-4 rounded-md border border-default bg-default p-4"
+      class="space-y-4 panel p-4"
       @submit.prevent="submit"
     >
       <UFormField

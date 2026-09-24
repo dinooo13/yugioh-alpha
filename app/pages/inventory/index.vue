@@ -495,15 +495,15 @@ async function onSaved() {
         <UFieldGroup>
           <UButton
             :label="t('inventory.view.list')"
-            color="neutral"
-            :variant="mode === 'list' ? 'solid' : 'outline'"
+            :color="mode === 'list' ? 'primary' : 'neutral'"
+            :variant="mode === 'list' ? 'subtle' : 'outline'"
             :aria-pressed="mode === 'list'"
             @click="() => { mode = 'list' }"
           />
           <UButton
             :label="t('inventory.view.overview')"
-            color="neutral"
-            :variant="mode === 'overview' ? 'solid' : 'outline'"
+            :color="mode === 'overview' ? 'primary' : 'neutral'"
+            :variant="mode === 'overview' ? 'subtle' : 'outline'"
             :aria-pressed="mode === 'overview'"
             @click="() => { mode = 'overview' }"
           />
@@ -567,7 +567,7 @@ async function onSaved() {
 
       <div
         v-else-if="searchError || searchItems.length === 0"
-        class="overflow-hidden rounded-md border border-default bg-default"
+        class="panel overflow-hidden"
       >
         <UAlert
           v-if="searchError"
@@ -666,7 +666,7 @@ async function onSaved() {
         />
       </div>
 
-      <div class="overflow-hidden rounded-md border border-default bg-default">
+      <div class="panel overflow-hidden">
         <ul
           v-if="pending"
           class="divide-y divide-default"

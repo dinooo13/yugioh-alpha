@@ -29,21 +29,25 @@ const winner = computed(() => {
   }
   return props.standings.find(row => row.rank === 1) ?? null
 })
+
+// The podium: gold, silver, bronze.
+const MEDAL_CLASSES = ['bg-secondary', 'bg-medal-silver', 'bg-medal-bronze'] as const
 </script>
 
 <template>
-  <section class="rounded-md border border-default bg-default p-4">
+  <section class="panel p-4">
     <div class="flex flex-wrap items-center justify-between gap-2">
       <h2 class="text-base font-semibold text-highlighted">
         {{ t('tournaments.standings.title') }}
       </h2>
       <p
         v-if="winner"
-        class="flex items-center gap-1.5 text-sm font-semibold text-warning"
+        class="flex items-center gap-1.5 text-sm font-semibold text-secondary"
       >
         <UIcon
           name="i-lucide-trophy"
           class="size-4"
+          aria-hidden="true"
         />
         {{ t('tournaments.standings.winner', { name: winner.name }) }}
       </p>
@@ -73,11 +77,11 @@ const winner = computed(() => {
         >
           <tr
             role="row"
-            class="border-b border-default text-xs uppercase tracking-wide text-muted"
+            class="border-b border-default bg-elevated/50 text-[0.6875rem] tracking-wider text-muted uppercase"
           >
             <th
               role="columnheader"
-              class="py-2 pr-2"
+              class="py-2 pr-2 pl-3"
             >
               {{ t('tournaments.standings.columns.rank') }}
             </th>
@@ -139,26 +143,29 @@ const winner = computed(() => {
             v-for="row in standings"
             :key="row.participantId"
             role="row"
-            class="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-x-2 gap-y-2 rounded-md border p-3 sm:table-row sm:rounded-none sm:border-0 sm:p-0"
-            :class="row.rank === 1 ? 'border-warning/30 bg-warning/10' : 'border-default'"
+            class="grid grid-cols-[2.5rem_minmax(0,1fr)_auto] items-center gap-x-2 gap-y-2 rounded-lg border p-3 transition-colors sm:table-row sm:rounded-none sm:border-0 sm:p-0 sm:hover:bg-elevated/40"
+            :class="row.rank === 1 ? 'border-secondary/40 bg-secondary/8' : 'border-default'"
           >
+            <!-- Gold, silver and bronze dots for the podium (decorative; the
+                 rank is written next to them); a gold edge on first place. -->
             <td
               role="cell"
-              class="tabular-nums text-muted sm:py-2 sm:pr-2"
+              class="font-numeric font-semibold tracking-[0.04em] text-muted tabular-nums sm:py-2 sm:pr-2 sm:pl-3"
+              :class="row.rank === 1 ? 'sm:shadow-[inset_3px_0_0_var(--ui-secondary)]' : undefined"
             >
-              <span class="inline-flex items-center gap-1">
-                <UIcon
-                  v-if="row.rank === 1"
-                  name="i-lucide-trophy"
-                  class="size-3.5 text-warning"
+              <span class="inline-flex items-center gap-1.5">
+                <span
+                  v-if="row.rank <= 3"
+                  class="size-2.5 rounded-full ring-1 ring-default"
+                  :class="MEDAL_CLASSES[row.rank - 1]"
+                  aria-hidden="true"
                 />
                 {{ row.rank }}
               </span>
             </td>
             <td
               role="cell"
-              class="font-medium sm:px-2 sm:py-2"
-              :class="row.rank === 1 ? 'text-highlighted' : 'text-highlighted'"
+              class="font-medium text-highlighted sm:px-2 sm:py-2"
             >
               {{ row.name }}
               <UBadge
@@ -172,31 +179,31 @@ const winner = computed(() => {
             </td>
             <td
               role="cell"
-              class="text-right font-semibold tabular-nums sm:px-2 sm:py-2 sm:text-left sm:font-normal"
+              class="text-right font-numeric font-bold tracking-[0.04em] text-highlighted tabular-nums sm:px-2 sm:py-2 sm:text-left"
             >
               {{ row.points }}<span class="text-xs font-normal text-muted sm:hidden"> {{ t('tournaments.standings.pointsShort') }}</span>
             </td>
             <td
               role="cell"
-              class="hidden tabular-nums sm:table-cell sm:px-2 sm:py-2"
+              class="hidden font-numeric tracking-[0.02em] tabular-nums sm:table-cell sm:px-2 sm:py-2"
             >
               {{ recordLabel(row) }}
             </td>
             <td
               role="cell"
-              class="hidden tabular-nums sm:table-cell sm:px-2 sm:py-2"
+              class="hidden font-numeric tracking-[0.02em] tabular-nums sm:table-cell sm:px-2 sm:py-2"
             >
               {{ formatRate(row.opponentMatchWinRate) }}
             </td>
             <td
               role="cell"
-              class="hidden tabular-nums sm:table-cell sm:px-2 sm:py-2"
+              class="hidden font-numeric tracking-[0.02em] tabular-nums sm:table-cell sm:px-2 sm:py-2"
             >
               {{ formatRate(row.gameWinRate) }}
             </td>
             <td
               role="cell"
-              class="hidden tabular-nums sm:table-cell sm:px-2 sm:py-2"
+              class="hidden font-numeric tracking-[0.02em] tabular-nums sm:table-cell sm:px-2 sm:py-2"
             >
               {{ formatRate(row.opponentGameWinRate) }}
             </td>
