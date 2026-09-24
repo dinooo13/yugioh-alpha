@@ -152,6 +152,14 @@ describe('toolDefinitions', () => {
   it('never uses a nullable union type in a parameter schema (#54: the provider garbles such calls)', () => {
     expect(JSON.stringify(toolDefinitions())).not.toMatch(/"type":\s*\[/)
   })
+
+  it('offers add_to_inventory without collector fields (ADR 0017)', () => {
+    const addToInventory = toolDefinitions().find(definition => definition.function.name === 'add_to_inventory')!
+    const parameters = addToInventory.function.parameters as {
+      properties: { items: { items: { properties: Record<string, unknown> } } }
+    }
+    expect(Object.keys(parameters.properties.items.items.properties)).toEqual(['catalogCardId', 'quantity', 'collectionId'])
+  })
 })
 
 describe('runTool', () => {
@@ -881,6 +889,27 @@ describe('applyAction', () => {
 
     expect(updated.status).toBe('applied')
     expect(ownedQuantitiesByCard(db, 'user-a', [CARD.darkMagician]).get(CARD.darkMagician)).toBe(2)
+  })
+
+  it('applies an add_to_inventory action stored with collector fields as default rows (ADR 0017)', async () => {
+    await addOwnedCard(db, 'user-a', validateInventoryInput({ catalog_card_id: CARD.darkMagician, quantity: 1 }))
+    const action = insertPendingAction('user-a', 'add_to_inventory', {
+      items: [
+        { catalogCardId: CARD.darkMagician, quantity: 2, printingId: 'LOB-005', language: 'de', condition: 'played', edition: 'first', collectionId: null, note: null, name: 'Dark Magician' },
+        { catalogCardId: CARD.potOfGreed, quantity: 1, printingId: null, language: 'ja', condition: 'played', edition: 'limited', collectionId: null, note: null, name: 'Pot of Greed' },
+      ],
+    })
+
+    const updated = await applyAction(db, 'user-a', action.id)
+
+    expect(updated.status).toBe('applied')
+    const rows = db.select().from(schema.ownedCard).where(eq(schema.ownedCard.userId, 'user-a')).all()
+    expect(rows).toHaveLength(2)
+    // Merged into the existing stack, not a separate German/played row.
+    expect(rows.find(row => row.catalogCardId === CARD.darkMagician)).toMatchObject({ quantity: 3 })
+    for (const row of rows) {
+      expect(row).toMatchObject({ printingId: null, language: 'en', condition: 'near_mint', edition: 'unlimited' })
+    }
   })
 
   it('applies the enriched create_deck / update_deck_cards payloads (names, preview) exactly as proposed', async () => {

@@ -111,11 +111,7 @@
         "quantity": "Menge",
         "newQuantity": "Neue Menge",
         "section": "Sektion",
-        "collectionId": "Sammlung",
-        "language": "Drucksprache",
-        "condition": "Zustand",
-        "edition": "Auflage",
-        "printingId": "Druck"
+        "collectionId": "Sammlung"
       },
       "meta": {
         "name": "Name",

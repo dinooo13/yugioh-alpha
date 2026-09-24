@@ -590,9 +590,10 @@ function withCardNames<T extends { catalogCardId: number }>(db: Db, cards: T[]):
 async function toolAddToInventory(db: Db, userId: string, args: unknown): Promise<ToolOutcome> {
   const record = requireArgs(args)
   const inputs: InventoryInput[] = validateInventoryBulkInput(db, userId, { items: record.items })
-  // Each item's `name` is display-only, like the deck tools' rows:
-  // `validateInventoryInput` reads only the fields it knows, so it never
-  // reaches the write.
+  // The payload items carry `{ catalogCardId, collectionId, quantity, note }`
+  // (no collector fields, ADR 0017) plus a display-only `name`/`nameDe`, like
+  // the deck tools' rows: `validateInventoryInput` reads only the fields it
+  // knows, so the names never reach the write.
   const items = withCardNames(db, inputs)
 
   const summary = ACTION_SUMMARY.addToInventory(items.length, items.map(item => `${item.name} x${item.quantity}`).join(', '))
@@ -853,9 +854,6 @@ export const ASSISTANT_TOOLS: AssistantTool[] = [
               catalogCardId: { type: 'integer' },
               quantity: { type: 'integer' },
               collectionId: { type: 'string' },
-              language: { type: 'string' },
-              condition: { type: 'string' },
-              edition: { type: 'string' },
             },
           },
         },
@@ -1024,6 +1022,8 @@ function executeActionPayload(db: Db, userId: string, action: AssistantActionRow
   switch (action.kind) {
     case 'add_to_inventory': {
       const payload = action.payload as unknown as { items: unknown }
+      // Actions stored before ADR 0017 may still carry `printingId`/`language`/
+      // `condition`/`edition`; the validator ignores them, so they apply with the defaults.
       const inputs = validateInventoryBulkInput(db, userId, { items: payload.items })
       return addOwnedCardsBulkSync(db, userId, inputs)
     }
