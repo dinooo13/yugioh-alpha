@@ -108,11 +108,12 @@ test.describe('Chat assistant', () => {
     await expect(page.getByText('Dark Magician', { exact: false }).first()).toBeVisible()
     await expect(nachricht).toBeEnabled()
 
-    // --- conversation list: title derived from the first message, delete ---
-    // The first conversation's title comes from its first user message —
-    // "suche Dark Magician", sent right after the empty conversation was created.
-    const firstConversationItem = conversationAside.locator('li').filter({ hasText: 'suche Dark Magician' })
-    await expect(firstConversationItem.getByRole('link', { name: 'suche Dark Magician', exact: true })).toBeVisible()
+    // --- conversation list: title written by the title model, delete -------
+    // The first conversation was titled by the (fake) title model after the
+    // first exchange (#129) — from its first message "suche Dark Magician",
+    // sent right after the empty conversation was created.
+    const firstConversationItem = conversationAside.locator('li').filter({ hasText: 'Thema: suche Dark Magician' })
+    await expect(firstConversationItem.getByRole('link', { name: 'Thema: suche Dark Magician', exact: true })).toBeVisible()
 
     await firstConversationItem.getByRole('button').click()
     await acceptConfirm(page)
@@ -232,8 +233,9 @@ test.describe('Chat assistant', () => {
     await page.getByRole('button', { name: 'Reject', exact: true }).click()
     await expect(page.getByText('Rejected')).toBeVisible()
 
-    // The conversation list shows the conversation, titled from its first message.
-    await expect(page.getByRole('link', { name: 'suche Dark Magician' }).first()).toBeVisible()
+    // The conversation list shows the conversation, titled by the (fake)
+    // title model in the interface language (#129).
+    await expect(page.getByRole('link', { name: 'Topic: suche Dark Magician' }).first()).toBeVisible()
   })
 })
 
@@ -343,5 +345,106 @@ test.describe('Chat assistant on the AI SDK (#84)', () => {
     // Two identical failures, then tools were switched off.
     await expect(page.locator('[data-testid="assistant-tool"][data-outcome="error"]')).toHaveCount(2)
     await expect(page.getByLabel('Nachricht', { exact: true })).toBeEnabled()
+  })
+})
+
+
+// --- #128 / #129: card names in chips, collapsed reasoning, model titles ----
+
+test.describe('Assistant polish (#128, #129)', () => {
+  async function openNewConversation(page: Page, data?: { deckId: string }): Promise<string> {
+    const createResponse = await page.request.post('/api/assistant/chat', data ? { data } : undefined)
+    expect(createResponse.ok()).toBe(true)
+    const { id } = await createResponse.json() as { id: string }
+    await page.goto(`/assistant/${id}`)
+    await waitForHydration(page)
+    return id
+  }
+
+  async function send(page: Page, text: string) {
+    const nachricht = page.getByLabel('Nachricht', { exact: true })
+    await nachricht.fill(text)
+    await page.getByRole('button', { name: 'Senden', exact: true }).click()
+  }
+
+  test('a get_card chip names the card, in the card language, also after a reload', async ({ page }) => {
+    await registerAndLogin(page)
+    await openNewConversation(page)
+
+    await send(page, `zeige karte ${DARK_MAGICIAN}`)
+    await expect(page.getByText('Kartendetails gelesen.')).toBeVisible()
+    const chip = page.getByTestId('assistant-tool')
+    await expect(chip).toContainText(`Liest Kartendetails: ${CARD.darkMagician}`)
+    await expect(chip).not.toContainText(String(DARK_MAGICIAN))
+
+    await page.reload()
+    await waitForHydration(page)
+    await expect(page.getByTestId('assistant-tool')).toContainText(`Liest Kartendetails: ${CARD.darkMagician}`)
+  })
+
+  test('the model\'s reasoning stays collapsed until the user opens it', async ({ page }) => {
+    await registerAndLogin(page)
+    await openNewConversation(page)
+
+    await send(page, 'denk nach')
+    await expect(page.getByText('Fertig überlegt.')).toBeVisible()
+    const trigger = page.getByTestId('assistant-reasoning').locator('[data-slot="trigger"]')
+    await expect(trigger).toHaveAttribute('aria-expanded', 'false')
+    await expect(page.getByText('Ich überlege kurz.')).toBeHidden()
+
+    await trigger.click()
+    await expect(trigger).toHaveAttribute('aria-expanded', 'true')
+    await expect(page.getByText('Ich überlege kurz.')).toBeVisible()
+
+    await page.reload()
+    await waitForHydration(page)
+    await expect(page.getByTestId('assistant-reasoning').locator('[data-slot="trigger"]')).toHaveAttribute('aria-expanded', 'false')
+    await expect(page.getByText('Ich überlege kurz.')).toBeHidden()
+  })
+
+  test('the title model names the conversation in list and header; the title is stored', async ({ page }) => {
+    await registerAndLogin(page)
+    await openNewConversation(page)
+
+    await send(page, 'suche Dark Magician')
+    await expect(page.getByText('Ich habe 1 Karte gefunden: Dark Magician')).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Thema: suche Dark Magician', exact: true }).first()).toBeVisible()
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Thema: suche Dark Magician')
+
+    await page.reload()
+    await waitForHydration(page)
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Thema: suche Dark Magician')
+    await expect(page.getByRole('link', { name: 'Thema: suche Dark Magician', exact: true }).first()).toBeVisible()
+  })
+
+  test('a failing title model keeps the first message as the title', async ({ page }) => {
+    await registerAndLogin(page)
+    const id = await openNewConversation(page)
+
+    await send(page, 'titel-fehler bitte')
+    await expect(page.getByText('Testantwort: titel-fehler bitte')).toBeVisible()
+    await expect(page.getByLabel('Nachricht', { exact: true })).toBeEnabled()
+    await expect(page.getByRole('link', { name: 'titel-fehler bitte', exact: true }).first()).toBeVisible()
+    // The title request has come back by now: the title stayed.
+    await expect.poll(async () => {
+      const response = await page.request.get(`/api/assistant/chat/${id}`)
+      return (await response.json() as { conversation: { title: string } }).conversation.title
+    }).toBe('titel-fehler bitte')
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('titel-fehler bitte')
+  })
+
+  test('a deck conversation gets a title too, and keeps its deck chip', async ({ page }) => {
+    await registerAndLogin(page)
+    const deckResponse = await page.request.post('/api/decks', { data: { name: 'Titel-Deck' } })
+    expect(deckResponse.ok()).toBe(true)
+    const deck = await deckResponse.json() as { id: string }
+    await openNewConversation(page, { deckId: deck.id })
+
+    const deckChip = page.getByRole('link', { name: 'Deck Titel-Deck öffnen', exact: true })
+    await expect(deckChip).toHaveText('Deck: Titel-Deck')
+    await send(page, 'Was ist in meinem Deck?')
+    await expect(page.getByText('Kontext-Deck: Titel-Deck (0 Karten)')).toBeVisible()
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Thema: Was ist in meinem')
+    await expect(deckChip).toBeVisible()
   })
 })

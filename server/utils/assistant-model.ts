@@ -1,8 +1,9 @@
 // The chat assistant's model on the AI SDK (docs/adr/0020-assistant-on-the-ai-sdk.md):
 // the app-level configuration (provider auto-detection, OPENAI_API_KEY
 // fallback, defaults, vision model — ADR 0009/0010), the language model the
-// turn engine (server/utils/assistant-turn.ts) streams from, the
-// deterministic fake used by tests and E2E, and the mapping of SDK errors to
+// turn engine (server/utils/assistant-turn.ts) streams from, the title model
+// that names a conversation (#129, server/utils/assistant-title.ts), the
+// deterministic fakes used by tests and E2E, and the mapping of SDK errors to
 // our error codes (ADR 0014).
 //
 // The real model is `@ai-sdk/openai-compatible` against any Chat Completions
@@ -18,7 +19,7 @@ import { AISDKError, APICallError, InvalidToolInputError, NoSuchToolError, Retry
 import type { LanguageModel, streamText } from 'ai'
 import { MockLanguageModelV4 } from 'ai/test'
 import type { AssistantStatus } from '../../shared/assistant-chat'
-import { TOOL_TEXT } from './assistant-prompts'
+import { TITLE_LANGUAGE_INSTRUCTION, TITLE_PROMPT_DELIMITERS, TOOL_TEXT } from './assistant-prompts'
 
 // --- Configuration resolution -------------------------------------------------
 
@@ -32,6 +33,8 @@ export interface DeckAssistantRuntimeConfig {
   visionModel: string
   /** NUXT_ASSISTANT_MODELS — comma-separated model ids the user may pick from; '' = only `model`. */
   models?: string
+  /** NUXT_ASSISTANT_TITLE_MODEL — names a conversation after its first exchange (#129); '' = `DEFAULT_TITLE_MODEL`, 'off' = never. */
+  titleModel?: string
 }
 
 export type AssistantProvider = 'openai' | 'fake' | null
@@ -39,6 +42,8 @@ export type AssistantProvider = 'openai' | 'fake' | null
 export const DEFAULT_BASE_URL = 'https://api.openai.com/v1'
 export const DEFAULT_MODEL = 'gpt-4o-mini'
 export const FAKE_MODEL_ID = 'fake'
+/** The title model when none is configured (#129): OpenCode Go's fast model. */
+export const DEFAULT_TITLE_MODEL = 'glm-5.3-flash'
 
 function normalizeBaseUrl(value: string | undefined): string {
   return (value ?? '').trim().replace(/\/+$/, '')
@@ -71,6 +76,19 @@ export function resolveReasoningEffort(config: DeckAssistantRuntimeConfig): stri
 export function resolveModelId(config: DeckAssistantRuntimeConfig): string {
   const trimmed = (config.model ?? '').trim()
   return trimmed !== '' ? trimmed : DEFAULT_MODEL
+}
+
+/**
+ * The model that names conversations (#129): `titleModel` as configured,
+ * `DEFAULT_TITLE_MODEL` when empty (a copied `.env.example` sets it to ''),
+ * null when switched off (`off`, any case).
+ */
+export function resolveTitleModelId(config: Pick<DeckAssistantRuntimeConfig, 'titleModel'>): string | null {
+  const trimmed = (config.titleModel ?? '').trim()
+  if (trimmed === '') {
+    return DEFAULT_TITLE_MODEL
+  }
+  return trimmed.toLowerCase() === 'off' ? null : trimmed
 }
 
 /** '' when unset (chat turns with images then use `model` as-is). */
@@ -251,6 +269,37 @@ export function useAssistantLanguageModel(modelId?: string): AssistantLanguageMo
   return null
 }
 
+/** The model that names a conversation (#129) and the provider options its calls carry. */
+export interface AssistantTitleModel {
+  id: string
+  model: LanguageModel
+  providerOptions?: ProviderOptions
+}
+
+/**
+ * The title model (#129) on the configured provider — the fake title model
+ * for the fake; null when the assistant isn't configured or titles are off.
+ * It reuses the chat's endpoint, key and `reasoning_effort`.
+ */
+export function useAssistantTitleModel(): AssistantTitleModel | null {
+  const config = useAssistantRuntimeConfig()
+  const provider = resolveProvider(config)
+  const id = resolveTitleModelId(config)
+  if (!provider || !id) {
+    return null
+  }
+  if (provider === 'fake') {
+    return { id, model: createFakeTitleModel() }
+  }
+  const model = createOpenAiCompatibleLanguageModel({
+    baseUrl: resolveBaseUrl(config),
+    apiKey: resolveApiKey(config),
+    model: id,
+    reasoningEffort: resolveReasoningEffort(config),
+  })
+  return { id, model: model.modelFor(false), ...(model.providerOptions ? { providerOptions: model.providerOptions } : {}) }
+}
+
 /** `requested` when it is one of `choice.models`, the default when nothing was requested; else 400 `assistant_model_not_allowed`. */
 export function pickModel(choice: { models: string[], defaultModel: string }, requested: string | undefined): string {
   if (requested === undefined) {
@@ -427,6 +476,8 @@ interface FakeTurn {
   toolCalls: FakeToolCall[]
   /** Streams the text word by word with a delay (the cancel test needs an answer that takes a while). */
   slow?: boolean
+  /** Streamed as the model's reasoning before the text (#128). */
+  reasoning?: string
 }
 
 let fakeToolCallCounter = 0
@@ -545,6 +596,10 @@ const FAKE_SLOW_TRIGGER = 'langsame antwort'
 /** Per word of the slow answer. */
 const FAKE_SLOW_CHUNK_DELAY_MS = 250
 const FAKE_SLOW_TEXT = Array.from({ length: 60 }, (_, index) => `Wort${index + 1}`).join(' ')
+/** Test trigger (#128): "zeige karte 46986414" calls get_card with that id. */
+const FAKE_GET_CARD_PATTERN = /\bkarte\s+(\d+)\b/i
+/** Test trigger (#128): an answer with reasoning before its text. */
+const FAKE_REASONING_TRIGGER = 'denk nach'
 
 /**
  * Proves the linked deck's context block (assistant-chat.ts
@@ -595,6 +650,15 @@ export function fakeTurn(options: Pick<FakeCallOptions, 'prompt' | 'toolChoice'>
       ? fakeToolCall('search_catalog', { query: 'Dark Magician' })
       : fakeText('search_catalog {"query":"Dark Magician"}')
   }
+  const getCard = text.match(FAKE_GET_CARD_PATTERN)
+  if (getCard) {
+    return alreadyRanToolThisTurn
+      ? fakeText('Kartendetails gelesen.')
+      : fakeToolCall('get_card', { id: Number(getCard[1]) })
+  }
+  if (lower.includes(FAKE_REASONING_TRIGGER)) {
+    return { reasoning: 'Ich überlege kurz.', text: 'Fertig überlegt.', toolCalls: [] }
+  }
 
   const isSearchIntent = FAKE_SEARCH_INTENT_PATTERN.test(lower)
   // German trigger words, plus English "add" for English-UI tests.
@@ -635,6 +699,13 @@ const FAKE_USAGE = {
 /** One fake answer as a language-model stream (the V4 stream parts a real provider produces). */
 export function fakeStreamParts(turn: FakeTurn): FakeStreamPart[] {
   const parts: FakeStreamPart[] = [{ type: 'stream-start', warnings: [] }]
+  if (turn.reasoning) {
+    parts.push(
+      { type: 'reasoning-start', id: 'fake-reasoning' },
+      { type: 'reasoning-delta', id: 'fake-reasoning', delta: turn.reasoning },
+      { type: 'reasoning-end', id: 'fake-reasoning' },
+    )
+  }
   if (turn.text !== '') {
     const deltas = turn.slow ? turn.text.split(/(?<= )/) : [turn.text]
     parts.push(
@@ -677,4 +748,55 @@ export function createFakeLanguageModel(id: string = FAKE_MODEL_ID): AssistantLa
     },
   })
   return { id, modelFor: () => model }
+}
+
+// --- Fake title model (#129) ------------------------------------------------------
+
+/** Test trigger (#129): the fake title model fails for a conversation whose first message contains it. */
+const FAKE_TITLE_FAILURE_TRIGGER = 'titel-fehler'
+const FAKE_TITLE_WORDS = 4
+
+/** The text of one delimited block of the title prompt (`buildTitlePrompt`), after `label`. */
+function fakeTitleBlock(text: string, label: string): string {
+  const start = text.indexOf(`${label}\n${TITLE_PROMPT_DELIMITERS.open}\n`)
+  if (start < 0) {
+    return ''
+  }
+  const from = start + label.length + TITLE_PROMPT_DELIMITERS.open.length + 2
+  const end = text.indexOf(`\n${TITLE_PROMPT_DELIMITERS.close}`, from)
+  return (end < 0 ? text.slice(from) : text.slice(from, end)).trim()
+}
+
+/**
+ * What the fake title model answers: "Thema: <the first 4 words of the
+ * first message>" in German ("Topic: …" in English; the answer's words when
+ * the message has no text, "Foto" when neither has). Throws for a first
+ * message with `titel-fehler`, so the fallback (the first message stays the
+ * title) is testable.
+ */
+export function fakeTitle(options: Pick<FakeCallOptions, 'prompt'>): string {
+  const system = fakeSystemText(options.prompt)
+  const input = options.prompt.flatMap(message => message.role === 'user' ? [fakeUserText(message)] : []).join('\n')
+  const userText = fakeTitleBlock(input, TITLE_PROMPT_DELIMITERS.user)
+  if (userText.toLowerCase().includes(FAKE_TITLE_FAILURE_TRIGGER)) {
+    throw new Error('fake title failure')
+  }
+  const source = userText !== '' ? userText : fakeTitleBlock(input, TITLE_PROMPT_DELIMITERS.answer)
+  const prefix = system.includes(TITLE_LANGUAGE_INSTRUCTION.de) ? 'Thema' : 'Topic'
+  const words = source.split(/\s+/).filter(Boolean).slice(0, FAKE_TITLE_WORDS)
+  return `${prefix}: ${words.length > 0 ? words.join(' ') : 'Foto'}`
+}
+
+/** The fake title model: answers `fakeTitle` (deterministic, no network). */
+export function createFakeTitleModel(): LanguageModel {
+  return new MockLanguageModelV4({
+    provider: 'fake',
+    modelId: FAKE_MODEL_ID,
+    doGenerate: async options => ({
+      content: [{ type: 'text', text: fakeTitle(options) }],
+      finishReason: { unified: 'stop', raw: 'stop' },
+      usage: FAKE_USAGE,
+      warnings: [],
+    }),
+  })
 }

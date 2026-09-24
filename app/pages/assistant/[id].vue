@@ -25,7 +25,8 @@ const conversations = computed(() => conversationsData.value?.items ?? [])
 
 // The open conversation's summary (title, linked deck), from the thread once
 // it has loaded it. The title follows the list, which is refreshed after
-// every turn (the first message names a new conversation).
+// every turn (the first message names a new conversation) and when the model
+// names the conversation (#129).
 const loadedConversation = ref<AssistantConversationSummary | null>(null)
 const conversation = computed<AssistantConversationSummary | null>(() => {
   const current = loadedConversation.value
@@ -182,6 +183,7 @@ async function onDeleted(id: string) {
           :default-model="status?.defaultModel ?? null"
           @loaded="(summary) => { loadedConversation = summary }"
           @turn-end="refreshConversations"
+          @title-change="refreshConversations"
         />
       </section>
     </div>

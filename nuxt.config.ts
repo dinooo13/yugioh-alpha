@@ -77,6 +77,11 @@ export default defineNuxtConfig({
       // Phase 8 chat assistant: model used for any turn that includes an
       // image, when set. Empty = use `model` for those turns too.
       visionModel: '',
+      // Model that names a conversation after its first exchange (#129): a
+      // short title in the interface language. '' = the default; 'off' =
+      // keep the first message as the title. Overridable via
+      // NUXT_ASSISTANT_TITLE_MODEL.
+      titleModel: 'glm-5.3-flash',
       // Phase 8 chat assistant: operational limits, all overridable via
       // NUXT_ASSISTANT_LIMITS_*. See server/utils/assistant-limits.ts
       // (getAssistantLimits) for validation/fallback and .env.example for a

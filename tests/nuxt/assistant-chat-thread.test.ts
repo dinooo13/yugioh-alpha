@@ -1,8 +1,9 @@
 // The assistant's thread on the AI SDK's chat client (ChatThread.vue +
 // useAssistantChat, docs/adr/0020-assistant-on-the-ai-sdk.md): what a turn
 // sends, how streamed parts render (text, chips, proposals), the German
-// plurals (#70), the error texts, retry, cancel, regenerate and the model
-// picker. The stream endpoint is a stubbed `fetch` answering with the UI
+// plurals (#70), the error texts, retry, cancel, regenerate, the model
+// picker, card names in chips and collapsed reasoning (#128), and the title
+// request after a turn (#129). The stream endpoint is a stubbed `fetch` answering with the UI
 // message stream protocol; `GET …/messages` is a stubbed `$fetch`.
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -405,5 +406,235 @@ describe('AssistantChatThread: regenerate and the model picker', () => {
     const component = await mountThread({ models: ['mimo-v2.6-pro'], defaultModel: 'mimo-v2.6-pro' })
     expect(component.find('[data-testid="assistant-model-select"]').exists()).toBe(false)
     expect(component.find('[data-testid="assistant-answer-model"]').exists()).toBe(false)
+  })
+})
+
+describe('AssistantChatThread: card names in chips and collapsed reasoning (#128)', () => {
+  const DARK_MAGICIAN = { id: 46986414, name: 'Dark Magician', nameDe: 'Dunkler Magier', type: 'Normal Monster' }
+
+  function getCardConversation(): AssistantUIMessage[] {
+    return [
+      { id: 'm1', role: 'user', parts: [{ type: 'text', text: 'zeige karte 46986414' }] },
+      { id: 'm2', role: 'assistant', parts: [toolPart('get_card', { id: 46986414 }, DARK_MAGICIAN), { type: 'text', text: 'Kartendetails gelesen.', state: 'done' }] },
+    ]
+  }
+
+  it('names a stored get_card call by the card\'s name in the card language', async () => {
+    stubMessages(getCardConversation())
+    const german = await mountThread()
+    expect(german.find('[data-testid="assistant-tool"]').text()).toContain('Liest Kartendetails: Dunkler Magier')
+    german.unmount()
+
+    await setTestLocale('en')
+    const english = await mountThread()
+    expect(english.find('[data-testid="assistant-tool"]').text()).toContain('Reading card details: Dark Magician')
+  })
+
+  it('shows the id while get_card runs, and the name once its result is there', async () => {
+    stubMessages([])
+    const stream = controlledUiStream()
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(stream.response)))
+    const component = await mountThread()
+    await sendText(component, 'zeige karte 46986414')
+
+    stream.push({ type: 'start', messageId: 'a1' })
+    stream.push({ type: 'start-step' })
+    stream.push({ type: 'tool-input-available', toolCallId: 'c1', toolName: 'get_card', input: { id: 46986414 } })
+    await flushPromises()
+    await vi.waitFor(() => expect(component.find('[data-outcome="running"]').exists()).toBe(true))
+    expect(component.find('[data-testid="assistant-tool"]').text()).toContain('Liest Kartendetails: 46986414')
+
+    stream.push({ type: 'tool-output-available', toolCallId: 'c1', output: { result: DARK_MAGICIAN } })
+    await flushPromises()
+    await vi.waitFor(() => expect(component.find('[data-outcome="ok"]').exists()).toBe(true))
+    expect(component.find('[data-testid="assistant-tool"]').text()).toContain('Liest Kartendetails: Dunkler Magier')
+    stream.push({ type: 'finish-step' })
+    stream.push({ type: 'finish', finishReason: 'stop' })
+    stream.close()
+    await flushPromises()
+  })
+
+  it('keeps streaming reasoning collapsed with the shimmer; the user opens it and it stays open', async () => {
+    stubMessages([])
+    const first = controlledUiStream()
+    const second = controlledUiStream()
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(first.response)
+      .mockResolvedValueOnce(second.response))
+    const component = await mountThread()
+    const trigger = () => component.findAll('[data-testid="assistant-reasoning"] [data-slot="trigger"]').at(-1)!
+    // Nuxt UI's own label (its locale comes from <UApp> in app.vue, which a
+    // mounted component lacks, so it is the English one here).
+    const THINKING = /Denkt nach…|Thinking…/
+
+    await sendText(component, 'denk nach')
+    first.push({ type: 'start', messageId: 'a1' })
+    first.push({ type: 'start-step' })
+    first.push({ type: 'reasoning-start', id: 'r1' })
+    first.push({ type: 'reasoning-delta', id: 'r1', delta: 'Ich überlege kurz.' })
+    await flushPromises()
+    await vi.waitFor(() => expect(component.find('[data-testid="assistant-reasoning"]').exists()).toBe(true))
+    await flushPromises()
+    expect(trigger().attributes('aria-expanded')).toBe('false')
+    expect(trigger().text()).toMatch(THINKING)
+
+    await trigger().trigger('click')
+    await flushPromises()
+    expect(trigger().attributes('aria-expanded')).toBe('true')
+
+    first.push({ type: 'reasoning-delta', id: 'r1', delta: ' Noch etwas.' })
+    first.push({ type: 'reasoning-end', id: 'r1' })
+    first.push({ type: 'text-start', id: 't1' })
+    first.push({ type: 'text-delta', id: 't1', delta: 'Fertig überlegt.' })
+    first.push({ type: 'text-end', id: 't1' })
+    first.push({ type: 'finish-step' })
+    first.push({ type: 'finish', finishReason: 'stop' })
+    first.close()
+    await flushPromises()
+    await vi.waitFor(() => expect(findButton(component, 'Senden')).toBeTruthy())
+    // No auto-close once it's done (Nuxt UI's default closes it after 500 ms).
+    await new Promise(resolve => setTimeout(resolve, 600))
+    await flushPromises()
+    expect(trigger().attributes('aria-expanded')).toBe('true')
+    expect(trigger().text()).not.toMatch(THINKING)
+
+    // The next turn's reasoning starts collapsed again.
+    await sendText(component, 'denk nach')
+    second.push({ type: 'start', messageId: 'a2' })
+    second.push({ type: 'start-step' })
+    second.push({ type: 'reasoning-start', id: 'r2' })
+    second.push({ type: 'reasoning-delta', id: 'r2', delta: 'Ich überlege noch mal.' })
+    await flushPromises()
+    await vi.waitFor(() => expect(component.findAll('[data-testid="assistant-reasoning"]')).toHaveLength(2))
+    await flushPromises()
+    expect(trigger().attributes('aria-expanded')).toBe('false')
+    expect(trigger().text()).toMatch(THINKING)
+    second.push({ type: 'reasoning-end', id: 'r2' })
+    second.push({ type: 'finish', finishReason: 'stop' })
+    second.close()
+    await flushPromises()
+  })
+
+  it('doesn\'t shimmer for reasoning a turn that ended left "streaming"', async () => {
+    stubMessages([
+      { id: 'm1', role: 'user', parts: [{ type: 'text', text: 'Hallo' }] },
+      { id: 'm2', role: 'assistant', parts: [{ type: 'reasoning', text: 'Der Nutzer grüßt.', state: 'streaming' }] },
+    ])
+    const component = await mountThread()
+    const trigger = component.find('[data-testid="assistant-reasoning"] [data-slot="trigger"]')
+    expect(trigger.attributes('aria-expanded')).toBe('false')
+    expect(trigger.text()).not.toMatch(/Denkt nach…|Thinking…/)
+  })
+})
+
+describe('AssistantChatThread: the title request after a turn (#129)', () => {
+  function titleCalls(fetchMock: ReturnType<typeof stubMessages>) {
+    return fetchMock.mock.calls.filter(([url]) => url === '/api/assistant/chat/conv-1/title')
+  }
+
+  it('asks the server to name the conversation after a completed turn, and reports a new title', async () => {
+    const fetchMock = stubMessages([], url => url === '/api/assistant/chat/conv-1/title'
+      ? { generated: true, conversation: conversationSummary({ title: 'Thema: Hallo' }) }
+      : null)
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(uiStreamResponse(textAnswer('a1', 'Hallo!')))))
+
+    const component = await mountThread()
+    await sendText(component, 'Hallo')
+    await vi.waitFor(() => expect(component.emitted('titleChange')).toHaveLength(1))
+    expect(titleCalls(fetchMock)).toEqual([['/api/assistant/chat/conv-1/title', { method: 'POST' }]])
+    expect(component.emitted('turnEnd')).toHaveLength(1)
+    // The thread's summary follows (the page's header reads it).
+    expect(component.emitted('loaded')!.at(-1)).toEqual([conversationSummary({ title: 'Thema: Hallo' })])
+  })
+
+  it('asks for a deck-linked conversation too', async () => {
+    const deck = { id: 'deck-1', name: 'Magier' }
+    vi.stubGlobal('$fetch', vi.fn((url: string) => {
+      if (url === '/api/assistant/chat/conv-1/messages') {
+        return Promise.resolve({ conversation: conversationSummary({ title: 'Deck: Magier', deck }), messages: [] })
+      }
+      return Promise.resolve(url === '/api/assistant/chat/conv-1/title'
+        ? { generated: true, conversation: conversationSummary({ title: 'Thema: Was fehlt', deck }) }
+        : null)
+    }))
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(uiStreamResponse(textAnswer('a1', 'Eine Falle.')))))
+
+    const component = await mountThread()
+    await sendText(component, 'Was fehlt?')
+    await vi.waitFor(() => expect(component.emitted('titleChange')).toHaveLength(1))
+  })
+
+  it('reports nothing when the title stayed', async () => {
+    const fetchMock = stubMessages([], url => url === '/api/assistant/chat/conv-1/title'
+      ? { generated: false, conversation: conversationSummary() }
+      : null)
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(uiStreamResponse(textAnswer('a1', 'Hallo!')))))
+
+    const component = await mountThread()
+    await sendText(component, 'Hallo')
+    await vi.waitFor(() => expect(titleCalls(fetchMock)).toHaveLength(1))
+    await flushPromises()
+    expect(component.emitted('titleChange')).toBeUndefined()
+  })
+
+  it.each([
+    ['an HTTP error', () => Promise.resolve(httpErrorResponse(503, 'assistant_not_configured'))],
+    ['a stream error', () => Promise.resolve(uiStreamResponse([{ type: 'start', messageId: 'a1' }, { type: 'error', errorText: 'assistant_busy' }]))],
+  ])('doesn\'t ask after a turn that ended with %s', async (_label, answer) => {
+    const fetchMock = stubMessages([])
+    vi.stubGlobal('fetch', vi.fn(answer))
+    const component = await mountThread()
+    await sendText(component, 'Hallo')
+    await vi.waitFor(() => expect(component.emitted('turnEnd')).toHaveLength(1))
+    await flushPromises()
+    expect(titleCalls(fetchMock)).toHaveLength(0)
+  })
+
+  it('doesn\'t ask after a cancelled turn', async () => {
+    const fetchMock = stubMessages([])
+    const stream = controlledUiStream()
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(stream.response)))
+    const component = await mountThread()
+    await sendText(component, 'Erzähl')
+    stream.push({ type: 'start', messageId: 'a1' })
+    stream.push({ type: 'start-step' })
+    stream.push({ type: 'text-start', id: 't' })
+    stream.push({ type: 'text-delta', id: 't', delta: 'Es war einmal' })
+    await flushPromises()
+    await vi.waitFor(() => expect(component.text()).toContain('Es war einmal'))
+
+    await findButton(component, 'Abbrechen')!.trigger('click')
+    await vi.waitFor(() => expect(component.emitted('turnEnd')).toHaveLength(1), { timeout: 4000 })
+    await flushPromises()
+    expect(titleCalls(fetchMock)).toHaveLength(0)
+  })
+
+  it('doesn\'t ask once the user has sent more than three messages', async () => {
+    const earlier: AssistantUIMessage[] = [1, 2, 3].flatMap(index => [
+      { id: `u${index}`, role: 'user' as const, parts: [{ type: 'text' as const, text: `Frage ${index}` }] },
+      { id: `a${index}`, role: 'assistant' as const, parts: [{ type: 'text' as const, text: `Antwort ${index}`, state: 'done' as const }] },
+    ])
+    const fetchMock = stubMessages(earlier)
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(uiStreamResponse(textAnswer('a4', 'Antwort 4')))))
+    const component = await mountThread()
+    await sendText(component, 'Frage 4')
+    await vi.waitFor(() => expect(component.emitted('turnEnd')).toHaveLength(1))
+    await flushPromises()
+    expect(titleCalls(fetchMock)).toHaveLength(0)
+  })
+
+  it('shows no error when the title request fails', async () => {
+    const fetchMock = stubMessages([], url => url === '/api/assistant/chat/conv-1/title'
+      ? Promise.reject(new Error('500'))
+      : null)
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(uiStreamResponse(textAnswer('a1', 'Hallo!')))))
+
+    const component = await mountThread()
+    await sendText(component, 'Hallo')
+    await vi.waitFor(() => expect(titleCalls(fetchMock)).toHaveLength(1))
+    await flushPromises()
+    expect(component.find('[role="alert"]').exists()).toBe(false)
+    expect(component.emitted('titleChange')).toBeUndefined()
+    expect(findButton(component, 'Senden')).toBeTruthy()
   })
 })
