@@ -53,6 +53,10 @@ results carry `nameDe` (only when a card has one), `get_card` also
 tells the model to name cards by their German name; in English, tool results
 are unchanged and the model keeps the English names.
 
+The card detail's source credit (decision 7) is superseded by
+[0017](0017-inventory-without-collector-details.md): the UI no longer credits
+the source (removed with #87/#88); the README credit stays.
+
 ## Context
 
 Issue #34 makes the app bilingual. F1 gave it language-neutral URLs

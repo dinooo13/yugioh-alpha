@@ -31,11 +31,11 @@ The inventory represents the cards a user actually owns. A user-owned card shoul
 Examples include:
 
 - quantity
-- language
-- condition
-- edition or printing
 - storage location
 - collection or box assignment
+- a note
+
+The inventory tracks the quantity, the collection or box, and a note; sets and printings live in the catalog (see ADR 0017).
 
 The user should be able to search across their complete inventory, regardless of how the cards are split across collections or boxes.
 

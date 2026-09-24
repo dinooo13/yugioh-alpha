@@ -134,9 +134,11 @@ nothing is written before it has been confirmed:
 The review table preselects certain matches (passcode, set code, exact name)
 and anything scoring at least 0.85, marks weaker hits as "Unsicher" with a
 candidate dropdown, and offers an inline catalog search for lines without a
-match. Language, condition, edition, and collection come from a
-"Standardwerte" panel and can be overridden per row. Saving posts the rows to
-`POST /api/inventory/bulk` in batches of 50, each batch in one transaction.
+match. The collection comes from a "Standard-Sammlung" default and can be
+overridden per row; a set code only identifies the card, no printing is stored
+(see [`docs/adr/0017-inventory-without-collector-details.md`](./docs/adr/0017-inventory-without-collector-details.md)).
+Saving posts the rows to `POST /api/inventory/bulk` in batches of 50, each
+batch in one transaction.
 
 Recognizing a card from a photo now lives in the chat assistant
 (`/assistant`, see below) instead of its own modes here
@@ -158,7 +160,7 @@ A deck references **catalog** cards, not owned-card rows (see
 Availability is therefore derived on every read:
 
 - `owned` is the sum of `owned_card.quantity` for that catalog card across all
-  collections, conditions, languages, and editions.
+  collections.
 - `usedInDeck` counts the copies used across *all* sections of that deck, and
   `shortfall = max(0, usedInDeck - owned)` is shown as a red `used/owned`
   indicator; the deck list shows "Vollständig" or "n fehlen".
@@ -316,7 +318,7 @@ the UI.
 Shared views are strictly read-only and never disclose ownership data: a shared deck shows card
 names and quantities, its format, and its legality, but not `owned`/`usedInDeck`/shortfall; a
 shared collection or the shared inventory lists cards aggregated per catalog card, searchable and
-paginated, without notes, condition, or language. See
+paginated, without notes. See
 [`docs/adr/0007-sharing-and-profile-model.md`](./docs/adr/0007-sharing-and-profile-model.md).
 
 ## Wunschliste
