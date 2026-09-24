@@ -99,7 +99,9 @@ included. See [`docs/adr/0015-german-card-data.md`](./docs/adr/0015-german-card-
   or German / English as picked under "Kartensprache / Card language" in the
   profile settings. API responses always carry the English `name` (and `desc`)
   plus the German `nameDe` (and `descDe` in the card detail); the client picks.
-  Card images stay English.
+  Card types, attributes and races follow the card language too ("FINSTERNIS",
+  "Hexer", "Schnell"; `card.value.*` in the i18n catalogues), while filter values
+  stay English. Card images, rarities and set names stay English.
 
 German card texts: [ygoresources.com](https://db.ygoresources.com/) — card-history
 repo. The texts are Konami's; the repo has no licence. Turning the sync off
@@ -270,8 +272,11 @@ message can include up to 6 photos (resized client-side before upload) that
 the model identifies against the catalog. Voice dictation is currently not
 offered (it was removed again because it didn't work reliably). The
 assistant answers in the interface language (German or English, see
-[`docs/adr/0014-ui-internationalisation.md`](./docs/adr/0014-ui-internationalisation.md));
-card names stay English.
+[`docs/adr/0014-ui-internationalisation.md`](./docs/adr/0014-ui-internationalisation.md))
+and names cards in the card language: with German card names it uses the
+official German name (and the English one in parentheses where it helps),
+otherwise the English name; it finds cards by either
+([`docs/adr/0015-german-card-data.md`](./docs/adr/0015-german-card-data.md)).
 
 This works with any OpenAI-compatible Chat Completions endpoint that
 supports streaming and tool calls — e.g. OpenAI, OpenRouter, Ollama,

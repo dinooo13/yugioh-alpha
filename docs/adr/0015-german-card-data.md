@@ -32,6 +32,27 @@ German name in German (`cardSortKey()`), deck sections by the display name.
 The profile settings card has "Kartensprache / Card language" (follow /
 German / English), and the card detail credits the source with a link.
 
+Implemented: F3a–F3d, so this ADR is fully implemented. F3d adds the card
+data labels (decision 6): `card.value.<type|attribute|race>.<slug>` in the
+`card` catalogues (`cardValueKey()` in `app/utils/card-values.ts` lowercases
+the stored value and turns everything but letters and digits into `_`),
+picked by `useCardText().cardValue()` in the card language and shown as
+stored when there is no key; filter options keep the English values. German
+is Konami's vocabulary as the card-history repo spells it (checked against a
+sample of its `de/*.json`), English is the stored value itself. The card
+language may differ from the interface language, and only the interface
+language's catalogue is loaded — but German is the fallback locale, which
+@nuxtjs/i18n 10.4 always loads alongside English, and English labels equal
+the stored values, so no second catalogue is loaded (`loadLocaleMessages`
+exists but isn't needed; making German stop being the fallback locale would
+need it). The assistant gets the card language per turn
+(`resolveCardLocale()` → `runChatTurn`): in German, card rows in its tool
+results carry `nameDe` (only when a card has one), `get_card` also
+`descDe`, validation issues keep `params.cardNameDe`, the deck context lists
+`catalogCardId|name|nameDe|…`, and the last paragraph of the system prompt
+tells the model to name cards by their German name; in English, tool results
+are unchanged and the model keeps the English names.
+
 ## Context
 
 Issue #34 makes the app bilingual. F1 gave it language-neutral URLs
