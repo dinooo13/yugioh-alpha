@@ -46,6 +46,8 @@ interface DeckDetail {
   /** Effective cover (#49); read null-safely, older fixtures lack it. */
   cover: DeckCover | null
   coverIsChosen: boolean
+  /** The chosen cover while it isn't in Main/Extra (#57); read null-safely, older fixtures lack it. */
+  inactiveCoverChoice?: DeckCover | null
 }
 
 interface RuleFormatListItem {
@@ -615,6 +617,17 @@ async function setCover(coverCardId: number | null) {
   }))
 }
 
+// The hint for a chosen cover that is no longer in Main/Extra (#57) offers
+// to clear the stored choice; ADR 0012 keeps it until the user does.
+const inactiveCoverActions = computed(() => [{
+  label: t('decks.editor.cover.clearChoice'),
+  color: 'neutral' as const,
+  variant: 'outline' as const,
+  size: 'xs' as const,
+  disabled: isMutating.value,
+  onClick: () => setCover(null),
+}])
+
 function rowMenuItems(row: DeckCardRow) {
   const moveItems = DECK_SECTIONS
     .filter(section => section !== row.section)
@@ -824,6 +837,16 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
           </ul>
         </template>
       </UAlert>
+
+      <UAlert
+        v-if="deck.inactiveCoverChoice"
+        color="neutral"
+        variant="subtle"
+        icon="i-lucide-image-off"
+        :title="t('decks.editor.cover.inactiveTitle')"
+        :description="t('decks.editor.cover.inactiveDescription', { name: cardName(deck.inactiveCoverChoice) })"
+        :actions="inactiveCoverActions"
+      />
 
       <p
         v-if="errorMessage"

@@ -290,3 +290,40 @@ test.describe('deckbuilder at 1024px', () => {
     }
   })
 })
+
+test.describe('deck cover hint', () => {
+  test('hints at an inactive chosen cover and clears it (#57)', async ({ page }) => {
+    await registerAndLogin(page)
+
+    const response = await page.request.post('/api/decks', {
+      data: {
+        name: 'Inaktive Titelkarte',
+        cards: [
+          { catalog_card_id: DARK_MAGICIAN, section: 'main', quantity: 1 },
+          { catalog_card_id: POT_OF_GREED, section: 'main', quantity: 1 },
+        ],
+      },
+    })
+    expect(response.ok()).toBe(true)
+    const deck = await response.json() as { id: string }
+
+    await page.goto(`/decks/${deck.id}`)
+    const potOfGreedRow = page.locator(`li:has(p[title="${CARD.potOfGreed}"])`)
+
+    await page.getByRole('button', { name: `Optionen für ${CARD.potOfGreed}`, exact: true }).click()
+    await page.getByRole('menuitem', { name: 'Als Titelkarte festlegen' }).click()
+    await expect(potOfGreedRow.getByText('Titelkarte', { exact: true })).toBeVisible()
+
+    // Removing the chosen card keeps the choice (ADR 0012); the editor says so.
+    await page.getByRole('button', { name: `${CARD.potOfGreed} aus dem Main Deck entfernen`, exact: true }).click()
+    const hintTitle = page.getByText('Gewählte Titelkarte nicht aktiv')
+    await expect(hintTitle).toBeVisible()
+    await expect(page.getByText(`"${CARD.potOfGreed}" ist nicht mehr im Main oder Extra Deck`)).toBeVisible()
+
+    await page.getByRole('button', { name: 'Auswahl aufheben', exact: true }).click()
+    await expect(hintTitle).toHaveCount(0)
+
+    const detail = await (await page.request.get(`/api/decks/${deck.id}`)).json() as { inactiveCoverChoice: unknown }
+    expect(detail.inactiveCoverChoice).toBeNull()
+  })
+})

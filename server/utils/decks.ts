@@ -106,7 +106,7 @@ export interface DeckCardRow {
   imageSmall: string | null
   section: DeckSection
   quantity: number
-  /** Copies the user owns in total (all collections/conditions/languages). */
+  /** Copies the user owns in total, across all collections. */
   owned: number
   /** Copies used across all sections of *this* deck. */
   usedInDeck: number
@@ -136,6 +136,13 @@ export interface DeckDetail {
   cover: DeckCover | null
   /** True when `cover` is the user's explicit choice, false when picked by rule. */
   coverIsChosen: boolean
+  /**
+   * The user's chosen cover card (`deck.cover_card_id`) while it doesn't
+   * count because it has no Main/Extra Deck row (removed or moved to the
+   * Side Deck). `cover` is then the rule's pick; re-adding the card makes
+   * it the cover again (ADR 0012). Null otherwise.
+   */
+  inactiveCoverChoice: DeckCover | null
 }
 
 function badRequest(message: string, code?: string): never {
@@ -615,6 +622,11 @@ function buildDeckDetail(db: Db, userId: string, deckRow: typeof deck.$inferSele
   const counts = { main: sum('main'), extra: sum('extra'), side: sum('side'), total: 0 }
   counts.total = counts.main + counts.extra + counts.side
 
+  const coverIsChosen = cover !== null && cover.catalogCardId === deckRow.coverCardId
+  const inactiveCoverChoice = deckRow.coverCardId !== null && !coverIsChosen
+    ? loadCoverCard(db, deckRow.coverCardId)
+    : null
+
   return {
     id: deckRow.id,
     name: deckRow.name,
@@ -631,7 +643,8 @@ function buildDeckDetail(db: Db, userId: string, deckRow: typeof deck.$inferSele
     validation: buildValidation(db, formatRow?.rules, rows),
     visibility: deckRow.visibility,
     cover,
-    coverIsChosen: cover !== null && cover.catalogCardId === deckRow.coverCardId,
+    coverIsChosen,
+    inactiveCoverChoice,
   }
 }
 
@@ -1064,6 +1077,23 @@ function toDeckCover(candidate: DeckCoverCandidate): DeckCover {
     imageSmall: candidate.imageSmall,
     imageLarge: candidate.imageLarge,
   }
+}
+
+/** One catalog card as a {@link DeckCover}, e.g. a chosen cover that has no deck row (#57). */
+function loadCoverCard(db: Db, catalogCardId: number): DeckCover | null {
+  return db
+    .select({
+      catalogCardId: catalogCard.id,
+      name: catalogCard.name,
+      nameDe: cardNameDeSql(),
+      imageSmall: sql<string | null>`min(${catalogCardImage.imageUrlSmall})`,
+      imageLarge: sql<string | null>`min(${catalogCardImage.imageUrl})`,
+    })
+    .from(catalogCard)
+    .leftJoin(catalogCardImage, eq(catalogCardImage.cardId, catalogCard.id))
+    .where(eq(catalogCard.id, catalogCardId))
+    .groupBy(catalogCard.id)
+    .get() ?? null
 }
 
 /**

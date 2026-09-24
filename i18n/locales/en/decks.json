@@ -102,7 +102,10 @@
       "emptySection": "No cards in the {section} yet.",
       "cover": {
         "chosen": "Cover card",
-        "auto": "Cover card (automatic)"
+        "auto": "Cover card (automatic)",
+        "inactiveTitle": "Chosen cover card inactive",
+        "inactiveDescription": "\"{name}\" is no longer in the Main or Extra Deck, so the cover card is chosen automatically. If the card comes back, it is the cover card again.",
+        "clearChoice": "Clear choice"
       },
       "row": {
         "ownedOnly": "You only own {owned}",

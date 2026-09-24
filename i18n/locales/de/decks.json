@@ -102,7 +102,10 @@
       "emptySection": "Noch keine Karten im {section}.",
       "cover": {
         "chosen": "Titelkarte",
-        "auto": "Titelkarte (automatisch)"
+        "auto": "Titelkarte (automatisch)",
+        "inactiveTitle": "Gewählte Titelkarte nicht aktiv",
+        "inactiveDescription": "\"{name}\" ist nicht mehr im Main oder Extra Deck, deshalb wird die Titelkarte automatisch gewählt. Kommt die Karte zurück, ist sie wieder die Titelkarte.",
+        "clearChoice": "Auswahl aufheben"
       },
       "row": {
         "ownedOnly": "Du besitzt nur {owned}",
