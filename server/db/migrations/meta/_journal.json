@@ -113,6 +113,13 @@
       "when": 1790249062789,
       "tag": "0015_catalog_card_retired",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "6",
+      "when": 1790252138290,
+      "tag": "0016_assistant_message_ui_parts",
+      "breakpoints": true
     }
   ]
 }

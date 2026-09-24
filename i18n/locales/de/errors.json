@@ -60,7 +60,8 @@
       "assistant_not_configured": "KI-Assistent ist nicht konfiguriert.",
       "assistant_misconfigured": "KI-Assistent ist nicht korrekt konfiguriert.",
       "assistant_busy": "Der KI-Assistent ist ausgelastet, bitte später erneut versuchen.",
-      "assistant_unreachable": "Der KI-Assistent ist derzeit nicht erreichbar."
+      "assistant_unreachable": "Der KI-Assistent ist derzeit nicht erreichbar.",
+      "regenerate_not_allowed": "Diese Antwort kann nicht neu erzeugt werden, weil einer ihrer Vorschläge schon bearbeitet wurde."
     }
   }
 }

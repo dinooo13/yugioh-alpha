@@ -1,6 +1,6 @@
 import { createError, getRouterParam } from 'h3'
 import { useDb } from '../../../../../db'
-import { toActionView } from '../../../../../utils/assistant-chat'
+import { hydrateActionViews } from '../../../../../utils/assistant-chat'
 import { rejectAction } from '../../../../../utils/assistant-tools'
 import { requireUser } from '../../../../../utils/session'
 
@@ -11,7 +11,9 @@ export default defineEventHandler(async (event) => {
   }
 
   const user = await requireUser(event)
-  const action = rejectAction(useDb(), user.id, id)
+  const db = useDb()
+  const action = rejectAction(db, user.id, id)
 
-  return { action: toActionView(action) }
+  // Hydrated (#69): the display names come along as an additive field.
+  return { action: hydrateActionViews(db, user.id, [action])[0]! }
 })

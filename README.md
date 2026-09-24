@@ -298,6 +298,15 @@ configuration needed. On OpenCode Go, the recommended model is
 tool calls and `image_url` data-URL photos (no separate vision model needed).
 `NUXT_ASSISTANT_REASONING_EFFORT`
 is optional for it; `glm-5.3-flash` remains a faster, cheaper alternative.
+The engine runs on the Vercel AI SDK (`ai` with
+`@ai-sdk/openai-compatible`): `streamText` drives the tool loop, each message
+is stored as AI SDK `UIMessage` parts (conversations of the former engine are
+converted when read), and `POST /api/assistant/chat/:id/stream` streams a turn
+with the SDK's UI message protocol. Guards against looping tool calls switch
+tools off after two identical failures and stop after three; a tool call
+written as text gets one corrective retry. The current thread UI still uses
+the former endpoint until it moves to the SDK's chat client; see
+[`docs/adr/0020-assistant-on-the-ai-sdk.md`](./docs/adr/0020-assistant-on-the-ai-sdk.md).
 The chat's operational limits (tool-calling rounds per turn,
 tool result size, history window, model call timeout) are configurable via
 `NUXT_ASSISTANT_LIMITS_*`; see [`.env.example`](./.env.example) and

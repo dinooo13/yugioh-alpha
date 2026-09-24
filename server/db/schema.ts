@@ -1,6 +1,7 @@
 import { relations } from 'drizzle-orm'
 import { sqliteTable, text, integer, index, primaryKey, uniqueIndex, type AnySQLiteColumn } from 'drizzle-orm/sqlite-core'
 import type { AssistantActionKind } from '../../shared/assistant-chat'
+import type { AssistantMessageMetadata, AssistantUIMessagePart } from '../../shared/assistant-ui'
 import type { RuleSet } from '../../shared/rule-formats'
 import type { AppLocale } from '../../shared/locale'
 import type { ShareResourceType, Visibility, WishlistVisibility } from '../../shared/sharing'
@@ -747,6 +748,13 @@ export const assistantMessage = sqliteTable(
     // Image attachments are never persisted as bytes — only a label survives
     // (see ADR 0010): [{ kind: 'image', label }].
     attachments: text('attachments', { mode: 'json' }).$type<Array<{ kind: 'image', label: string }>>(),
+    // The message as AI SDK UIMessage parts (ADR 0020): one row per UIMessage,
+    // written by the AI SDK engine. NULL = a legacy row of the engine before
+    // it (one row per model round plus 'tool' rows), converted when read
+    // (server/utils/assistant-ui-messages.ts). `content` still holds the
+    // joined text parts.
+    parts: text('parts', { mode: 'json' }).$type<AssistantUIMessagePart[]>(),
+    metadata: text('metadata', { mode: 'json' }).$type<AssistantMessageMetadata>(),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   },
   table => [

@@ -10,6 +10,7 @@ import {
   createConversation,
   deleteConversation,
   getConversationDetail,
+  hydrateActionViews,
   listConversations,
   runChatTurn,
   validateAssistantMessageInput,
@@ -17,7 +18,7 @@ import {
 } from '../../server/utils/assistant-chat'
 import type { AssistantMessageInput, ChatTurnEvent } from '../../server/utils/assistant-chat'
 import { getAssistantLimits } from '../../server/utils/assistant-limits'
-import { applyAction } from '../../server/utils/assistant-tools'
+import { applyAction, rejectAction } from '../../server/utils/assistant-tools'
 import { createDeck, deleteDeck, updateDeck, upsertDeckCard } from '../../server/utils/decks'
 import { createRuleFormat, validateRuleFormatInput } from '../../server/utils/rule-formats'
 import { readFileSync } from 'node:fs'
@@ -878,5 +879,44 @@ describe('deck-linked conversations (ADR 0011)', () => {
     expect(reloaded.toolCalls!.map(call => call.deckName)).toEqual(['Umbenannt', 'Umbenannt', undefined])
     const stored = db.select().from(schema.assistantMessage).all().find(row => row.toolCalls)!
     expect(JSON.stringify(stored.toolCalls)).not.toContain('Magier-Deck')
+  })
+})
+
+describe('hydrateActionViews (#69)', () => {
+  function seedAction(id: string, kind: 'add_to_inventory' | 'update_deck_cards' | 'set_deck_format', payload: Record<string, unknown>) {
+    const conversation = createConversation(db, 'user-a')
+    const now = new Date()
+    db.insert(schema.assistantMessage).values({ id: `msg-${id}`, conversationId: conversation.id, role: 'assistant', content: '', createdAt: now }).run()
+    db.insert(schema.assistantAction).values({ id, conversationId: conversation.id, messageId: `msg-${id}`, userId: 'user-a', kind, payload, summary: 's', status: 'pending', createdAt: now }).run()
+    return db.select().from(schema.assistantAction).where(eq(schema.assistantAction.id, id)).get()!
+  }
+
+  it('names the deck of an old action without a stored deckName, and each target collection — never a raw id', () => {
+    const deck = createDeck(db, 'user-a', { name: 'Magier-Deck', description: null })
+    const foreignDeck = createDeck(db, 'user-b', { name: 'Fremd', description: null })
+    db.insert(schema.collection).values({ id: 'col-a', userId: 'user-a', name: 'Ordner 1', createdAt: new Date(), updatedAt: new Date() }).run()
+
+    const views = hydrateActionViews(db, 'user-a', [
+      seedAction('old', 'update_deck_cards', { deckId: deck.id, changes: [] }),
+      seedAction('foreign', 'set_deck_format', { deckId: foreignDeck.id, formatId: null }),
+      seedAction('inventory', 'add_to_inventory', { items: [{ catalogCardId: CARD.darkMagician, quantity: 1, collectionId: 'col-a' }, { catalogCardId: CARD.potOfGreed, quantity: 1, collectionId: 'col-gone' }] }),
+      seedAction('plain', 'add_to_inventory', { items: [{ catalogCardId: CARD.darkMagician, quantity: 1 }] }),
+    ])
+
+    expect(views.map(view => view.display)).toEqual([
+      { deckName: 'Magier-Deck' },
+      { deckName: null },
+      { collectionNames: { 'col-a': 'Ordner 1', 'col-gone': null } },
+      undefined,
+    ])
+  })
+
+  it('comes back from apply and reject with the resolved names', async () => {
+    const deck = createDeck(db, 'user-a', { name: 'Magier-Deck', description: null })
+    const rejected = rejectAction(db, 'user-a', seedAction('r', 'set_deck_format', { deckId: deck.id, formatId: null }).id)
+    expect(hydrateActionViews(db, 'user-a', [rejected])[0]).toMatchObject({ status: 'rejected', display: { deckName: 'Magier-Deck' } })
+
+    const applied = await applyAction(db, 'user-a', seedAction('a', 'add_to_inventory', { items: [{ catalogCardId: CARD.darkMagician, quantity: 1 }] }).id)
+    expect(hydrateActionViews(db, 'user-a', [applied])[0]).toMatchObject({ status: 'applied' })
   })
 })

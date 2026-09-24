@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Accepted. Mechanism note: the per-turn deck context is now passed as `instructions` by the [ADR 0020](0020-assistant-on-the-ai-sdk.md) engine; the decisions are unchanged.
 
 ## Context
 

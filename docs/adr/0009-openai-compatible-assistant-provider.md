@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted — the structured-output `generate()` parts are superseded by [ADR 0011](0011-deck-assistance-in-chat.md)
+Accepted — the structured-output `generate()` parts are superseded by [ADR 0011](0011-deck-assistance-in-chat.md). The plain-`fetch`/no-SDK decision and the fake-`fetch` test approach are superseded by [ADR 0020](0020-assistant-on-the-ai-sdk.md); the configuration semantics stay.
 
 ## Context
 

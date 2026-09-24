@@ -70,6 +70,20 @@ export interface AssistantActionView {
   payload: Record<string, unknown>
   status: AssistantActionStatus
   result?: unknown
+  /**
+   * Display only (#69), resolved when the action is read and never
+   * persisted: the current name of the deck `payload.deckId` refers to (for
+   * actions stored before the payload carried `deckName`), and the names of
+   * the collections `add_to_inventory` items go to. `null` = the deck or
+   * collection is gone (or not the caller's). Missing when there is nothing
+   * to resolve.
+   */
+  display?: AssistantActionDisplay
+}
+
+export interface AssistantActionDisplay {
+  deckName?: string | null
+  collectionNames?: Record<string, string | null>
 }
 
 export interface AssistantConversationListItem {
@@ -266,6 +280,7 @@ export const ASSISTANT_ERROR_CODES = [
   'assistant_misconfigured',
   'assistant_busy',
   'assistant_unreachable',
+  'regenerate_not_allowed',
   'unexpected',
 ] as const
 

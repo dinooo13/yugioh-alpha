@@ -1,0 +1,63 @@
+// What the chat assistant's model reads (server/utils/assistant-prompts.ts):
+// the #77 and #54 rules in the system prompt, and the order of its parts.
+
+import { describe, expect, it } from 'vitest'
+import {
+  buildSystemPrompt,
+  CARD_NAME_INSTRUCTION,
+  IMAGE_HINT,
+  REPLY_LANGUAGE_INSTRUCTION,
+  SYSTEM_PROMPT,
+  TOOL_TEXT,
+  TURN_TEXT,
+} from '../../server/utils/assistant-prompts'
+
+describe('SYSTEM_PROMPT', () => {
+  it('asks for a write proposal only on a request or explicit agreement, and to ask first for mere suggestions (#77)', () => {
+    expect(SYSTEM_PROMPT).toContain('Create a write proposal (add_to_inventory, create_deck, update_deck_cards, set_deck_format) only when the user asks for a change or explicitly agrees to one.')
+    expect(SYSTEM_PROMPT).toContain('When the user only asks for ideas or suggestions, describe them and ask whether you should propose them.')
+    expect(SYSTEM_PROMPT).toContain('A proposal changes nothing until the user confirms it in the app.')
+    expect(SYSTEM_PROMPT).not.toContain('Propose changes (inventory, decks) only through a tool')
+  })
+
+  it('keeps card-data terms as the tool results give them (#77)', () => {
+    expect(SYSTEM_PROMPT).toContain('Keep card-data terms (card type, attribute, monster type/race, archetype) exactly as the tool results give them; don\'t translate or gloss them yourself.')
+  })
+
+  it('asks for tool calls through the tool-calling interface only (#54)', () => {
+    expect(SYSTEM_PROMPT).toContain('Call tools only through the tool-calling interface; never write a tool call or its JSON arguments into your message.')
+  })
+
+  it('is English only (ADR 0014)', () => {
+    expect(SYSTEM_PROMPT).not.toMatch(/[äöüÄÖÜß]/)
+    expect(JSON.stringify(TOOL_TEXT)).not.toMatch(/[äöüÄÖÜß]/)
+  })
+})
+
+describe('buildSystemPrompt', () => {
+  it('puts the deck context and the image hint before the reply- and card-language instructions, which stay last', () => {
+    const prompt = buildSystemPrompt({ deckContext: 'Deck ID: d1', hasImages: true, locale: 'en', cardLocale: 'de' })
+    const paragraphs = prompt.split('\n\n')
+    expect(paragraphs.slice(-2)).toEqual([REPLY_LANGUAGE_INSTRUCTION.en, CARD_NAME_INSTRUCTION.de])
+    expect(prompt.indexOf('Deck ID: d1')).toBeLessThan(prompt.indexOf(IMAGE_HINT))
+    expect(prompt.indexOf(IMAGE_HINT)).toBeLessThan(prompt.indexOf(REPLY_LANGUAGE_INSTRUCTION.en))
+    expect(prompt.startsWith(SYSTEM_PROMPT)).toBe(true)
+  })
+
+  it('leaves out the deck context and image hint when there are none', () => {
+    expect(buildSystemPrompt({ deckContext: null, hasImages: false, locale: 'de', cardLocale: 'de' }))
+      .toBe([SYSTEM_PROMPT, REPLY_LANGUAGE_INSTRUCTION.de, CARD_NAME_INSTRUCTION.de].join('\n\n'))
+  })
+})
+
+describe('texts of the #54 guards', () => {
+  it('has the empty-arguments error and the text-written-call hint the model reads', () => {
+    expect(TOOL_TEXT.emptyArguments).toBe('The tool arguments were empty. Send the parameters as the tool call\'s JSON arguments, never as text in your message.')
+    expect(TOOL_TEXT.textWrittenToolCallHint).toMatch(/tool-calling interface/)
+  })
+
+  it('saves the repeated-failure note in the turn\'s locale', () => {
+    expect(TURN_TEXT.de.repeatedToolFailure).toBe('Ich komme mit einem Werkzeugaufruf gerade nicht weiter. Formuliere die Anfrage bitte etwas anders.')
+    expect(TURN_TEXT.en.repeatedToolFailure).toBe('I got stuck on a tool call. Please rephrase the request.')
+  })
+})

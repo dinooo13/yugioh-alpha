@@ -14,8 +14,11 @@
 // own rows, and a referenced deck/collection/action that belongs to someone
 // else is reported as missing (404), never as forbidden.
 
+import { randomUUID } from 'node:crypto'
 import { and, asc, eq, inArray } from 'drizzle-orm'
 import { createError } from 'h3'
+import { jsonSchema, tool } from 'ai'
+import type { JSONSchema7, JSONValue, Tool } from 'ai'
 import type { useDb } from '../db'
 import { assistantAction, catalogCard, catalogCardImage, collection, ownedCard } from '../db/schema'
 import type { ToolDefinition } from './deck-assistant-model'
@@ -46,7 +49,10 @@ import { listRuleFormats, requireAccessibleFormat, requireAssignableFormat } fro
 import { loadCardDataForValidation, loadCardNameRecords, maxCopiesByCard, missingCatalogCardIds } from './deck-validation'
 import { previewDeckProposal } from './deck-proposal'
 import { ACTION_SUMMARY, TOOL_DESCRIPTIONS, TOOL_PARAM_DESCRIPTIONS, TOOL_TEXT } from './assistant-prompts'
-import type { AssistantActionKind, AssistantDeckPreview } from '../../shared/assistant-chat'
+import { toolCallDeckId } from '../../shared/assistant-chat'
+import type { AssistantActionKind, AssistantActionView, AssistantDeckPreview, AssistantToolName } from '../../shared/assistant-chat'
+import type { AssistantToolOutput } from '../../shared/assistant-ui'
+import { AssistantToolError } from './assistant-model'
 import type { DeckValidation } from '../../shared/rule-formats'
 import type { AppLocale } from '../../shared/locale'
 import { cardNameDeSql } from './card-translation-sql'
@@ -711,6 +717,13 @@ async function toolSetDeckFormat(db: Db, userId: string, cardLocale: AppLocale, 
 }
 
 // --- Registry --------------------------------------------------------------------
+//
+// The parameter schemas are hand-written, flat JSON Schema on purpose (#54,
+// ADR 0020): plain `type`s, no `['string', 'null']` unions, no `anyOf`, no
+// `$ref`. The configured OpenAI-compatible model (MiMo) garbled calls against
+// union types into empty arguments. Don't generate them from zod either — its
+// `.nullable()`/`.optional()` conversion brings those unions back. Every
+// value is validated again by the tool's own `validate*` code anyway.
 
 export const ASSISTANT_TOOLS: AssistantTool[] = [
   {
@@ -970,13 +983,138 @@ export async function runTool(name: string, ctx: ToolRunContext, rawArgs: unknow
   return tool.run(ctx, rawArgs)
 }
 
+// --- The tool set for the AI SDK engine (ADR 0020) ----------------------------------
+
+/** An error's technical (English) `statusMessage` — what the model reads as a tool error. */
+export function toolErrorMessage(error: unknown): string {
+  if (isRecord(error) && typeof error.statusMessage === 'string' && error.statusMessage !== '') {
+    return error.statusMessage
+  }
+  return TOOL_TEXT.unexpectedError
+}
+
+// A result over budget is replaced with a small, valid JSON envelope instead
+// of being cut off mid-string — a truncated JSON document is not just
+// unreadable for a human, it's not parseable at all, so a model asked to
+// reason about "the tool result" gets a syntax-broken blob instead of data.
+export function serializeToolResult(value: unknown, maxChars: number): string {
+  const json = JSON.stringify(value ?? null)
+  if (json.length <= maxChars) {
+    return json
+  }
+  return JSON.stringify(TOOL_TEXT.resultTooLarge)
+}
+
+type AssistantActionRow = typeof assistantAction.$inferSelect
+
+/** Persists a write tool's proposal as a pending `assistant_action` of `messageId` (an existing assistant message — the FK is enforced). */
+export function insertPendingAction(
+  db: Db,
+  fields: { conversationId: string, messageId: string, userId: string, action: AssistantProposedAction },
+): AssistantActionRow {
+  const [row] = db
+    .insert(assistantAction)
+    .values({
+      id: randomUUID(),
+      conversationId: fields.conversationId,
+      messageId: fields.messageId,
+      userId: fields.userId,
+      kind: fields.action.kind,
+      payload: fields.action.payload,
+      summary: fields.action.summary,
+      status: 'pending',
+      createdAt: new Date(),
+    })
+    .returning()
+    .all()
+  return row!
+}
+
+/**
+ * The AI SDK's input validation for one tool: the input must be an object,
+ * and not an empty one when the schema has required fields (#54: a model
+ * that writes the call into its text often sends `{}` or `""` as the
+ * arguments). A failure becomes a tool error the model reads, and the turn
+ * goes on. Everything beyond that is checked by the tool's own validators.
+ */
+export function validateToolInput(schema: Record<string, unknown>, value: unknown):
+  | { success: true, value: Record<string, unknown> }
+  | { success: false, error: Error } {
+  const required = Array.isArray(schema.required) ? schema.required : []
+  if (!isRecord(value) || (required.length > 0 && Object.keys(value).length === 0)) {
+    return { success: false, error: new AssistantToolError(TOOL_TEXT.emptyArguments) }
+  }
+  return { success: true, value }
+}
+
+export interface AssistantToolSetContext extends ToolRunContext {
+  conversationId: string
+  /** The assistant message the turn streams into — `assistant_action.message_id` of a proposal. */
+  messageId: string
+  /** `getAssistantLimits()` of the turn: `toolResultChars` caps a serialized result, `toolResultItems` goes into search_catalog's `limit` description. */
+  limits: { toolResultChars: number, toolResultItems: number }
+  /** The view a proposal's `data-action` part carries (injected by the turn: assistant-chat.ts `hydrateActionViews`). */
+  actionView: (row: AssistantActionRow) => AssistantActionView
+  /** The current name of one of the caller's decks, or undefined (#53) — for a tool part's display-only `deckName`. */
+  deckName: (deckId: string) => string | undefined
+  /** Receives a proposal's view with the id of the tool call that made it; the turn writes it as a `data-action` part after that call's result. */
+  onAction: (toolCallId: string, view: AssistantActionView) => void
+}
+
+export type AssistantToolSet = Record<AssistantToolName, Tool<Record<string, unknown>, AssistantToolOutput>>
+
+/**
+ * The registry above as an AI SDK tool set, built per turn: the flat schemas
+ * unchanged (`jsonSchema` with `validateToolInput`), `execute` running the
+ * tool's own validation and logic (a failure is an `AssistantToolError` with
+ * the English message the model reads), capping the serialized result at
+ * `limits.toolResultChars`, and turning a write tool's proposal into a
+ * pending `assistant_action` of `ctx.messageId`. The tool part's output is
+ * `{ result, deckName? }`; the model only ever reads `result`
+ * (`toModelOutput`).
+ */
+export function buildAssistantToolSet(ctx: AssistantToolSetContext): AssistantToolSet {
+  const entries = ASSISTANT_TOOLS.map((definition) => {
+    const parameters = toolParameters(definition, ctx.limits.toolResultItems)
+    const name = definition.name as AssistantToolName
+    const assistantTool = tool({
+      description: definition.description,
+      inputSchema: jsonSchema<Record<string, unknown>>(parameters as JSONSchema7, {
+        validate: value => validateToolInput(parameters, value),
+      }),
+      execute: async (input, { toolCallId }): Promise<AssistantToolOutput> => {
+        try {
+          const outcome = await definition.run(ctx, input)
+          const result: unknown = JSON.parse(serializeToolResult(outcome.result, ctx.limits.toolResultChars))
+          if ('action' in outcome) {
+            const row = insertPendingAction(ctx.db, {
+              conversationId: ctx.conversationId,
+              messageId: ctx.messageId,
+              userId: ctx.userId,
+              action: outcome.action,
+            })
+            ctx.onAction(toolCallId, ctx.actionView(row))
+          }
+          const deckId = toolCallDeckId({ name, arguments: input })
+          const deckName = deckId ? ctx.deckName(deckId) : undefined
+          return { result, ...(deckName !== undefined ? { deckName } : {}) }
+        }
+        catch (error) {
+          throw error instanceof AssistantToolError ? error : new AssistantToolError(toolErrorMessage(error))
+        }
+      },
+      toModelOutput: ({ output }) => ({ type: 'json', value: (output.result ?? null) as JSONValue }),
+    })
+    return [name, assistantTool] as const
+  })
+  return Object.fromEntries(entries) as AssistantToolSet
+}
+
 // --- Actions: apply/reject a pending write --------------------------------------
 
 function actionAlreadyResolved(): never {
   throw createError({ statusCode: 409, statusMessage: 'This action was already resolved', data: { code: 'action_already_resolved' } })
 }
-
-type AssistantActionRow = typeof assistantAction.$inferSelect
 
 function requireOwnAction(db: Db, userId: string, actionId: string): AssistantActionRow {
   const row = db
