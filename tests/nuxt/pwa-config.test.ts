@@ -24,4 +24,25 @@ describe('PWA service worker options', () => {
   it('keeps the local card image set (public/assets) out of the precache', () => {
     expect(pwaOptions.workbox?.globIgnores).toContain('assets/**')
   })
+
+  it('does not precache web fonts (they load on demand per unicode range)', () => {
+    for (const pattern of pwaOptions.workbox?.globPatterns ?? []) {
+      expect(pattern).not.toMatch(/woff/i)
+    }
+  })
+})
+
+describe('PWA manifest', () => {
+  it('uses the dark arena canvas for the splash and title bar', () => {
+    const manifest = pwaOptions.manifest || {}
+    expect(manifest.theme_color).toBe('#0a0a1a')
+    expect(manifest.background_color).toBe('#0a0a1a')
+  })
+
+  it('offers the icon as a maskable icon too', () => {
+    const manifest = pwaOptions.manifest || {}
+    const purposes = (manifest.icons ?? []).map(icon => icon.purpose)
+    expect(purposes).toContain('any')
+    expect(purposes).toContain('maskable')
+  })
 })

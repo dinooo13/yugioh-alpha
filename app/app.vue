@@ -9,7 +9,27 @@ const uiLocales = { de, en } satisfies Record<AppLocale, unknown>
 const { locale } = useI18n()
 const appLocale = computed<AppLocale>(() => isAppLocale(locale.value) ? locale.value : DEFAULT_APP_LOCALE)
 
-useHead({ htmlAttrs: { lang: appLocale } })
+// Color mode (ADR 0016): dark unless the `ygo-color-mode` cookie says light.
+// @nuxtjs/color-mode only sets the `<html>` class from its inline script, so
+// the server renders it (and `theme-color`) from the cookie itself; on the
+// client both follow the toggle. Only head markup depends on the mode, never
+// the page body, so hydration can't mismatch.
+const colorMode = useColorMode()
+const colorModeCookie = useCookie<string | null>('ygo-color-mode')
+const isDark = computed(() => import.meta.server
+  ? colorModeCookie.value !== 'light'
+  : colorMode.value !== 'light')
+
+useHead({
+  htmlAttrs: {
+    lang: appLocale,
+    class: computed(() => isDark.value ? 'dark' : 'light'),
+  },
+  meta: [
+    { name: 'theme-color', content: computed(() => isDark.value ? '#0a0a1a' : '#f3f2f8') },
+    { name: 'color-scheme', content: computed(() => isDark.value ? 'dark' : 'light') },
+  ],
+})
 </script>
 
 <template>

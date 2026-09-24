@@ -18,14 +18,24 @@ export const pwaOptions: ModuleOptions = {
     lang: 'de',
     display: 'standalone',
     start_url: '/',
-    theme_color: '#6D5DF6',
-    background_color: '#ffffff',
+    // The dark arena canvas (ADR 0016); app/app.vue switches the page's
+    // `theme-color` with the color mode.
+    theme_color: '#0a0a1a',
+    background_color: '#0a0a1a',
     icons: [
       {
         src: '/icon.svg',
         sizes: 'any',
         type: 'image/svg+xml',
         purpose: 'any',
+      },
+      {
+        // Same file: the mark sits inside the 80% safe zone on a full
+        // background, so a launcher mask never cuts into it.
+        src: '/icon.svg',
+        sizes: 'any',
+        type: 'image/svg+xml',
+        purpose: 'maskable',
       },
     ],
   },

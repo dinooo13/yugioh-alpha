@@ -6,7 +6,19 @@ export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   devtools: { enabled: true },
   modules: ['@nuxt/eslint', '@nuxt/ui', '@nuxtjs/i18n', '@vite-pwa/nuxt'],
-  css: ['~/assets/css/main.css'],
+  // Self-hosted OFL fonts (ADR 0016): bundled from node_modules by Vite, so
+  // neither the build nor the browser talks to a font CDN. Nuxt UI's
+  // @nuxt/fonts integration is off (`ui.fonts`); it would resolve families
+  // through remote providers.
+  css: [
+    '@fontsource-variable/inter/wght.css',
+    '@fontsource-variable/cinzel/wght.css',
+    '@fontsource-variable/oxanium/wght.css',
+    '~/assets/css/main.css',
+  ],
+  ui: {
+    fonts: false,
+  },
   typescript: {
     strict: true,
   },
@@ -17,8 +29,13 @@ export default defineNuxtConfig({
       tasks: true,
     },
   },
+  // Dark first (ADR 0016). The choice lives in a cookie so the server can
+  // render the right `<html class>` and `theme-color` (app/app.vue).
   colorMode: {
-    preference: 'light',
+    preference: 'dark',
+    fallback: 'dark',
+    storage: 'cookie',
+    storageKey: 'ygo-color-mode',
   },
   routeRules: {
     // The SSR HTML for a shared profile/deck/collection page embeds the same
@@ -78,8 +95,9 @@ export default defineNuxtConfig({
   app: {
     head: {
       title: 'yugioh alpha',
-      // <html lang> follows the UI language: app/app.vue sets it.
-      meta: [{ name: 'theme-color', content: '#6D5DF6' }],
+      // <html lang>, the color-mode class and `theme-color` follow the UI
+      // language and color mode: app/app.vue sets them.
+      link: [{ rel: 'icon', type: 'image/svg+xml', href: '/icon.svg' }],
     },
   },
   // UI language (docs/adr/0014-ui-internationalisation.md). The module only
