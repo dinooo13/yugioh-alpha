@@ -45,6 +45,17 @@ const displayName = computed(() =>
 // colour here and on /players/<handle>.
 const avatarSeed = computed(() => ownProfile.value?.handle ?? session.value?.user.email ?? '')
 
+// The active item: a violet wash, a gold bar on the sidebar's edge and a
+// gold icon — gold marks "where you are" (ADR 0016).
+const NAV_UI = {
+  link: [
+    'py-2 px-3 gap-2.5 before:inset-x-0 focus-visible:before:outline-2 focus-visible:before:outline-focus',
+    'data-active:text-highlighted data-active:before:bg-primary/15',
+    'after:absolute after:-start-3 after:inset-y-1.5 after:w-0.5 after:rounded-full after:transition-colors data-active:after:bg-secondary',
+  ].join(' '),
+  linkLeadingIcon: 'size-[1.125rem] group-data-active:text-secondary',
+}
+
 async function onLogout() {
   await authClient.signOut()
   // Volle Navigation, damit kein gecachter Session-Zustand übrig bleibt.
@@ -54,28 +65,32 @@ async function onLogout() {
 
 <template>
   <div class="flex min-h-0 flex-1 flex-col">
-    <nav class="px-3 pt-3">
+    <nav class="min-h-0 flex-1 overflow-y-auto px-3 pt-3 pb-4">
       <UNavigationMenu
         orientation="vertical"
         :items="navItems"
         class="w-full"
+        :ui="NAV_UI"
       />
     </nav>
 
-    <div class="flex-1" />
-
     <div
       v-if="session"
-      class="border-t border-default p-3"
+      class="relative p-3"
     >
-      <div class="flex items-center gap-2.5 px-1 py-1">
+      <div
+        class="gold-hairline absolute inset-x-3 top-0"
+        aria-hidden="true"
+      />
+      <div class="flex items-center gap-3 py-1 ps-1.5">
         <ProfileAvatar
           :name="displayName"
           :handle="avatarSeed"
           size="md"
-          class="shrink-0"
+          class="shrink-0 ring-2 ring-secondary/60 ring-offset-2 ring-offset-island"
         />
-        <span class="truncate text-sm text-default">{{ displayName }}</span>
+        <span class="min-w-0 flex-1 truncate text-sm font-medium text-highlighted">{{ displayName }}</span>
+        <LayoutColorModeToggle />
       </div>
       <UButton
         icon="i-lucide-user"
@@ -84,7 +99,7 @@ async function onLogout() {
         variant="ghost"
         color="neutral"
         block
-        class="mt-1 justify-start"
+        class="mt-2 justify-start"
       />
       <UButton
         icon="i-lucide-log-out"
@@ -92,7 +107,7 @@ async function onLogout() {
         variant="ghost"
         color="neutral"
         block
-        class="mt-1 justify-start"
+        class="mt-0.5 justify-start"
         @click="onLogout"
       />
     </div>

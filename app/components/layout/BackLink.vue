@@ -14,11 +14,11 @@ defineProps<{
 <template>
   <NuxtLink
     :to="to"
-    class="inline-flex items-center gap-1 text-sm text-muted hover:text-highlighted max-lg:min-h-11"
+    class="group/back inline-flex items-center gap-1.5 rounded-sm text-sm font-medium text-muted transition-colors hover:text-highlighted max-lg:min-h-11"
   >
     <UIcon
       name="i-lucide-arrow-left"
-      class="size-4"
+      class="size-4 transition-transform duration-200 motion-safe:group-hover/back:-translate-x-0.5"
       aria-hidden="true"
     />
     {{ label }}

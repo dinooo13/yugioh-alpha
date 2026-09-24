@@ -30,26 +30,23 @@ const loginTarget = computed(() => ({ path: '/login', query: { redirect: route.f
 </script>
 
 <template>
-  <div class="min-h-screen bg-muted">
+  <div class="arena-canvas min-h-screen">
     <LayoutSkipLink />
 
-    <header class="border-b border-default bg-default">
-      <div class="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
-        <NuxtLink
+    <header class="sticky top-0 z-30 border-b border-default bg-default/80 backdrop-blur-md">
+      <div class="mx-auto flex h-16 max-w-5xl items-center justify-between gap-2 px-4 sm:gap-4 sm:px-6">
+        <LayoutBrandMark
           :to="session ? '/' : '/login'"
-          class="flex items-center gap-2.5"
-        >
-          <div class="flex size-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-inverted">
-            Y
-          </div>
-          <span class="whitespace-nowrap text-base font-semibold text-highlighted">yugioh alpha</span>
-        </NuxtLink>
+          collapse
+          class="shrink-0"
+        />
 
-        <div class="flex items-center gap-2">
+        <div class="flex min-w-0 items-center gap-1 sm:gap-2">
           <LayoutLocaleSwitch
             compact
             collapse
           />
+          <LayoutColorModeToggle />
           <template v-if="session">
             <UButton
               :label="t('app.publicHeader.myProfile')"
@@ -87,6 +84,10 @@ const loginTarget = computed(() => ({ path: '/login', query: { redirect: route.f
           />
         </div>
       </div>
+      <div
+        class="gold-hairline absolute inset-x-0 -bottom-px"
+        aria-hidden="true"
+      />
     </header>
 
     <main

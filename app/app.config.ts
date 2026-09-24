@@ -19,7 +19,7 @@ export default defineAppConfig({
       // Focus: a solid ring in the focus color (gold in dark mode) instead of
       // Nuxt UI's 25% tint, which nearly vanishes on the dark canvas.
       slots: {
-        base: 'disabled:opacity-40 disabled:grayscale transition-[color,background-color,border-color,box-shadow,opacity] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--app-focus)',
+        base: 'disabled:opacity-40 disabled:grayscale transition-[color,background-color,border-color,box-shadow,opacity] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus',
       },
       compoundVariants: [
         {
