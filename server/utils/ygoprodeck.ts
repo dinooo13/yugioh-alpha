@@ -5,6 +5,8 @@
 // which stays well within the documented 20 req/s rate limit, so this
 // module never paginates.
 
+import { foldCardName } from '../../shared/card-name-fold'
+
 const YGOPRODECK_CARDINFO_URL = 'https://db.ygoprodeck.com/api/v7/cardinfo.php'
 
 export interface YgoproCardSet {
@@ -25,6 +27,8 @@ export interface YgoproCardImage {
 export interface YgoproMisc {
   tcg_date?: string
   ocg_date?: string
+  /** Konami's card id, the join key to the German card data (ADR 0015). */
+  konami_id?: number
 }
 
 export interface YgoproBanlistInfo {
@@ -62,8 +66,8 @@ interface YgoproCardInfoResponse {
 
 /**
  * Fetches the entire YGOPRODeck card database in a single request.
- * `misc=yes` adds `misc_info` (tcg/ocg release dates), used for Phase 4
- * release-date-based rule formats.
+ * `misc=yes` adds `misc_info`: tcg/ocg release dates (Phase 4
+ * release-date-based rule formats) and the Konami id (ADR 0015).
  */
 export async function fetchAllCards(): Promise<YgoproCard[]> {
   const response = await $fetch<YgoproCardInfoResponse>(YGOPRODECK_CARDINFO_URL, {
@@ -102,6 +106,8 @@ export interface CatalogCardRow {
   ocgDate: string | null
   ygoprodeckUrl: string | null
   syncedAt: Date
+  konamiId: number | null
+  nameSearch: string
 }
 
 export interface CatalogSetRow {
@@ -140,6 +146,7 @@ export interface MappedCard {
 export function mapCardToRows(card: YgoproCard, syncedAt: Date): MappedCard {
   const misc = card.misc_info?.[0]
   const cardPrices = card.card_prices?.[0] ?? null
+  const konamiId = Number.isInteger(misc?.konami_id) ? misc?.konami_id ?? null : null
 
   const sets: CatalogSetRow[] = []
   const printings: CatalogPrintingRow[] = []
@@ -186,6 +193,8 @@ export function mapCardToRows(card: YgoproCard, syncedAt: Date): MappedCard {
       ocgDate: misc?.ocg_date ?? null,
       ygoprodeckUrl: card.ygoprodeck_url ?? null,
       syncedAt,
+      konamiId,
+      nameSearch: foldCardName(card.name),
     },
     sets,
     printings,

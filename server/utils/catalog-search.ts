@@ -85,6 +85,8 @@ export async function searchCatalog(db: Db, filters: CardListQuery) {
 export async function getCatalogCardDetail(db: Db, id: number) {
   const card = await db.query.catalogCard.findFirst({
     where: eq(catalogCard.id, id),
+    // Internal join/search columns (ADR 0015), not part of the API.
+    columns: { konamiId: false, nameSearch: false },
   })
 
   if (!card) {

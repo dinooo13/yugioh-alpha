@@ -25,6 +25,8 @@ describe('mapCardToRows', () => {
       tcgDate: '2002-03-08',
       ocgDate: '1999-02-04',
       syncedAt: SYNCED_AT,
+      konamiId: 4041,
+      nameSearch: 'darkmagician',
     })
 
     expect(mapped.images).toEqual([
@@ -52,7 +54,23 @@ describe('mapCardToRows', () => {
       level: null,
       linkval: null,
       scale: null,
+      konamiId: 4844,
+      nameSearch: 'potofgreed',
     })
+  })
+
+  it('maps a missing or malformed Konami id to null', () => {
+    const withoutMisc = mapCardToRows({ ...potOfGreedFixture, misc_info: undefined }, SYNCED_AT)
+    expect(withoutMisc.card.konamiId).toBeNull()
+
+    const withoutKonamiId = mapCardToRows({ ...potOfGreedFixture, misc_info: [{ tcg_date: '2002-03-08' }] }, SYNCED_AT)
+    expect(withoutKonamiId.card.konamiId).toBeNull()
+
+    const malformed = mapCardToRows(
+      { ...potOfGreedFixture, misc_info: [{ konami_id: '4844' as unknown as number }] },
+      SYNCED_AT,
+    )
+    expect(malformed.card.konamiId).toBeNull()
   })
 
   it('dedupes a shared set name across two cards into one set with two printings', () => {

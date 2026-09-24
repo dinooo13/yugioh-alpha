@@ -1,13 +1,13 @@
 import { useDb } from '../../db'
-import { syncCatalog } from '../../utils/catalog-sync'
+import { refreshCatalog } from '../../utils/catalog-refresh'
 
 export default defineTask({
   meta: {
     name: 'catalog:sync',
-    description: 'Fetches the full YGOPRODeck card database and upserts it into the local catalog.',
+    description: 'Fetches the full YGOPRODeck card database into the local catalog, then the German card data (ADR 0015).',
   },
   async run() {
-    const result = await syncCatalog(useDb())
+    const result = await refreshCatalog(useDb())
     return { result }
   },
 })

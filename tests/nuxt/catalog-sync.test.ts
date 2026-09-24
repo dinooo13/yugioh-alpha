@@ -3,7 +3,7 @@ import { drizzle } from 'drizzle-orm/better-sqlite3'
 import Database from 'better-sqlite3'
 import { beforeEach, describe, expect, it } from 'vitest'
 import * as schema from '../../server/db/schema'
-import { syncCatalog } from '../../server/utils/catalog-sync'
+import { backfillCatalogNameSearch, syncCatalog } from '../../server/utils/catalog-sync'
 import { darkMagicianFixture, potOfGreedFixture } from './fixtures/ygoprodeck-cards'
 
 function createTestDb() {
@@ -52,6 +52,7 @@ describe('syncCatalog', () => {
       .all()
       .find(card => card.id === darkMagicianFixture.id)!
     expect(dmAfterSecond.syncedAt.getTime()).toBeGreaterThan(0)
+    expect(dmAfterSecond).toMatchObject({ konamiId: 4041, nameSearch: 'darkmagician' })
   })
 
   it('records a successful run with the card count', async () => {
@@ -79,5 +80,36 @@ describe('syncCatalog', () => {
     const runs = db.select().from(schema.catalogSync).all()
     expect(runs).toHaveLength(1)
     expect(runs[0]).toMatchObject({ status: 'error', error: 'network exploded' })
+  })
+})
+
+describe('backfillCatalogNameSearch', () => {
+  it('folds the names of rows without a search name, once', () => {
+    const db = createTestDb()
+    // Rows as they look right after migration 0012, or inserted by a test
+    // that doesn't know the column.
+    db.insert(schema.catalogCard).values([
+      { id: 1, name: 'Blue-Eyes White Dragon', type: 'Normal Monster', desc: '', syncedAt: new Date(0) },
+      { id: 2, name: 'Élan Straße', type: 'Normal Monster', desc: '', syncedAt: new Date(0) },
+      { id: 3, name: 'Already Folded', type: 'Normal Monster', desc: '', syncedAt: new Date(0), nameSearch: 'custom' },
+      { id: 4, name: '???', type: 'Normal Monster', desc: '', syncedAt: new Date(0) },
+    ]).run()
+
+    expect(backfillCatalogNameSearch(db)).toBe(2)
+
+    const rows = db
+      .select({ id: schema.catalogCard.id, nameSearch: schema.catalogCard.nameSearch })
+      .from(schema.catalogCard)
+      .all()
+      .sort((a, b) => a.id - b.id)
+    expect(rows).toEqual([
+      { id: 1, nameSearch: 'blueeyeswhitedragon' },
+      { id: 2, nameSearch: 'elanstrasse' },
+      { id: 3, nameSearch: 'custom' },
+      // Folds to nothing: stays '' (the raw LIKE on name still finds it).
+      { id: 4, nameSearch: '' },
+    ])
+
+    expect(backfillCatalogNameSearch(db)).toBe(0)
   })
 })

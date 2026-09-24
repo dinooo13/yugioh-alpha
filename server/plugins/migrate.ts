@@ -1,13 +1,16 @@
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
 import { useDb } from '../db'
 import { seedCatalogFixture } from '../db/fixtures/catalog-fixture'
+import { backfillCatalogNameSearch } from '../utils/catalog-sync'
 import { seedBuiltinFormats } from '../utils/rule-formats'
 
 /**
  * Applies pending Drizzle migrations at server startup so the app
- * works out of the box without a manual migration step, then upserts the
- * built-in rule formats (see docs/adr/0005-rule-format-model.md) so their
- * rules ship with the code instead of needing a data migration.
+ * works out of the box without a manual migration step, fills the folded
+ * search name of catalog cards that don't have one yet (ADR 0015; a no-op
+ * after the first boot), then upserts the built-in rule formats (see
+ * docs/adr/0005-rule-format-model.md) so their rules ship with the code
+ * instead of needing a data migration.
  *
  * When `e2eSeedCatalog` is explicitly enabled (Playwright's webServer sets
  * NUXT_E2E_SEED_CATALOG=1), also upserts the small deterministic E2E catalog
@@ -17,6 +20,7 @@ import { seedBuiltinFormats } from '../utils/rule-formats'
 export default defineNitroPlugin(() => {
   const db = useDb()
   migrate(db, { migrationsFolder: './server/db/migrations' })
+  backfillCatalogNameSearch(db)
   seedBuiltinFormats(db)
 
   // Nitro's env-var override for runtime config runs values through `destr`,
