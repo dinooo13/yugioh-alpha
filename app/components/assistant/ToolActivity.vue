@@ -24,7 +24,7 @@ const errorDetail = computed(() => props.status === 'error' ? props.outcome?.err
 </script>
 
 <template>
-  <div class="flex justify-start">
+  <div class="flex justify-start ps-[2.375rem]">
     <div
       class="inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs"
       :class="status === 'error'

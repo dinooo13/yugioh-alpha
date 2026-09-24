@@ -12,7 +12,12 @@ const apiError = useApiError()
 // click instead of a blank page. Sent as the user's message, so they are
 // in the interface language.
 const EXAMPLE_PROMPT_KEYS = ['inventory', 'deck', 'photo'] as const
-const examplePrompts = computed(() => EXAMPLE_PROMPT_KEYS.map(key => t(`assistant.index.examples.${key}`)))
+const EXAMPLE_PROMPT_ICONS = { inventory: 'i-lucide-archive', deck: 'i-lucide-layers', photo: 'i-lucide-camera' } as const
+const examplePrompts = computed(() => EXAMPLE_PROMPT_KEYS.map(key => ({
+  key,
+  icon: EXAMPLE_PROMPT_ICONS[key],
+  text: t(`assistant.index.examples.${key}`),
+})))
 
 const route = useRoute()
 const router = useRouter()
@@ -98,15 +103,11 @@ async function startEmpty() {
 </script>
 
 <template>
-  <div class="space-y-6">
-    <div>
-      <h1 class="text-2xl font-semibold text-highlighted">
-        {{ t('assistant.title') }}
-      </h1>
-      <p class="mt-1 max-w-prose text-sm text-muted">
-        {{ t('assistant.index.intro') }}
-      </p>
-    </div>
+  <div class="space-y-6 lg:space-y-8">
+    <LayoutPageHeader
+      :title="t('assistant.title')"
+      :description="t('assistant.index.intro')"
+    />
 
     <AssistantUnavailableNotice v-if="!status?.chat" />
 
@@ -126,26 +127,51 @@ async function startEmpty() {
         {{ errorMessage }}
       </p>
 
-      <UButton
-        icon="i-lucide-plus"
-        :label="t('assistant.conversations.new')"
-        size="lg"
-        :loading="isCreating"
-        @click="startEmpty"
-      />
+      <!-- The summoning circle: start a conversation, or pick an example. -->
+      <section class="arena-surface relative overflow-hidden rounded-xl border border-default p-5 shadow-panel sm:p-8">
+        <LayoutArcaneRings class="absolute -top-36 -right-32 size-[26rem] opacity-80" />
+        <div class="relative flex items-center gap-4">
+          <span
+            class="flex size-12 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary ring-2 ring-secondary/60 ring-offset-2 ring-offset-bg"
+            aria-hidden="true"
+          >
+            <UIcon
+              name="i-lucide-sparkles"
+              class="size-6"
+            />
+          </span>
+          <UButton
+            icon="i-lucide-plus"
+            :label="t('assistant.conversations.new')"
+            size="lg"
+            class="btn-summon"
+            :loading="isCreating"
+            @click="startEmpty"
+          />
+        </div>
 
-      <div class="grid gap-3 sm:grid-cols-3">
-        <button
-          v-for="prompt in examplePrompts"
-          :key="prompt"
-          type="button"
-          class="rounded-md border border-default bg-default p-4 text-left text-sm text-default transition hover:border-primary hover:bg-primary/5 disabled:opacity-50"
-          :disabled="isCreating"
-          @click="startWithPrompt(prompt)"
-        >
-          {{ prompt }}
-        </button>
-      </div>
+        <div class="relative mt-6 grid gap-3 sm:grid-cols-3">
+          <button
+            v-for="prompt in examplePrompts"
+            :key="prompt.key"
+            type="button"
+            class="group panel flex items-start gap-3 p-4 text-left text-sm leading-6 text-default transition-[box-shadow,border-color] duration-200 hover:border-primary/50 hover:shadow-glow-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus disabled:opacity-50"
+            :disabled="isCreating"
+            @click="startWithPrompt(prompt.text)"
+          >
+            <span
+              class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary transition-colors group-hover:bg-primary/15"
+              aria-hidden="true"
+            >
+              <UIcon
+                :name="prompt.icon"
+                class="size-4"
+              />
+            </span>
+            <span class="min-w-0">{{ prompt.text }}</span>
+          </button>
+        </div>
+      </section>
     </template>
   </div>
 </template>
