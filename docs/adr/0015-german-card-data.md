@@ -9,6 +9,12 @@ sync, fixtures). F3b (bilingual search), F3c (card language setting and
 German display) and F3d (card data labels, the assistant) follow and add
 their status notes here.
 
+Implemented: F3a, F3b. F3b puts every card name search behind one helper,
+`cardNameMatches()` / `cardTextMatches()` in
+`server/utils/card-name-search.ts` (decision 6), and gives quick entry a
+German candidate pool on `catalog_card_translation.name_search`; entry
+candidates carry `nameDe`.
+
 ## Context
 
 Issue #34 makes the app bilingual. F1 gave it language-neutral URLs
