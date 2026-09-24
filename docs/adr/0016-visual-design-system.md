@@ -5,6 +5,10 @@
 Proposed — a redesign proposal for the owner's review
 (`feat/redesign-duel-arena`). Becomes Accepted once it is merged.
 
+Implemented on the branch, including two changes from the owner's first
+review: the sidebar and the mobile drawer follow the color mode (decision
+8), and the assistant pages use the shared page header.
+
 ## Context
 
 The UI was built from raw Tailwind palette classes: roughly 365 `gray-*`
@@ -47,15 +51,22 @@ Constraints that shape the answer:
    server renders the right `<html class>` and there is no flash. A toggle sits
    in the sidebar user block and in the auth and public headers. The
    `theme-color` meta follows the mode; the PWA manifest uses the dark canvas.
-3. **Self-hosted OFL fonts through `@nuxt/fonts`** with only the `npm` provider
-   enabled (all remote providers switched off): Inter (UI), Cinzel (display:
-   page titles, wordmark, hero greetings) and Oxanium (numbers: counters, deck
-   counts, scores). The build output must not reference Google font hosts.
+3. **Self-hosted OFL fonts**: Inter (UI), Cinzel (display: page titles,
+   wordmark, hero greetings) and Oxanium (numbers: counters, deck counts,
+   scores), imported from the `@fontsource-variable/*` packages in
+   `nuxt.config.ts` `css`, so Vite bundles the woff2 files and the browser
+   loads them from the app's own origin by unicode range. Nuxt UI's
+   `@nuxt/fonts` integration is switched off (`ui.fonts: false`): its `npm`
+   provider rewrites the font URLs to a CDN and downloads them at build
+   time. A metric-matched local "Inter Fallback" keeps the swap from
+   shifting the layout. The build output must not reference Google font
+   hosts, and the service worker does not precache fonts.
 4. **Shared building blocks** in `app/assets/css/main.css`: `panel` (the
    standard surface), `arena-canvas` (page background with glows and a rhombus
-   lattice), `gold-hairline`, `btn-summon` (at most one hero CTA per page),
-   `frame-stripe`/`frame-dot`, `card-back`, `foil`, `lp-counter` and
-   `eyebrow`. Dense tools (deck editor, tables, forms) stay flat; ceremony is
+   lattice), `arena-surface` (the lit surface of the shell and the heroes),
+   `gold-hairline`, `btn-summon` (at most one hero CTA per page),
+   `frame-stripe`/`frame-dot`, `attribute-orb`, `card-back`, `foil`,
+   `lp-counter`, `deck-fan`/`deck-meter` and `eyebrow`. Dense tools (deck editor, tables, forms) stay flat; ceremony is
    reserved for auth, dashboard, profile headers, empty states and deck tiles.
 5. **Card-frame and attribute colors are decorative accents only** —
    stripes, dots and orbs next to the written type or attribute, never text

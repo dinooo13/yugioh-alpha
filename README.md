@@ -349,6 +349,34 @@ tournament makes it read-only and moves it into the "Abgeschlossen" history
 list. See
 [`docs/adr/0008-tournament-model.md`](./docs/adr/0008-tournament-model.md).
 
+## Design system ("Duel Arena")
+
+The UI follows a dark-first design system, "Duel Arena · Midnight Arcane": an
+indigo-black canvas, arcane violet for actions, Millennium gold for meaning
+(focus, the active place, highlights), and card-frame colors as small
+stripes and dots next to the written card type. See
+[`docs/adr/0016-visual-design-system.md`](./docs/adr/0016-visual-design-system.md).
+
+- **Color mode.** Dark by default, with a light mode. The toggle sits in the
+  sidebar and in the login and public headers; the choice is stored in the
+  `ygo-color-mode` cookie, so the server renders the right theme (no flash)
+  and `theme-color` follows it.
+- **Tokens only.** Components use Nuxt UI's semantic utilities
+  (`text-muted`, `bg-elevated`, `border-default`, `text-error`, …) and the
+  building blocks in `app/assets/css/main.css` (`panel`, `arena-canvas`,
+  `arena-surface`, `gold-hairline`, `btn-summon`, `frame-stripe`/`frame-dot`,
+  `card-back`, `foil`, `lp-counter`, `deck-fan`, `deck-meter`). Raw palette
+  classes (`text-gray-500`, `bg-white`, `bg-brand-600`, arbitrary hex
+  colors) fail `tests/nuxt/no-raw-palette.test.ts`.
+- **Fonts.** Inter (UI), Cinzel (page titles, wordmark) and Oxanium (counters,
+  scores), all SIL OFL, bundled from `@fontsource-variable/*` — no font CDN
+  at build or run time, and web fonts are not precached by the service
+  worker.
+- **Accessibility.** WCAG AA contrast in both modes (checked by
+  `e2e/a11y-axe.spec.ts`), a visible focus ring (violet in light, gold in
+  dark), the 44px touch targets below `lg`, decorative motion only without
+  `prefers-reduced-motion`, and a `forced-colors` fallback.
+
 ## Quality Checks
 
 ```bash
