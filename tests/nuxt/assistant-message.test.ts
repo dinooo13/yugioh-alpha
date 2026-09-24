@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { parseAssistantMessageBlocks } from '~/utils/assistant-message'
 
 // Covers review finding #15's gap: this is the security-relevant parser
-// behind MessageBubble.vue (app/components/assistant/MessageBubble.vue) —
+// behind MessageText.vue (app/components/assistant/MessageText.vue) —
 // it only ever produces plain-text segments consumed via `{{ }}`
 // interpolation, never markup, so a stray HTML-looking string in a model's
 // answer must survive as literal text rather than being interpreted.

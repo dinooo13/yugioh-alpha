@@ -33,7 +33,7 @@ describe('product name', () => {
   it('scans the app, the server, the messages and the config', () => {
     expect(scanned).toContain('app/components/layout/BrandMark.vue')
     expect(scanned).toContain('i18n/locales/de/app.json')
-    expect(scanned).toContain('server/utils/deck-assistant-model.ts')
+    expect(scanned).toContain('server/utils/assistant-model.ts')
     expect(scanned).toContain('pwa.config.ts')
   })
 

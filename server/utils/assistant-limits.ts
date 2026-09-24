@@ -4,8 +4,8 @@
 // gets to see, and how long a single model call may take. Read from
 // `runtimeConfig.assistant.limits` (see nuxt.config.ts for the defaults and
 // .env.example for the six `NUXT_ASSISTANT_LIMITS_*` overrides), consumed by
-// the chat engine (assistant-chat.ts), the tool layer (assistant-tools.ts),
-// and the model factory (deck-assistant-model.ts).
+// the turn (assistant-turn.ts), the history window (assistant-ui-messages.ts)
+// and the tool layer (assistant-tools.ts).
 //
 // The app currently has a single user who watches costs, not an untrusted
 // multi-tenant crowd — so a garbage/missing override falls back to a
@@ -19,17 +19,17 @@
 // `nuxt.config.ts` default or a config layer that leaves it as a string
 // still works.
 
-/** Tool-calling rounds per user turn — server/utils/assistant-chat.ts. */
+/** Tool-calling rounds (model steps) per user turn — server/utils/assistant-turn.ts. */
 export const DEFAULT_ASSISTANT_MAX_TOOL_ROUNDS = 24
 /** Rows a read tool returns, and the floor read tools' write counterparts (`items`/`changes`) are capped at — server/utils/assistant-tools.ts. */
 export const DEFAULT_ASSISTANT_TOOL_RESULT_MAX_ITEMS = 100
-/** Serialized tool result budget, in characters — server/utils/assistant-chat.ts. */
+/** Serialized tool result budget, in characters — server/utils/assistant-tools.ts. */
 export const DEFAULT_ASSISTANT_TOOL_RESULT_MAX_CHARS = 60_000
-/** Prior messages sent to the model as history — server/utils/assistant-chat.ts. */
+/** Prior messages sent to the model as history — server/utils/assistant-ui-messages.ts. */
 export const DEFAULT_ASSISTANT_HISTORY_MESSAGE_LIMIT = 120
-/** History character budget, oldest messages dropped first once exceeded — server/utils/assistant-chat.ts. */
+/** History character budget, oldest messages dropped first once exceeded — server/utils/assistant-ui-messages.ts. */
 export const DEFAULT_ASSISTANT_HISTORY_CHAR_LIMIT = 160_000
-/** Per-request timeout for a single model call, in milliseconds — server/utils/deck-assistant-model.ts. */
+/** Timeout for a single model call (one step), in milliseconds — server/utils/assistant-turn.ts. */
 export const DEFAULT_ASSISTANT_TIMEOUT_MS = 300_000
 
 export interface AssistantLimits {

@@ -205,8 +205,6 @@ export interface TurnText {
   tooManySteps: string
   /** The turn stopped after the same tool call failed repeatedly (#54). */
   repeatedToolFailure: string
-  /** Label of an attached image, by 1-based index (the UI renders its own). */
-  photoLabel: (index: number) => string
 }
 
 export const TURN_TEXT: Record<AppLocale, TurnText> = {
@@ -219,7 +217,6 @@ export const TURN_TEXT: Record<AppLocale, TurnText> = {
     noAnswer: 'Ich konnte dazu keine Antwort erzeugen. Bitte formuliere die Frage anders.',
     tooManySteps: 'Ich konnte die Anfrage nicht in wenigen Schritten abschließen. Bitte formuliere sie konkreter oder in kleineren Schritten.',
     repeatedToolFailure: 'Ich komme mit einem Werkzeugaufruf gerade nicht weiter. Formuliere die Anfrage bitte etwas anders.',
-    photoLabel: index => `Foto ${index}`,
   },
   en: {
     defaultConversationTitle: 'New conversation',
@@ -230,6 +227,5 @@ export const TURN_TEXT: Record<AppLocale, TurnText> = {
     noAnswer: 'I couldn\'t come up with an answer to that. Please rephrase the question.',
     tooManySteps: 'I couldn\'t finish the request in a few steps. Please make it more specific or split it into smaller steps.',
     repeatedToolFailure: 'I got stuck on a tool call. Please rephrase the request.',
-    photoLabel: index => `Photo ${index}`,
   },
 }

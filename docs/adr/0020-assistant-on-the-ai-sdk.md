@@ -9,6 +9,10 @@ of the former engine). Supersedes the engine parts of
 [0010](0010-chat-assistant-with-tools.md); the mechanism note in
 [0011](0011-deck-assistance-in-chat.md) applies.
 
+Implemented (84a–84c). 84c removed the former engine and its SSE endpoint
+`POST /api/assistant/chat/:id/messages`, so the side-by-side note under
+Consequences no longer holds. The legacy converter stays.
+
 ## Context
 
 The chat assistant (ADR 0010) ran on a hand-written engine: a `fetch` + SSE

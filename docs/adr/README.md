@@ -27,4 +27,4 @@ mark the old as superseded.
 | [0017](0017-inventory-without-collector-details.md) | Inventory without collector details | Accepted |
 | [0018](0018-product-name-ygo-alpha.md) | Product name "YGO Alpha" | Accepted |
 | [0019](0019-retired-catalog-cards.md) | Retired catalog cards | Accepted |
-| [0020](0020-assistant-on-the-ai-sdk.md) | The chat assistant on the Vercel AI SDK | Accepted (84a: server engine) |
+| [0020](0020-assistant-on-the-ai-sdk.md) | The chat assistant on the Vercel AI SDK | Accepted, implemented (84a–84c) |

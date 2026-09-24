@@ -28,6 +28,7 @@ import { loadUiMessages, validateAssistantTurnRequest } from '../../server/utils
 import { CARD_NAME_INSTRUCTION, REPLY_LANGUAGE_INSTRUCTION, TOOL_TEXT, TURN_TEXT } from '../../server/utils/assistant-prompts'
 import { createDeck, upsertDeckCard } from '../../server/utils/decks'
 import type { AssistantUIMessage } from '../../shared/assistant-ui'
+import { seedGermanNames } from './fixtures/german-names'
 
 const CARD = {
   darkMagician: 46986414,
@@ -252,6 +253,44 @@ describe('startAssistantTurn: the tool loop', () => {
       { state: 'output-error', errorText: TOOL_TEXT.emptyArguments },
       { state: 'output-error', errorText: TOOL_TEXT.emptyArguments },
     ])
+  })
+
+  it('keeps an invalid call\'s input in `input`, never in the deprecated `rawInput` — the SDK warns about nothing, now or on the next turn', async () => {
+    const warnings: unknown[] = []
+    const previous = (globalThis as { AI_SDK_LOG_WARNINGS?: unknown }).AI_SDK_LOG_WARNINGS
+    ;(globalThis as { AI_SDK_LOG_WARNINGS?: unknown }).AI_SDK_LOG_WARNINGS = (options: { warnings: unknown[] }) => warnings.push(...options.warnings)
+    try {
+      const conversationId = newConversation()
+      const { model } = scriptedModel([call('search_catalog', {}), call('get_card', '{"id": 4'), text('ok')])
+
+      const { chunks } = await runTurn(conversationId, model)
+      await runTurn(conversationId, model, { body: userText('Und jetzt?') })
+
+      expect(chunks.map(chunk => chunk.type)).not.toContain('tool-input-error')
+      const parts = storedMessages(conversationId)[1]!.parts!.filter(part => part.type.startsWith('tool-'))
+      expect(parts).toMatchObject([
+        { state: 'output-error', input: {}, errorText: TOOL_TEXT.emptyArguments },
+        { state: 'output-error', input: '{"id": 4', errorText: TOOL_TEXT.invalidArguments },
+      ])
+      expect(parts.some(part => 'rawInput' in part)).toBe(false)
+      expect(warnings).toEqual([])
+    }
+    finally {
+      ;(globalThis as { AI_SDK_LOG_WARNINGS?: unknown }).AI_SDK_LOG_WARNINGS = previous
+    }
+  })
+
+  it('moves the `rawInput` of parts stored by earlier versions to `input` when read', async () => {
+    const conversationId = newConversation()
+    const { model } = scriptedModel([text('ok')])
+    await runTurn(conversationId, model)
+    const answer = storedMessages(conversationId)[1]!
+    db.update(schema.assistantMessage)
+      .set({ parts: [{ type: 'tool-search_catalog', toolCallId: 'c1', state: 'output-error', rawInput: { query: '' }, errorText: 'x' } as never, { type: 'text', text: 'ok', state: 'done' }] })
+      .where(eq(schema.assistantMessage.id, answer.id))
+      .run()
+
+    expect(loadUiMessages(db, 'user-a', conversationId)[1]!.parts[0]).toEqual({ type: 'tool-search_catalog', toolCallId: 'c1', state: 'output-error', input: { query: '' }, errorText: 'x' })
   })
 
   it('hands a tool\'s own validation error to the model as its English message', async () => {
@@ -529,7 +568,7 @@ describe('startAssistantTurn: history, images and regenerate', () => {
 
     const stored = storedMessages(conversationId)[0]!
     expect(stored.parts).toEqual([{ type: 'text', text: 'Was ist das?' }, { type: 'data-image', data: { index: 1 } }])
-    expect(stored.attachments).toEqual([{ kind: 'image', label: 'Foto 1' }])
+    expect(stored.attachments).toBeNull()
     expect(JSON.stringify(stored)).not.toContain('iVBORw0KGgo')
 
     await runTurn(conversationId, model, { body: userText('Und jetzt?') })
@@ -601,6 +640,42 @@ describe('startAssistantTurn: history, images and regenerate', () => {
     // The deck-linked conversation keeps its title.
     expect(db.select().from(schema.assistantConversation).get()!.title).toBe('Deck: Magier-Deck')
   })
+
+  it('adds no deck block to an unlinked conversation', async () => {
+    createDeck(db, 'user-a', { name: 'Magier-Deck', description: null })
+    const { model, calls } = scriptedModel([text('ok')])
+
+    await runTurn(newConversation(), model)
+
+    expect(systemOf(calls[0]!)).not.toContain('Deck ID:')
+    expect(systemOf(calls[0]!)).toContain('Deck building:')
+  })
+
+  it('saves the fallback texts in the turn\'s interface language', async () => {
+    const conversationId = newConversation()
+    const { model } = scriptedModel([text('', 'content-filter')])
+
+    await runTurn(conversationId, model)
+    await runTurn(conversationId, model, { body: userText('hello'), locale: 'en' })
+
+    expect(storedMessages(conversationId).filter(row => row.role === 'assistant').map(row => row.content))
+      .toEqual([TURN_TEXT.de.noAnswer, TURN_TEXT.en.noAnswer])
+  })
+
+  it('passes the card language to the tools: German names in the results only in German (ADR 0015)', async () => {
+    seedGermanNames(db, { [CARD.darkMagician]: 'Dunkler Magier' })
+    const { model, calls } = scriptedModel([call('search_catalog', { query: 'Dunkler' }), text('ok')])
+
+    await runTurn(newConversation(), model, { locale: 'en', cardLocale: 'de' })
+    const german = toolResultsOf(calls[1]!)[0]
+    calls.length = 0
+    await runTurn(newConversation(), model, { locale: 'de', cardLocale: 'en' })
+    const english = toolResultsOf(calls[1]!)[0]
+
+    expect(german).toMatchObject({ output: { type: 'json', value: { items: [{ name: 'Dark Magician', nameDe: 'Dunkler Magier' }] } } })
+    expect(JSON.stringify(english)).toContain('Dark Magician')
+    expect(JSON.stringify(english)).not.toContain('nameDe')
+  })
 })
 
 describe('the fake model end-to-end (NUXT_ASSISTANT_PROVIDER=fake)', () => {
@@ -619,6 +694,16 @@ describe('the fake model end-to-end (NUXT_ASSISTANT_PROVIDER=fake)', () => {
     const messages = loadUiMessages(db, 'user-a', conversationId)
     expect(messages.map(message => message.role)).toEqual(['user', 'assistant', 'user', 'assistant'])
     expect(messages[3]!.parts.find(part => part.type === 'data-action')).toMatchObject({ data: { id: action.id, status: 'pending' } })
+  })
+
+  it('answers from the deck context of a deck-linked conversation', async () => {
+    const deck = createDeck(db, 'user-a', { name: 'Magier-Deck', description: null })
+    upsertDeckCard(db, 'user-a', deck.id, { catalogCardId: CARD.darkMagician, section: 'main', quantity: 2 })
+    const conversationId = createConversation(db, 'user-a', { deckId: deck.id }).id
+
+    await runTurn(conversationId, createFakeLanguageModel(), { body: userText('Was ist in meinem Deck?') })
+
+    expect(storedMessages(conversationId).at(-1)!.content).toBe('Kontext-Deck: Magier-Deck (2 Karten)')
   })
 
   it('ends a "leere argumente" turn with a text answer instead of looping (#54)', async () => {

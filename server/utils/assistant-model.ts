@@ -307,8 +307,8 @@ export function assistantErrorCode(error: unknown): string {
  * A tool call that failed; thrown from a tool's `execute` (and returned by
  * its input validation) with the technical English message the model reads.
  * The AI SDK hands a failed call's error to the model as JSON, so `toJSON`
- * makes that `{ "error": "<message>" }` — the same shape the tool results of
- * the former engine used — instead of an empty `{}`.
+ * makes that `{ "error": "<message>" }` — the same shape as the stored tool
+ * results of legacy conversations — instead of an empty `{}`.
  */
 export class AssistantToolError extends Error {
   constructor(message: string) {

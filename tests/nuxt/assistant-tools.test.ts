@@ -14,8 +14,6 @@ import {
   ASSISTANT_TOOLS,
   buildAssistantToolSet,
   rejectAction,
-  runTool,
-  toolDefinitions,
 } from '../../server/utils/assistant-tools'
 import type { AssistantToolSet, ToolOutcome } from '../../server/utils/assistant-tools'
 import { createConversation, resolveDeckNames, toActionView } from '../../server/utils/assistant-chat'
@@ -132,46 +130,6 @@ let db: TestDb
 beforeEach(() => {
   db = createTestDb()
   seedUsersAndCatalog(db)
-})
-
-describe('toolDefinitions', () => {
-  it('exposes every tool as an OpenAI-style function definition', () => {
-    const definitions = toolDefinitions()
-    expect(definitions).toHaveLength(ASSISTANT_TOOLS.length)
-    for (const definition of definitions) {
-      expect(definition.type).toBe('function')
-      expect(typeof definition.function.name).toBe('string')
-      expect(typeof definition.function.description).toBe('string')
-      expect(typeof definition.function.parameters).toBe('object')
-    }
-  })
-
-  it('describes every tool and parameter in English, one version for every locale (ADR 0014)', () => {
-    const json = JSON.stringify(toolDefinitions())
-    expect(json).not.toMatch(/[äöüÄÖÜß]/)
-    expect(json).not.toMatch(/\b(?:der|die|das|und|nicht|Karte|Karten|Vorschlag)\b/)
-    // The search_catalog limit carries the live cap.
-    const searchCatalog = toolDefinitions().find(definition => definition.function.name === 'search_catalog')!
-    expect(JSON.stringify(searchCatalog.function.parameters)).toContain(`(default/maximum: ${getAssistantLimits().toolResultItems})`)
-  })
-
-  it('never uses a nullable union type in a parameter schema (#54: the provider garbles such calls)', () => {
-    expect(JSON.stringify(toolDefinitions())).not.toMatch(/"type":\s*\[/)
-  })
-
-  it('offers add_to_inventory without collector fields (ADR 0017)', () => {
-    const addToInventory = toolDefinitions().find(definition => definition.function.name === 'add_to_inventory')!
-    const parameters = addToInventory.function.parameters as {
-      properties: { items: { items: { properties: Record<string, unknown> } } }
-    }
-    expect(Object.keys(parameters.properties.items.items.properties)).toEqual(['catalogCardId', 'quantity', 'collectionId'])
-  })
-})
-
-describe('runTool', () => {
-  it('rejects an unknown tool name with 400', async () => {
-    expect(await statusOf(() => runTool('does_not_exist', { db, userId: 'user-a', cardLocale: 'en' }, {}))).toBe(400)
-  })
 })
 
 describe('search_catalog', () => {
@@ -1202,16 +1160,42 @@ describe('buildAssistantToolSet (the AI SDK engine, ADR 0020)', () => {
     return tools[name].execute!(input, options(toolCallId)) as Promise<AssistantToolOutput>
   }
 
+  async function schemaOf(tools: AssistantToolSet, name: keyof AssistantToolSet) {
+    return await asSchema(tools[name].inputSchema).jsonSchema as { properties: Record<string, { description?: string, items?: { properties: Record<string, unknown> } }> }
+  }
+
   it('offers every registered tool with its flat schema unchanged — no nullable unions anywhere (#54)', async () => {
     const { tools } = buildSet()
     expect(Object.keys(tools)).toEqual(ASSISTANT_TOOLS.map(definition => definition.name))
-    const definitions = new Map(toolDefinitions().map(definition => [definition.function.name, definition.function]))
-    for (const [name, assistantTool] of Object.entries(tools)) {
-      const schemaJson = await asSchema(assistantTool.inputSchema).jsonSchema
-      expect(schemaJson).toEqual(definitions.get(name)!.parameters)
-      expect(assistantTool.description).toBe(definitions.get(name)!.description)
+    for (const definition of ASSISTANT_TOOLS) {
+      const name = definition.name as keyof AssistantToolSet
+      expect(tools[name].description).toBe(definition.description)
+      if (name !== 'search_catalog') {
+        expect(await schemaOf(tools, name)).toEqual(definition.parameters)
+      }
     }
     expect(JSON.stringify(await Promise.all(Object.values(tools).map(assistantTool => asSchema(assistantTool.inputSchema).jsonSchema)))).not.toMatch(/"type":\s*\[/)
+  })
+
+  it('puts the turn\'s item cap into search_catalog\'s limit description, the rest of its schema unchanged', async () => {
+    const { tools } = buildSet({ limits: { toolResultChars: 60_000, toolResultItems: 7 } })
+    const schemaJson = await schemaOf(tools, 'search_catalog')
+    const registered = ASSISTANT_TOOLS.find(definition => definition.name === 'search_catalog')!.parameters as typeof schemaJson
+    expect(schemaJson.properties.limit!.description).toBe('Maximum number of results (default/maximum: 7)')
+    expect({ ...schemaJson, properties: { ...schemaJson.properties, limit: registered.properties.limit } }).toEqual(registered)
+  })
+
+  it('describes every tool and parameter in English, one version for every locale (ADR 0014)', async () => {
+    const { tools } = buildSet()
+    const json = JSON.stringify(await Promise.all(Object.values(tools).map(async assistantTool => [assistantTool.description, await asSchema(assistantTool.inputSchema).jsonSchema])))
+    expect(json).not.toMatch(/[äöüÄÖÜß]/)
+    expect(json).not.toMatch(/\b(?:der|die|das|und|nicht|Karte|Karten|Vorschlag)\b/)
+  })
+
+  it('offers add_to_inventory without collector fields (ADR 0017)', async () => {
+    const { tools } = buildSet()
+    const schemaJson = await schemaOf(tools, 'add_to_inventory')
+    expect(Object.keys(schemaJson.properties.items!.items!.properties)).toEqual(['catalogCardId', 'quantity', 'collectionId'])
   })
 
   it('rejects empty or non-object arguments with the emptyArguments text, but accepts {} where nothing is required', async () => {

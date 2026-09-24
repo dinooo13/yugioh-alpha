@@ -22,9 +22,8 @@ import {
 } from '../../shared/assistant-chat'
 import type { AssistantActionView } from '../../shared/assistant-chat'
 import type { AssistantTurnTrigger, AssistantUIMessage, AssistantUIMessagePart } from '../../shared/assistant-ui'
-import type { AppLocale } from '../../shared/locale'
-import { decodedByteSizeOfDataUrl, hydrateActionViews, IMAGE_DATA_URL_PATTERN, resolveDeckNames } from './assistant-chat'
-import { TOOL_TEXT, TURN_TEXT } from './assistant-prompts'
+import { hydrateActionViews, resolveDeckNames } from './assistant-chat'
+import { TOOL_TEXT } from './assistant-prompts'
 
 type Db = ReturnType<typeof useDb>
 type MessageRow = typeof assistantMessage.$inferSelect
@@ -52,6 +51,22 @@ function toolPart(fields: {
 
 function isToolPart(part: AssistantUIMessagePart): part is Extract<AssistantUIMessagePart, { toolCallId: string }> & { type: `tool-${string}` } {
   return part.type.startsWith('tool-')
+}
+
+/**
+ * Answers stored before the turn stopped streaming `tool-input-error`
+ * chunks keep an invalid call's input in the AI SDK's deprecated `rawInput`
+ * field, which the SDK warns about whenever such a message is read. Moves
+ * it to `input`, where the SDK expects it now.
+ */
+function withoutRawInput(parts: AssistantUIMessagePart[]): AssistantUIMessagePart[] {
+  return parts.map((part) => {
+    if (!isToolPart(part) || !('rawInput' in part)) {
+      return part
+    }
+    const { rawInput, ...rest } = part as typeof part & { rawInput?: unknown }
+    return { ...rest, input: rest.input ?? rawInput } as AssistantUIMessagePart
+  })
 }
 
 /** The joined text of a message's text parts — stored as `content` (title, legacy readers). */
@@ -113,7 +128,7 @@ export function legacyRowsToUIMessages(rows: MessageRow[], actionsByMessageId: M
       messages.push({
         id: row.id,
         role: row.role === 'user' ? 'user' : 'assistant',
-        parts: row.parts,
+        parts: withoutRawInput(row.parts),
         metadata: { ...row.metadata, createdAt: row.createdAt.toISOString() },
       })
     }
@@ -263,13 +278,13 @@ export function isMessageIdFree(db: Db, id: string): boolean {
 
 /**
  * Stores the user's message: its text and one `data-image` placeholder per
- * photo — the image bytes are never stored (ADR 0010). `attachments` keeps
- * the labels for the former engine's thread, which still reads these rows.
- * Bumps the conversation's `updatedAt`.
+ * photo — the image bytes are never stored (ADR 0010). The legacy
+ * `attachments` column stays empty (the parts carry the photos). Bumps the
+ * conversation's `updatedAt`.
  */
 export function persistUserMessage(
   db: Db,
-  fields: { conversationId: string, id: string, text: string, imageCount: number, locale: AppLocale, now?: Date },
+  fields: { conversationId: string, id: string, text: string, imageCount: number, now?: Date },
 ): MessageRow {
   const now = fields.now ?? new Date()
   const images = Array.from({ length: fields.imageCount }, (_, index) => index + 1)
@@ -284,7 +299,6 @@ export function persistUserMessage(
       conversationId: fields.conversationId,
       role: 'user',
       content: fields.text,
-      attachments: images.length > 0 ? images.map(index => ({ kind: 'image' as const, label: TURN_TEXT[fields.locale].photoLabel(index) })) : null,
       parts,
       createdAt: now,
     })
@@ -400,13 +414,27 @@ export interface AssistantTurnRequest {
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
+// Only the three MIME types the client actually produces (see ADR 0010's
+// "Images (client)" decision — canvas-resized JPEG, or a passthrough
+// PNG/WebP) are accepted; anything else (e.g. `data:text/html`,
+// `data:application/pdf`) is rejected rather than forwarded to the model.
+export const IMAGE_DATA_URL_PATTERN = /^data:image\/(?:jpe?g|png|webp)[;,]/i
+
+/** The decoded byte size of a `data:` URL's base64 payload (3/4 of its encoded character length, ignoring padding). */
+export function decodedByteSizeOfDataUrl(dataUrl: string): number {
+  const commaIndex = dataUrl.indexOf(',')
+  const base64Length = commaIndex >= 0 ? dataUrl.length - commaIndex - 1 : dataUrl.length
+  const paddingLength = dataUrl.endsWith('==') ? 2 : dataUrl.endsWith('=') ? 1 : 0
+  return Math.max(0, Math.floor((base64Length * 3) / 4) - paddingLength)
+}
+
 /**
  * Validates a turn request as the AI SDK's chat transport sends it (only the
  * newest message; the server reads the history from the database and never
  * trusts client history): `{ trigger, message }`, where a submitted message
- * is a user UIMessage of text and `file` parts. The limits are those of the
- * former `validateAssistantMessageInput`: text ≤ 20,000 characters, ≤ 6
- * images, jpeg/png/webp data URLs, ≤ 12 MB decoded in total. Nothing of the
+ * is a user UIMessage of text and `file` parts. The limits: text ≤ 20,000
+ * characters, ≤ 6 images, jpeg/png/webp data URLs, ≤ 12 MB decoded in
+ * total (the decoded size, not the data URL's length). Nothing of the
  * client's JSON is passed on; the turn builds its own message from the
  * result.
  */

@@ -54,7 +54,7 @@ export default defineNuxtConfig({
     // see server/plugins/migrate.ts and server/db/fixtures/catalog-fixture.ts.
     e2eSeedCatalog: '',
     // Chat assistant (/assistant, incl. deck assistance — ADRs 0010/0011),
-    // server-only. See server/utils/deck-assistant-model.ts for how these
+    // server-only. See server/utils/assistant-model.ts for how these
     // resolve to a provider. All overridable via NUXT_ASSISTANT_*.
     // Works with any OpenAI-compatible Chat Completions endpoint — OpenAI,
     // OpenRouter, Ollama, LM Studio, OpenCode Zen, etc.

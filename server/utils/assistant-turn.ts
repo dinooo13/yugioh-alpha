@@ -37,7 +37,6 @@ import {
   hydrateActionViews,
   requireOwnConversation,
   resolveDeckNames,
-  TURN_TIMEOUT_MS,
 } from './assistant-chat'
 import { getAssistantLimits } from './assistant-limits'
 import type { AssistantLimits } from './assistant-limits'
@@ -63,6 +62,9 @@ import type { AssistantTurnRequest } from './assistant-ui-messages'
 type Db = ReturnType<typeof useDb>
 type Chunk = InferUIMessageChunk<AssistantUIMessage>
 type Steps = Array<StepResult<AssistantToolSet>>
+
+/** A whole turn's deadline; a single model call has its own `limits.timeoutMs`. */
+export const TURN_TIMEOUT_MS = 5 * 60 * 1000
 
 // --- #54 guards ------------------------------------------------------------------
 
@@ -298,7 +300,6 @@ export function startAssistantTurn(options: AssistantTurnOptions): AssistantTurn
       id: chooseUserMessageId(db, request.clientMessageId),
       text: request.text,
       imageCount: request.images.length,
-      locale,
     })
     // Derived the moment the first message is stored, not after a successful
     // turn: a turn that fails right after this must not leave the
@@ -426,6 +427,16 @@ export function startAssistantTurn(options: AssistantTurnOptions): AssistantTurn
       }
       if (chunk.type === 'error') {
         status = 'error'
+      }
+      if (chunk.type === 'tool-input-error') {
+        // An invalid call (unparseable or empty input). The SDK would store
+        // its input on the part as the deprecated `rawInput` (and warn about
+        // it on every read); as an available input followed by the
+        // `tool-output-error` chunk the SDK sends for the same call, the part
+        // ends up the same, with the input in `input`.
+        const { errorText: _errorText, dynamic: _dynamic, ...call } = chunk
+        writer.write({ ...call, type: 'tool-input-available' })
+        continue
       }
       writer.write(chunk)
       if (chunk.type === 'tool-output-available' || chunk.type === 'tool-output-error') {

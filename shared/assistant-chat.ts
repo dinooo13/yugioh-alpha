@@ -29,18 +29,7 @@ export interface AssistantStatus {
   visionModel: string | null
 }
 
-export type AssistantMessageRole = 'user' | 'assistant' | 'tool'
-
-export interface AssistantAttachment {
-  kind: 'image'
-  /**
-   * e.g. "Foto 1", in the language of the turn that stored it — the UI
-   * renders its own label by index. The image bytes are never persisted.
-   */
-  label: string
-}
-
-/** A tool call as persisted/rendered — arguments already parsed to an object. */
+/** A tool call as the former engine persisted it (`assistant_message.tool_calls`) and as a chip names it — arguments already parsed to an object. */
 export interface AssistantToolCallView {
   id: string
   name: string
@@ -51,17 +40,6 @@ export interface AssistantToolCallView {
    * never persisted. Missing when the call has no deck or the deck is gone.
    */
   deckName?: string
-}
-
-export interface AssistantMessageView {
-  id: string
-  role: AssistantMessageRole
-  content: string
-  toolCalls?: AssistantToolCallView[]
-  toolCallId?: string
-  toolName?: string
-  attachments?: AssistantAttachment[]
-  createdAt: string
 }
 
 export type AssistantActionKind = 'add_to_inventory' | 'create_deck' | 'update_deck_cards' | 'set_deck_format'
@@ -125,12 +103,6 @@ export interface AssistantConversationSummary {
   deck: AssistantConversationDeckRef | null
   createdAt: string
   updatedAt: string
-}
-
-export interface AssistantConversationDetail {
-  conversation: AssistantConversationSummary
-  messages: AssistantMessageView[]
-  actions: AssistantActionView[]
 }
 
 /**
@@ -240,11 +212,11 @@ export interface AssistantToolOutcome {
 }
 
 /**
- * Derives the outcome from a tool result exactly as it was persisted (the
- * `tool` message's JSON content, already parsed): the server sends it with
- * the live `tool_result` event, the UI derives it again for a reloaded
- * thread, so both look the same. Any `{ error }` payload counts as failed —
- * also the "result too large" envelope of a call that itself succeeded.
+ * Derives the outcome from a tool result exactly as the model read it (a
+ * tool part's `output.result`): the same whether the part is streaming
+ * right now or was loaded with the conversation, so both look the same. Any
+ * `{ error }` payload counts as failed — also the "result too large"
+ * envelope of a call that itself succeeded.
  */
 export function summarizeToolResult(ok: boolean, result: unknown): { ok: boolean, outcome: AssistantToolOutcome } {
   if (isRecord(result) && typeof result.error === 'string') {
@@ -271,9 +243,9 @@ export function summarizeToolResult(ok: boolean, result: unknown): { ok: boolean
 // --- Errors ---------------------------------------------------------------------
 
 /**
- * `data.code` of the assistant endpoints' HTTP errors and `code` of the SSE
- * `error` event; the UI shows `errors.api.<code>`. `unexpected` is anything
- * without a code of its own.
+ * `data.code` of the assistant endpoints' HTTP errors and the text of the
+ * turn stream's `error` chunk; the UI shows `errors.api.<code>`.
+ * `unexpected` is anything without a code of its own.
  */
 export const ASSISTANT_ERROR_CODES = [
   'conversation_not_found',
@@ -291,15 +263,3 @@ export const ASSISTANT_ERROR_CODES = [
 ] as const
 
 export type AssistantErrorCode = typeof ASSISTANT_ERROR_CODES[number]
-
-// --- SSE event payloads for POST /api/assistant/chat/:id/messages ------------
-
-export interface AssistantSseMessageStart { userMessageId: string }
-export interface AssistantSseTextDelta { text: string }
-/** `arguments` parsed like the persisted call (`{}` when unparseable); `deckName` as in `AssistantToolCallView`. */
-export interface AssistantSseToolCall { id: string, name: string, arguments: Record<string, unknown>, deckName?: string }
-export interface AssistantSseToolResult { id: string, ok: boolean, outcome: AssistantToolOutcome }
-export interface AssistantSseActionProposed { action: AssistantActionView }
-export interface AssistantSseMessageEnd { message: AssistantMessageView }
-/** `message` is technical English for logs; the UI shows `code`. */
-export interface AssistantSseError { code: string, message: string }

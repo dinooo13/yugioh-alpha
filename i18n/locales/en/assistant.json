@@ -41,7 +41,6 @@
       "regenerate": "Regenerate the answer",
       "errors": {
         "load": "The conversation couldn't be loaded.",
-        "refresh": "The conversation couldn't be updated.",
         "connectionLost": "The connection was interrupted. Please try again.",
         "unexpected": "An unexpected error occurred."
       }
