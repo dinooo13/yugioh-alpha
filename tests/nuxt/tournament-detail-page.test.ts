@@ -1,14 +1,17 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
+import { defineComponent, h } from 'vue'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
 import TournamentDetailPage from '~/pages/tournaments/[id].vue'
 import type {
+  TournamentDeckSnapshot,
   TournamentDetail,
   TournamentMatchDto,
   TournamentParticipantDto,
   TournamentRoundDto,
   TournamentStandingRow,
 } from '~~/shared/tournaments'
+import { setTestLocale } from './fixtures/locale'
 
 const state = vi.hoisted(() => ({
   tournament: {} as TournamentDetail,
@@ -132,10 +135,12 @@ function tournamentDetail(overrides: Partial<TournamentDetail> = {}): Tournament
   }
 }
 
-afterEach(() => {
+afterEach(async () => {
   vi.unstubAllGlobals()
   state.getCallCount = 0
+  await setTestLocale('de')
 })
+
 
 describe('tournament detail page — organizer, registration', () => {
   it('disables "Turnier starten" with one participant and enables it with two', async () => {
@@ -499,10 +504,8 @@ describe('tournament detail page — error mapping', () => {
     })
 
     // Mirrors ofetch's real shape: `error.data` is the JSON body Nitro's
-    // `createError` serialized, i.e. `{ statusCode, statusMessage, data: { code } }`.
-    const fetchMock = vi.fn(() => Promise.reject({
-      data: { statusCode: 409, statusMessage: 'Not enough participants', data: { code: 'not_enough_participants' } },
-    }))
+    // `createError` serialized, i.e. `{ statusCode, statusMessage, data: { code, params } }`.
+    const fetchMock = vi.fn(() => Promise.reject(notEnoughParticipantsError()))
     vi.stubGlobal('$fetch', fetchMock)
 
     const component = await mountSuspended(TournamentDetailPage)
@@ -511,5 +514,207 @@ describe('tournament detail page — error mapping', () => {
     await component.vm.$nextTick()
 
     expect(component.text()).toContain('Mindestens 2 Teilnehmer sind nötig.')
+  })
+
+  it('translates the error code in English, with its params, and never shows the statusMessage', async () => {
+    await setTestLocale('en')
+    state.tournament = tournamentDetail({
+      participants: [participant(), participant({ id: 'p-2', name: 'Alice', isSelf: false })],
+      canStart: true,
+    })
+    vi.stubGlobal('$fetch', vi.fn(() => Promise.reject(notEnoughParticipantsError())))
+
+    const component = await mountSuspended(TournamentDetailPage)
+    await component.findAll('button').find(button => button.text() === 'Start tournament')!.trigger('click')
+    await flushPromises()
+    await component.vm.$nextTick()
+
+    expect(component.text()).toContain('At least 2 participants are needed.')
+    expect(component.text()).not.toContain('Not enough participants')
+  })
+
+  it('falls back to the action\'s own message for an error without a known code', async () => {
+    state.tournament = tournamentDetail({
+      participants: [participant(), participant({ id: 'p-2', name: 'Alice', isSelf: false })],
+      canStart: true,
+    })
+    vi.stubGlobal('$fetch', vi.fn(() => Promise.reject({
+      data: { statusCode: 500, statusMessage: 'Internal Server Error' },
+    })))
+
+    const component = await mountSuspended(TournamentDetailPage)
+    await component.findAll('button').find(button => button.text() === 'Turnier starten')!.trigger('click')
+    await flushPromises()
+    await component.vm.$nextTick()
+
+    expect(component.text()).toContain('Das Turnier konnte nicht gestartet werden.')
+    expect(component.text()).not.toContain('Internal Server Error')
+  })
+})
+
+function notEnoughParticipantsError() {
+  return {
+    data: {
+      statusCode: 409,
+      statusMessage: 'Not enough participants',
+      data: { code: 'not_enough_participants', params: { min: 2 } },
+    },
+  }
+}
+
+function snapshot(validation: TournamentDeckSnapshot['validation']): TournamentDeckSnapshot {
+  return {
+    deckId: 'deck-1',
+    name: 'Turnierdeck',
+    formatName: 'Advanced',
+    formatId: 'advanced',
+    sections: { main: [], extra: [], side: [] },
+    counts: { main: 10, extra: 0, side: 0, total: 10 },
+    validation,
+    capturedAt: '2026-09-12T11:13:52.000Z',
+  }
+}
+
+// Renders a popover's content inline, so the issue list is in the DOM
+// without driving reka-ui's open state in jsdom.
+const InlinePopover = defineComponent({
+  setup(_, { slots }) {
+    return () => h('div', [slots.default?.(), slots.content?.()])
+  },
+})
+
+function mountWithOpenPopovers() {
+  return mountSuspended(TournamentDetailPage, {
+    global: { stubs: { UPopover: InlinePopover, Popover: InlinePopover } },
+  })
+}
+
+describe('tournament detail page — deck snapshot issues', () => {
+  it('renders issueDetails through the validation catalogue', async () => {
+    state.tournament = tournamentDetail({
+      participants: [participant({
+        deckId: 'deck-1',
+        deckName: 'Turnierdeck',
+        deckLegal: false,
+        deckIssueCount: 2,
+        deckSnapshot: snapshot({
+          legal: false,
+          issueCount: 2,
+          issues: ['Main Deck has 10 cards; at least 40 are required.', 'Pot of Greed is forbidden in this format.'],
+          issueDetails: [
+            { severity: 'error', code: 'deck_size_min', message: 'Main Deck has 10 cards; at least 40 are required.', params: { section: 'main', count: 10, min: 40 } },
+            { severity: 'error', code: 'card_forbidden', message: 'Pot of Greed is forbidden in this format.', params: { cardId: 55144522, cardName: 'Pot of Greed' } },
+          ],
+        }),
+      })],
+    })
+
+    const component = await mountWithOpenPopovers()
+
+    const text = component.text()
+    expect(text).toContain('Das Main Deck hat 10 Karten, mindestens 40 sind erforderlich.')
+    expect(text).toContain('Pot of Greed ist in diesem Format verboten.')
+    expect(text).not.toContain('is forbidden in this format')
+  })
+
+  it('still renders the stored strings of a snapshot taken before issueDetails existed', async () => {
+    state.tournament = tournamentDetail({
+      participants: [participant({
+        deckId: 'deck-1',
+        deckName: 'Turnierdeck',
+        deckLegal: false,
+        deckIssueCount: 1,
+        deckSnapshot: snapshot({
+          legal: false,
+          issueCount: 1,
+          issues: ['Topf der Gier ist in diesem Format verboten.'],
+        }),
+      })],
+    })
+
+    const component = await mountWithOpenPopovers()
+    expect(component.text()).toContain('1 Regelverstoß')
+    // Same text as the former hard-coded `Intl.DateTimeFormat('de-DE', …)`.
+    const registeredAt = new Intl.DateTimeFormat('de-DE', {
+      day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
+    }).format(new Date('2026-09-12T11:13:52.000Z'))
+    expect(component.text()).toContain(`Angemeldet am ${registeredAt}`)
+    expect(component.text()).toContain('Topf der Gier ist in diesem Format verboten.')
+  })
+})
+
+describe('tournament detail page — English', () => {
+  it('renders the header, participants, rounds and standings in English', async () => {
+    await setTestLocale('en')
+    state.tournament = tournamentDetail({
+      status: 'running',
+      pairingSystem: 'round_robin',
+      plannedRounds: 3,
+      format: { id: 'advanced', name: 'Advanced', isBuiltin: true },
+      participants: [
+        participant({
+          deckId: 'deck-1',
+          deckName: 'Turnierdeck',
+          deckLegal: false,
+          deckIssueCount: 2,
+          deckSnapshot: snapshot({ legal: false, issueCount: 2, issues: [] }),
+        }),
+        participant({ id: 'p-2', name: 'Alice', isSelf: false, linked: false, dropped: true }),
+      ],
+      rounds: [round()],
+      currentRound: round(),
+      standings: [
+        standing(),
+        standing({ participantId: 'p-2', rank: 2, name: 'Alice', points: 0, wins: 0, losses: 1, dropped: true }),
+      ],
+      canEditPairings: true,
+    })
+
+    const component = await mountSuspended(TournamentDetailPage)
+    const text = component.text()
+
+    expect(text).toContain('Back to tournaments')
+    expect(text).toContain('Running')
+    expect(text).toContain('Pairing system: Round robin')
+    expect(text).toContain('Round 1 of 3')
+    expect(text).toContain('Organizer: Organizer')
+    expect(text).toContain('Complete round')
+    expect(text).toContain('Next round')
+    expect(text).toContain('Finish tournament')
+    expect(text).toContain('Delete tournament')
+    expect(text).toContain('All results must be entered')
+
+    expect(text).toContain('Participants (2)')
+    expect(text).toContain('Not legal')
+    expect(text).toContain('2 rule violations')
+    expect(text).toContain('Registered on 09/12/2026')
+    expect(text).toContain('Dropped')
+    expect(text).toContain('“Account”: Player with their own user account')
+
+    expect(text).toContain('Rounds')
+    expect(text).toContain('Swap pairings')
+    expect(text).toContain('Table 1')
+    expect(text).toContain('Save result')
+    expect(component.find('[aria-label="Games won by Organizer"]').exists()).toBe(true)
+
+    expect(text).toContain('Standings')
+    expect(text).toContain('66.7%')
+    expect(text).toContain('Points: win 3, draw 1 · W-L-D = wins–losses–draws')
+    expect(component.find('abbr[title="Wins–losses–draws"]').exists()).toBe(true)
+
+    for (const german of ['Runde', 'Teilnehmer', 'Tabelle', 'Ausgestiegen', 'Regelverstöße', 'Paarungssystem']) {
+      expect(text).not.toContain(german)
+    }
+  })
+
+  it('shows why "Start tournament" is disabled in English', async () => {
+    await setTestLocale('en')
+    state.tournament = tournamentDetail({ participants: [participant()], canStart: false })
+
+    const component = await mountSuspended(TournamentDetailPage)
+
+    expect(component.findAll('p').some(p => p.text() === 'At least 2 participants needed')).toBe(true)
+    expect(component.text()).toContain('No format')
+    expect(component.text()).toContain('Not started yet')
   })
 })

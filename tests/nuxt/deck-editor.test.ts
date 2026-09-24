@@ -6,6 +6,7 @@ import { DecksDeckFormModal, UDropdownMenu, USelect } from '#components'
 import DeckEditorPage from '~/pages/decks/[id].vue'
 import { optionLabels, selectWithOption } from './fixtures/select-wrapper'
 import type { DeckValidation } from '~~/shared/rule-formats'
+import { setTestLocale } from './fixtures/locale'
 
 type DeckSection = 'main' | 'extra' | 'side'
 
@@ -118,7 +119,14 @@ function deckDetail(
   }
 }
 
-afterEach(() => {
+afterEach(async () => {
+  await setTestLocale('de')
+  state.formats = {
+    items: [
+      { id: 'tcg-advanced', name: 'TCG Advanced', isBuiltin: true },
+      { id: 'own-1', name: 'Nur alte Karten', isBuiltin: false },
+    ],
+  }
   vi.unstubAllGlobals()
   state.ownedQuantities = {}
   state.assistantStatus = { enabled: false, provider: null, model: null, chat: false, vision: false, visionModel: null }
@@ -396,14 +404,22 @@ describe('deck editor mutations', () => {
     state.source = { items: [], total: 0 }
     state.deck = darkMagicianDeck(1)
 
-    stubDeckFetch(() => Promise.reject(new Error('Extra deck cards can only be placed in the extra or side section')))
+    // The API's error code is shown translated, never its technical
+    // statusMessage (ADR 0014).
+    stubDeckFetch(() => Promise.reject(Object.assign(new Error('[PUT] "/api/decks/deck-1/cards": 400'), {
+      data: {
+        statusMessage: 'Extra deck cards can only be placed in the extra or side section',
+        data: { code: 'section_not_allowed' },
+      },
+    })))
 
     const component = await mountSuspended(DeckEditorPage)
     await component.find('[aria-label="Eine Kopie von Dark Magician zum Main Deck hinzufügen"]').trigger('click')
     await flushPromises()
     await component.vm.$nextTick()
 
-    expect(component.text()).toContain('Extra deck cards can only be placed in the extra or side section')
+    expect(component.text()).toContain('Diese Karte kann nicht in diesen Deckbereich.')
+    expect(component.text()).not.toContain('Extra deck cards can only be placed')
     expect(component.find('[aria-label="Anzahl im Main Deck"]').text()).toBe('1/40–60')
     // Controls are usable again after the failure.
     expect(component.find('[aria-label="Eine Kopie von Dark Magician zum Main Deck hinzufügen"]').attributes('disabled')).toBeUndefined()
@@ -576,11 +592,11 @@ describe('deck editor rule validation', () => {
       validation({
         legal: false,
         issues: [
-          { severity: 'error', code: 'card_forbidden', cardId: 55144522, message: 'Pot of Greed ist in diesem Format verboten.' },
-          { severity: 'error', code: 'deck_size_min', section: 'main', message: 'Das Main Deck hat 3 Karten, mindestens 40 sind erforderlich.' },
+          { severity: 'error', code: 'card_forbidden', cardId: 55144522, params: { cardId: 55144522, cardName: 'Pot of Greed' }, message: 'Pot of Greed is forbidden in this format.' },
+          { severity: 'error', code: 'deck_size_min', section: 'main', params: { section: 'main', count: 3, min: 40 }, message: 'The Main Deck has 3 cards; at least 40 are required.' },
         ],
         cards: {
-          55144522: { maxCopies: 0, status: 'forbidden', reasons: ['TCG-Banliste: Forbidden'] },
+          55144522: { maxCopies: 0, status: 'forbidden', reasons: [{ kind: 'banlist', source: 'tcg', raw: 'Forbidden' }] },
           46986414: { maxCopies: 3, status: 'unrestricted', reasons: [] },
         },
       }),
@@ -626,7 +642,7 @@ describe('deck editor rule validation', () => {
       { id: 'tcg-advanced', name: 'TCG Advanced', isBuiltin: true },
       validation({
         legal: false,
-        issues: [{ severity: 'error', code: 'deck_size_min', section: 'main', message: 'Das Main Deck hat 1 Karte, mindestens 40 sind erforderlich.' }],
+        issues: [{ severity: 'error', code: 'deck_size_min', section: 'main', params: { section: 'main', count: 1, min: 40 }, message: 'The Main Deck has 1 card; at least 40 are required.' }],
         cards: {},
       }),
     )
@@ -1036,5 +1052,98 @@ describe('deck editor add panel paging', () => {
     expect(component.text()).toContain('12 Karten')
     expect(component.text()).not.toContain('von 12 Karten')
     expect(loadMoreButton(component)).toBeUndefined()
+  })
+})
+
+describe('deck editor in English', () => {
+  const POT_OF_GREED = 55144522
+  const RAIGEKI = 12580477
+
+  function goatDeck() {
+    return {
+      ...deckDetail(
+        {
+          main: [
+            row({ name: 'Dark Magician', section: 'main' }),
+            row({ catalogCardId: POT_OF_GREED, name: 'Pot of Greed', type: 'Spell Card', frameType: 'spell', attribute: null, race: 'Normal', level: null, section: 'main' }),
+            row({ catalogCardId: RAIGEKI, name: 'Raigeki', type: 'Spell Card', frameType: 'spell', attribute: null, race: 'Normal', level: null, section: 'main' }),
+          ],
+        },
+        [],
+        { id: 'goat', name: 'GOAT Format', isBuiltin: true },
+        {
+          legal: false,
+          issues: [
+            { severity: 'error', code: 'deck_size_min', section: 'main', params: { section: 'main', count: 3, min: 40 }, message: 'The Main Deck has 3 cards; at least 40 are required.' },
+            { severity: 'error', code: 'card_forbidden', cardId: RAIGEKI, params: { cardId: RAIGEKI, cardName: 'Raigeki' }, message: 'Raigeki is forbidden in this format.' },
+          ],
+          cards: {
+            [POT_OF_GREED]: { maxCopies: 1, status: 'limited', reasons: [{ kind: 'banlist', source: 'goat', raw: 'Limited' }] },
+            [RAIGEKI]: {
+              maxCopies: 0,
+              status: 'forbidden',
+              reasons: [{
+                kind: 'filter',
+                label: 'Only cards up to June 2005',
+                rule: { kind: 'filter', match: 'not_matching', filter: { releasedBefore: '2005-07-01' }, maxCopies: 0, label: 'Only cards up to June 2005' },
+              }],
+            },
+          },
+        },
+      ),
+      cover: { catalogCardId: 46986414, name: 'Dark Magician', imageSmall: null, imageLarge: null },
+      coverIsChosen: true,
+    }
+  }
+
+  it('renders the validation issues, status badges, cover badge and row menu in English', async () => {
+    state.source = { items: [], total: 0 }
+    state.deck = goatDeck()
+    state.formats = {
+      items: [
+        { id: 'goat', name: 'GOAT Format', isBuiltin: true },
+        { id: 'unlimited', name: 'No banlist', isBuiltin: true },
+        { id: 'own-1', name: 'Nur alte Karten', isBuiltin: false },
+      ],
+    }
+    await setTestLocale('en')
+
+    const component = await mountSuspended(DeckEditorPage)
+    const text = component.text()
+
+    expect(component.find('[aria-label="Rule check status"]').text()).toBe('Not legal – 2 issues')
+    expect(text).toContain('The Main Deck has 3 cards; at least 40 are required.')
+    expect(text).toContain('Raigeki is forbidden in this format.')
+    expect(text).toContain('3 cards in total')
+    expect(text).toContain('Cover card')
+    expect(text).toContain('Add from inventory')
+    expect(text).not.toMatch(/Karte|Regel|Titelkarte|Verboten|Limitiert|hinzufügen/)
+
+    // Status badges and their tooltips (the reasons behind the limit).
+    const forbidden = component.find('[title="Only cards up to June 2005"]')
+    expect(forbidden.exists()).toBe(true)
+    expect(forbidden.text()).toBe('Forbidden')
+    expect(component.find('[title="GOAT banlist: Limited"]').text()).toBe('Limited (1)')
+
+    const formatSelect = selectWithOption(component.findAllComponents(USelect), '__no_format__')
+    expect(optionLabels(formatSelect!)).toEqual(['No format', 'GOAT Format', 'No banlist', 'Nur alte Karten (custom)'])
+
+    const menus = component.findAllComponents(UDropdownMenu) as unknown as Array<{ props: (key: string) => unknown, find: (selector: string) => { exists: () => boolean } }>
+    const potMenu = menus.find(menu => menu.find('[aria-label="Options for Pot of Greed"]').exists())
+    expect((potMenu!.props('items') as Array<Array<{ label: string }>>).flat().map(item => item.label))
+      .toEqual(['Move to Extra Deck', 'Move to Side Deck', 'Set as cover card'])
+    expect(component.find('[aria-label="Remove one copy of Dark Magician from the Main Deck"]').exists()).toBe(true)
+  })
+
+  it('shows a built-in format\'s German cutoff label in German mode', async () => {
+    state.source = { items: [], total: 0 }
+    state.deck = goatDeck()
+
+    const component = await mountSuspended(DeckEditorPage)
+
+    expect(component.find('[title="Nur Karten bis Juni 2005"]').text()).toBe('Verboten')
+    expect(component.find('[title="GOAT-Banliste: Limited"]').text()).toBe('Limitiert (1)')
+    expect(component.text()).toContain('Das Main Deck hat 3 Karten, mindestens 40 sind erforderlich.')
+    expect(component.text()).toContain('Titelkarte')
   })
 })

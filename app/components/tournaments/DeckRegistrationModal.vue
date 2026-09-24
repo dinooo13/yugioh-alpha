@@ -1,8 +1,6 @@
 <script setup lang="ts">
-import { TOURNAMENT_ERROR_MESSAGES } from '~~/shared/tournaments'
-import type { TournamentDetail, TournamentErrorCode, TournamentFormatRef } from '~~/shared/tournaments'
+import type { TournamentDetail, TournamentFormatRef } from '~~/shared/tournaments'
 import type { DeckValidation } from '~~/shared/rule-formats'
-import { apiErrorCode, apiErrorMessage } from '~/utils/card-entry'
 
 interface DeckListItem {
   id: string
@@ -25,6 +23,10 @@ const emit = defineEmits<{
   'updated': [detail: TournamentDetail]
 }>()
 
+const { t, n } = useI18n()
+const apiError = useApiError()
+const validationText = useValidationText()
+
 // Sentinel for "no deck" in the select — reka-ui reserves the empty string
 // for "clear selection".
 const NO_DECK = '__no_deck__'
@@ -40,7 +42,7 @@ const errorMessage = ref('')
 const decks = ref<DeckListItem[]>([])
 
 const deckItems = computed(() => [
-  { label: 'Kein Deck', value: NO_DECK },
+  { label: t('tournaments.noDeck'), value: NO_DECK },
   ...decks.value.map(deck => ({ label: deck.name, value: deck.id })),
 ])
 
@@ -136,10 +138,20 @@ watch(
   { immediate: true },
 )
 
-function errorText(error: unknown, fallback: string) {
-  const code = apiErrorCode(error) as TournamentErrorCode | undefined
-  return (code && TOURNAMENT_ERROR_MESSAGES[code]) || apiErrorMessage(error, fallback)
-}
+const previewCountsLabel = computed(() => {
+  const counts = previewCounts.value
+  if (!counts) {
+    return ''
+  }
+  return t('tournaments.deckRegistration.counts', {
+    count: n(counts.total, 'integer'),
+    main: n(counts.main, 'integer'),
+    extra: n(counts.extra, 'integer'),
+    side: n(counts.side, 'integer'),
+  }, counts.total)
+})
+
+const previewIssues = computed(() => previewValidation.value?.issues.map(issue => validationText(issue)) ?? [])
 
 async function save() {
   if (!props.participantId || isSubmitting.value) {
@@ -161,7 +173,7 @@ async function save() {
     openProxy.value = false
   }
   catch (error) {
-    errorMessage.value = errorText(error, 'Das Deck konnte nicht angemeldet werden.')
+    errorMessage.value = apiError(error, 'tournaments.deckRegistration.saveFailed')
   }
   finally {
     isSubmitting.value = false
@@ -172,15 +184,15 @@ async function save() {
 <template>
   <UModal
     v-model:open="openProxy"
-    title="Deck anmelden"
+    :title="t('tournaments.deckRegistration.title')"
   >
     <template #body>
       <div class="space-y-4">
-        <UFormField label="Deck">
+        <UFormField :label="t('tournaments.deckRegistration.deck')">
           <USelect
             v-model="selectedDeckId"
             :items="deckItems"
-            aria-label="Deck"
+            :aria-label="t('tournaments.deckRegistration.deck')"
             class="w-full"
             autofocus
           />
@@ -192,13 +204,12 @@ async function save() {
         >
           <template v-if="previewPending">
             <p class="text-gray-500">
-              Regelprüfung läuft …
+              {{ t('tournaments.deckRegistration.checking') }}
             </p>
           </template>
           <template v-else-if="previewCounts">
             <p class="text-gray-700">
-              {{ previewCounts.total }} Karten (Main {{ previewCounts.main }}, Extra {{ previewCounts.extra }},
-              Side {{ previewCounts.side }})
+              {{ previewCountsLabel }}
             </p>
 
             <div
@@ -209,17 +220,17 @@ async function save() {
                 size="sm"
                 variant="subtle"
                 :color="previewValidation.legal ? 'success' : 'error'"
-                :label="previewValidation.legal ? 'Legal' : 'Nicht legal'"
+                :label="previewValidation.legal ? t('validation.badge.legal') : t('validation.badge.notLegal')"
               />
               <ul
                 v-if="!previewValidation.legal"
                 class="mt-1 list-inside list-disc space-y-0.5 text-xs text-gray-600"
               >
                 <li
-                  v-for="(issue, index) in previewValidation.issues"
+                  v-for="(issue, index) in previewIssues"
                   :key="index"
                 >
-                  {{ issue.message }}
+                  {{ issue }}
                 </li>
               </ul>
             </div>
@@ -227,25 +238,25 @@ async function save() {
               v-else-if="format && previewUnavailable"
               class="mt-2 text-xs text-gray-500"
             >
-              Die Regelprüfung erfolgt bei der Anmeldung.
+              {{ t('tournaments.deckRegistration.checkedOnRegistration') }}
             </p>
             <p
               v-else-if="!format"
               class="mt-2 text-xs text-gray-500"
             >
-              Dieses Turnier hat kein Pflichtformat.
+              {{ t('tournaments.deckRegistration.noFormat') }}
             </p>
           </template>
           <p
             v-else-if="previewUnavailable"
             class="text-xs text-gray-500"
           >
-            Die Regelprüfung erfolgt bei der Anmeldung.
+            {{ t('tournaments.deckRegistration.checkedOnRegistration') }}
           </p>
         </div>
 
         <p class="text-xs text-gray-500">
-          Dein Deck wird beim Anmelden kopiert. Spätere Änderungen am Deck ändern das Turnier nicht.
+          {{ t('tournaments.deckRegistration.copyHint') }}
         </p>
 
         <p
@@ -260,11 +271,11 @@ async function save() {
             type="button"
             color="neutral"
             variant="ghost"
-            label="Abbrechen"
+            :label="t('common.cancel')"
             @click="() => { openProxy = false }"
           />
           <UButton
-            label="Anmelden"
+            :label="t('tournaments.deckRegistration.submit')"
             :loading="isSubmitting"
             @click="save"
           />

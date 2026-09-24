@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { DECK_SECTION_LABELS, DECK_SECTIONS } from '~~/shared/deck-sections'
+import { DECK_SECTIONS } from '~~/shared/deck-sections'
 import type { DeckSection } from '~~/shared/deck-sections'
 import type { SharedDeckCardRow } from '~~/shared/sharing'
 
@@ -9,6 +9,10 @@ defineProps<{
 }>()
 
 const { t } = useI18n()
+
+function sectionName(section: DeckSection): string {
+  return t(`decks.section.${section}`)
+}
 
 function cardMetaLine(card: SharedDeckCardRow): string {
   return [card.type, card.level !== null ? t('card.stars', { level: card.level }) : null, card.attribute]
@@ -26,11 +30,11 @@ function cardMetaLine(card: SharedDeckCardRow): string {
     >
       <header class="flex items-center justify-between border-b border-gray-200 px-4 py-3">
         <h2 class="text-base font-semibold text-gray-900">
-          {{ DECK_SECTION_LABELS[section] }}
+          {{ sectionName(section) }}
         </h2>
         <span
           class="text-sm font-semibold tabular-nums text-gray-500"
-          :aria-label="t('sharing.deckSections.countIn', { section: DECK_SECTION_LABELS[section] })"
+          :aria-label="t('sharing.deckSections.countIn', { section: sectionName(section) })"
         >
           {{ counts[section] }}
         </span>
@@ -40,7 +44,7 @@ function cardMetaLine(card: SharedDeckCardRow): string {
         v-if="sections[section].length === 0"
         class="px-4 py-6 text-sm text-gray-500"
       >
-        {{ t('sharing.deckSections.empty', { section: DECK_SECTION_LABELS[section] }) }}
+        {{ t('sharing.deckSections.empty', { section: sectionName(section) }) }}
       </p>
 
       <ul

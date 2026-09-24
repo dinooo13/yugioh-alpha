@@ -31,6 +31,14 @@ const EXTRACTED_FILES = [
   'app/pages/players/[[]handle]/index.vue',
   'app/pages/players/[[]handle]/inventory.vue',
   'app/pages/players/[[]handle]/collections/*.vue',
+  // F2c: decks, formats, tournaments, the player deck page
+  'app/pages/decks/*.vue',
+  'app/components/decks/*.vue',
+  'app/pages/formats/*.vue',
+  'app/components/formats/*.vue',
+  'app/pages/tournaments/*.vue',
+  'app/components/tournaments/*.vue',
+  'app/pages/players/[[]handle]/decks/*.vue',
 ]
 
 // The plugin's `flat/base` config minus its YAML block (no YAML catalogues)

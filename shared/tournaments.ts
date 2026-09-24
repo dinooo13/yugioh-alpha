@@ -1,6 +1,8 @@
-// Types, German labels, and limits shared by the server (server/utils/tournaments.ts)
-// and the tournament UI (app/pages/tournaments/**). Intentionally dependency-free.
+// Types, value lists, and limits shared by the server (server/utils/tournaments.ts)
+// and the tournament UI (app/pages/tournaments/**). Intentionally dependency-free;
+// the labels and error messages live in the i18n catalogues (ADR 0014).
 
+import type { ValidationIssue } from './rule-formats'
 import type { StandingsRow } from './tournament-standings'
 
 // Scoring constants live in tournament-standings.ts (the standings path);
@@ -8,37 +10,16 @@ import type { StandingsRow } from './tournament-standings'
 // uses the same values instead of a second, independently-maintained copy.
 export { BYE_GAMES, POINTS_DRAW, POINTS_WIN } from './tournament-standings'
 
-// --- Enums + labels --------------------------------------------------------
+// --- Enums ----------------------------------------------------------------
 
 export const TOURNAMENT_STATUSES = ['registration', 'running', 'finished'] as const
 export type TournamentStatus = typeof TOURNAMENT_STATUSES[number]
 
-export const TOURNAMENT_STATUS_LABELS: Record<TournamentStatus, string> = {
-  registration: 'Anmeldung',
-  running: 'Läuft',
-  finished: 'Abgeschlossen',
-}
-
 export const PAIRING_SYSTEMS = ['swiss', 'round_robin'] as const
 export type PairingSystem = typeof PAIRING_SYSTEMS[number]
 
-export const PAIRING_SYSTEM_LABELS: Record<PairingSystem, string> = {
-  swiss: 'Schweizer System',
-  round_robin: 'Jeder gegen jeden',
-}
-
-export const PAIRING_SYSTEM_DESCRIPTIONS: Record<PairingSystem, string> = {
-  swiss: 'Gleich starke Spieler treffen aufeinander; Wiederholungen werden vermieden.',
-  round_robin: 'Jeder Spieler tritt genau einmal gegen jeden anderen an.',
-}
-
 export const ROUND_STATUSES = ['pending', 'completed'] as const
 export type RoundStatus = typeof ROUND_STATUSES[number]
-
-export const ROUND_STATUS_LABELS: Record<RoundStatus, string> = {
-  pending: 'Offen',
-  completed: 'Abgeschlossen',
-}
 
 export type TournamentRole = 'organizer' | 'participant'
 
@@ -80,14 +61,24 @@ export interface TournamentDeckSnapshot {
   name: string
   /** Name of the tournament format the snapshot was checked against, if any. */
   formatName?: string
+  /**
+   * Id of that format, so the UI can show a built-in format's name in the
+   * interface language. Missing in snapshots taken before #34 F2c.
+   */
+  formatId?: string
   sections: {
     main: TournamentDeckSnapshotCard[]
     extra: TournamentDeckSnapshotCard[]
     side: TournamentDeckSnapshotCard[]
   }
   counts: { main: number, extra: number, side: number, total: number }
-  /** Frozen verdict; null when the tournament has no format. */
-  validation: { legal: boolean, issueCount: number, issues: string[] } | null
+  /**
+   * Frozen verdict; null when the tournament has no format. `issues` holds
+   * the issue messages (German before #34 F2c, canonical English since);
+   * `issueDetails` the same issues as code + params, which the UI renders in
+   * the interface language. Older snapshots have only `issues`.
+   */
+  validation: { legal: boolean, issueCount: number, issues: string[], issueDetails?: ValidationIssue[] } | null
   /** ISO 8601 instant the snapshot was taken. */
   capturedAt: string
 }
@@ -209,6 +200,7 @@ export interface TournamentDetail {
 
 // --- Error codes -----------------------------------------------------------
 
+// Codes the API returns in `data.code`; the client shows `errors.api.<code>`.
 export const TOURNAMENT_ERROR_CODES = [
   'invalid_body', 'invalid_name', 'invalid_description', 'invalid_pairing_system',
   'invalid_planned_rounds', 'unknown_format', 'invalid_participant', 'user_not_found',
@@ -220,38 +212,6 @@ export const TOURNAMENT_ERROR_CODES = [
   'planned_rounds_reached', 'bye_not_editable', 'no_rounds',
 ] as const
 export type TournamentErrorCode = typeof TOURNAMENT_ERROR_CODES[number]
-
-/** German messages for the codes the API returns in `data.code`. */
-export const TOURNAMENT_ERROR_MESSAGES: Record<TournamentErrorCode, string> = {
-  invalid_body: 'Die Anfrage konnte nicht gelesen werden.',
-  invalid_name: `Der Name ist erforderlich und darf höchstens ${TOURNAMENT_NAME_MAX_LENGTH} Zeichen lang sein.`,
-  invalid_description: `Die Beschreibung darf höchstens ${TOURNAMENT_DESCRIPTION_MAX_LENGTH} Zeichen lang sein.`,
-  invalid_pairing_system: 'Unbekanntes Paarungssystem.',
-  invalid_planned_rounds: `Die Rundenzahl muss zwischen 1 und ${MAX_PLANNED_ROUNDS} liegen.`,
-  unknown_format: 'Dieses Format gibt es nicht.',
-  invalid_participant: 'Gib entweder eine E-Mail-Adresse oder einen Namen an.',
-  user_not_found: 'Zu dieser E-Mail-Adresse gibt es kein Konto.',
-  unknown_deck: 'Dieses Deck gibt es nicht.',
-  empty_deck: 'Ein leeres Deck kann nicht angemeldet werden.',
-  invalid_result: 'Das Ergebnis ist ungültig.',
-  invalid_swap: 'Diese Paarungen können nicht getauscht werden.',
-  organizer_only: 'Das kann nur die Turnierleitung.',
-  foreign_deck_owner: 'Dieser Spieler meldet sein Deck selbst an.',
-  not_enough_participants: `Mindestens ${MIN_PARTICIPANTS_TO_START} Teilnehmer sind nötig.`,
-  too_many_participants: `Ein Turnier fasst höchstens ${MAX_PARTICIPANTS} Teilnehmer.`,
-  participant_exists: 'Dieser Teilnehmer ist schon dabei.',
-  registration_closed: 'Die Anmeldung ist geschlossen.',
-  tournament_started: 'Das Turnier läuft bereits.',
-  tournament_finished: 'Das Turnier ist abgeschlossen.',
-  invalid_status: 'In diesem Turnierstatus ist das nicht möglich.',
-  round_not_complete: 'Die laufende Runde ist noch nicht abgeschlossen.',
-  round_completed: 'Diese Runde ist bereits abgeschlossen.',
-  results_missing: 'Es fehlen noch Ergebnisse in dieser Runde.',
-  results_reported: 'In dieser Runde wurden bereits Ergebnisse eingetragen.',
-  planned_rounds_reached: 'Alle geplanten Runden wurden gespielt.',
-  bye_not_editable: 'Ein Freilos hat kein Ergebnis.',
-  no_rounds: 'Es wurde noch keine Runde gespielt.',
-}
 
 // --- Small helpers ---------------------------------------------------------
 
@@ -275,9 +235,4 @@ export function defaultPlannedRounds(system: PairingSystem, participantCount: nu
   return system === 'round_robin'
     ? roundRobinRoundCount(participantCount)
     : swissRoundCount(participantCount)
-}
-
-/** "0,6667" → "66,7 %" for standings tiebreakers. */
-export function formatRate(rate: number): string {
-  return `${(rate * 100).toFixed(1).replace('.', ',')} %`
 }

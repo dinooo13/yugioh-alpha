@@ -23,6 +23,14 @@
     "collection": {
       "title": "Sammlung „{name}“ von {owner}",
       "fallbackTitle": "Sammlung"
+    },
+    "deck": {
+      "fallbackTitle": "Deck",
+      "sharedBy": "Geteilt von {name}",
+      "summary": "{count} Karte insgesamt · Nur ansehen | {count} Karten insgesamt · Nur ansehen",
+      "legality": "Legalität",
+      "showDetails": "Details anzeigen",
+      "hideDetails": "Details ausblenden"
     }
   }
 }

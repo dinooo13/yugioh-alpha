@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import type { DeckCover } from '~~/shared/deck-cover'
+import { DECK_NAME_MAX_LENGTH, DECK_SECTIONS } from '~~/shared/deck-sections'
+import type { DeckSection } from '~~/shared/deck-sections'
 import type { Visibility } from '~~/shared/sharing'
-import { pluralize } from '~~/shared/plural'
+import { copyName } from '~/utils/copy-name'
 
 interface DeckListItem {
   id: string
@@ -31,7 +33,12 @@ interface DeckListResponse {
 
 const PAGE_SIZE = 20
 
-useHead({ title: 'Decks – yugioh alpha' })
+usePageTitle('decks.list.title')
+
+const { t } = useI18n()
+const count = useCount()
+const apiError = useApiError()
+const { formatName, sortFormats } = useFormatLabel()
 
 const route = useRoute()
 const toast = useToast()
@@ -83,17 +90,17 @@ const { data: formatsData } = await useFetch<{ items: Array<{ id: string, name: 
 })
 
 const formatFilterItems = computed(() => [
-  { label: 'Alle Formate', value: ALL_FORMATS },
-  { label: 'Ohne Format', value: 'none' },
-  ...(formatsData.value?.items ?? []).map(format => ({ label: format.name, value: format.id })),
+  { label: t('decks.list.allFormats'), value: ALL_FORMATS },
+  { label: t('decks.list.noFormat'), value: 'none' },
+  ...sortFormats(formatsData.value?.items ?? []).map(format => ({ label: formatName(format), value: format.id })),
 ])
 
-const sortItems = [
-  { label: 'Zuletzt bearbeitet', value: 'updated' },
-  { label: 'Neueste', value: 'newest' },
-  { label: 'Name (A-Z)', value: 'name' },
-  { label: 'Name (Z-A)', value: '-name' },
-]
+const sortItems = computed(() => [
+  { label: t('decks.list.sort.updated'), value: 'updated' },
+  { label: t('decks.list.sort.newest'), value: 'newest' },
+  { label: t('decks.list.sort.nameAsc'), value: 'name' },
+  { label: t('decks.list.sort.nameDesc'), value: '-name' },
+])
 
 const { data: ownProfile } = await useOwnProfile()
 
@@ -151,13 +158,15 @@ async function onSaved(deck: { id: string }, created: boolean) {
 async function duplicateDeck(deck: DeckListItem) {
   errorMessage.value = ''
   try {
-    await $fetch(`/api/decks/${deck.id}/duplicate`, { method: 'POST' })
-    toast.add({ title: 'Deck dupliziert', color: 'success' })
+    // The copy is named in the interface language ("… (Kopie)" / "… (copy)").
+    const name = copyName(source => t('decks.copyName', { name: source }), deck.name, DECK_NAME_MAX_LENGTH)
+    await $fetch(`/api/decks/${deck.id}/duplicate`, { method: 'POST', body: { name } })
+    toast.add({ title: t('decks.toast.duplicated'), color: 'success' })
     await refresh()
   }
   catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : 'Das Deck konnte nicht dupliziert werden.'
-    toast.add({ title: 'Das Deck konnte nicht dupliziert werden.', color: 'error' })
+    errorMessage.value = apiError(error, 'decks.errors.duplicateFailed')
+    toast.add({ title: t('decks.errors.duplicateFailed'), color: 'error' })
   }
 }
 
@@ -166,8 +175,8 @@ const { confirm } = useConfirm()
 async function deleteDeck(deck: DeckListItem) {
   errorMessage.value = ''
   const confirmed = await confirm({
-    title: 'Deck löschen',
-    description: `"${deck.name}" wirklich löschen?`,
+    title: t('decks.confirm.delete.title'),
+    description: t('decks.confirm.delete.description', { name: deck.name }),
   })
   if (!confirmed) {
     return
@@ -175,34 +184,34 @@ async function deleteDeck(deck: DeckListItem) {
 
   try {
     await $fetch(`/api/decks/${deck.id}`, { method: 'DELETE' })
-    toast.add({ title: 'Deck gelöscht', color: 'success' })
+    toast.add({ title: t('decks.toast.deleted'), color: 'success' })
     await refresh()
   }
   catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : 'Das Deck konnte nicht gelöscht werden.'
-    toast.add({ title: 'Das Deck konnte nicht gelöscht werden.', color: 'error' })
+    errorMessage.value = apiError(error, 'decks.errors.deleteFailed')
+    toast.add({ title: t('decks.errors.deleteFailed'), color: 'error' })
   }
 }
 
 function menuItemsFor(deck: DeckListItem) {
   return [[
     {
-      label: 'Bearbeiten',
+      label: t('decks.menu.edit'),
       icon: 'i-lucide-pencil-ruler',
       onSelect: () => navigateTo(`/decks/${deck.id}`),
     },
     {
-      label: 'Umbenennen',
+      label: t('decks.menu.rename'),
       icon: 'i-lucide-pencil',
       onSelect: () => openRename(deck),
     },
     {
-      label: 'Duplizieren',
+      label: t('decks.menu.duplicate'),
       icon: 'i-lucide-copy',
       onSelect: () => duplicateDeck(deck),
     },
     {
-      label: 'Teilen',
+      label: t('decks.menu.share'),
       icon: 'i-lucide-share-2',
       // Without a loaded handle, sharePath would resolve to a broken
       // `/players//decks/:id` link — keep the entry disabled until then.
@@ -210,7 +219,7 @@ function menuItemsFor(deck: DeckListItem) {
       onSelect: () => openShare(deck),
     },
     {
-      label: 'Löschen',
+      label: t('common.delete'),
       icon: 'i-lucide-trash-2',
       color: 'error' as const,
       onSelect: () => deleteDeck(deck),
@@ -225,12 +234,24 @@ function menuItemsFor(deck: DeckListItem) {
 // that out explicitly (UX review #12).
 function statusLabel(deck: DeckListItem) {
   if (deck.cardCount === 0) {
-    return 'Leer'
+    return t('decks.list.status.empty')
   }
   if (deck.complete) {
-    return 'Alle Karten im Besitz'
+    return t('decks.list.status.complete')
   }
-  return `${pluralize(deck.missingCount, 'fehlt', 'fehlen')} im Besitz`
+  return count('decks.list.status.missing', deck.missingCount)
+}
+
+function sectionShortName(section: DeckSection): string {
+  return t(`decks.sectionShort.${section}`)
+}
+
+function sectionCount(deck: DeckListItem, section: DeckSection): number {
+  return section === 'main' ? deck.mainCount : section === 'extra' ? deck.extraCount : deck.sideCount
+}
+
+function deckFormatName(deck: DeckListItem): string | null {
+  return deck.formatName ? formatName({ id: deck.formatId, name: deck.formatName }) : null
 }
 
 function statusColor(deck: DeckListItem) {
@@ -244,20 +265,20 @@ function statusColor(deck: DeckListItem) {
 <template>
   <div class="space-y-6">
     <LayoutPageHeader
-      title="Decks"
-      :description="pluralize(total, 'Deck', 'Decks')"
+      :title="t('decks.list.title')"
+      :description="count('decks.list.count', total)"
     >
       <template #actions>
         <UButton
           icon="i-lucide-sparkles"
           color="neutral"
           variant="outline"
-          label="Mit KI erstellen"
+          :label="t('decks.list.createWithAi')"
           to="/assistant?intent=new-deck"
         />
         <UButton
           icon="i-lucide-plus"
-          label="Neues Deck"
+          :label="t('decks.list.newDeck')"
           @click="openCreate"
         />
       </template>
@@ -267,20 +288,20 @@ function statusColor(deck: DeckListItem) {
       <UInput
         v-model="searchInput"
         icon="i-lucide-search"
-        placeholder="Decks durchsuchen (Name oder Karte)..."
-        aria-label="Decks durchsuchen"
+        :placeholder="t('decks.list.searchPlaceholder')"
+        :aria-label="t('decks.list.searchLabel')"
         class="w-full max-w-xl"
       />
       <USelect
         v-model="sort"
         :items="sortItems"
-        aria-label="Sortierung"
+        :aria-label="t('decks.list.sortLabel')"
         class="w-full sm:w-52"
       />
       <USelect
         v-model="formatFilter"
         :items="formatFilterItems"
-        aria-label="Format"
+        :aria-label="t('decks.list.formatLabel')"
         class="w-full sm:w-52"
       />
     </div>
@@ -306,13 +327,13 @@ function statusColor(deck: DeckListItem) {
     <LayoutEmptyState
       v-else-if="decks.length === 0 && !debouncedSearch"
       icon="i-lucide-layers"
-      title="Noch keine Decks"
-      description="Lege dein erstes Deck an und fülle es mit Karten aus deinem Inventar."
+      :title="t('decks.list.empty.title')"
+      :description="t('decks.list.empty.description')"
     >
       <template #actions>
         <UButton
           icon="i-lucide-plus"
-          label="Neues Deck"
+          :label="t('decks.list.newDeck')"
           @click="openCreate"
         />
       </template>
@@ -321,10 +342,10 @@ function statusColor(deck: DeckListItem) {
     <LayoutEmptyState
       v-else-if="decks.length === 0"
       icon="i-lucide-search-x"
-      title="Keine Decks gefunden"
+      :title="t('decks.list.noResults.title')"
     >
       <template #description>
-        Kein Deckname und keine enthaltene Karte passt zu "{{ debouncedSearch }}".
+        {{ t('decks.list.noResults.description', { query: debouncedSearch }) }}
       </template>
     </LayoutEmptyState>
 
@@ -350,7 +371,7 @@ function statusColor(deck: DeckListItem) {
             :src="deck.cover?.imageSmall"
             :src-large="deck.cover?.imageLarge"
             :alt="deck.cover?.name ?? deck.name"
-            :no-image-label="deck.cover ? 'Kein Bild' : 'Leer'"
+            :no-image-label="deck.cover ? undefined : t('decks.list.emptyCover')"
           />
         </NuxtLink>
 
@@ -377,29 +398,21 @@ function statusColor(deck: DeckListItem) {
                 color="neutral"
                 variant="ghost"
                 size="xs"
-                :aria-label="`Optionen für ${deck.name}`"
+                :aria-label="t('decks.list.options', { name: deck.name })"
                 class="tap-target"
               />
             </UDropdownMenu>
           </div>
 
           <dl class="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-600">
-            <div class="flex gap-1">
-              <dt>Main</dt>
+            <div
+              v-for="section in DECK_SECTIONS"
+              :key="section"
+              class="flex gap-1"
+            >
+              <dt>{{ sectionShortName(section) }}</dt>
               <dd class="font-semibold tabular-nums text-gray-900">
-                {{ deck.mainCount }}
-              </dd>
-            </div>
-            <div class="flex gap-1">
-              <dt>Extra</dt>
-              <dd class="font-semibold tabular-nums text-gray-900">
-                {{ deck.extraCount }}
-              </dd>
-            </div>
-            <div class="flex gap-1">
-              <dt>Side</dt>
-              <dd class="font-semibold tabular-nums text-gray-900">
-                {{ deck.sideCount }}
+                {{ sectionCount(deck, section) }}
               </dd>
             </div>
           </dl>
@@ -423,15 +436,15 @@ function statusColor(deck: DeckListItem) {
                 color="neutral"
                 variant="subtle"
                 icon="i-lucide-scroll-text"
-                :label="deck.formatName"
+                :label="deckFormatName(deck) ?? undefined"
               />
               <UBadge
                 v-if="deck.legal !== null"
                 :color="deck.legal ? 'success' : 'error'"
                 variant="subtle"
-                :label="deck.legal ? 'Legal' : 'Nicht legal'"
+                :label="deck.legal ? t('validation.badge.legal') : t('validation.badge.notLegal')"
               />
-              <span class="text-xs text-gray-400">{{ pluralize(deck.cardCount, 'Karte', 'Karten') }}</span>
+              <span class="text-xs text-gray-400">{{ count('decks.list.cardCount', deck.cardCount) }}</span>
             </div>
           </div>
         </div>

@@ -1,3 +1,19 @@
 {
-  "validation": {}
+  "validation": {
+    "deck_size_min": "Das {section} hat {count} Karte, mindestens {min} sind erforderlich. | Das {section} hat {count} Karten, mindestens {min} sind erforderlich.",
+    "deck_size_max": "Das {section} hat {count} Karte, höchstens {max} sind erlaubt. | Das {section} hat {count} Karten, höchstens {max} sind erlaubt.",
+    "card_forbidden": "{cardName} ist in diesem Format verboten.",
+    "card_limit_exceeded": "{cardName}: {copies} Kopien im Deck, erlaubt ist {maxCopies} Kopie. | {cardName}: {copies} Kopien im Deck, erlaubt sind {maxCopies} Kopien.",
+    "unknown_card_data": "Zu einer Karte im Deck (ID {cardId}) fehlen die Kartendaten.",
+    "main_below_min": "Das {section} hat {count} Karte, mindestens {min} sind üblich. | Das {section} hat {count} Karten, mindestens {min} sind üblich.",
+    "main_above_max": "Das {section} hat {count} Karte, höchstens {max} sind üblich. | Das {section} hat {count} Karten, höchstens {max} sind üblich.",
+    "extra_above_max": "Das {section} hat {count} Karte, höchstens {max} sind üblich. | Das {section} hat {count} Karten, höchstens {max} sind üblich.",
+    "side_above_max": "Das {section} hat {count} Karte, höchstens {max} sind üblich. | Das {section} hat {count} Karten, höchstens {max} sind üblich.",
+    "copies_above_max": "{cardName}: {copies} Kopien im Deck, höchstens {maxCopies} sind üblich.",
+    "badge": {
+      "legal": "Legal",
+      "notLegal": "Nicht legal",
+      "notLegalCount": "Nicht legal – {count} Problem | Nicht legal – {count} Probleme"
+    }
+  }
 }

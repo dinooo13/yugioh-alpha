@@ -1,16 +1,17 @@
 <script setup lang="ts">
 // Editor for a rule format: name, description, and a list of typed rules.
 // Shared by /formats/new (create), /formats/:id (edit), and the read-only
-// view of a built-in format. Every rule renders a live German summary from
-// the same `describeRule` the rest of the app uses, so the editor and the
-// deck validation can never describe a rule differently.
+// view of a built-in format. Every rule renders a live summary in the
+// interface language from the same describer the rest of the app uses
+// (`useRuleDescription`), so the editor and the deck editor can never
+// describe a rule differently.
 
 import {
+  BANLIST_SOURCES,
   CARD_STATUSES,
-  describeRule,
   RULE_FORMAT_DESCRIPTION_MAX_LENGTH,
   RULE_FORMAT_NAME_MAX_LENGTH,
-  RULE_KIND_LABELS,
+  RULE_KINDS,
 } from '~~/shared/rule-formats'
 import type {
   BanlistSource,
@@ -22,8 +23,7 @@ import type {
   RuleKind,
   RuleSet,
 } from '~~/shared/rule-formats'
-import { DECK_SECTION_LABELS, DECK_SECTIONS } from '~~/shared/deck-sections'
-import { pluralize } from '~~/shared/plural'
+import { DECK_SECTIONS } from '~~/shared/deck-sections'
 import type { DeckSection } from '~~/shared/deck-sections'
 
 interface FormatInitialValues {
@@ -43,6 +43,12 @@ const props = defineProps<{
 const emit = defineEmits<{
   saved: [format: { id: string, name: string }]
 }>()
+
+const { t } = useI18n()
+const count = useCount()
+const apiError = useApiError()
+const validationText = useValidationText()
+const { describeRule } = useRuleDescription()
 
 // --- Editable rule shape ---------------------------------------------------
 //
@@ -300,7 +306,11 @@ const setNames = computed(() => Object.fromEntries((facets.value?.sets ?? []).ma
 
 // --- Rule list -------------------------------------------------------------
 
-const ruleKinds = Object.keys(RULE_KIND_LABELS) as RuleKind[]
+const ruleKinds: readonly RuleKind[] = RULE_KINDS
+
+function ruleKindLabel(kind: RuleKind): string {
+  return t(`formats.ruleKind.${kind}`)
+}
 
 function addRule(kind: RuleKind) {
   rules.value = [...rules.value, emptyRule(kind)]
@@ -315,7 +325,7 @@ function summaryFor(draft: EditableRule): string {
     return describeRule(toRule(draft), { cardNames, setNames: setNames.value })
   }
   catch {
-    return 'Regel unvollständig'
+    return t('formats.rule.incomplete')
   }
 }
 
@@ -327,35 +337,29 @@ function onCardsResolved(cards: Array<{ id: number, name: string }>) {
 
 // --- Option lists ----------------------------------------------------------
 
-const sectionItems = DECK_SECTIONS.map(section => ({ label: DECK_SECTION_LABELS[section], value: section }))
-const statusItems = CARD_STATUSES.map(status => ({
-  label: status === 'forbidden' ? 'Verboten' : status === 'limited' ? 'Limitiert (1)' : 'Semi-limitiert (2)',
-  value: status,
-}))
-const sourceItems = [
-  { label: 'TCG', value: 'tcg' },
-  { label: 'OCG', value: 'ocg' },
-  { label: 'GOAT', value: 'goat' },
-]
-const matchItems = [
-  { label: 'Karten, auf die der Filter passt', value: 'matching' },
-  { label: 'Karten, auf die der Filter nicht passt', value: 'not_matching' },
-]
-const maxCopiesItems = [
-  { label: 'Verboten', value: 0 },
-  { label: 'Limitiert (1)', value: 1 },
-  { label: 'Semi-limitiert (2)', value: 2 },
-  { label: 'Erlaubt (3)', value: 3 },
-]
-const effectItems = [
-  { label: 'Egal', value: 'any' },
-  { label: 'Mit Effekt', value: 'yes' },
-  { label: 'Ohne Effekt', value: 'no' },
-]
-const regionItems = [
-  { label: 'TCG-Datum', value: 'tcg' },
-  { label: 'OCG-Datum', value: 'ocg' },
-]
+const sectionItems = computed(() => DECK_SECTIONS.map(section => ({ label: t(`decks.section.${section}`), value: section })))
+const statusItems = computed(() => CARD_STATUSES.map(status => ({ label: t(`formats.cardStatus.${status}`), value: status })))
+// Banlist names are game terms (TCG, OCG, GOAT) in every language.
+const sourceItems = BANLIST_SOURCES.map(source => ({ label: source.toUpperCase(), value: source }))
+const matchItems = computed(() => [
+  { label: t('formats.editor.match.matching'), value: 'matching' },
+  { label: t('formats.editor.match.not_matching'), value: 'not_matching' },
+])
+const maxCopiesItems = computed(() => [
+  { label: t('formats.cardStatus.forbidden'), value: 0 },
+  { label: t('formats.cardStatus.limited'), value: 1 },
+  { label: t('formats.cardStatus.semi_limited'), value: 2 },
+  { label: t('formats.editor.maxCopiesAllowed'), value: 3 },
+])
+const effectItems = computed(() => [
+  { label: t('formats.editor.effect.any'), value: 'any' },
+  { label: t('formats.editor.effect.yes'), value: 'yes' },
+  { label: t('formats.editor.effect.no'), value: 'no' },
+])
+const regionItems = computed(() => [
+  { label: t('formats.editor.region.tcg'), value: 'tcg' },
+  { label: t('formats.editor.region.ocg'), value: 'ocg' },
+])
 
 // --- Deck check ------------------------------------------------------------
 
@@ -368,6 +372,9 @@ const { data: deckList } = await useFetch<{ items: Array<{ id: string, name: str
 const deckItems = computed(() => (deckList.value?.items ?? []).map(deck => ({ label: deck.name, value: deck.id })))
 const checkDeckId = ref('')
 const checkResult = ref<DeckValidation | null>(null)
+const checkBadgeLabel = computed(() => (checkResult.value?.legal
+  ? t('validation.badge.legal')
+  : count('validation.badge.notLegalCount', checkResult.value?.issues.length ?? 0)))
 const checkError = ref('')
 const isChecking = ref(false)
 
@@ -388,7 +395,7 @@ async function runDeckCheck() {
     checkResult.value = response.validation
   }
   catch (error) {
-    checkError.value = error instanceof Error ? error.message : 'Die Prüfung ist fehlgeschlagen.'
+    checkError.value = apiError(error, 'formats.editor.check.failed')
   }
   finally {
     isChecking.value = false
@@ -408,7 +415,7 @@ function payload() {
 
 async function save() {
   if (!name.value.trim()) {
-    nameError.value = 'Bitte einen Namen angeben.'
+    nameError.value = t('formats.editor.nameRequired')
     // The field sits far above the save button on a long rule list.
     nameInput.value?.inputRef?.focus()
     return
@@ -426,7 +433,7 @@ async function save() {
     emit('saved', saved)
   }
   catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : 'Das Format konnte nicht gespeichert werden.'
+    errorMessage.value = apiError(error, 'formats.editor.saveFailed')
   }
   finally {
     isSaving.value = false
@@ -438,7 +445,7 @@ async function save() {
   <div class="space-y-6">
     <div class="space-y-4 rounded-md border border-gray-200 bg-white p-4">
       <UFormField
-        label="Name"
+        :label="t('formats.editor.name')"
         :error="nameError"
       >
         <UInput
@@ -446,18 +453,18 @@ async function save() {
           v-model="name"
           :maxlength="RULE_FORMAT_NAME_MAX_LENGTH"
           :disabled="readonly"
-          placeholder="z. B. Nur alte Karten"
-          aria-label="Formatname"
+          :placeholder="t('formats.editor.namePlaceholder')"
+          :aria-label="t('formats.editor.nameLabel')"
         />
       </UFormField>
 
-      <UFormField label="Beschreibung (optional)">
+      <UFormField :label="t('formats.editor.description')">
         <UTextarea
           v-model="description"
           :rows="2"
           :maxlength="RULE_FORMAT_DESCRIPTION_MAX_LENGTH"
           :disabled="readonly"
-          aria-label="Formatbeschreibung"
+          :aria-label="t('formats.editor.descriptionLabel')"
         />
       </UFormField>
     </div>
@@ -465,10 +472,10 @@ async function save() {
     <div class="space-y-3 rounded-md border border-gray-200 bg-white p-4">
       <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <h2 class="text-base font-semibold text-gray-900">
-          Regeln
+          {{ t('formats.editor.rules') }}
         </h2>
         <p class="text-sm text-gray-500">
-          {{ rules.length }} Regel<span v-if="rules.length !== 1">n</span>
+          {{ count('formats.list.ruleCount', rules.length) }}
         </p>
       </div>
 
@@ -476,7 +483,7 @@ async function save() {
         v-if="rules.length === 0"
         class="text-sm text-gray-500"
       >
-        Noch keine Regeln. Ohne Regeln ist jedes Deck legal.
+        {{ t('formats.editor.noRules') }}
       </p>
 
       <ul class="space-y-3">
@@ -488,7 +495,7 @@ async function save() {
           <div class="flex items-start justify-between gap-2">
             <div class="min-w-0">
               <p class="text-xs font-semibold uppercase tracking-wide text-gray-400">
-                {{ RULE_KIND_LABELS[rule.kind] }}
+                {{ ruleKindLabel(rule.kind) }}
               </p>
               <p
                 class="mt-0.5 text-sm text-gray-900"
@@ -503,7 +510,7 @@ async function save() {
               color="error"
               variant="ghost"
               size="xs"
-              :aria-label="`Regel ${index + 1} entfernen`"
+              :aria-label="t('formats.editor.removeRule', { index: index + 1 })"
               class="tap-target"
               @click="removeRule(index)"
             />
@@ -519,7 +526,7 @@ async function save() {
               :items="sectionItems"
               :disabled="readonly"
               class="w-44"
-              aria-label="Deckbereich"
+              :aria-label="t('formats.editor.section')"
             />
             <UInput
               v-model="rule.min"
@@ -527,8 +534,8 @@ async function save() {
               min="0"
               class="w-28"
               :disabled="readonly"
-              placeholder="min"
-              aria-label="Mindestanzahl"
+              :placeholder="t('formats.editor.minPlaceholder')"
+              :aria-label="t('formats.editor.minLabel')"
             />
             <UInput
               v-model="rule.max"
@@ -536,8 +543,8 @@ async function save() {
               min="0"
               class="w-28"
               :disabled="readonly"
-              placeholder="max"
-              aria-label="Höchstanzahl"
+              :placeholder="t('formats.editor.maxPlaceholder')"
+              :aria-label="t('formats.editor.maxLabel')"
             />
           </div>
 
@@ -553,7 +560,7 @@ async function save() {
               max="10"
               class="w-28"
               :disabled="readonly"
-              aria-label="Kopien pro Karte"
+              :aria-label="t('formats.editor.copiesLabel')"
             />
           </div>
 
@@ -567,7 +574,7 @@ async function save() {
               :items="statusItems"
               :disabled="readonly"
               class="w-52"
-              aria-label="Status"
+              :aria-label="t('formats.editor.statusLabel')"
             />
             <FormatsCardStatusPicker
               v-model="rule.cardIds"
@@ -587,7 +594,7 @@ async function save() {
               :items="sourceItems"
               :disabled="readonly"
               class="w-44"
-              aria-label="Banliste"
+              :aria-label="t('formats.editor.banlistLabel')"
             />
           </div>
 
@@ -602,21 +609,21 @@ async function save() {
                 :items="matchItems"
                 :disabled="readonly"
                 class="w-full sm:w-72"
-                aria-label="Filterrichtung"
+                :aria-label="t('formats.editor.matchLabel')"
               />
               <USelect
                 v-model="rule.maxCopies"
                 :items="maxCopiesItems"
                 :disabled="readonly"
                 class="w-full sm:w-48"
-                aria-label="Erlaubte Kopien"
+                :aria-label="t('formats.editor.maxCopiesLabel')"
               />
               <UInput
                 v-model="rule.label"
                 class="w-full sm:w-64"
                 :disabled="readonly"
-                placeholder="Bezeichnung (optional)"
-                aria-label="Regelbezeichnung"
+                :placeholder="t('formats.editor.labelPlaceholder')"
+                :aria-label="t('formats.editor.labelLabel')"
               />
             </div>
 
@@ -626,8 +633,8 @@ async function save() {
                 multiple
                 :items="facets.types"
                 :disabled="readonly"
-                placeholder="Kartentypen"
-                aria-label="Kartentypen"
+                :placeholder="t('formats.editor.types')"
+                :aria-label="t('formats.editor.types')"
                 class="w-full min-w-0"
               />
               <USelectMenu
@@ -635,8 +642,8 @@ async function save() {
                 multiple
                 :items="facets.attributes"
                 :disabled="readonly"
-                placeholder="Attribute"
-                aria-label="Attribute"
+                :placeholder="t('formats.editor.attributes')"
+                :aria-label="t('formats.editor.attributes')"
                 class="w-full min-w-0"
               />
               <USelectMenu
@@ -644,8 +651,8 @@ async function save() {
                 multiple
                 :items="facets.races"
                 :disabled="readonly"
-                placeholder="Arten"
-                aria-label="Arten"
+                :placeholder="t('formats.editor.races')"
+                :aria-label="t('formats.editor.races')"
                 class="w-full min-w-0"
               />
               <USelectMenu
@@ -654,8 +661,8 @@ async function save() {
                 value-key="value"
                 :items="setItems"
                 :disabled="readonly"
-                placeholder="Sets"
-                aria-label="Sets"
+                :placeholder="t('formats.editor.sets')"
+                :aria-label="t('formats.editor.sets')"
                 class="w-full min-w-0"
               />
             </div>
@@ -666,48 +673,48 @@ async function save() {
                 type="number"
                 class="w-28"
                 :disabled="readonly"
-                placeholder="Stufe ab"
-                aria-label="Stufe ab"
+                :placeholder="t('formats.editor.levelMin')"
+                :aria-label="t('formats.editor.levelMin')"
               />
               <UInput
                 v-model="rule.filter.levelMax"
                 type="number"
                 class="w-28"
                 :disabled="readonly"
-                placeholder="Stufe bis"
-                aria-label="Stufe bis"
+                :placeholder="t('formats.editor.levelMax')"
+                :aria-label="t('formats.editor.levelMax')"
               />
               <UInput
                 v-model="rule.filter.atkMin"
                 type="number"
                 class="w-28"
                 :disabled="readonly"
-                placeholder="ATK ab"
-                aria-label="ATK ab"
+                :placeholder="t('formats.editor.atkMin')"
+                :aria-label="t('formats.editor.atkMin')"
               />
               <UInput
                 v-model="rule.filter.atkMax"
                 type="number"
                 class="w-28"
                 :disabled="readonly"
-                placeholder="ATK bis"
-                aria-label="ATK bis"
+                :placeholder="t('formats.editor.atkMax')"
+                :aria-label="t('formats.editor.atkMax')"
               />
               <UInput
                 v-model="rule.filter.defMin"
                 type="number"
                 class="w-28"
                 :disabled="readonly"
-                placeholder="DEF ab"
-                aria-label="DEF ab"
+                :placeholder="t('formats.editor.defMin')"
+                :aria-label="t('formats.editor.defMin')"
               />
               <UInput
                 v-model="rule.filter.defMax"
                 type="number"
                 class="w-28"
                 :disabled="readonly"
-                placeholder="DEF bis"
-                aria-label="DEF bis"
+                :placeholder="t('formats.editor.defMax')"
+                :aria-label="t('formats.editor.defMax')"
               />
             </div>
 
@@ -717,35 +724,35 @@ async function save() {
                 :items="effectItems"
                 :disabled="readonly"
                 class="w-44"
-                aria-label="Effekt"
+                :aria-label="t('formats.editor.effectLabel')"
               />
               <UInput
                 v-model="rule.filter.releasedBefore"
                 type="date"
                 class="w-44"
                 :disabled="readonly"
-                aria-label="Erschienen vor"
+                :aria-label="t('formats.editor.releasedBefore')"
               />
               <UInput
                 v-model="rule.filter.releasedAfter"
                 type="date"
                 class="w-44"
                 :disabled="readonly"
-                aria-label="Erschienen nach"
+                :aria-label="t('formats.editor.releasedAfter')"
               />
               <USelect
                 v-model="rule.filter.region"
                 :items="regionItems"
                 :disabled="readonly"
                 class="w-40"
-                aria-label="Region"
+                :aria-label="t('formats.editor.regionLabel')"
               />
               <UInput
                 v-model="rule.filter.nameContains"
                 class="w-56"
                 :disabled="readonly"
-                placeholder="Name enthält"
-                aria-label="Name enthält"
+                :placeholder="t('formats.editor.nameContains')"
+                :aria-label="t('formats.editor.nameContains')"
               />
             </div>
           </div>
@@ -757,7 +764,7 @@ async function save() {
         class="border-t border-gray-200 pt-3"
       >
         <p class="text-sm font-medium text-gray-700">
-          Regel hinzufügen
+          {{ t('formats.editor.addRule') }}
         </p>
         <div class="mt-2 flex flex-wrap gap-2">
           <UButton
@@ -767,8 +774,8 @@ async function save() {
             color="neutral"
             variant="outline"
             size="xs"
-            :label="RULE_KIND_LABELS[kind]"
-            :aria-label="`Regel hinzufügen: ${RULE_KIND_LABELS[kind]}`"
+            :label="ruleKindLabel(kind)"
+            :aria-label="t('formats.editor.addRuleLabel', { kind: ruleKindLabel(kind) })"
             class="tap-target"
             @click="addRule(kind)"
           />
@@ -778,10 +785,10 @@ async function save() {
 
     <div class="space-y-3 rounded-md border border-gray-200 bg-white p-4">
       <h2 class="text-base font-semibold text-gray-900">
-        Deck prüfen
+        {{ t('formats.editor.check.title') }}
       </h2>
       <p class="text-sm text-gray-500">
-        Prüft eines deiner Decks gegen die Regeln in diesem Editor — auch ungespeichert.
+        {{ t('formats.editor.check.description') }}
       </p>
 
       <div class="flex flex-wrap items-center gap-2">
@@ -789,14 +796,14 @@ async function save() {
           v-model="checkDeckId"
           :items="deckItems"
           class="w-64"
-          placeholder="Deck wählen"
-          aria-label="Deck für die Prüfung"
+          :placeholder="t('formats.editor.check.deckPlaceholder')"
+          :aria-label="t('formats.editor.check.deckLabel')"
         />
         <UButton
           icon="i-lucide-shield-check"
           color="neutral"
           variant="outline"
-          label="Deck prüfen"
+          :label="t('formats.editor.check.button')"
           :loading="isChecking"
           :disabled="!checkDeckId"
           @click="runDeckCheck"
@@ -814,14 +821,14 @@ async function save() {
         <UBadge
           :color="checkResult.legal ? 'success' : 'error'"
           variant="subtle"
-          :label="checkResult.legal ? 'Legal' : `Nicht legal – ${pluralize(checkResult.issues.length, 'Problem', 'Probleme')}`"
+          :label="checkBadgeLabel"
         />
         <ul class="mt-2 list-inside list-disc space-y-0.5 text-sm text-gray-700">
           <li
             v-for="(issue, index) in checkResult.issues"
             :key="`${issue.code}-${issue.cardId ?? index}`"
           >
-            {{ issue.message }}
+            {{ validationText(issue) }}
           </li>
         </ul>
       </div>
@@ -842,7 +849,7 @@ async function save() {
       <UButton
         icon="i-lucide-save"
         :loading="isSaving"
-        :label="isEditing ? 'Speichern' : 'Format erstellen'"
+        :label="isEditing ? t('common.save') : t('formats.editor.create')"
         @click="save"
       />
     </div>

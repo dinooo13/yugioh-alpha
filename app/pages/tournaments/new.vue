@@ -1,14 +1,12 @@
 <script setup lang="ts">
-import {
-  PAIRING_SYSTEM_DESCRIPTIONS,
-  PAIRING_SYSTEM_LABELS,
-  PAIRING_SYSTEMS,
-  TOURNAMENT_ERROR_MESSAGES,
-} from '~~/shared/tournaments'
-import type { PairingSystem, TournamentDetail, TournamentErrorCode } from '~~/shared/tournaments'
-import { apiErrorCode, apiErrorMessage } from '~/utils/card-entry'
+import { PAIRING_SYSTEMS, TOURNAMENT_DESCRIPTION_MAX_LENGTH, TOURNAMENT_NAME_MAX_LENGTH } from '~~/shared/tournaments'
+import type { PairingSystem, TournamentDetail } from '~~/shared/tournaments'
 
-useHead({ title: 'Neues Turnier – yugioh alpha' })
+usePageTitle('tournaments.new.title')
+
+const { t } = useI18n()
+const apiError = useApiError()
+const { formatName, sortFormats } = useFormatLabel()
 
 // reka-ui reserves the empty string for "clear selection", so "no format"
 // uses a sentinel that maps back to `null` on the wire (same convention as
@@ -26,12 +24,14 @@ const { data: formatsData } = await useFetch<{ items: RuleFormatListItem[] }>('/
   default: () => ({ items: [] }),
 })
 
+// Built-in formats first, sorted by their name in the interface language.
 const formatItems = computed(() => [
-  { label: 'Ohne Format', value: NO_FORMAT },
-  ...(formatsData.value?.items ?? []).map(format => ({ label: format.name, value: format.id })),
+  { label: t('tournaments.noFormat'), value: NO_FORMAT },
+  ...sortFormats(formatsData.value?.items ?? []).map(format => ({ label: formatName(format), value: format.id })),
 ])
 
-const pairingSystemItems = PAIRING_SYSTEMS.map(system => ({ label: PAIRING_SYSTEM_LABELS[system], value: system }))
+const pairingSystemItems = computed(() =>
+  PAIRING_SYSTEMS.map(system => ({ label: t(`tournaments.pairingSystem.${system}.label`), value: system })))
 
 const form = reactive({
   name: '',
@@ -54,17 +54,16 @@ watch(() => form.name, (name) => {
   }
 })
 
-function errorText(error: unknown, fallback: string) {
-  const code = apiErrorCode(error) as TournamentErrorCode | undefined
-  return (code && TOURNAMENT_ERROR_MESSAGES[code]) || apiErrorMessage(error, fallback)
-}
+const plannedRoundsHint = computed(() => t(form.pairingSystem === 'round_robin'
+  ? 'tournaments.new.plannedRoundsRoundRobinHint'
+  : 'tournaments.new.plannedRoundsHint'))
 
 async function submit() {
   if (isSubmitting.value) {
     return
   }
   if (!form.name.trim()) {
-    nameError.value = 'Bitte einen Namen angeben.'
+    nameError.value = t('tournaments.new.nameRequired')
     return
   }
 
@@ -86,7 +85,7 @@ async function submit() {
     await navigateTo(`/tournaments/${created.id}`)
   }
   catch (error) {
-    errorMessage.value = errorText(error, 'Das Turnier konnte nicht angelegt werden.')
+    errorMessage.value = apiError(error, 'tournaments.new.createFailed')
   }
   finally {
     isSubmitting.value = false
@@ -99,11 +98,11 @@ async function submit() {
     <div class="space-y-2">
       <LayoutBackLink
         to="/tournaments"
-        label="Zurück zu den Turnieren"
+        :label="t('tournaments.backToList')"
       />
       <LayoutPageHeader
-        title="Neues Turnier"
-        description="Spieler lädst du nach dem Anlegen per E-Mail oder als Gast ein."
+        :title="t('tournaments.new.title')"
+        :description="t('tournaments.new.description')"
       />
     </div>
 
@@ -112,67 +111,65 @@ async function submit() {
       @submit.prevent="submit"
     >
       <UFormField
-        label="Turniername"
+        :label="t('tournaments.new.name')"
         :error="nameError"
       >
         <UInput
           v-model="form.name"
-          placeholder="z. B. Freitagsturnier"
-          maxlength="80"
-          aria-label="Turniername"
+          :placeholder="t('tournaments.new.namePlaceholder')"
+          :maxlength="TOURNAMENT_NAME_MAX_LENGTH"
+          :aria-label="t('tournaments.new.name')"
         />
       </UFormField>
 
-      <UFormField label="Beschreibung (optional)">
+      <UFormField :label="t('tournaments.new.descriptionLabel')">
         <UTextarea
           v-model="form.description"
           :rows="3"
-          maxlength="500"
-          aria-label="Beschreibung"
+          :maxlength="TOURNAMENT_DESCRIPTION_MAX_LENGTH"
+          :aria-label="t('tournaments.new.descriptionAriaLabel')"
         />
       </UFormField>
 
-      <UFormField label="Format">
+      <UFormField :label="t('tournaments.new.format')">
         <USelect
           v-model="form.formatId"
           :items="formatItems"
-          aria-label="Format"
+          :aria-label="t('tournaments.new.format')"
           class="w-full"
         />
       </UFormField>
 
-      <UFormField label="Paarungssystem">
+      <UFormField :label="t('tournaments.new.pairingSystem')">
         <USelect
           v-model="form.pairingSystem"
           :items="pairingSystemItems"
-          aria-label="Paarungssystem"
+          :aria-label="t('tournaments.new.pairingSystem')"
           class="w-full"
         />
         <p class="mt-1 text-xs text-gray-500">
-          {{ PAIRING_SYSTEM_DESCRIPTIONS[form.pairingSystem] }}
+          {{ t(`tournaments.pairingSystem.${form.pairingSystem}.description`) }}
         </p>
       </UFormField>
 
-      <UFormField label="Geplante Runden">
+      <UFormField :label="t('tournaments.new.plannedRounds')">
         <UInput
           v-model="form.plannedRounds"
           type="number"
           min="1"
           max="20"
-          placeholder="Automatisch"
-          aria-label="Geplante Runden"
+          :placeholder="t('tournaments.new.plannedRoundsPlaceholder')"
+          :aria-label="t('tournaments.new.plannedRounds')"
           :disabled="form.pairingSystem === 'round_robin'"
         />
         <p class="mt-1 text-xs text-gray-500">
-          {{ form.pairingSystem === 'round_robin'
-            ? 'Bei "Jeder gegen jeden" ergibt sich die Rundenzahl aus der Teilnehmerzahl.'
-            : 'Leer lassen: wird beim Start aus der Teilnehmerzahl berechnet.' }}
+          {{ plannedRoundsHint }}
         </p>
       </UFormField>
 
       <UCheckbox
         v-model="form.includeSelf"
-        label="Ich spiele selbst mit"
+        :label="t('tournaments.new.includeSelf')"
       />
 
       <p
@@ -188,13 +185,13 @@ async function submit() {
           type="button"
           color="neutral"
           variant="ghost"
-          label="Abbrechen"
+          :label="t('common.cancel')"
           to="/tournaments"
         />
         <UButton
           type="submit"
           icon="i-lucide-plus"
-          label="Turnier anlegen"
+          :label="t('tournaments.new.submit')"
           :loading="isSubmitting"
         />
       </div>

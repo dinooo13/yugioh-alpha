@@ -1,11 +1,20 @@
 <script setup lang="ts">
-import { formatRate, POINTS_DRAW, POINTS_WIN } from '~~/shared/tournaments'
+import { POINTS_DRAW, POINTS_WIN } from '~~/shared/tournaments'
 import type { TournamentStandingRow, TournamentStatus } from '~~/shared/tournaments'
 
 const props = defineProps<{
   standings: TournamentStandingRow[]
   status: TournamentStatus
 }>()
+
+const { t, n } = useI18n()
+
+/** 0.6667 → "66,7 %" (de) / "66.7%" (en) for the standings tie-breakers. */
+function formatRate(rate: number): string {
+  return t('tournaments.standings.rate', { value: n(rate * 100, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) })
+}
+
+const legend = computed(() => t('tournaments.standings.legend', { win: POINTS_WIN, draw: POINTS_DRAW }))
 
 function recordLabel(row: TournamentStandingRow): string {
   return `${row.wins}-${row.losses}-${row.draws}`
@@ -26,7 +35,7 @@ const winner = computed(() => {
   <section class="rounded-md border border-gray-200 bg-white p-4">
     <div class="flex flex-wrap items-center justify-between gap-2">
       <h2 class="text-base font-semibold text-gray-900">
-        Tabelle
+        {{ t('tournaments.standings.title') }}
       </h2>
       <p
         v-if="winner"
@@ -36,7 +45,7 @@ const winner = computed(() => {
           name="i-lucide-trophy"
           class="size-4"
         />
-        Sieger: {{ winner.name }}
+        {{ t('tournaments.standings.winner', { name: winner.name }) }}
       </p>
     </div>
 
@@ -44,7 +53,7 @@ const winner = computed(() => {
       v-if="standings.length === 0"
       class="mt-4 text-sm text-gray-500"
     >
-      Noch keine Ergebnisse.
+      {{ t('tournaments.standings.empty') }}
     </p>
 
     <!-- Same single-<table> card pattern as the participants panel (#28):
@@ -70,55 +79,55 @@ const winner = computed(() => {
               role="columnheader"
               class="py-2 pr-2"
             >
-              Platz
+              {{ t('tournaments.standings.columns.rank') }}
             </th>
             <th
               role="columnheader"
               class="px-2 py-2"
             >
-              Spieler
+              {{ t('tournaments.standings.columns.player') }}
             </th>
             <th
               role="columnheader"
               class="px-2 py-2"
             >
-              Punkte
-            </th>
-            <th
-              role="columnheader"
-              class="px-2 py-2"
-            >
-              <abbr
-                title="Siege–Niederlagen–Unentschieden"
-                class="cursor-help"
-              >S-N-U</abbr>
+              {{ t('tournaments.standings.columns.points') }}
             </th>
             <th
               role="columnheader"
               class="px-2 py-2"
             >
               <abbr
-                title="Siegquote der Gegner"
+                :title="t('tournaments.standings.recordTitle')"
                 class="cursor-help"
-              >OMW%</abbr>
+              >{{ t('tournaments.standings.record') }}</abbr>
             </th>
             <th
               role="columnheader"
               class="px-2 py-2"
             >
               <abbr
-                title="Eigene Spielquote"
+                :title="t('tournaments.standings.omwTitle')"
                 class="cursor-help"
-              >GW%</abbr>
+              >{{ t('tournaments.standings.omw') }}</abbr>
             </th>
             <th
               role="columnheader"
               class="px-2 py-2"
             >
               <abbr
-                title="Spielquote der Gegner"
+                :title="t('tournaments.standings.gwTitle')"
                 class="cursor-help"
-              >OGW%</abbr>
+              >{{ t('tournaments.standings.gw') }}</abbr>
+            </th>
+            <th
+              role="columnheader"
+              class="px-2 py-2"
+            >
+              <abbr
+                :title="t('tournaments.standings.ogwTitle')"
+                class="cursor-help"
+              >{{ t('tournaments.standings.ogw') }}</abbr>
             </th>
           </tr>
         </thead>
@@ -158,14 +167,14 @@ const winner = computed(() => {
                 class="ml-1"
                 color="neutral"
                 variant="subtle"
-                label="Ausgestiegen"
+                :label="t('tournaments.dropped')"
               />
             </td>
             <td
               role="cell"
               class="text-right font-semibold tabular-nums sm:px-2 sm:py-2 sm:text-left sm:font-normal"
             >
-              {{ row.points }}<span class="text-xs font-normal text-gray-500 sm:hidden"> Pkt.</span>
+              {{ row.points }}<span class="text-xs font-normal text-gray-500 sm:hidden"> {{ t('tournaments.standings.pointsShort') }}</span>
             </td>
             <td
               role="cell"
@@ -200,7 +209,7 @@ const winner = computed(() => {
               <dl class="grid grid-cols-4 gap-2 text-xs">
                 <div>
                   <dt class="text-gray-500">
-                    S-N-U
+                    {{ t('tournaments.standings.record') }}
                   </dt>
                   <dd class="tabular-nums text-gray-900">
                     {{ recordLabel(row) }}
@@ -208,7 +217,7 @@ const winner = computed(() => {
                 </div>
                 <div>
                   <dt class="text-gray-500">
-                    OMW%
+                    {{ t('tournaments.standings.omw') }}
                   </dt>
                   <dd class="tabular-nums text-gray-900">
                     {{ formatRate(row.opponentMatchWinRate) }}
@@ -216,7 +225,7 @@ const winner = computed(() => {
                 </div>
                 <div>
                   <dt class="text-gray-500">
-                    GW%
+                    {{ t('tournaments.standings.gw') }}
                   </dt>
                   <dd class="tabular-nums text-gray-900">
                     {{ formatRate(row.gameWinRate) }}
@@ -224,7 +233,7 @@ const winner = computed(() => {
                 </div>
                 <div>
                   <dt class="text-gray-500">
-                    OGW%
+                    {{ t('tournaments.standings.ogw') }}
                   </dt>
                   <dd class="tabular-nums text-gray-900">
                     {{ formatRate(row.opponentGameWinRate) }}
@@ -240,11 +249,7 @@ const winner = computed(() => {
     <!-- A visible legend rather than tooltips only: `title` never shows on
          touch devices (#28). -->
     <p class="mt-3 text-xs text-gray-500">
-      Punkte: Sieg {{ POINTS_WIN }}, Unentschieden {{ POINTS_DRAW }}
-      · S-N-U = Siege–Niederlagen–Unentschieden
-      · OMW% = Siegquote der Gegner
-      · GW% = eigene Spielquote
-      · OGW% = Spielquote der Gegner
+      {{ legend }}
     </p>
   </section>
 </template>

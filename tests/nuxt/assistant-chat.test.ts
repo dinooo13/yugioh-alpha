@@ -642,7 +642,8 @@ describe('deck-linked conversations (ADR 0011)', () => {
     expect(system).toContain('Deckname: Magier-Deck')
     expect(system).toContain(`Format: Streng (ID ${format.id})`)
     expect(system).toContain('Anzahl: Main 2 · Extra 0 · Side 0')
-    expect(system).toMatch(/Legalität: nicht legal – Dark Magician: 2 Kopien/)
+    // Validation issue messages are canonical English for the model (ADR 0014).
+    expect(system).toMatch(/Legalität: nicht legal – Dark Magician: 2 copies in the deck; 1 copy is allowed\./)
     expect(system).toContain(`${CARD.darkMagician}|Dark Magician|main|2|0`)
     expect(system).toContain(`update_deck_cards mit deckId=${deck.id}`)
     expect(system).toContain('set_deck_format')

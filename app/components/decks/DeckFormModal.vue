@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { DECK_DESCRIPTION_MAX_LENGTH, DECK_NAME_MAX_LENGTH } from '~~/shared/deck-sections'
+
 interface DeckInitialValues {
   id?: string
   name: string
@@ -21,6 +23,9 @@ const emit = defineEmits<{
   'saved': [deck: SavedDeck, created: boolean]
 }>()
 
+const { t } = useI18n()
+const apiError = useApiError()
+
 const form = reactive({
   name: '',
   description: '',
@@ -39,7 +44,7 @@ watch(() => form.name, (name) => {
 })
 
 const isEditing = computed(() => Boolean(props.initialValues?.id))
-const title = computed(() => isEditing.value ? 'Deck bearbeiten' : 'Neues Deck')
+const title = computed(() => isEditing.value ? t('decks.form.editTitle') : t('decks.form.createTitle'))
 
 const openProxy = computed({
   get: () => props.open,
@@ -63,7 +68,7 @@ watch(
 
 async function save() {
   if (!form.name.trim()) {
-    nameError.value = 'Bitte einen Namen angeben.'
+    nameError.value = t('decks.form.nameRequired')
     return
   }
 
@@ -85,7 +90,7 @@ async function save() {
     openProxy.value = false
   }
   catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : 'Das Deck konnte nicht gespeichert werden.'
+    errorMessage.value = apiError(error, 'decks.form.saveFailed')
   }
   finally {
     isSubmitting.value = false
@@ -104,26 +109,26 @@ async function save() {
         @submit.prevent="save"
       >
         <UFormField
-          label="Name"
+          :label="t('decks.form.name')"
           :error="nameError"
         >
           <UInput
             v-model="form.name"
             name="name"
-            placeholder="z. B. Blue-Eyes Control"
-            maxlength="80"
-            aria-label="Deckname"
+            :placeholder="t('decks.form.namePlaceholder')"
+            :maxlength="DECK_NAME_MAX_LENGTH"
+            :aria-label="t('decks.form.nameLabel')"
             autofocus
           />
         </UFormField>
 
-        <UFormField label="Beschreibung (optional)">
+        <UFormField :label="t('decks.form.description')">
           <UTextarea
             v-model="form.description"
             name="description"
             :rows="3"
-            maxlength="500"
-            aria-label="Deckbeschreibung"
+            :maxlength="DECK_DESCRIPTION_MAX_LENGTH"
+            :aria-label="t('decks.form.descriptionLabel')"
           />
         </UFormField>
 
@@ -140,14 +145,14 @@ async function save() {
             type="button"
             color="neutral"
             variant="ghost"
-            label="Abbrechen"
+            :label="t('common.cancel')"
             @click="() => { openProxy = false }"
           />
           <UButton
             type="submit"
             icon="i-lucide-save"
             :loading="isSubmitting"
-            :label="isEditing ? 'Speichern' : 'Erstellen'"
+            :label="isEditing ? t('common.save') : t('decks.form.create')"
           />
         </div>
       </form>

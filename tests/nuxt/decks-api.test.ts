@@ -12,6 +12,7 @@ import {
   deleteDeck,
   duplicateDeck,
   getDeckDetail,
+  validateDuplicateDeckInput,
   isExtraDeckCard,
   listDecks,
   loadDeckCovers,
@@ -426,6 +427,21 @@ describe('deck persistence', () => {
     expect(getDeckDetail(db, 'user-a', deck.id).counts.main).toBe(3)
   })
 
+  it('names the copy from the optional request body', () => {
+    const deck = createDeck(db, 'user-a', { name: 'Original', description: null })
+
+    // The UI names the copy in the interface language (ADR 0014).
+    const copy = duplicateDeck(db, 'user-a', deck.id, validateDuplicateDeckInput({ name: '  Original (copy)  ' }))
+    expect(copy.name).toBe('Original (copy)')
+
+    expect(validateDuplicateDeckInput(undefined)).toEqual({})
+    expect(validateDuplicateDeckInput({})).toEqual({})
+    expect(() => validateDuplicateDeckInput({ name: '' })).toThrow(expect.objectContaining({ statusCode: 400 }))
+    expect(() => validateDuplicateDeckInput({ name: 'x'.repeat(81) })).toThrow(expect.objectContaining({ statusCode: 400 }))
+    expect(() => getDeckDetail(db, 'user-a', 'missing'))
+      .toThrow(expect.objectContaining({ statusCode: 404, data: { code: 'deck_not_found' } }))
+  })
+
   it('never inherits the source deck\'s share — the copy is always private with no token', () => {
     const deck = createDeck(db, 'user-a', { name: 'Shared', description: null })
     setShareState(db, 'user-a', 'deck', deck.id, { visibility: 'link' })
@@ -561,8 +577,8 @@ describe('deck warnings', () => {
     const copyWarnings = detail.warnings.filter(warning => warning.code === 'copies_above_max')
     expect(copyWarnings.map(warning => warning.cardId).sort())
       .toEqual([CARD.stardustDragon, CARD.darkMagician].sort())
-    expect(copyWarnings.find(warning => warning.cardId === CARD.darkMagician)!.message)
-      .toContain('Dark Magician: 4 Kopien')
+    expect(copyWarnings.find(warning => warning.cardId === CARD.darkMagician)!.params)
+      .toEqual({ cardId: CARD.darkMagician, cardName: 'Dark Magician', copies: 4, maxCopies: 3 })
 
     // Over-limit quantities are warnings, never hard errors: the write stuck.
     expect(detail.counts).toMatchObject({ main: 2, side: 2, extra: 5 })

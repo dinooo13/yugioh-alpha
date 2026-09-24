@@ -25,7 +25,13 @@ import {
   validateParticipantInput,
   validateTournamentInput,
 } from '../../server/utils/tournaments'
-import { MAX_PARTICIPANTS } from '../../shared/tournaments'
+import {
+  MAX_PARTICIPANTS,
+  MAX_PLANNED_ROUNDS,
+  MIN_PARTICIPANTS_TO_START,
+  TOURNAMENT_DESCRIPTION_MAX_LENGTH,
+  TOURNAMENT_NAME_MAX_LENGTH,
+} from '../../shared/tournaments'
 import type { TournamentDetail } from '../../shared/tournaments'
 
 const CARD = {
@@ -134,7 +140,14 @@ describe('tournament creation', () => {
 
   it('rejects a blank name', () => {
     expect(() => validateTournamentInput({ name: '   ' }))
-      .toThrow(expect.objectContaining({ statusCode: 400, data: { code: 'invalid_name' } }))
+      .toThrow(expect.objectContaining({ statusCode: 400, data: { code: 'invalid_name', params: { max: TOURNAMENT_NAME_MAX_LENGTH } } }))
+  })
+
+  it('sends the limits the client message needs as data.params', () => {
+    expect(() => validateTournamentInput({ name: 'Turnier', description: 'x'.repeat(TOURNAMENT_DESCRIPTION_MAX_LENGTH + 1) }))
+      .toThrow(expect.objectContaining({ statusCode: 400, data: { code: 'invalid_description', params: { max: TOURNAMENT_DESCRIPTION_MAX_LENGTH } } }))
+    expect(() => validateTournamentInput({ name: 'Turnier', plannedRounds: MAX_PLANNED_ROUNDS + 1 }))
+      .toThrow(expect.objectContaining({ statusCode: 400, data: { code: 'invalid_planned_rounds', params: { max: MAX_PLANNED_ROUNDS } } }))
   })
 })
 
@@ -226,7 +239,7 @@ describe('participants', () => {
       addParticipant(db, 'user-a', id, validateParticipantInput({ name: `Gast ${i}` }))
     }
     expect(() => addParticipant(db, 'user-a', id, validateParticipantInput({ name: 'Once too many' })))
-      .toThrow(expect.objectContaining({ statusCode: 409, data: { code: 'too_many_participants' } }))
+      .toThrow(expect.objectContaining({ statusCode: 409, data: { code: 'too_many_participants', params: { max: MAX_PARTICIPANTS } } }))
   })
 
   it('renumbers seeds contiguously after removing a participant during registration', () => {
@@ -393,7 +406,7 @@ describe('starting a tournament', () => {
   it('rejects starting with fewer than two participants', () => {
     const id = createTournament(db, 'user-a', validateTournamentInput({ name: 'Solo' })).id
     expect(() => startTournament(db, 'user-a', id))
-      .toThrow(expect.objectContaining({ statusCode: 409, data: { code: 'not_enough_participants' } }))
+      .toThrow(expect.objectContaining({ statusCode: 409, data: { code: 'not_enough_participants', params: { min: MIN_PARTICIPANTS_TO_START } } }))
   })
 
   it('freezes seeds, resolves plannedRounds, and creates round 1', () => {

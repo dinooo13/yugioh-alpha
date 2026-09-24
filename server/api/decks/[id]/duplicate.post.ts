@@ -1,6 +1,6 @@
-import { createError, getRouterParam, setResponseStatus } from 'h3'
+import { createError, getRouterParam, readBody, setResponseStatus } from 'h3'
 import { useDb } from '../../../db'
-import { duplicateDeck } from '../../../utils/decks'
+import { duplicateDeck, validateDuplicateDeckInput } from '../../../utils/decks'
 import { requireUser } from '../../../utils/session'
 
 export default defineEventHandler(async (event) => {
@@ -10,7 +10,8 @@ export default defineEventHandler(async (event) => {
   }
 
   const user = await requireUser(event)
-  const detail = duplicateDeck(useDb(), user.id, id)
+  const input = validateDuplicateDeckInput(await readBody(event).catch(() => undefined))
+  const detail = duplicateDeck(useDb(), user.id, id, input)
 
   setResponseStatus(event, 201)
   return detail

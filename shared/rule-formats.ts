@@ -7,9 +7,8 @@
 // See docs/adr/0005-rule-format-model.md for why rules are a JSON list of
 // typed predicates evaluated in code instead of relational rule tables.
 
-import { DECK_SECTIONS, DECK_SECTION_LABELS } from './deck-sections'
+import { DECK_SECTIONS } from './deck-sections'
 import type { DeckSection } from './deck-sections'
-import { pluralize } from './plural'
 
 export const RULE_FORMAT_NAME_MAX_LENGTH = 80
 export const RULE_FORMAT_DESCRIPTION_MAX_LENGTH = 500
@@ -77,18 +76,16 @@ export const CARD_STATUSES = ['forbidden', 'limited', 'semi_limited'] as const
 export const BANLIST_SOURCES = ['tcg', 'ocg', 'goat'] as const
 export const FILTER_MATCHES = ['matching', 'not_matching'] as const
 
-export const RULE_KIND_LABELS: Record<RuleKind, string> = {
-  deck_size: 'Deckgröße',
-  copies: 'Kopien pro Karte',
-  card_status: 'Einzelne Karten',
-  banlist: 'Banliste',
-  filter: 'Kartenfilter',
-}
+/**
+ * Ids of the built-in formats (`server/utils/rule-formats.ts` seeds them).
+ * Their names and descriptions are stored in English; the UI shows them in
+ * the interface language by id (`useFormatLabel`, ADR 0014).
+ */
+export const BUILTIN_FORMAT_IDS = ['tcg-advanced', 'ocg', 'goat', 'unlimited'] as const
+export type BuiltinFormatId = typeof BUILTIN_FORMAT_IDS[number]
 
-export const BANLIST_SOURCE_LABELS: Record<BanlistSource, string> = {
-  tcg: 'TCG',
-  ocg: 'OCG',
-  goat: 'GOAT',
+export function isBuiltinFormatId(id: string | null | undefined): id is BuiltinFormatId {
+  return typeof id === 'string' && (BUILTIN_FORMAT_IDS as readonly string[]).includes(id)
 }
 
 // --- Card data + deck input ------------------------------------------------
@@ -125,13 +122,6 @@ export interface DeckCardEntry {
 
 export type CardStatus = CardStatusName | 'unrestricted'
 
-export const CARD_STATUS_LABELS: Record<CardStatus, string> = {
-  forbidden: 'Verboten',
-  limited: 'Limitiert (1)',
-  semi_limited: 'Semi-limitiert (2)',
-  unrestricted: 'Erlaubt',
-}
-
 export type ValidationIssueCode =
   | 'deck_size_min'
   | 'deck_size_max'
@@ -139,20 +129,69 @@ export type ValidationIssueCode =
   | 'card_limit_exceeded'
   | 'unknown_card_data'
 
+/**
+ * The values a validation issue or deck warning is phrased with. The UI
+ * renders `validation.<code>` with them (`useValidationText`, ADR 0014).
+ */
+export interface ValidationIssueParams {
+  section?: DeckSection
+  /** Cards in `section`. */
+  count?: number
+  min?: number
+  max?: number
+  cardId?: number
+  cardName?: string
+  /** Copies of the card across the deck. */
+  copies?: number
+  maxCopies?: number
+}
+
 export interface ValidationIssue {
   severity: 'error'
   code: ValidationIssueCode
-  /** German, ready to render. */
+  /**
+   * Canonical English text. The assistant model reads it (`validate_deck`);
+   * the UI renders `code` + `params` instead.
+   */
   message: string
+  params: ValidationIssueParams
   cardId?: number
   section?: DeckSection
 }
 
+export type DeckWarningCode =
+  | 'main_below_min'
+  | 'main_above_max'
+  | 'extra_above_max'
+  | 'side_above_max'
+  | 'copies_above_max'
+
+/**
+ * A structural hint independent of any rule format (standard deck sizes and
+ * copy limit, `server/utils/decks.ts`). Same shape as a `ValidationIssue`:
+ * canonical English `message`, rendered by the UI from `code` + `params`.
+ */
+export interface DeckWarning {
+  code: DeckWarningCode
+  message: string
+  params: ValidationIssueParams
+  cardId?: number
+}
+
+/**
+ * Why a card's copy limit is lower than the format's base limit. Rendered by
+ * the client (`app/utils/rule-description.ts`), most specific first.
+ */
+export type CapReason =
+  | { kind: 'format_rule', status: CardStatusName }
+  | { kind: 'banlist', source: BanlistSource, raw: string }
+  | { kind: 'filter', label?: string, rule: Extract<Rule, { kind: 'filter' }> }
+
 export interface DeckValidationCard {
   maxCopies: number
   status: CardStatus
-  /** German explanations for the restriction, most specific first. */
-  reasons: string[]
+  /** The restrictions behind the limit, most specific first. */
+  reasons: CapReason[]
 }
 
 export interface DeckValidation {
@@ -323,139 +362,11 @@ const STATUS_COPIES: Record<CardStatusName, number> = {
   semi_limited: 2,
 }
 
-// --- Human-readable summaries (German) -------------------------------------
-
-/** `2005-07-01` → `01.07.2005`; returns the input unchanged when unparseable. */
-export function formatIsoDate(value: string): string {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
-  return match ? `${match[3]}.${match[2]}.${match[1]}` : value
-}
-
-function copiesLabel(maxCopies: number): string {
-  if (maxCopies <= 0) {
-    return 'verboten'
-  }
-  if (maxCopies === 1) {
-    return 'limitiert (max. 1)'
-  }
-  if (maxCopies === 2) {
-    return 'semi-limitiert (max. 2)'
-  }
-  return `erlaubt (max. ${maxCopies})`
-}
-
-function rangeLabel(label: string, min?: number, max?: number): string | null {
-  if (min !== undefined && max !== undefined) {
-    return `${label} ${min}–${max}`
-  }
-  if (min !== undefined) {
-    return `${label} ab ${min}`
-  }
-  if (max !== undefined) {
-    return `${label} bis ${max}`
-  }
-  return null
-}
-
 export interface DescribeOptions {
   /** Catalog card names by id, for `card_status` rules and `cardIds` filters. */
   cardNames?: Record<number | string, string>
   /** Set names by set id, for `setIds` filters. */
   setNames?: Record<string, string>
-}
-
-function nameFor(options: DescribeOptions | undefined, id: number): string {
-  return options?.cardNames?.[id] ?? options?.cardNames?.[String(id)] ?? `#${id}`
-}
-
-/** A German one-liner for a card filter, e.g. `Attribut DARK, Stufe ab 5`. */
-export function describeCardFilter(filter: CardFilter, options?: DescribeOptions): string {
-  const parts: string[] = []
-  const region = filter.region === 'ocg' ? 'OCG' : 'TCG'
-
-  if (filter.types?.length) {
-    parts.push(`Typ ${filter.types.join(' oder ')}`)
-  }
-  if (filter.frameTypes?.length) {
-    parts.push(`Rahmen ${filter.frameTypes.join(' oder ')}`)
-  }
-  if (filter.attributes?.length) {
-    parts.push(`Attribut ${filter.attributes.join(' oder ')}`)
-  }
-  if (filter.races?.length) {
-    parts.push(`Art ${filter.races.join(' oder ')}`)
-  }
-  if (filter.archetypes?.length) {
-    parts.push(`Archetyp ${filter.archetypes.join(' oder ')}`)
-  }
-  if (filter.setIds?.length) {
-    parts.push(`Set ${filter.setIds.map(id => options?.setNames?.[id] ?? id).join(' oder ')}`)
-  }
-  if (filter.cardIds?.length) {
-    parts.push(`Karte ${filter.cardIds.map(id => nameFor(options, id)).join(', ')}`)
-  }
-
-  const level = rangeLabel('Stufe', filter.levelMin, filter.levelMax)
-  if (level) {
-    parts.push(level)
-  }
-  const atk = rangeLabel('ATK', filter.atkMin, filter.atkMax)
-  if (atk) {
-    parts.push(atk)
-  }
-  const def = rangeLabel('DEF', filter.defMin, filter.defMax)
-  if (def) {
-    parts.push(def)
-  }
-
-  if (filter.hasEffect !== undefined) {
-    parts.push(filter.hasEffect ? 'mit Effekt' : 'ohne Effekt')
-  }
-  if (filter.releasedBefore !== undefined) {
-    parts.push(`erschienen vor dem ${formatIsoDate(filter.releasedBefore)} (${region})`)
-  }
-  if (filter.releasedAfter !== undefined) {
-    parts.push(`erschienen nach dem ${formatIsoDate(filter.releasedAfter)} (${region})`)
-  }
-  if (filter.nameContains) {
-    parts.push(`Name enthält "${filter.nameContains}"`)
-  }
-
-  return parts.length > 0 ? parts.join(', ') : 'alle Karten'
-}
-
-/** A German one-liner describing what a rule does, for the format editor and list. */
-export function describeRule(rule: Rule, options?: DescribeOptions): string {
-  switch (rule.kind) {
-    case 'deck_size': {
-      const label = DECK_SECTION_LABELS[rule.section]
-      if (rule.min !== undefined && rule.max !== undefined) {
-        return `${label}: ${rule.min}–${rule.max} Karten`
-      }
-      if (rule.min !== undefined) {
-        return `${label}: mindestens ${rule.min} Karten`
-      }
-      if (rule.max !== undefined) {
-        return `${label}: höchstens ${rule.max} Karten`
-      }
-      return `${label}: keine Größenvorgabe`
-    }
-    case 'copies':
-      return `Höchstens ${rule.maxCopies} Kopie${rule.maxCopies === 1 ? '' : 'n'} pro Karte`
-    case 'card_status': {
-      const names = rule.cardIds.map(id => nameFor(options, id)).join(', ')
-      const status = CARD_STATUS_LABELS[rule.status]
-      return `${status}: ${names || 'keine Karten ausgewählt'}`
-    }
-    case 'banlist':
-      return `Offizielle Banliste (${BANLIST_SOURCE_LABELS[rule.source]})`
-    case 'filter': {
-      const description = describeCardFilter(rule.filter, options)
-      const prefix = rule.match === 'matching' ? 'Karten mit' : 'Karten ohne'
-      const body = `${prefix} ${description}: ${copiesLabel(rule.maxCopies)}`
-      return rule.label ? `${rule.label} — ${body}` : body
-    }
-  }
 }
 
 // --- Evaluation ------------------------------------------------------------
@@ -475,10 +386,10 @@ function toCardMap(
 
 interface CapCandidate {
   maxCopies: number
-  reason: string
+  reason: CapReason
 }
 
-function capsForCard(rules: Rule[], card: ValidationCardData, options?: DescribeOptions): CapCandidate[] {
+function capsForCard(rules: Rule[], card: ValidationCardData): CapCandidate[] {
   const caps: CapCandidate[] = []
 
   for (const rule of rules) {
@@ -486,7 +397,7 @@ function capsForCard(rules: Rule[], card: ValidationCardData, options?: Describe
       if (rule.cardIds.includes(card.id)) {
         caps.push({
           maxCopies: STATUS_COPIES[rule.status],
-          reason: `Formatregel: ${CARD_STATUS_LABELS[rule.status].toLowerCase()}`,
+          reason: { kind: 'format_rule', status: rule.status },
         })
       }
       continue
@@ -495,10 +406,10 @@ function capsForCard(rules: Rule[], card: ValidationCardData, options?: Describe
     if (rule.kind === 'banlist') {
       const raw = card.banlistInfo?.[`ban_${rule.source}` as const]
       const maxCopies = banlistCopies(raw)
-      if (maxCopies !== null) {
+      if (raw && maxCopies !== null) {
         caps.push({
           maxCopies,
-          reason: `${BANLIST_SOURCE_LABELS[rule.source]}-Banliste: ${raw}`,
+          reason: { kind: 'banlist', source: rule.source, raw },
         })
       }
       continue
@@ -510,13 +421,25 @@ function capsForCard(rules: Rule[], card: ValidationCardData, options?: Describe
       if (applies) {
         caps.push({
           maxCopies: rule.maxCopies,
-          reason: rule.label ?? describeRule(rule, options),
+          reason: rule.label ? { kind: 'filter', label: rule.label, rule } : { kind: 'filter', rule },
         })
       }
     }
   }
 
   return caps
+}
+
+// English section names for the canonical (model-facing) issue messages only;
+// the UI renders `decks.section.<section>`.
+const SECTION_NAMES: Record<DeckSection, string> = {
+  main: 'Main Deck',
+  extra: 'Extra Deck',
+  side: 'Side Deck',
+}
+
+function cardCount(count: number): string {
+  return `${count} ${count === 1 ? 'card' : 'cards'}`
 }
 
 function deckSizeIssues(rules: Rule[], counts: Record<DeckSection, number>): ValidationIssue[] {
@@ -527,14 +450,15 @@ function deckSizeIssues(rules: Rule[], counts: Record<DeckSection, number>): Val
       continue
     }
     const count = counts[rule.section]
-    const label = DECK_SECTION_LABELS[rule.section]
+    const label = SECTION_NAMES[rule.section]
 
     if (rule.min !== undefined && count < rule.min) {
       issues.push({
         severity: 'error',
         code: 'deck_size_min',
         section: rule.section,
-        message: `Das ${label} hat ${pluralize(count, 'Karte', 'Karten')}, mindestens ${rule.min} sind erforderlich.`,
+        params: { section: rule.section, count, min: rule.min },
+        message: `The ${label} has ${cardCount(count)}; at least ${rule.min} are required.`,
       })
     }
     if (rule.max !== undefined && count > rule.max) {
@@ -542,7 +466,8 @@ function deckSizeIssues(rules: Rule[], counts: Record<DeckSection, number>): Val
         severity: 'error',
         code: 'deck_size_max',
         section: rule.section,
-        message: `Das ${label} hat ${pluralize(count, 'Karte', 'Karten')}, höchstens ${rule.max} sind erlaubt.`,
+        params: { section: rule.section, count, max: rule.max },
+        message: `The ${label} has ${cardCount(count)}; at most ${rule.max} are allowed.`,
       })
     }
   }
@@ -563,7 +488,6 @@ export function evaluateDeck(
   ruleSet: RuleSet | Rule[],
   deckCards: DeckCardEntry[],
   cardData: Iterable<ValidationCardData> | Map<number, ValidationCardData>,
-  options?: DescribeOptions,
 ): DeckValidation {
   const rules = Array.isArray(ruleSet) ? ruleSet : (ruleSet?.rules ?? [])
   const byId = toCardMap(cardData)
@@ -594,12 +518,13 @@ export function evaluateDeck(
         severity: 'error',
         code: 'unknown_card_data',
         cardId,
-        message: `Zu einer Karte im Deck (ID ${cardId}) fehlen die Kartendaten.`,
+        params: { cardId },
+        message: `Card data is missing for a card in the deck (ID ${cardId}).`,
       })
       continue
     }
 
-    const caps = capsForCard(rules, card, options)
+    const caps = capsForCard(rules, card)
     const maxCopies = caps.reduce((lowest, cap) => Math.min(lowest, cap.maxCopies), baseCopies)
     const reasons = caps.filter(cap => cap.maxCopies < baseCopies).map(cap => cap.reason)
 
@@ -610,7 +535,8 @@ export function evaluateDeck(
         severity: 'error',
         code: 'card_forbidden',
         cardId,
-        message: `${card.name} ist in diesem Format verboten.`,
+        params: { cardId, cardName: card.name },
+        message: `${card.name} is forbidden in this format.`,
       })
     }
     else if (copies > maxCopies) {
@@ -618,12 +544,22 @@ export function evaluateDeck(
         severity: 'error',
         code: 'card_limit_exceeded',
         cardId,
-        message: `${card.name}: ${copies} Kopien im Deck, erlaubt ${maxCopies === 1 ? 'ist 1 Kopie' : `sind ${maxCopies} Kopien`}.`,
+        params: { cardId, cardName: card.name, copies, maxCopies },
+        message: `${card.name}: ${copies} copies in the deck; ${maxCopies === 1 ? '1 copy is' : `${maxCopies} copies are`} allowed.`,
       })
     }
   }
 
-  cardIssues.sort((a, b) => a.message.localeCompare(b.message, 'de'))
+  // By card name (issues about unknown card data last), independent of the
+  // language the issues are rendered in.
+  cardIssues.sort((a, b) => {
+    const nameA = a.params.cardName
+    const nameB = b.params.cardName
+    if (nameA === undefined || nameB === undefined) {
+      return nameA === nameB ? (a.cardId ?? 0) - (b.cardId ?? 0) : nameA === undefined ? 1 : -1
+    }
+    return nameA.localeCompare(nameB, 'de')
+  })
 
   return {
     legal: issues.length === 0 && cardIssues.length === 0,

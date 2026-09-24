@@ -124,7 +124,6 @@ export function buildSharedDeckView(
           formatRow.rules,
           rows.map(row => ({ catalogCardId: row.catalogCardId, section: row.section, quantity: row.quantity })),
           loadCardDataForValidation(db, rows.map(row => row.catalogCardId)),
-          { cardNames: Object.fromEntries(rows.map(row => [row.catalogCardId, row.name])) },
         )
       : null,
     isOwner,
