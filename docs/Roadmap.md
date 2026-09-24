@@ -416,7 +416,15 @@ F3 is in progress, as four stacked PRs:
   ("blauaugiger w drache", "BLAUÄUGIGER"); "also search card text" covers
   the German text. Quick entry recognizes German names too, fuzzy matches
   included, and now folds `ß`. Results are still shown in English
-- F3c — the card language setting and German names and texts in the UI (open)
+- F3c — the card language (implemented): a "Kartensprache / Card language"
+  setting on the profile (follow the interface language, German, English;
+  anonymous visitors follow the interface), and German card names across the
+  app — catalog tiles and detail (German text, the English name as a
+  subtitle, a source credit), inventory list and overview, quick entry,
+  deck editor, player pages, wishlist, validation messages, the format
+  editor and the assistant's action cards. Cards without German data (OCG-only
+  cards, tokens, …) stay English. Lists sorted by name sort by the German name
+  in German; switching the setting applies at once
 - F3d — card data labels and the assistant (open)
 
 See [`docs/adr/0015-german-card-data.md`](adr/0015-german-card-data.md).

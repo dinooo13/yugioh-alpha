@@ -15,6 +15,23 @@ Implemented: F3a, F3b. F3b puts every card name search behind one helper,
 German candidate pool on `catalog_card_translation.name_search`; entry
 candidates carry `nameDe`.
 
+Implemented: F3a–F3c. F3c adds the card language (decision 6):
+`user_profile.card_locale` (migration 0013, a plain `ALTER TABLE … ADD`;
+`PATCH /api/profile { cardLocale }`, `invalid_card_locale` otherwise),
+resolved by `resolveCardLocale()` in `server/utils/ui-locale.ts` (profile
+choice, else the interface language; the profile row and the session are
+read once per request) and handed to SSR in `useState`, so the first render
+shows the right names without a hydration mismatch. Payloads keep
+`name`/`desc` English and add `nameDe` (and `descDe` in the card detail,
+which now selects an explicit column list); deck validation issues and
+warnings carry `params.cardNameDe`, rule formats `cardNamesDe`, new
+tournament snapshots and assistant action rows `nameDe` (display only — the
+model's tool results are unchanged until F3d). The client picks through
+`useCardText()` (`shared/card-text.ts`); "by name" sorts by the folded
+German name in German (`cardSortKey()`), deck sections by the display name.
+The profile settings card has "Kartensprache / Card language" (follow /
+German / English), and the card detail credits the source with a link.
+
 ## Context
 
 Issue #34 makes the app bilingual. F1 gave it language-neutral URLs
