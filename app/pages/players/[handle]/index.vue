@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import type { PublicProfileResponse, SharedWishlistResponse } from '~~/shared/sharing'
-import { pluralize } from '~~/shared/plural'
 
 definePageMeta({ layout: 'public' })
 
 const route = useRoute()
+const { t } = useI18n()
+const count = useCount()
 const handle = computed(() => String(route.params.handle ?? ''))
 
 const { data, error } = await useFetch<PublicProfileResponse>(
@@ -26,8 +27,8 @@ const { data: wishlistData } = await useFetch<SharedWishlistResponse>(
 )
 const wishlistItems = computed(() => wishlistData.value?.items ?? [])
 
+usePageTitle(() => data.value?.profile.displayName ?? t('players.profile.fallbackTitle'))
 useHead({
-  title: computed(() => `${data.value?.profile.displayName ?? 'Profil'} – yugioh alpha`),
   meta: [
     { name: 'referrer', content: 'no-referrer' },
     { name: 'robots', content: 'noindex, nofollow' },
@@ -59,7 +60,7 @@ const isEmpty = computed(() => {
         />
         <LayoutPageHeader
           :title="data.profile.displayName"
-          :description="`@${data.profile.handle}`"
+          :description="t('sharing.handle', { handle: data.profile.handle })"
           class="min-w-0 flex-1"
         >
           <p
@@ -78,11 +79,11 @@ const isEmpty = computed(() => {
         color="info"
         variant="subtle"
         icon="i-lucide-eye"
-        title="Vorschau deines Profils – private Inhalte siehst nur du."
+        :title="t('players.profile.ownerPreview')"
       >
         <template #actions>
           <UButton
-            label="Sichtbarkeit verwalten"
+            :label="t('players.profile.manageVisibility')"
             color="neutral"
             variant="outline"
             size="sm"
@@ -94,12 +95,12 @@ const isEmpty = computed(() => {
       <LayoutEmptyState
         v-if="isEmpty && data.viewer.isOwner"
         icon="i-lucide-eye-off"
-        title="Du teilst aktuell nichts."
-        description="Decks, Sammlungen, Inventar und Wunschliste sind privat, bis du sie teilst."
+        :title="t('players.profile.ownerEmpty')"
+        :description="t('players.profile.ownerEmptyDescription')"
       >
         <template #actions>
           <UButton
-            label="Sichtbarkeit verwalten"
+            :label="t('players.profile.manageVisibility')"
             color="neutral"
             variant="outline"
             size="sm"
@@ -111,7 +112,7 @@ const isEmpty = computed(() => {
       <LayoutEmptyState
         v-else-if="isEmpty"
         icon="i-lucide-eye-off"
-        title="Dieses Profil teilt aktuell nichts."
+        :title="t('players.profile.empty')"
       />
 
       <template v-else>
@@ -120,7 +121,7 @@ const isEmpty = computed(() => {
           class="space-y-3"
         >
           <h2 class="text-base font-semibold text-gray-900">
-            Decks
+            {{ t('players.profile.decks') }}
           </h2>
           <ul class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             <li
@@ -140,7 +141,7 @@ const isEmpty = computed(() => {
                   :src="deck.cover?.imageSmall"
                   :src-large="deck.cover?.imageLarge"
                   :alt="deck.cover?.name ?? deck.name"
-                  :no-image-label="deck.cover ? 'Kein Bild' : 'Leer'"
+                  :no-image-label="deck.cover ? t('card.noImage') : t('players.profile.emptyDeckCover')"
                 />
               </NuxtLink>
               <div class="min-w-0 flex-1">
@@ -153,7 +154,7 @@ const isEmpty = computed(() => {
                   </h3>
                 </NuxtLink>
                 <p class="mt-1 text-xs text-gray-500">
-                  {{ pluralize(deck.cardCount, 'Karte', 'Karten') }}
+                  {{ count('players.cardCount', deck.cardCount) }}
                 </p>
                 <SharingVisibilityBadge
                   v-if="data.viewer.isOwner"
@@ -170,7 +171,7 @@ const isEmpty = computed(() => {
           class="space-y-3"
         >
           <h2 class="text-base font-semibold text-gray-900">
-            Sammlungen
+            {{ t('players.profile.collections') }}
           </h2>
           <ul class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             <li
@@ -187,7 +188,7 @@ const isEmpty = computed(() => {
                 </h3>
               </NuxtLink>
               <p class="mt-1 text-xs text-gray-500">
-                {{ pluralize(collection.cardCount, 'Karte', 'Karten') }}
+                {{ count('players.cardCount', collection.cardCount) }}
               </p>
               <SharingVisibilityBadge
                 v-if="data.viewer.isOwner"
@@ -203,16 +204,16 @@ const isEmpty = computed(() => {
           class="rounded-md border border-gray-200 bg-white p-4"
         >
           <h2 class="text-base font-semibold text-gray-900">
-            Inventar
+            {{ t('players.profile.inventory') }}
           </h2>
           <p class="mt-1 text-sm text-gray-500">
-            {{ pluralize(data.inventory.cardCount, 'Karte', 'Karten') }}
+            {{ count('players.cardCount', data.inventory.cardCount) }}
           </p>
           <NuxtLink
             :to="`/players/${handle}/inventory`"
             class="mt-2 inline-block text-sm font-medium text-primary hover:underline"
           >
-            Inventar ansehen
+            {{ t('players.profile.viewInventory') }}
           </NuxtLink>
         </section>
 
@@ -221,10 +222,10 @@ const isEmpty = computed(() => {
           class="rounded-md border border-gray-200 bg-white p-4"
         >
           <h2 class="text-base font-semibold text-gray-900">
-            Wunschliste
+            {{ t('players.profile.wishlist') }}
           </h2>
           <p class="mt-1 text-sm text-gray-500">
-            {{ pluralize(data.wishlist.itemCount, 'Karte', 'Karten') }}
+            {{ count('players.cardCount', data.wishlist.itemCount) }}
           </p>
           <ul
             v-if="wishlistItems.length > 0"

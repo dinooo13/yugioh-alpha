@@ -2,14 +2,19 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DOMWrapper } from '@vue/test-utils'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
 import CatalogPage from '~/pages/catalog.vue'
+import { setTestLocale } from './fixtures/locale'
+
+const catalogState = vi.hoisted(() => ({ total: 1 }))
 
 // UModal teleports its content to <body> (same note as in collections-ui.test.ts).
 function body() {
   return new DOMWrapper(document.body)
 }
 
-afterEach(() => {
+afterEach(async () => {
   document.body.innerHTML = ''
+  catalogState.total = 1
+  await setTestLocale('de')
 })
 
 mockNuxtImport('useFetch', () => {
@@ -43,7 +48,7 @@ mockNuxtImport('useFetch', () => {
             def: 2500,
             imageSmall: 'https://img/blue-small.jpg',
           }],
-          total: 1,
+          total: catalogState.total,
           page: 1,
           pageSize: 24,
         }),
@@ -85,5 +90,44 @@ describe('catalog page', () => {
 
     expect(body().text()).toContain('Karte hinzufügen')
     expect(body().text()).toContain('Blue-Eyes White Dragon')
+    expect(body().text()).toContain('Drucksprache')
+    expect(body().text()).toContain('Neuwertig (Near Mint)')
+  })
+
+  it('shows the result count with a thousands separator and the right plural', async () => {
+    const one = await mountSuspended(CatalogPage)
+    expect(one.text()).toContain('1 Karte')
+    expect(one.text()).not.toContain('1 Karten')
+    one.unmount()
+
+    catalogState.total = 13_000
+    const many = await mountSuspended(CatalogPage)
+    expect(many.text()).toContain('13.000 Karten')
+  })
+
+  it('renders in English', async () => {
+    await setTestLocale('en')
+    catalogState.total = 13_000
+    const component = await mountSuspended(CatalogPage)
+
+    const text = component.text()
+    expect(text).toContain('Catalog')
+    expect(text).toContain('13,000 cards')
+    expect(text).toContain('Add to inventory')
+    expect(text).toContain('Add to wishlist')
+    expect(text).toContain('Lv 8')
+    expect(component.find('input[aria-label="Search cards"]').exists()).toBe(true)
+    expect(component.find('select[aria-label="Type"]').exists()).toBe(true)
+    expect(text).not.toContain('Karten')
+    expect(text).not.toContain('Zum Inventar')
+
+    const addButton = component.findAll('button').find(btn => btn.text() === 'Add to inventory')
+    await addButton!.trigger('click')
+
+    const modal = body().text()
+    expect(modal).toContain('Add card')
+    expect(modal).toContain('Printing language')
+    expect(modal).toContain('Near Mint')
+    expect(modal).not.toContain('Neuwertig')
   })
 })

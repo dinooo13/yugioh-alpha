@@ -21,6 +21,9 @@ interface SavedCollection {
   name: string
 }
 
+const { t } = useI18n()
+const apiError = useApiError()
+
 const form = reactive({
   name: '',
   description: '',
@@ -39,7 +42,7 @@ watch(() => form.name, (name) => {
 })
 
 const isEditing = computed(() => Boolean(props.initialValues?.id))
-const title = computed(() => isEditing.value ? 'Sammlung umbenennen' : 'Neue Sammlung')
+const title = computed(() => isEditing.value ? t('collections.form.renameTitle') : t('collections.create'))
 
 const openProxy = computed({
   get: () => props.open,
@@ -63,7 +66,7 @@ watch(
 
 async function save() {
   if (!form.name.trim()) {
-    nameError.value = 'Bitte einen Namen angeben.'
+    nameError.value = t('collections.form.nameRequired')
     return
   }
 
@@ -90,7 +93,7 @@ async function save() {
     openProxy.value = false
   }
   catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : 'Die Sammlung konnte nicht gespeichert werden.'
+    errorMessage.value = apiError(error, 'collections.errors.saveFailed')
   }
   finally {
     isSubmitting.value = false
@@ -109,18 +112,18 @@ async function save() {
         @submit.prevent="save"
       >
         <UFormField
-          label="Name"
+          :label="t('collections.form.name')"
           :error="nameError"
         >
           <UInput
             v-model="form.name"
             name="name"
-            placeholder="z. B. Box 1"
+            :placeholder="t('collections.form.namePlaceholder')"
             maxlength="60"
           />
         </UFormField>
 
-        <UFormField label="Beschreibung (optional)">
+        <UFormField :label="t('collections.form.description')">
           <UTextarea
             v-model="form.description"
             name="description"
@@ -142,14 +145,14 @@ async function save() {
             type="button"
             color="neutral"
             variant="ghost"
-            label="Abbrechen"
+            :label="t('common.cancel')"
             @click="() => { openProxy = false }"
           />
           <UButton
             type="submit"
             icon="i-lucide-save"
             :loading="isSubmitting"
-            :label="isEditing ? 'Speichern' : 'Erstellen'"
+            :label="isEditing ? t('common.save') : t('collections.form.create')"
           />
         </div>
       </form>

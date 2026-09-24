@@ -1,3 +1,59 @@
 {
-  "card": {}
+  "card": {
+    "noImage": "Kein Bild",
+    "noImageFor": "{name}: {label}",
+    "enlarge": "{name} vergrößern",
+    "level": "Level {level}",
+    "levelShort": "Lv {level}",
+    "stars": "Stufe {level}",
+    "atkDef": "ATK {atk} / DEF {def}",
+    "totalQuantity": "×{count} ges.",
+    "field": {
+      "quantity": "Anzahl",
+      "printingLanguage": "Drucksprache",
+      "condition": "Zustand",
+      "edition": "Auflage",
+      "printing": "Set-Ausgabe",
+      "collection": "Sammlung",
+      "note": "Notiz"
+    },
+    "printingLanguage": {
+      "en": "EN",
+      "de": "DE",
+      "fr": "FR",
+      "it": "IT",
+      "es": "ES",
+      "pt": "PT",
+      "ja": "JA",
+      "ko": "KO"
+    },
+    "condition": {
+      "mint": "Makellos (Mint)",
+      "near_mint": "Neuwertig (Near Mint)",
+      "excellent": "Sehr gut (Excellent)",
+      "good": "Gut (Good)",
+      "light_played": "Leicht bespielt (Lightly Played)",
+      "played": "Bespielt (Played)",
+      "poor": "Schlecht (Poor)"
+    },
+    "conditionShort": {
+      "mint": "M",
+      "near_mint": "NM",
+      "excellent": "EX",
+      "good": "GD",
+      "light_played": "LP",
+      "played": "PL",
+      "poor": "PO"
+    },
+    "edition": {
+      "first": "1. Auflage",
+      "unlimited": "Unlimitiert",
+      "limited": "Limitiert"
+    },
+    "editionShort": {
+      "first": "1st",
+      "unlimited": "Unlimited",
+      "limited": "Limited"
+    }
+  }
 }

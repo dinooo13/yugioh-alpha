@@ -13,6 +13,7 @@ import { getAuthSession } from '~/utils/session'
 // truly has no access) softens that and carries the current URL through the
 // login round-trip so they land back here, not on the dashboard.
 const route = useRoute()
+const { t } = useI18n()
 
 const session = ref(await getAuthSession(
   import.meta.server ? useRequestHeaders(['cookie']) : undefined,
@@ -30,22 +31,26 @@ const loginTarget = computed(() => ({ path: '/login', query: { redirect: route.f
 <template>
   <div class="rounded-md border border-gray-200 bg-white px-6 py-12 text-center">
     <h1 class="text-lg font-semibold text-gray-900">
-      Nicht gefunden oder nicht freigegeben.
+      {{ t('sharing.notFound.title') }}
     </h1>
     <p class="mt-2 text-sm text-gray-500">
-      Vielleicht ist der Link abgelaufen oder die Freigabe wurde zurückgenommen.
+      {{ t('sharing.notFound.description') }}
     </p>
-    <p
+    <i18n-t
       v-if="!session"
+      keypath="sharing.notFound.loginHint"
+      tag="p"
+      scope="global"
       class="mt-4 text-sm text-gray-500"
     >
-      Falls die Freigabe für dein Konto gilt,
-      <NuxtLink
-        :to="loginTarget"
-        class="font-medium text-primary hover:underline"
-      >
-        melde dich an
-      </NuxtLink>.
-    </p>
+      <template #link>
+        <NuxtLink
+          :to="loginTarget"
+          class="font-medium text-primary hover:underline"
+        >
+          {{ t('sharing.notFound.loginLink') }}
+        </NuxtLink>
+      </template>
+    </i18n-t>
   </div>
 </template>

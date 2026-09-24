@@ -1,3 +1,33 @@
 {
-  "collections": {}
+  "collections": {
+    "create": "New collection",
+    "select": {
+      "all": "All collections ({count})",
+      "unassigned": "(no collection) ({count})",
+      "collection": "{name} ({count})"
+    },
+    "menu": {
+      "optionsFor": "Options for {name}",
+      "rename": "Rename",
+      "share": "Share"
+    },
+    "form": {
+      "renameTitle": "Rename collection",
+      "name": "Name",
+      "namePlaceholder": "e.g. Box 1",
+      "nameRequired": "Please enter a name.",
+      "description": "Description (optional)",
+      "create": "Create"
+    },
+    "confirm": {
+      "delete": {
+        "title": "Delete collection",
+        "description": "Delete \"{name}\"? The cards are kept and move to \"All cards\"."
+      }
+    },
+    "errors": {
+      "saveFailed": "Couldn't save the collection.",
+      "deleteFailed": "Couldn't delete the collection."
+    }
+  }
 }

@@ -1,3 +1,43 @@
 {
-  "catalog": {}
+  "catalog": {
+    "title": "Catalog",
+    "description": "Search the global card catalog by name, type, attribute, monster type, level and set.",
+    "resultCount": "{count} card | {count} cards",
+    "search": {
+      "placeholder": "Search cards...",
+      "label": "Search cards"
+    },
+    "filters": {
+      "type": "Type",
+      "attribute": "Attribute",
+      "level": "Level",
+      "race": "Monster type",
+      "set": "Set",
+      "allSets": "All sets",
+      "reset": "Reset"
+    },
+    "sort": {
+      "label": "Sort by",
+      "nameAsc": "Name A-Z",
+      "nameDesc": "Name Z-A",
+      "newest": "Newest first"
+    },
+    "loadFailed": "Couldn't load the catalog",
+    "tryAgain": "Please try again.",
+    "reload": "Reload",
+    "empty": {
+      "noMatches": "No cards found",
+      "noMatchesDescription": "Adjust the search or the filters to see more results.",
+      "noCatalog": "No catalog imported yet",
+      "noCatalogDescription": "Run the catalog sync first so cards can be searched and filtered here."
+    },
+    "addToInventory": "Add to inventory",
+    "detail": {
+      "fallbackTitle": "Card",
+      "notFound": "Card not found",
+      "notFoundDescription": "Couldn't load the card details.",
+      "cardText": "Card text",
+      "printings": "Printings"
+    }
+  }
 }

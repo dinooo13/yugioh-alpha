@@ -16,6 +16,8 @@ const emit = defineEmits<{
   select: [card: CatalogCard]
 }>()
 
+const { t } = useI18n()
+
 const query = ref('')
 const debouncedQuery = ref('')
 
@@ -41,8 +43,8 @@ const { data, pending } = await useFetch<{ items: CatalogCard[] }>('/api/invento
     <UInput
       v-model="query"
       icon="i-lucide-search"
-      placeholder="Katalog durchsuchen..."
-      aria-label="Katalog durchsuchen"
+      :placeholder="t('inventory.picker.searchPlaceholder')"
+      :aria-label="t('inventory.picker.searchLabel')"
       autofocus
     />
 
@@ -51,7 +53,7 @@ const { data, pending } = await useFetch<{ items: CatalogCard[] }>('/api/invento
         v-if="pending"
         class="p-4 text-sm text-gray-500"
       >
-        Suche läuft...
+        {{ t('inventory.picker.searching') }}
       </div>
 
       <button
@@ -76,7 +78,7 @@ const { data, pending } = await useFetch<{ items: CatalogCard[] }>('/api/invento
         v-if="!pending && data.items.length === 0"
         class="p-4 text-sm text-gray-500"
       >
-        Keine Karten gefunden.
+        {{ t('inventory.picker.noResults') }}
       </div>
     </div>
   </div>

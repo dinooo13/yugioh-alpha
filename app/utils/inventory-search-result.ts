@@ -21,8 +21,12 @@ export interface InventorySearchResultItem {
   collectionBreakdown?: InventoryCollectionBreakdown[]
 }
 
-export function breakdownLabel(entry: InventoryCollectionBreakdown): string {
-  return entry.collectionId ? (entry.collectionName ?? 'Unbenannte Sammlung') : '(keine Sammlung)'
+/** Collection name for a breakdown row; `t` translates the two fallbacks (ADR 0014). */
+export function breakdownLabel(entry: InventoryCollectionBreakdown, t: (key: string) => string): string {
+  if (!entry.collectionId) {
+    return t('inventory.breakdown.noCollection')
+  }
+  return entry.collectionName ?? t('inventory.breakdown.unnamedCollection')
 }
 
 export function breakdownKey(entry: InventoryCollectionBreakdown): string {

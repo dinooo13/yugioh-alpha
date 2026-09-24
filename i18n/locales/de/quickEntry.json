@@ -1,3 +1,92 @@
 {
-  "quickEntry": {}
+  "quickEntry": {
+    "title": "Schnellerfassung",
+    "description": "Karten als Liste tippen — und vor dem Speichern prüfen.",
+    "backToInventory": "Zurück zum Inventar",
+    "assistantHint": {
+      "title": "Karten per Foto? Nutze den Assistenten",
+      "description": "Ein Kartenfoto erkennen oder direkt ein Deck bauen lassen — das übernimmt jetzt der Assistent.",
+      "cta": "Zum Assistenten"
+    },
+    "list": {
+      "label": "Kartenliste",
+      "description": "Eine Karte pro Zeile. Anzahl, Set-Code oder Passcode werden automatisch erkannt.",
+      "examples": "Beispiele:",
+      "tooManyLines": "{count} Zeilen — bitte höchstens {max} auf einmal auswerten.",
+      "submit": "Karten erkennen"
+    },
+    "queueFull": {
+      "title": "Prüfliste ist voll",
+      "description": "Die Prüfliste fasst {max} Zeilen — {dropped} Zeile(n) wurden nicht übernommen. Speichere zuerst die vorhandenen Zeilen."
+    },
+    "errors": {
+      "title": "Das hat nicht geklappt",
+      "empty": "Bitte zuerst mindestens eine Karte eintragen.",
+      "tooManyLines": "Bitte höchstens {max} Zeilen auf einmal auswerten.",
+      "suggestFailed": "Die Karten konnten nicht erkannt werden."
+    },
+    "toast": {
+      "saved": {
+        "title": "Karten gespeichert",
+        "description": "{created} neu · {merged} zusammengeführt"
+      }
+    },
+    "field": {
+      "edition": "Edition"
+    },
+    "defaults": {
+      "title": "Standardwerte",
+      "description": "Gelten für alle Zeilen, solange eine Zeile nichts anderes vorgibt.",
+      "printingLanguage": "Standard-Drucksprache",
+      "condition": "Standard-Zustand",
+      "edition": "Standard-Edition",
+      "collection": "Standard-Sammlung"
+    },
+    "summary": {
+      "total": "{count} gesamt",
+      "sicher": "{count} sicher",
+      "unsicher": "{count} unsicher",
+      "ohne_treffer": "{count} ohne Treffer"
+    },
+    "status": {
+      "sicher": "Sicher",
+      "unsicher": "Unsicher",
+      "ohne_treffer": "Kein Treffer"
+    },
+    "matchedBy": {
+      "passcode": "Passcode",
+      "set_code": "Set-Code",
+      "exact": "Exakt",
+      "prefix": "Namensanfang",
+      "contains": "Enthält",
+      "fuzzy": "Ähnlich"
+    },
+    "review": {
+      "title": "Prüfen und korrigieren",
+      "nothingYet": "Noch nichts zu prüfen — lies zuerst Karten als Liste ein.",
+      "clear": "Liste leeren",
+      "saveResolved": "Nur aufgelöste speichern",
+      "saveAll": "Alle speichern",
+      "unresolvedHint": "Es gibt noch offene Zeilen. Wähle einen Treffer aus oder entferne die Zeile, um alle zu speichern.",
+      "nothingResolved": "Es gibt keine aufgelösten Zeilen zum Speichern.",
+      "saveFailedTitle": "Speichern fehlgeschlagen",
+      "saveFailed": "Die Karten konnten nicht gespeichert werden.",
+      "itemError": "„{line}“: {message}",
+      "itemInvalid": "Diese Zeile ist ungültig."
+    },
+    "row": {
+      "candidate": "{name} · {matchedBy} {score}%",
+      "noPrinting": "Keine bestimmte Edition",
+      "useDefault": "Standard",
+      "conflict": "Set-Code und Name zeigen auf verschiedene Karten — bitte auswählen.",
+      "quantityFor": "Anzahl für {line}",
+      "adjustValues": "Werte für {line} anpassen",
+      "remove": "{line} entfernen",
+      "pickCandidate": "Treffer auswählen...",
+      "candidateFor": "Treffer für {line}",
+      "noSuggestions": "Keine Vorschläge — bitte im Katalog suchen.",
+      "printingFor": "Printing für {line}",
+      "catalog": "Katalog"
+    }
+  }
 }

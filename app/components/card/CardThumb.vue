@@ -14,7 +14,8 @@
  *   nested interactive elements are invalid and swallow the click. Those
  *   callers wrap a plain thumbnail in their own button instead.
  *
- * Visible strings are props with German defaults until the app gets i18n.
+ * The visible strings default to the interface language (`card.noImage`,
+ * `card.enlarge`); callers may override them.
  */
 type CardThumbSize = 'xs' | 'sm' | 'md' | 'lg' | 'full'
 
@@ -35,9 +36,11 @@ const props = withDefaults(defineProps<{
   sizes: undefined,
   enlargeable: false,
   enlargeLabel: undefined,
-  noImageLabel: 'Kein Bild',
+  noImageLabel: undefined,
   loading: 'lazy',
 })
+
+const { t } = useI18n()
 
 const WIDTH_CLASSES: Record<CardThumbSize, string> = {
   xs: 'w-8',
@@ -66,7 +69,8 @@ watch(imageSrc, () => {
 
 const showImage = computed(() => Boolean(imageSrc.value) && !failed.value)
 const canEnlarge = computed(() => props.enlargeable && showImage.value)
-const resolvedEnlargeLabel = computed(() => props.enlargeLabel ?? `${props.alt} vergrößern`)
+const resolvedEnlargeLabel = computed(() => props.enlargeLabel ?? t('card.enlarge', { name: props.alt }))
+const resolvedNoImageLabel = computed(() => props.noImageLabel ?? t('card.noImage'))
 
 // The width lives on an outer box and the 59:86 ratio on the inner frame: a
 // flex row stretches its items vertically, which would override
@@ -116,7 +120,7 @@ function onClick() {
       <div
         v-else
         role="img"
-        :aria-label="`${alt}: ${noImageLabel}`"
+        :aria-label="t('card.noImageFor', { name: alt, label: resolvedNoImageLabel })"
         class="flex h-full w-full flex-col items-center justify-center gap-1 px-1 text-center text-xs text-gray-400"
       >
         <UIcon
@@ -124,7 +128,7 @@ function onClick() {
           :class="size === 'xs' ? 'size-3' : isFull ? 'size-6' : 'size-4'"
           aria-hidden="true"
         />
-        <span v-if="size === 'lg' || isFull">{{ noImageLabel }}</span>
+        <span v-if="size === 'lg' || isFull">{{ resolvedNoImageLabel }}</span>
       </div>
     </component>
 
@@ -133,7 +137,7 @@ function onClick() {
       v-model:open="isOpen"
       :title="alt"
       :src="srcLarge ?? src"
-      :no-image-label="noImageLabel"
+      :no-image-label="resolvedNoImageLabel"
     />
   </div>
 </template>

@@ -13,6 +13,8 @@ defineEmits<{
 
 const open = defineModel<boolean>('open', { default: false })
 
+const { t } = useI18n()
+
 const imageSrc = computed(() => props.item ? (props.item.imageLarge ?? props.item.imageSmall) : null)
 const isMonster = computed(() => props.item ? props.item.atk !== null || props.item.def !== null : false)
 </script>
@@ -49,14 +51,14 @@ const isMonster = computed(() => props.item ? props.item.atk !== null || props.i
 
       <div class="space-y-1 rounded-md border border-gray-200 p-3">
         <p class="text-sm font-semibold tabular-nums text-gray-900">
-          ×{{ item.totalQuantity }} ges.
+          {{ t('card.totalQuantity', { count: item.totalQuantity }) }}
         </p>
         <div
           v-for="entry in item.collectionBreakdown ?? []"
           :key="breakdownKey(entry)"
           class="flex items-center justify-between gap-4 text-sm"
         >
-          <span class="min-w-0 truncate text-gray-700">{{ breakdownLabel(entry) }}</span>
+          <span class="min-w-0 truncate text-gray-700">{{ breakdownLabel(entry, t) }}</span>
           <span class="font-medium tabular-nums text-gray-900">×{{ entry.quantity }}</span>
         </div>
       </div>
@@ -64,7 +66,7 @@ const isMonster = computed(() => props.item ? props.item.atk !== null || props.i
       <div class="flex flex-wrap justify-end gap-2">
         <UButton
           icon="i-lucide-list"
-          label="In Liste bearbeiten"
+          :label="t('inventory.preview.editInList')"
           color="neutral"
           variant="outline"
           @click="$emit('edit-in-list', item)"
@@ -72,7 +74,7 @@ const isMonster = computed(() => props.item ? props.item.atk !== null || props.i
         <UButton
           :to="`/catalog?card=${item.catalogCardId}`"
           icon="i-lucide-book-open"
-          label="Im Katalog öffnen"
+          :label="t('inventory.preview.openInCatalog')"
           color="neutral"
           variant="outline"
         />

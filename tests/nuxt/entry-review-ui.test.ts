@@ -11,6 +11,7 @@ import {
   summarizeEntryRows,
 } from '~/utils/card-entry'
 import type { EntryCandidate, EntryRow, EntrySuggestResult } from '~/utils/card-entry'
+import { setTestLocale } from './fixtures/locale'
 
 mockNuxtImport('useFetch', () => {
   return () => ({ data: ref({ items: [], allCount: 0 }), pending: ref(false), refresh: vi.fn() })
@@ -24,8 +25,9 @@ mockNuxtImport('useToast', () => {
   return () => ({ add: vi.fn() })
 })
 
-afterEach(() => {
+afterEach(async () => {
   vi.unstubAllGlobals()
+  await setTestLocale('de')
 })
 
 function candidate(overrides: Partial<EntryCandidate> & { name: string, cardId: number }): EntryCandidate {
@@ -157,6 +159,7 @@ describe('EntryReviewTable', () => {
     expect(text).toContain('Dark Magician')
     expect(text).toContain('Kein Treffer')
     expect(text).toContain('Standardwerte')
+    expect(text).toContain('Normal Monster · EN · Neuwertig (Near Mint) · Unlimitiert')
   })
 
   it('explains a contradicting set code on the row', async () => {
@@ -269,7 +272,10 @@ describe('EntryReviewTable', () => {
         data: {
           statusCode: 400,
           statusMessage: 'Some items are invalid',
-          data: { errors: [{ index: 1, message: 'printing_id does not exist for catalog_card_id' }] },
+          data: {
+            code: 'items_invalid',
+            errors: [{ index: 1, message: 'quantity must be at most 999', code: 'quantity_too_large', params: { max: 999 } }],
+          },
         },
       }
     }))
@@ -280,10 +286,12 @@ describe('EntryReviewTable', () => {
     await flushPromises()
 
     const text = component.text()
-    expect(text).toContain('Some items are invalid')
+    // The server's technical English never reaches the UI (ADR 0014).
+    expect(text).toContain('Einige Zeilen sind ungültig.')
+    expect(text).not.toContain('Some items are invalid')
     // Index 1 of the batch is the second row ("SDY-006"), not "Zeile 2".
-    expect(text).toContain('„SDY-006“: printing_id does not exist for catalog_card_id')
-    expect(text).not.toContain('Dark Magician“: printing_id')
+    expect(text).toContain('„SDY-006“: Die Anzahl darf höchstens 999 betragen.')
+    expect(text).not.toContain('Dark Magician“: Die Anzahl')
 
     const updates = component.emitted('update:rows') as Array<[EntryRow[]]>
     expect(updates.at(-1)?.[0]).toHaveLength(2)
@@ -362,5 +370,33 @@ describe('Schnellerfassung page', () => {
       .filter(call => call[0] === '/api/inventory/entry/suggest')
     expect(suggestCalls).toHaveLength(2)
     expect(component.text()).toContain('4 gesamt')
+  })
+
+  it('renders in English', async () => {
+    await setTestLocale('en')
+    vi.stubGlobal('$fetch', vi.fn(async () => ({ results: [exactResult, noMatchResult] })))
+
+    const component = await mountSuspended(QuickEntryPage)
+    expect(component.text()).toContain('Quick entry')
+    expect(component.text()).toContain('Card list')
+    expect(component.text()).toContain('Examples: 3x Dark Magician, Dark Magician x3')
+    expect(component.text()).toContain('Nothing to check yet')
+
+    await component.find('textarea').setValue('Dark Magician\nVöllig unbekannt')
+    await component.findAll('button').find(button => button.text().includes('Recognize cards'))!.trigger('click')
+    await flushPromises()
+
+    const text = component.text()
+    expect(text).toContain('Check and correct')
+    expect(text).toContain('Defaults')
+    expect(text).toContain('Printing language')
+    expect(text).toContain('2 total')
+    expect(text).toContain('1 certain')
+    expect(text).toContain('1 without a match')
+    expect(text).toContain('No match')
+    expect(text).toContain('Dark Magician · Exact 100%')
+    expect(text).toContain('Normal Monster · EN · Near Mint · Unlimited')
+    expect(text).toContain('Save resolved only')
+    expect(text).not.toMatch(/gesamt|sicher|Treffer|Standard|Neuwertig|Zustand|Sammlung/)
   })
 })

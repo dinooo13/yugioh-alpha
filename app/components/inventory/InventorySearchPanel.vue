@@ -29,9 +29,10 @@ interface SearchFacets {
 
 const props = defineProps<{
   facets: SearchFacets
-  editionLabels: Record<string, string>
-  conditionLabels: Record<string, string>
 }>()
+
+const { t } = useI18n()
+const { conditionShortLabel, editionShortLabel } = useCardOptionItems()
 
 const filters = defineModel<InventorySearchFilters>('filters', { required: true })
 
@@ -46,15 +47,15 @@ const noSetValue = '__all_sets__'
 const typeItems = computed(() => props.facets.types.map(value => ({ label: value, value })))
 const attributeItems = computed(() => props.facets.attributes.map(value => ({ label: value, value })))
 const raceItems = computed(() => props.facets.races.map(value => ({ label: value, value })))
-const levelItems = computed(() => props.facets.levels.map(value => ({ label: `Level ${value}`, value })))
+const levelItems = computed(() => props.facets.levels.map(value => ({ label: t('card.level', { level: value }), value })))
 const setItems = computed(() => [
-  { label: 'Alle Sets', value: noSetValue },
+  { label: t('inventory.search.allSets'), value: noSetValue },
   ...props.facets.sets.map(set => ({ label: set.name, value: set.id })),
 ])
 
 const languageItems = computed(() => props.facets.languages.map(value => ({ label: value.toUpperCase(), value })))
-const conditionItems = computed(() => props.facets.conditions.map(value => ({ label: props.conditionLabels[value] ?? value, value })))
-const editionItems = computed(() => props.facets.editions.map(value => ({ label: props.editionLabels[value] ?? value, value })))
+const conditionItems = computed(() => props.facets.conditions.map(value => ({ label: conditionShortLabel(value), value })))
+const editionItems = computed(() => props.facets.editions.map(value => ({ label: editionShortLabel(value), value })))
 
 const setSelection = computed({
   get: () => filters.value.setId || noSetValue,
@@ -63,12 +64,12 @@ const setSelection = computed({
   },
 })
 
-const sortItems = [
-  { label: 'Name (A-Z)', value: 'name' },
-  { label: 'Name (Z-A)', value: '-name' },
-  { label: 'Anzahl', value: 'quantity' },
-  { label: 'Neueste', value: 'newest' },
-]
+const sortItems = computed(() => [
+  { label: t('inventory.search.sort.nameAsc'), value: 'name' },
+  { label: t('inventory.search.sort.nameDesc'), value: '-name' },
+  { label: t('inventory.search.sort.quantity'), value: 'quantity' },
+  { label: t('inventory.search.sort.newest'), value: 'newest' },
+])
 
 function resetFilters() {
   // Mutate the shared filters object in place (rather than reassigning
@@ -90,14 +91,14 @@ function resetFilters() {
 <template>
   <div class="space-y-3">
     <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-      <span class="w-20 shrink-0 text-xs font-semibold uppercase text-gray-500">Katalog</span>
+      <span class="w-20 shrink-0 text-xs font-semibold uppercase text-gray-500">{{ t('inventory.search.catalogGroup') }}</span>
       <div class="flex flex-1 flex-wrap gap-2">
         <USelectMenu
           v-model="filters.type"
           multiple
           value-key="value"
           :items="typeItems"
-          placeholder="Typ"
+          :placeholder="t('inventory.search.type')"
           class="w-36"
         />
         <USelectMenu
@@ -105,7 +106,7 @@ function resetFilters() {
           multiple
           value-key="value"
           :items="attributeItems"
-          placeholder="Attribut"
+          :placeholder="t('inventory.search.attribute')"
           class="w-36"
         />
         <USelectMenu
@@ -113,7 +114,7 @@ function resetFilters() {
           multiple
           value-key="value"
           :items="raceItems"
-          placeholder="Monsterart"
+          :placeholder="t('inventory.search.race')"
           class="w-36"
         />
         <USelectMenu
@@ -121,35 +122,35 @@ function resetFilters() {
           multiple
           value-key="value"
           :items="levelItems"
-          placeholder="Level"
+          :placeholder="t('inventory.search.level')"
           class="w-32"
         />
         <USelect
           v-model="setSelection"
           :items="setItems"
-          placeholder="Set"
+          :placeholder="t('inventory.search.set')"
           class="w-40"
         />
       </div>
     </div>
 
     <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-      <span class="w-20 shrink-0 text-xs font-semibold uppercase text-gray-500">Besitz</span>
+      <span class="w-20 shrink-0 text-xs font-semibold uppercase text-gray-500">{{ t('inventory.search.ownedGroup') }}</span>
       <div class="flex flex-1 flex-wrap items-center gap-2">
         <USelectMenu
           v-model="filters.language"
           multiple
           value-key="value"
           :items="languageItems"
-          placeholder="Sprache"
-          class="w-32"
+          :placeholder="t('card.field.printingLanguage')"
+          class="w-44"
         />
         <USelectMenu
           v-model="filters.condition"
           multiple
           value-key="value"
           :items="conditionItems"
-          placeholder="Zustand"
+          :placeholder="t('card.field.condition')"
           class="w-36"
         />
         <USelectMenu
@@ -157,14 +158,14 @@ function resetFilters() {
           multiple
           value-key="value"
           :items="editionItems"
-          placeholder="Auflage"
+          :placeholder="t('card.field.edition')"
           class="w-36"
         />
         <UButton
           icon="i-lucide-rotate-ccw"
           color="neutral"
           variant="ghost"
-          label="Reset"
+          :label="t('inventory.search.reset')"
           @click="resetFilters"
         />
       </div>
@@ -172,7 +173,7 @@ function resetFilters() {
 
     <div class="flex justify-end">
       <UFormField
-        label="Sortierung"
+        :label="t('inventory.search.sortLabel')"
         class="flex items-center gap-2"
       >
         <USelect

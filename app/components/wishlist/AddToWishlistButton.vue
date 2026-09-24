@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { apiErrorMessage } from '~/utils/card-entry'
-
 const props = defineProps<{
   catalogCardId: number
   inWishlist: boolean
@@ -9,6 +7,9 @@ const props = defineProps<{
 const emit = defineEmits<{
   changed: [inWishlist: boolean]
 }>()
+
+const { t } = useI18n()
+const apiError = useApiError()
 
 const isSaving = ref(false)
 const errorMessage = ref('')
@@ -31,7 +32,7 @@ async function toggle() {
     }
   }
   catch (error) {
-    errorMessage.value = apiErrorMessage(error, 'Die Wunschliste konnte nicht aktualisiert werden.')
+    errorMessage.value = apiError(error, 'wishlist.errors.updateFailed')
   }
   finally {
     isSaving.value = false
@@ -47,7 +48,7 @@ async function toggle() {
       variant="outline"
       size="xs"
       :loading="isSaving"
-      :label="inWishlist ? 'Auf der Wunschliste' : 'Zur Wunschliste'"
+      :label="inWishlist ? t('wishlist.button.onList') : t('wishlist.button.add')"
       class="tap-target"
       @click="toggle"
     />

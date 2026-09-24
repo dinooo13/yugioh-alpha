@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { UNASSIGNED_COLLECTION_ID } from '~~/shared/inventory'
 import type { CollectionItem } from '~/composables/useCollections'
-import { apiErrorMessage } from '~/utils/card-entry'
 
 /**
  * The inventory's collection scope: a "Sammlung" select (all cards, cards
@@ -27,14 +26,17 @@ const emit = defineEmits<{
 
 const model = defineModel<string>({ required: true })
 
+const { t } = useI18n()
+const apiError = useApiError()
+
 // reka-ui's <SelectItem> reserves `''` for "no selection", so "Alle
 // Sammlungen" needs a non-empty sentinel that maps back to `''`.
 const allValue = '__all__'
 
 const selectItems = computed(() => [
-  { label: `Alle Sammlungen (${props.allCount})`, value: allValue },
-  { label: `(keine Sammlung) (${props.unassignedCount})`, value: UNASSIGNED_COLLECTION_ID },
-  ...props.collections.map(c => ({ label: `${c.name} (${c.cardCount})`, value: c.id })),
+  { label: t('collections.select.all', { count: props.allCount }), value: allValue },
+  { label: t('collections.select.unassigned', { count: props.unassignedCount }), value: UNASSIGNED_COLLECTION_ID },
+  ...props.collections.map(c => ({ label: t('collections.select.collection', { name: c.name, count: c.cardCount }), value: c.id })),
 ])
 
 const selection = computed({
@@ -73,8 +75,8 @@ const toast = useToast()
 
 async function onDelete(collection: CollectionItem) {
   const confirmed = await confirm({
-    title: 'Sammlung löschen',
-    description: `"${collection.name}" löschen? Die Karten bleiben erhalten und werden zu "Alle Karten".`,
+    title: t('collections.confirm.delete.title'),
+    description: t('collections.confirm.delete.description', { name: collection.name }),
   })
   if (!confirmed) {
     return
@@ -84,7 +86,7 @@ async function onDelete(collection: CollectionItem) {
     await $fetch(`/api/collections/${collection.id}`, { method: 'DELETE' })
   }
   catch (error) {
-    toast.add({ title: apiErrorMessage(error, 'Die Sammlung konnte nicht gelöscht werden.'), color: 'error' })
+    toast.add({ title: apiError(error, 'collections.errors.deleteFailed'), color: 'error' })
     return
   }
 
@@ -116,12 +118,12 @@ const menuItems = computed(() => {
   }
   return [[
     {
-      label: 'Umbenennen',
+      label: t('collections.menu.rename'),
       icon: 'i-lucide-pencil',
       onSelect: () => openRename(collection),
     },
     {
-      label: 'Teilen',
+      label: t('collections.menu.share'),
       icon: 'i-lucide-share-2',
       // Without a loaded handle, sharePath would resolve to a broken
       // `/players//collections/:id` link — keep the entry disabled until then.
@@ -129,7 +131,7 @@ const menuItems = computed(() => {
       onSelect: () => openShare(collection),
     },
     {
-      label: 'Löschen',
+      label: t('common.delete'),
       icon: 'i-lucide-trash-2',
       color: 'error' as const,
       onSelect: () => onDelete(collection),
@@ -143,7 +145,7 @@ const menuItems = computed(() => {
     <USelect
       v-model="selection"
       :items="selectItems"
-      aria-label="Sammlung"
+      :aria-label="t('card.field.collection')"
       class="w-56 max-w-full"
     />
 
@@ -156,13 +158,13 @@ const menuItems = computed(() => {
         color="neutral"
         variant="outline"
         class="tap-target"
-        :aria-label="`Optionen für ${activeCollection.name}`"
+        :aria-label="t('collections.menu.optionsFor', { name: activeCollection.name })"
       />
     </UDropdownMenu>
 
     <UButton
       icon="i-lucide-folder-plus"
-      label="Neue Sammlung"
+      :label="t('collections.create')"
       color="neutral"
       variant="ghost"
       @click="openCreate"

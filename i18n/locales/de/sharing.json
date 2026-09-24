@@ -1,3 +1,78 @@
 {
-  "sharing": {}
+  "sharing": {
+    "handle": "{'@'}{handle}",
+    "visibility": {
+      "private": {
+        "label": "Privat",
+        "description": "Nur du kannst das sehen.",
+        "descriptionWithGrants": "Nur du und {count} freigegebener Spieler können das sehen. | Nur du und {count} freigegebene Spieler können das sehen."
+      },
+      "link": {
+        "label": "Nur über Link",
+        "description": "Jede Person mit dem Link kann es ansehen."
+      },
+      "public": {
+        "label": "Öffentlich",
+        "description": "Für alle sichtbar und auf deinem Profil gelistet."
+      }
+    },
+    "shareModal": {
+      "title": {
+        "deck": "Deck teilen",
+        "collection": "Sammlung teilen",
+        "inventory": "Inventar teilen"
+      },
+      "publicHint": {
+        "deck": "Nicht nötig – dieses Deck ist für alle sichtbar.",
+        "collection": "Nicht nötig – diese Sammlung ist für alle sichtbar.",
+        "inventory": "Nicht nötig – dieses Inventar ist für alle sichtbar."
+      },
+      "linkLabel": "Freigabe-Link",
+      "copyLink": "Link kopieren",
+      "linkCopied": "Link kopiert",
+      "regenerate": "Neuen Link erzeugen",
+      "grantsTitle": "Für einzelne Spieler freigegeben",
+      "noGrants": "Noch keine Spieler freigegeben.",
+      "confirm": {
+        "regenerate": {
+          "title": "Neuen Link erzeugen",
+          "description": "Alte Links werden dadurch ungültig. Fortfahren?"
+        }
+      },
+      "errors": {
+        "loadFailed": "Freigabe konnte nicht geladen werden.",
+        "saveFailed": "Freigabe konnte nicht gespeichert werden.",
+        "regenerateFailed": "Der Link konnte nicht erneuert werden.",
+        "addGrantFailed": "Der Spieler konnte nicht hinzugefügt werden.",
+        "removeGrantFailed": "Die Freigabe konnte nicht entfernt werden."
+      }
+    },
+    "userPicker": {
+      "placeholder": "Nutzername oder Anzeigename...",
+      "label": "Spieler suchen",
+      "noResults": "Keine Spieler gefunden.",
+      "loadFailed": "Spieler konnten nicht geladen werden."
+    },
+    "notFound": {
+      "title": "Nicht gefunden oder nicht freigegeben.",
+      "description": "Vielleicht ist der Link abgelaufen oder die Freigabe wurde zurückgenommen.",
+      "loginHint": "Falls die Freigabe für dein Konto gilt, {link}.",
+      "loginLink": "melde dich an"
+    },
+    "cardList": {
+      "searchPlaceholder": "Karten durchsuchen...",
+      "searchLabel": "Karten durchsuchen",
+      "sortLabel": "Sortierung",
+      "sort": {
+        "nameAsc": "Name A–Z",
+        "nameDesc": "Name Z–A",
+        "quantity": "Anzahl"
+      },
+      "empty": "Keine Karten gefunden."
+    },
+    "deckSections": {
+      "countIn": "Anzahl im {section}",
+      "empty": "Noch keine Karten im {section}."
+    }
+  }
 }

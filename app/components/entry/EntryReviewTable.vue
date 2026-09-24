@@ -1,10 +1,6 @@
 <script setup lang="ts">
 import {
-  ENTRY_CONDITION_ITEMS,
-  ENTRY_EDITION_ITEMS,
-  ENTRY_LANGUAGE_ITEMS,
   NO_COLLECTION_VALUE,
-  apiErrorMessage,
   apiItemErrors,
   buildBulkEntries,
   chunkBulkEntries,
@@ -34,6 +30,11 @@ const emit = defineEmits<{
 
 const rows = defineModel<EntryRow[]>('rows', { required: true })
 
+const { t } = useI18n()
+const apiError = useApiError()
+const apiErrorCode = useApiErrorCode()
+const { languageItems, conditionItems, editionItems } = useCardOptionItems()
+
 const defaults = reactive<EntryDefaults>({
   language: 'en',
   condition: 'near_mint',
@@ -53,7 +54,7 @@ watch(
 
 const collections = computed(() => props.collections ?? [])
 const collectionItems = computed(() => [
-  { label: '— (keine)', value: NO_COLLECTION_VALUE },
+  { label: t('inventory.noCollectionOption'), value: NO_COLLECTION_VALUE },
   ...collections.value.map(collection => ({ label: collection.name, value: collection.id })),
 ])
 
@@ -93,7 +94,7 @@ function rowLabel(rowId: string): string {
 async function save() {
   const entries = buildBulkEntries(rows.value, defaults)
   if (entries.length === 0) {
-    errorMessage.value = 'Es gibt keine aufgelösten Zeilen zum Speichern.'
+    errorMessage.value = t('quickEntry.review.nothingResolved')
     return
   }
 
@@ -121,9 +122,12 @@ async function save() {
     catch (error) {
       itemErrors.value = apiItemErrors(error).map((itemError) => {
         const failed = chunk[itemError.index]
-        return `„${failed ? rowLabel(failed.rowId) : `#${itemError.index + 1}`}“: ${itemError.message}`
+        return t('quickEntry.review.itemError', {
+          line: failed ? rowLabel(failed.rowId) : `#${itemError.index + 1}`,
+          message: apiErrorCode(itemError.code, itemError.params, 'quickEntry.review.itemInvalid'),
+        })
       })
-      errorMessage.value = apiErrorMessage(error, 'Die Karten konnten nicht gespeichert werden.')
+      errorMessage.value = apiError(error, 'quickEntry.review.saveFailed')
       break
     }
   }
@@ -145,38 +149,38 @@ defineExpose({ defaults, summary, canSaveAll })
   <div class="space-y-4">
     <div class="rounded-md border border-gray-200 bg-white p-4">
       <h2 class="text-sm font-semibold text-gray-900">
-        Standardwerte
+        {{ t('quickEntry.defaults.title') }}
       </h2>
       <p class="mt-1 text-xs text-gray-500">
-        Gelten für alle Zeilen, solange eine Zeile nichts anderes vorgibt.
+        {{ t('quickEntry.defaults.description') }}
       </p>
       <div class="mt-3 grid gap-3 sm:grid-cols-4">
-        <UFormField label="Sprache">
+        <UFormField :label="t('card.field.printingLanguage')">
           <USelect
             v-model="defaults.language"
-            :items="ENTRY_LANGUAGE_ITEMS"
-            aria-label="Standard-Sprache"
+            :items="languageItems"
+            :aria-label="t('quickEntry.defaults.printingLanguage')"
           />
         </UFormField>
-        <UFormField label="Zustand">
+        <UFormField :label="t('card.field.condition')">
           <USelect
             v-model="defaults.condition"
-            :items="ENTRY_CONDITION_ITEMS"
-            aria-label="Standard-Zustand"
+            :items="conditionItems"
+            :aria-label="t('quickEntry.defaults.condition')"
           />
         </UFormField>
-        <UFormField label="Edition">
+        <UFormField :label="t('quickEntry.field.edition')">
           <USelect
             v-model="defaults.edition"
-            :items="ENTRY_EDITION_ITEMS"
-            aria-label="Standard-Edition"
+            :items="editionItems"
+            :aria-label="t('quickEntry.defaults.edition')"
           />
         </UFormField>
-        <UFormField label="Sammlung">
+        <UFormField :label="t('card.field.collection')">
           <USelect
             v-model="defaults.collectionId"
             :items="collectionItems"
-            aria-label="Standard-Sammlung"
+            :aria-label="t('quickEntry.defaults.collection')"
           />
         </UFormField>
       </div>
@@ -187,22 +191,22 @@ defineExpose({ defaults, summary, canSaveAll })
         <UBadge
           color="neutral"
           variant="subtle"
-          :label="`${summary.total} gesamt`"
+          :label="t('quickEntry.summary.total', { count: summary.total })"
         />
         <UBadge
           color="success"
           variant="subtle"
-          :label="`${summary.sicher} sicher`"
+          :label="t('quickEntry.summary.sicher', { count: summary.sicher })"
         />
         <UBadge
           color="warning"
           variant="subtle"
-          :label="`${summary.unsicher} unsicher`"
+          :label="t('quickEntry.summary.unsicher', { count: summary.unsicher })"
         />
         <UBadge
           color="error"
           variant="subtle"
-          :label="`${summary.ohneTreffer} ohne Treffer`"
+          :label="t('quickEntry.summary.ohne_treffer', { count: summary.ohneTreffer })"
         />
       </div>
 
@@ -210,7 +214,7 @@ defineExpose({ defaults, summary, canSaveAll })
         <UButton
           color="neutral"
           variant="ghost"
-          label="Liste leeren"
+          :label="t('quickEntry.review.clear')"
           :disabled="rows.length === 0"
           @click="clearAll"
         />
@@ -218,14 +222,14 @@ defineExpose({ defaults, summary, canSaveAll })
           v-if="hasUnresolved"
           color="neutral"
           variant="outline"
-          label="Nur aufgelöste speichern"
+          :label="t('quickEntry.review.saveResolved')"
           :loading="isSaving"
           :disabled="resolvedCount === 0"
           @click="save"
         />
         <UButton
           icon="i-lucide-save"
-          label="Alle speichern"
+          :label="t('quickEntry.review.saveAll')"
           :loading="isSaving"
           :disabled="!canSaveAll"
           @click="save"
@@ -237,14 +241,14 @@ defineExpose({ defaults, summary, canSaveAll })
       v-if="hasUnresolved"
       class="text-xs text-amber-700"
     >
-      Es gibt noch offene Zeilen. Wähle einen Treffer aus oder entferne die Zeile, um alle zu speichern.
+      {{ t('quickEntry.review.unresolvedHint') }}
     </p>
 
     <UAlert
       v-if="errorMessage"
       color="error"
       variant="subtle"
-      title="Speichern fehlgeschlagen"
+      :title="t('quickEntry.review.saveFailedTitle')"
       :description="errorMessage"
     />
     <ul

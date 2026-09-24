@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { VISIBILITY_LABELS } from '~~/shared/sharing'
 import type { Visibility } from '~~/shared/sharing'
 
 const props = withDefaults(defineProps<{
@@ -17,8 +16,10 @@ const COLORS: Record<Visibility, 'neutral' | 'warning' | 'primary'> = {
   public: 'primary',
 }
 
+const { t } = useI18n()
+
 const color = computed(() => (props.visibility ? COLORS[props.visibility] : 'neutral'))
-const label = computed(() => (props.visibility ? VISIBILITY_LABELS[props.visibility] : ''))
+const label = computed(() => (props.visibility ? t(`sharing.visibility.${props.visibility}.label`) : ''))
 const visible = computed(() =>
   props.visibility != null && !(props.hidePrivate && props.visibility === 'private'))
 </script>

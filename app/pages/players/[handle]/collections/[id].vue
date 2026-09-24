@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { pluralize } from '~~/shared/plural'
 import type { SharedCardListResponse } from '~~/shared/sharing'
 
 definePageMeta({ layout: 'public' })
 
 const route = useRoute()
+const { t } = useI18n()
+const count = useCount()
 
 const search = ref('')
 const sort = ref<'name' | '-name' | 'quantity'>('name')
@@ -28,11 +29,11 @@ const { data, pending, error } = await useFetch<SharedCardListResponse>(
 )
 
 const pageTitle = computed(() => data.value
-  ? `Sammlung „${data.value.source.name}“ von ${data.value.owner.displayName}`
-  : 'Sammlung')
+  ? t('players.collection.title', { name: data.value.source.name, owner: data.value.owner.displayName })
+  : t('players.collection.fallbackTitle'))
 
+usePageTitle(() => pageTitle.value)
 useHead({
-  title: computed(() => `${pageTitle.value} – yugioh alpha`),
   meta: [
     { name: 'referrer', content: 'no-referrer' },
     { name: 'robots', content: 'noindex, nofollow' },
@@ -60,13 +61,13 @@ function onPage(value: number) {
       <div>
         <LayoutBackLink
           :to="`/players/${route.params.handle}`"
-          label="Zurück zum Profil"
+          :label="t('players.backToProfile')"
         />
       </div>
 
       <LayoutPageHeader
         :title="pageTitle"
-        :description="pluralize(data.total, 'Karte', 'Karten')"
+        :description="count('players.cardCount', data.total)"
       />
 
       <SharingSharedCardList

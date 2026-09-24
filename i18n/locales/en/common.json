@@ -4,10 +4,17 @@
     "cancel": "Cancel",
     "confirm": "Confirm",
     "delete": "Delete",
+    "remove": "Remove",
+    "add": "Add",
     "close": "Close",
     "back": "Back",
     "retry": "Try again",
     "loading": "Loading …",
-    "saved": "Saved"
+    "saved": "Saved",
+    "pagination": {
+      "previous": "Previous page",
+      "next": "Next page",
+      "pageOf": "Page {page} / {total}"
+    }
   }
 }

@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { ENTRY_CONDITION_ITEMS, ENTRY_EDITION_ITEMS } from '~/utils/card-entry'
 
 interface PrintingOption {
   id: string
@@ -44,19 +43,9 @@ const emit = defineEmits<{
   saved: []
 }>()
 
-const languageItems = [
-  { label: 'EN', value: 'en' },
-  { label: 'DE', value: 'de' },
-  { label: 'FR', value: 'fr' },
-  { label: 'IT', value: 'it' },
-  { label: 'ES', value: 'es' },
-  { label: 'PT', value: 'pt' },
-  { label: 'JA', value: 'ja' },
-  { label: 'KO', value: 'ko' },
-]
-
-const conditionItems = ENTRY_CONDITION_ITEMS
-const editionItems = ENTRY_EDITION_ITEMS
+const { t } = useI18n()
+const apiError = useApiError()
+const { languageItems, conditionItems, editionItems } = useCardOptionItems()
 
 const noPrintingValue = '__no_printing__'
 const noCollectionValue = '__no_collection__'
@@ -75,16 +64,16 @@ const isSubmitting = ref(false)
 const errorMessage = ref('')
 
 const isEditing = computed(() => Boolean(props.initialValues?.id))
-const title = computed(() => isEditing.value ? 'Karte bearbeiten' : 'Karte hinzufügen')
+const title = computed(() => isEditing.value ? t('inventory.addModal.editTitle') : t('inventory.addModal.addTitle'))
 const printingItems = computed(() => [
-  { label: 'Keine bestimmte Set-Ausgabe', value: noPrintingValue },
+  { label: t('inventory.addModal.noPrinting'), value: noPrintingValue },
   ...(props.card?.printings ?? []).map(printing => ({
     label: `${printing.id}${printing.setName ? ` · ${printing.setName}` : ''}${printing.rarity ? ` · ${printing.rarity}` : ''}`,
     value: printing.id,
   })),
 ])
 const collectionItems = computed(() => [
-  { label: '— (keine)', value: noCollectionValue },
+  { label: t('inventory.noCollectionOption'), value: noCollectionValue },
   ...(props.collections ?? []).map(collection => ({
     label: collection.name,
     value: collection.id,
@@ -120,7 +109,7 @@ watch(
 async function save() {
   const catalogCardId = props.initialValues?.catalogCardId ?? props.card?.id
   if (!catalogCardId) {
-    errorMessage.value = 'Bitte zuerst eine Karte auswählen.'
+    errorMessage.value = t('inventory.addModal.noCard')
     return
   }
 
@@ -156,7 +145,7 @@ async function save() {
     openProxy.value = false
   }
   catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : 'Die Karte konnte nicht gespeichert werden.'
+    errorMessage.value = apiError(error, 'inventory.addModal.saveFailed')
   }
   finally {
     isSubmitting.value = false
@@ -184,7 +173,7 @@ async function save() {
         </div>
 
         <div class="grid gap-4 sm:grid-cols-2">
-          <UFormField label="Anzahl">
+          <UFormField :label="t('card.field.quantity')">
             <UInput
               v-model.number="form.quantity"
               name="quantity"
@@ -193,14 +182,14 @@ async function save() {
             />
           </UFormField>
 
-          <UFormField label="Sprache">
+          <UFormField :label="t('card.field.printingLanguage')">
             <USelect
               v-model="form.language"
               :items="languageItems"
             />
           </UFormField>
 
-          <UFormField label="Zustand">
+          <UFormField :label="t('card.field.condition')">
             <USelect
               v-model="form.condition"
               :items="conditionItems"
@@ -208,8 +197,8 @@ async function save() {
           </UFormField>
 
           <UFormField
-            label="Auflage"
-            help="Wie oft diese Karte gedruckt wurde (Erstauflage/Unlimitiert)."
+            :label="t('card.field.edition')"
+            :help="t('inventory.addModal.editionHelp')"
           >
             <USelect
               v-model="form.edition"
@@ -219,8 +208,8 @@ async function save() {
         </div>
 
         <UFormField
-          label="Set-Ausgabe"
-          help="Das konkrete Set/die Rarität, in der du diese Karte besitzt."
+          :label="t('card.field.printing')"
+          :help="t('inventory.addModal.printingHelp')"
         >
           <USelect
             v-model="form.printingId"
@@ -228,14 +217,14 @@ async function save() {
           />
         </UFormField>
 
-        <UFormField label="Sammlung">
+        <UFormField :label="t('card.field.collection')">
           <USelect
             v-model="form.collectionId"
             :items="collectionItems"
           />
         </UFormField>
 
-        <UFormField label="Notiz">
+        <UFormField :label="t('card.field.note')">
           <UTextarea
             v-model="form.note"
             name="note"
@@ -258,14 +247,14 @@ async function save() {
             type="button"
             color="neutral"
             variant="ghost"
-            label="Abbrechen"
+            :label="t('common.cancel')"
             @click="() => { openProxy = false }"
           />
           <UButton
             type="submit"
             icon="i-lucide-save"
             :loading="isSubmitting"
-            :label="isEditing ? 'Speichern' : 'Hinzufügen'"
+            :label="isEditing ? t('common.save') : t('common.add')"
           />
         </div>
       </form>
