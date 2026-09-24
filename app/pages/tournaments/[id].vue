@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { MIN_PARTICIPANTS_TO_START, PAIRING_SYSTEM_LABELS, TOURNAMENT_ERROR_MESSAGES, TOURNAMENT_STATUS_LABELS } from '~~/shared/tournaments'
-import type { TournamentDetail, TournamentErrorCode, TournamentStatus } from '~~/shared/tournaments'
-import { apiErrorCode, apiErrorMessage } from '~/utils/card-entry'
+import { MIN_PARTICIPANTS_TO_START } from '~~/shared/tournaments'
+import type { TournamentDetail, TournamentStatus } from '~~/shared/tournaments'
 
 const route = useRoute()
 const tournamentId = computed(() => String(route.params.id ?? ''))
@@ -14,25 +13,25 @@ const {
   headers: import.meta.server ? useRequestHeaders(['cookie']) : undefined,
 })
 
-useHead({ title: computed(() => `${tournament.value?.name ?? 'Turnier'} – yugioh alpha`) })
+const { t, n } = useI18n()
+const apiError = useApiError()
+const { formatName } = useFormatLabel()
+
+usePageTitle(() => tournament.value?.name ?? t('tournaments.detail.pageTitleFallback'))
 
 const errorMessage = ref('')
 const busy = ref(false)
 const { confirm } = useConfirm()
 
-function errorText(requestError: unknown, fallback: string) {
-  const code = apiErrorCode(requestError) as TournamentErrorCode | undefined
-  return (code && TOURNAMENT_ERROR_MESSAGES[code]) || apiErrorMessage(requestError, fallback)
-}
-
-async function run(action: () => Promise<TournamentDetail>, fallback: string) {
+/** `fallbackKey`: the message when the error carries no known `data.code`. */
+async function run(action: () => Promise<TournamentDetail>, fallbackKey: string) {
   errorMessage.value = ''
   busy.value = true
   try {
     tournament.value = await action()
   }
   catch (requestError) {
-    errorMessage.value = errorText(requestError, fallback)
+    errorMessage.value = apiError(requestError, fallbackKey)
   }
   finally {
     busy.value = false
@@ -46,14 +45,14 @@ function onUpdated(detail: TournamentDetail) {
 function startTournament() {
   return run(
     () => $fetch<TournamentDetail>(`/api/tournaments/${tournamentId.value}/start`, { method: 'POST' }),
-    'Das Turnier konnte nicht gestartet werden.',
+    'tournaments.detail.errors.startFailed',
   )
 }
 
 function createNextRound() {
   return run(
     () => $fetch<TournamentDetail>(`/api/tournaments/${tournamentId.value}/rounds`, { method: 'POST' }),
-    'Die nächste Runde konnte nicht erstellt werden.',
+    'tournaments.detail.errors.createRoundFailed',
   )
 }
 
@@ -67,21 +66,21 @@ function completeRound() {
       `/api/tournaments/${tournamentId.value}/rounds/${roundId}/complete`,
       { method: 'POST' },
     ),
-    'Die Runde konnte nicht abgeschlossen werden.',
+    'tournaments.detail.errors.completeRoundFailed',
   )
 }
 
 function finishTournament() {
   return run(
     () => $fetch<TournamentDetail>(`/api/tournaments/${tournamentId.value}/finish`, { method: 'POST' }),
-    'Das Turnier konnte nicht abgeschlossen werden.',
+    'tournaments.detail.errors.finishFailed',
   )
 }
 
 async function onFinishClick() {
   const confirmed = await confirm({
-    title: 'Turnier abschließen',
-    description: 'Turnier abschließen? Ergebnisse und Paarungen können danach nicht mehr geändert werden.',
+    title: t('tournaments.detail.confirm.finish.title'),
+    description: t('tournaments.detail.confirm.finish.description'),
   })
   if (!confirmed) {
     return
@@ -94,8 +93,8 @@ async function deleteTournament() {
     return
   }
   const confirmed = await confirm({
-    title: 'Turnier löschen',
-    description: `"${tournament.value.name}" wirklich löschen? Alle Runden und Ergebnisse gehen verloren.`,
+    title: t('tournaments.detail.confirm.delete.title'),
+    description: t('tournaments.detail.confirm.delete.description', { name: tournament.value.name }),
   })
   if (!confirmed) {
     return
@@ -107,7 +106,7 @@ async function deleteTournament() {
     await $fetch(`/api/tournaments/${tournamentId.value}`, { method: 'DELETE' })
   }
   catch (requestError) {
-    errorMessage.value = errorText(requestError, 'Das Turnier konnte nicht gelöscht werden.')
+    errorMessage.value = apiError(requestError, 'tournaments.detail.errors.deleteFailed')
     busy.value = false
     return
   }
@@ -119,6 +118,16 @@ const STATUS_COLORS: Record<TournamentStatus, 'info' | 'warning' | 'neutral'> = 
   running: 'warning',
   finished: 'neutral',
 }
+
+const roundProgress = computed(() => {
+  if (!tournament.value) {
+    return ''
+  }
+  return t('tournaments.detail.roundProgress', {
+    current: n(tournament.value.rounds.length, 'integer'),
+    planned: tournament.value.plannedRounds === null ? '–' : n(tournament.value.plannedRounds, 'integer'),
+  })
+})
 
 // --- Header actions (#29) ---------------------------------------------------
 // Only the actions relevant to the current status are rendered at all, and
@@ -145,14 +154,14 @@ const startTitle = computed(() => {
   if (!tournament.value || tournament.value.canStart) {
     return undefined
   }
-  return `Mindestens ${MIN_PARTICIPANTS_TO_START} Teilnehmer nötig`
+  return t('tournaments.detail.hints.minParticipants', { min: MIN_PARTICIPANTS_TO_START })
 })
 
 const completeRoundTitle = computed(() => {
   if (!tournament.value || tournament.value.canCompleteRound) {
     return undefined
   }
-  return 'Alle Ergebnisse müssen eingetragen sein'
+  return t('tournaments.detail.hints.resultsMissing')
 })
 
 const createRoundTitle = computed(() => {
@@ -160,9 +169,9 @@ const createRoundTitle = computed(() => {
     return undefined
   }
   if (tournament.value.currentRound) {
-    return 'Schließe zuerst die laufende Runde ab'
+    return t('tournaments.detail.hints.completeCurrentRoundFirst')
   }
-  return TOURNAMENT_ERROR_MESSAGES.planned_rounds_reached
+  return t('errors.api.planned_rounds_reached')
 })
 
 const finishTitle = computed(() => {
@@ -170,10 +179,10 @@ const finishTitle = computed(() => {
     return undefined
   }
   if (tournament.value.currentRound) {
-    return TOURNAMENT_ERROR_MESSAGES.round_not_complete
+    return t('errors.api.round_not_complete')
   }
   if (tournament.value.rounds.length === 0) {
-    return TOURNAMENT_ERROR_MESSAGES.no_rounds
+    return t('errors.api.no_rounds')
   }
   return undefined
 })
@@ -204,7 +213,7 @@ const actionHint = computed(() => {
     <div>
       <LayoutBackLink
         to="/tournaments"
-        label="Zurück zu den Turnieren"
+        :label="t('tournaments.backToList')"
       />
     </div>
 
@@ -212,8 +221,8 @@ const actionHint = computed(() => {
       v-if="error"
       color="error"
       variant="subtle"
-      title="Turnier konnte nicht geladen werden"
-      :description="error.message"
+      :title="t('tournaments.detail.loadFailed.title')"
+      :description="apiError(error, 'tournaments.detail.loadFailed.description')"
     />
 
     <div
@@ -234,30 +243,32 @@ const actionHint = computed(() => {
           <UBadge
             :color="STATUS_COLORS[tournament.status]"
             variant="subtle"
-            :label="TOURNAMENT_STATUS_LABELS[tournament.status]"
+            :label="t(`tournaments.status.${tournament.status}`)"
           />
           <UBadge
             v-if="tournament.format"
             color="neutral"
             variant="subtle"
             icon="i-lucide-scroll-text"
-            :label="tournament.format.name"
+            :label="formatName(tournament.format)"
           />
           <span
             v-else
             class="text-sm text-gray-500"
-          >Ohne Format</span>
+          >{{ t('tournaments.noFormat') }}</span>
         </div>
 
         <dl class="mt-2 space-y-0.5 text-sm text-gray-500">
-          <div>Paarungssystem: {{ PAIRING_SYSTEM_LABELS[tournament.pairingSystem] }}</div>
+          <div>
+            {{ t('tournaments.detail.pairingSystem', { name: t(`tournaments.pairingSystem.${tournament.pairingSystem}.label`) }) }}
+          </div>
           <div v-if="tournament.rounds.length === 0">
-            Noch nicht gestartet
+            {{ t('tournaments.detail.notStarted') }}
           </div>
           <div v-else>
-            Runde {{ tournament.rounds.length }} von {{ tournament.plannedRounds ?? '–' }}
+            {{ roundProgress }}
           </div>
-          <div>Turnierleitung: {{ tournament.organizerName }}</div>
+          <div>{{ t('tournaments.detail.organizer', { name: tournament.organizerName }) }}</div>
         </dl>
 
         <template
@@ -268,7 +279,7 @@ const actionHint = computed(() => {
             <div class="flex flex-wrap items-center gap-2 sm:justify-end">
               <template v-if="tournament.status === 'registration'">
                 <UButton
-                  label="Turnier starten"
+                  :label="t('tournaments.detail.actions.start')"
                   color="primary"
                   :disabled="!tournament.canStart || busy"
                   :title="startTitle"
@@ -277,7 +288,7 @@ const actionHint = computed(() => {
               </template>
               <template v-else-if="tournament.status === 'running'">
                 <UButton
-                  label="Runde abschließen"
+                  :label="t('tournaments.detail.actions.completeRound')"
                   :color="primaryRunningAction === 'complete' ? 'primary' : 'neutral'"
                   :variant="primaryRunningAction === 'complete' ? 'solid' : 'outline'"
                   :disabled="!tournament.canCompleteRound || busy"
@@ -285,7 +296,7 @@ const actionHint = computed(() => {
                   @click="completeRound"
                 />
                 <UButton
-                  label="Nächste Runde"
+                  :label="t('tournaments.detail.actions.nextRound')"
                   :color="primaryRunningAction === 'next' ? 'primary' : 'neutral'"
                   :variant="primaryRunningAction === 'next' ? 'solid' : 'outline'"
                   :disabled="!tournament.canCreateRound || busy"
@@ -293,7 +304,7 @@ const actionHint = computed(() => {
                   @click="createNextRound"
                 />
                 <UButton
-                  label="Turnier abschließen"
+                  :label="t('tournaments.detail.actions.finish')"
                   :color="primaryRunningAction === 'finish' ? 'primary' : 'neutral'"
                   :variant="primaryRunningAction === 'finish' ? 'solid' : 'outline'"
                   :disabled="!tournament.canFinish || busy"
@@ -304,7 +315,7 @@ const actionHint = computed(() => {
               <UButton
                 color="error"
                 variant="outline"
-                label="Turnier löschen"
+                :label="t('tournaments.detail.actions.delete')"
                 :disabled="busy"
                 @click="deleteTournament"
               />
@@ -323,13 +334,13 @@ const actionHint = computed(() => {
         v-if="tournament.status === 'finished'"
         color="neutral"
         variant="subtle"
-        description="Dieses Turnier ist abgeschlossen und kann nicht mehr geändert werden."
+        :description="t('tournaments.detail.finishedBanner')"
       />
       <UAlert
         v-else-if="tournament.role === 'participant'"
         color="info"
         variant="subtle"
-        description="Du nimmst an diesem Turnier teil. Änderungen nimmt die Turnierleitung vor."
+        :description="t('tournaments.detail.participantBanner')"
       />
 
       <p

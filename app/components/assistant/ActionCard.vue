@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { ASSISTANT_ACTION_KIND_LABELS, ASSISTANT_ACTION_STATUS_LABELS } from '~~/shared/assistant-chat'
 import type { AssistantActionView } from '~~/shared/assistant-chat'
-import { DECK_SECTION_LABELS } from '~~/shared/deck-sections'
-import type { DeckSection } from '~~/shared/deck-sections'
+import { DECK_SECTIONS } from '~~/shared/deck-sections'
 import { apiErrorMessage } from '~/utils/card-entry'
 
 const props = defineProps<{
@@ -12,6 +11,10 @@ const props = defineProps<{
 const emit = defineEmits<{
   updated: [action: AssistantActionView]
 }>()
+
+// Deck section names come from the catalogue since #34 F2c; the rest of this
+// card is translated in F2d.
+const { t } = useI18n()
 
 const isExpanded = ref(false)
 const isApplying = ref(false)
@@ -140,8 +143,8 @@ const openDeckId = computed(() => {
 })
 
 function displayValue(column: string, value: unknown): string {
-  if (column === 'section' && typeof value === 'string' && value in DECK_SECTION_LABELS) {
-    return DECK_SECTION_LABELS[value as DeckSection]
+  if (column === 'section' && typeof value === 'string' && (DECK_SECTIONS as readonly string[]).includes(value)) {
+    return t(`decks.section.${value}`)
   }
   return String(value)
 }

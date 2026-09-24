@@ -1,3 +1,207 @@
 {
-  "formats": {}
+  "formats": {
+    "builtin": {
+      "tcg-advanced": {
+        "name": "TCG Advanced",
+        "description": "Offizielles Turnierformat des TCG: Standard-Deckgrößen, höchstens 3 Kopien pro Karte und die aktuelle TCG-Verbots- und Beschränkungsliste."
+      },
+      "ocg": {
+        "name": "OCG",
+        "description": "Japanisches Turnierformat: Standard-Deckgrößen, höchstens 3 Kopien pro Karte und die OCG-Verbots- und Beschränkungsliste."
+      },
+      "goat": {
+        "name": "GOAT Format",
+        "description": "Retro-Format auf dem Stand von April 2005: nur Karten, die bis Juni 2005 im TCG erschienen sind, plus die GOAT-Banliste.",
+        "cutoffLabel": "Nur Karten bis Juni 2005"
+      },
+      "unlimited": {
+        "name": "Ohne Banliste",
+        "description": "Standard-Deckgrößen und höchstens 3 Kopien pro Karte, aber keinerlei Verbots- oder Beschränkungsliste."
+      }
+    },
+    "cardStatus": {
+      "forbidden": "Verboten",
+      "limited": "Limitiert (1)",
+      "semi_limited": "Semi-limitiert (2)",
+      "unrestricted": "Erlaubt"
+    },
+    "ruleKind": {
+      "deck_size": "Deckgröße",
+      "copies": "Kopien pro Karte",
+      "card_status": "Einzelne Karten",
+      "banlist": "Banliste",
+      "filter": "Kartenfilter"
+    },
+    "rule": {
+      "incomplete": "Regel unvollständig",
+      "deckSize": {
+        "range": "{section}: {min}–{max} Karte | {section}: {min}–{max} Karten",
+        "min": "{section}: mindestens {min} Karte | {section}: mindestens {min} Karten",
+        "max": "{section}: höchstens {max} Karte | {section}: höchstens {max} Karten",
+        "none": "{section}: keine Größenvorgabe"
+      },
+      "copies": "Höchstens {count} Kopie pro Karte | Höchstens {count} Kopien pro Karte",
+      "cardStatus": "{status}: {cards}",
+      "noCardsSelected": "keine Karten ausgewählt",
+      "banlist": "Offizielle Banliste ({source})",
+      "filter": {
+        "matching": "Karten mit {filter}: {copies}",
+        "notMatching": "Karten ohne {filter}: {copies}",
+        "labelled": "{label} — {rule}",
+        "copies": {
+          "forbidden": "verboten",
+          "limited": "limitiert (max. 1)",
+          "semiLimited": "semi-limitiert (max. 2)",
+          "allowed": "erlaubt (max. {max})"
+        }
+      },
+      "cardFilter": {
+        "types": "Typ {values}",
+        "frameTypes": "Rahmen {values}",
+        "attributes": "Attribut {values}",
+        "races": "Art {values}",
+        "archetypes": "Archetyp {values}",
+        "sets": "Set {values}",
+        "cards": "Karte {values}",
+        "or": "oder",
+        "level": "Stufe",
+        "range": "{label} {min}–{max}",
+        "rangeMin": "{label} ab {min}",
+        "rangeMax": "{label} bis {max}",
+        "withEffect": "mit Effekt",
+        "withoutEffect": "ohne Effekt",
+        "releasedBefore": "erschienen vor dem {date} ({region})",
+        "releasedAfter": "erschienen nach dem {date} ({region})",
+        "nameContains": "Name enthält \"{text}\"",
+        "all": "alle Karten"
+      }
+    },
+    "capReason": {
+      "formatRule": {
+        "forbidden": "Formatregel: verboten",
+        "limited": "Formatregel: limitiert (1)",
+        "semi_limited": "Formatregel: semi-limitiert (2)"
+      },
+      "banlist": "{source}-Banliste: {status}"
+    },
+    "copyName": "{name} (Kopie)",
+    "back": "Zurück zu den Formaten",
+    "toast": {
+      "created": "\"{name}\" erstellt",
+      "saved": "\"{name}\" gespeichert",
+      "deleted": "\"{name}\" gelöscht"
+    },
+    "confirm": {
+      "delete": {
+        "title": "Format löschen",
+        "description": "\"{name}\" wirklich löschen? Decks mit diesem Format behalten ihre Karten und stehen danach ohne Format da."
+      }
+    },
+    "errors": {
+      "cloneFailed": "Das Format konnte nicht kopiert werden.",
+      "deleteFailed": "Das Format konnte nicht gelöscht werden."
+    },
+    "list": {
+      "title": "Formate",
+      "description": "Regelformate bestimmen, welche Karten und wie viele Kopien in einem Deck erlaubt sind.",
+      "newFormat": "Neues Format",
+      "official": "Offizielle Formate",
+      "officialBadge": "Offiziell",
+      "view": "Ansehen",
+      "clone": "Klonen",
+      "cloneLabel": "{name} klonen",
+      "mine": "Meine Formate",
+      "empty": {
+        "title": "Noch keine eigenen Formate",
+        "description": "Lege ein eigenes Format mit deinen Hausregeln an oder klone ein offizielles Format."
+      },
+      "edit": "Bearbeiten",
+      "duplicate": "Duplizieren",
+      "duplicateLabel": "{name} duplizieren",
+      "deleteLabel": "{name} löschen",
+      "ruleCount": "{count} Regel | {count} Regeln"
+    },
+    "new": {
+      "title": "Neues Format",
+      "description": "Lege Deckgrößen, Kopienlimits und eigene Regeln fest."
+    },
+    "detail": {
+      "fallbackTitle": "Format",
+      "loadFailed": "Format konnte nicht geladen werden",
+      "loadFailedDescription": "Bitte versuche es später erneut.",
+      "builtinHint": "Offizielles Format – schreibgeschützt. Klone es, um eigene Regeln zu ergänzen.",
+      "ownHint": "Eigenes Format"
+    },
+    "editor": {
+      "name": "Name",
+      "nameLabel": "Formatname",
+      "namePlaceholder": "z. B. Nur alte Karten",
+      "nameRequired": "Bitte einen Namen angeben.",
+      "description": "Beschreibung (optional)",
+      "descriptionLabel": "Formatbeschreibung",
+      "rules": "Regeln",
+      "noRules": "Noch keine Regeln. Ohne Regeln ist jedes Deck legal.",
+      "removeRule": "Regel {index} entfernen",
+      "section": "Deckbereich",
+      "minPlaceholder": "min",
+      "minLabel": "Mindestanzahl",
+      "maxPlaceholder": "max",
+      "maxLabel": "Höchstanzahl",
+      "copiesLabel": "Kopien pro Karte",
+      "statusLabel": "Status",
+      "banlistLabel": "Banliste",
+      "matchLabel": "Filterrichtung",
+      "match": {
+        "matching": "Karten, auf die der Filter passt",
+        "not_matching": "Karten, auf die der Filter nicht passt"
+      },
+      "maxCopiesLabel": "Erlaubte Kopien",
+      "maxCopiesAllowed": "Erlaubt (3)",
+      "labelPlaceholder": "Bezeichnung (optional)",
+      "labelLabel": "Regelbezeichnung",
+      "types": "Kartentypen",
+      "attributes": "Attribute",
+      "races": "Arten",
+      "sets": "Sets",
+      "levelMin": "Stufe ab",
+      "levelMax": "Stufe bis",
+      "atkMin": "ATK ab",
+      "atkMax": "ATK bis",
+      "defMin": "DEF ab",
+      "defMax": "DEF bis",
+      "effectLabel": "Effekt",
+      "effect": {
+        "any": "Egal",
+        "yes": "Mit Effekt",
+        "no": "Ohne Effekt"
+      },
+      "releasedBefore": "Erschienen vor",
+      "releasedAfter": "Erschienen nach",
+      "regionLabel": "Region",
+      "region": {
+        "tcg": "TCG-Datum",
+        "ocg": "OCG-Datum"
+      },
+      "nameContains": "Name enthält",
+      "addRule": "Regel hinzufügen",
+      "addRuleLabel": "Regel hinzufügen: {kind}",
+      "check": {
+        "title": "Deck prüfen",
+        "description": "Prüft eines deiner Decks gegen die Regeln in diesem Editor — auch ungespeichert.",
+        "deckPlaceholder": "Deck wählen",
+        "deckLabel": "Deck für die Prüfung",
+        "button": "Deck prüfen",
+        "failed": "Die Prüfung ist fehlgeschlagen."
+      },
+      "create": "Format erstellen",
+      "saveFailed": "Das Format konnte nicht gespeichert werden."
+    },
+    "cardPicker": {
+      "remove": "{name} entfernen",
+      "none": "Noch keine Karten ausgewählt.",
+      "searchPlaceholder": "Karte im Katalog suchen...",
+      "searchLabel": "Karte für die Regel suchen",
+      "searching": "Suche läuft..."
+    }
+  }
 }

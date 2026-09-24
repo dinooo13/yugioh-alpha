@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { pluralize } from '~~/shared/plural'
-
 interface RuleFormatListItem {
   id: string
   name: string
@@ -10,7 +8,13 @@ interface RuleFormatListItem {
   updatedAt: string
 }
 
-useHead({ title: 'Formate – yugioh alpha' })
+usePageTitle('formats.list.title')
+
+const { t } = useI18n()
+const count = useCount()
+const apiError = useApiError()
+const cloneFormatRequest = useFormatClone()
+const { formatName, formatDescription, sortFormats } = useFormatLabel()
 
 const toast = useToast()
 const errorMessage = ref('')
@@ -20,18 +24,18 @@ const { data, pending, refresh } = await useFetch<{ items: RuleFormatListItem[] 
   default: () => ({ items: [] }),
 })
 
-const builtins = computed(() => (data.value?.items ?? []).filter(format => format.isBuiltin))
+const builtins = computed(() => sortFormats(data.value?.items ?? []).filter(format => format.isBuiltin))
 const ownFormats = computed(() => (data.value?.items ?? []).filter(format => !format.isBuiltin))
 
 async function cloneFormat(format: RuleFormatListItem) {
   errorMessage.value = ''
   try {
-    const copy = await $fetch<{ id: string, name: string }>(`/api/formats/${format.id}/clone`, { method: 'POST' })
-    toast.add({ title: `"${copy.name}" erstellt`, color: 'success' })
+    const copy = await cloneFormatRequest(format)
+    toast.add({ title: t('formats.toast.created', { name: copy.name }), color: 'success' })
     await navigateTo(`/formats/${copy.id}`)
   }
   catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : 'Das Format konnte nicht kopiert werden.'
+    errorMessage.value = apiError(error, 'formats.errors.cloneFailed')
   }
 }
 
@@ -40,8 +44,8 @@ const { confirm } = useConfirm()
 async function deleteFormat(format: RuleFormatListItem) {
   errorMessage.value = ''
   const confirmed = await confirm({
-    title: 'Format löschen',
-    description: `"${format.name}" wirklich löschen? Decks mit diesem Format behalten ihre Karten und stehen danach ohne Format da.`,
+    title: t('formats.confirm.delete.title'),
+    description: t('formats.confirm.delete.description', { name: format.name }),
   })
   if (!confirmed) {
     return
@@ -49,29 +53,29 @@ async function deleteFormat(format: RuleFormatListItem) {
 
   try {
     await $fetch(`/api/formats/${format.id}`, { method: 'DELETE' })
-    toast.add({ title: `"${format.name}" gelöscht`, color: 'success' })
+    toast.add({ title: t('formats.toast.deleted', { name: format.name }), color: 'success' })
     await refresh()
   }
   catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : 'Das Format konnte nicht gelöscht werden.'
+    errorMessage.value = apiError(error, 'formats.errors.deleteFailed')
   }
 }
 
 function ruleCountLabel(format: RuleFormatListItem) {
-  return pluralize(format.ruleCount, 'Regel', 'Regeln')
+  return count('formats.list.ruleCount', format.ruleCount)
 }
 </script>
 
 <template>
   <div class="space-y-8">
     <LayoutPageHeader
-      title="Formate"
-      description="Regelformate bestimmen, welche Karten und wie viele Kopien in einem Deck erlaubt sind."
+      :title="t('formats.list.title')"
+      :description="t('formats.list.description')"
     >
       <template #actions>
         <UButton
           icon="i-lucide-plus"
-          label="Neues Format"
+          :label="t('formats.list.newFormat')"
           to="/formats/new"
         />
       </template>
@@ -98,7 +102,7 @@ function ruleCountLabel(format: RuleFormatListItem) {
     <template v-else>
       <section class="space-y-3">
         <h2 class="text-lg font-semibold text-gray-900">
-          Offizielle Formate
+          {{ t('formats.list.official') }}
         </h2>
         <ul class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           <li
@@ -112,20 +116,20 @@ function ruleCountLabel(format: RuleFormatListItem) {
                 class="min-w-0 flex-1"
               >
                 <h3 class="truncate text-base font-semibold text-gray-900 hover:text-primary">
-                  {{ format.name }}
+                  {{ formatName(format) }}
                 </h3>
               </NuxtLink>
               <UBadge
                 color="neutral"
                 variant="subtle"
-                label="Offiziell"
+                :label="t('formats.list.officialBadge')"
               />
             </div>
             <p
-              v-if="format.description"
+              v-if="formatDescription(format)"
               class="mt-1 line-clamp-3 text-sm text-gray-500"
             >
-              {{ format.description }}
+              {{ formatDescription(format) }}
             </p>
             <p class="mt-3 text-xs text-gray-400">
               {{ ruleCountLabel(format) }}
@@ -135,7 +139,7 @@ function ruleCountLabel(format: RuleFormatListItem) {
                 size="xs"
                 color="neutral"
                 variant="outline"
-                label="Ansehen"
+                :label="t('formats.list.view')"
                 :to="`/formats/${format.id}`"
                 class="tap-target"
               />
@@ -144,8 +148,8 @@ function ruleCountLabel(format: RuleFormatListItem) {
                 color="neutral"
                 variant="outline"
                 icon="i-lucide-copy"
-                label="Klonen"
-                :aria-label="`${format.name} klonen`"
+                :label="t('formats.list.clone')"
+                :aria-label="t('formats.list.cloneLabel', { name: formatName(format) })"
                 class="tap-target"
                 @click="cloneFormat(format)"
               />
@@ -156,20 +160,20 @@ function ruleCountLabel(format: RuleFormatListItem) {
 
       <section class="space-y-3">
         <h2 class="text-lg font-semibold text-gray-900">
-          Meine Formate
+          {{ t('formats.list.mine') }}
         </h2>
 
         <LayoutEmptyState
           v-if="ownFormats.length === 0"
           icon="i-lucide-scroll-text"
-          title="Noch keine eigenen Formate"
-          description="Lege ein eigenes Format mit deinen Hausregeln an oder klone ein offizielles Format."
+          :title="t('formats.list.empty.title')"
+          :description="t('formats.list.empty.description')"
           :heading-level="3"
         >
           <template #actions>
             <UButton
               icon="i-lucide-plus"
-              label="Neues Format"
+              :label="t('formats.list.newFormat')"
               to="/formats/new"
             />
           </template>
@@ -207,7 +211,7 @@ function ruleCountLabel(format: RuleFormatListItem) {
                 color="neutral"
                 variant="outline"
                 icon="i-lucide-pencil"
-                label="Bearbeiten"
+                :label="t('formats.list.edit')"
                 :to="`/formats/${format.id}`"
                 class="tap-target"
               />
@@ -216,8 +220,8 @@ function ruleCountLabel(format: RuleFormatListItem) {
                 color="neutral"
                 variant="outline"
                 icon="i-lucide-copy"
-                label="Duplizieren"
-                :aria-label="`${format.name} duplizieren`"
+                :label="t('formats.list.duplicate')"
+                :aria-label="t('formats.list.duplicateLabel', { name: format.name })"
                 class="tap-target"
                 @click="cloneFormat(format)"
               />
@@ -226,8 +230,8 @@ function ruleCountLabel(format: RuleFormatListItem) {
                 color="error"
                 variant="outline"
                 icon="i-lucide-trash-2"
-                label="Löschen"
-                :aria-label="`${format.name} löschen`"
+                :label="t('common.delete')"
+                :aria-label="t('formats.list.deleteLabel', { name: format.name })"
                 class="tap-target"
                 @click="deleteFormat(format)"
               />

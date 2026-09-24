@@ -1,7 +1,10 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
 import TournamentsPage from '~/pages/tournaments/index.vue'
 import type { TournamentListItem, TournamentListResponse } from '~~/shared/tournaments'
+import { setTestLocale } from './fixtures/locale'
+
+afterEach(() => setTestLocale('de'))
 
 const state = vi.hoisted(() => ({
   list: { items: [] as TournamentListItem[], total: 0, page: 1, pageSize: 20 } as TournamentListResponse,
@@ -153,5 +156,53 @@ describe('tournaments page', () => {
     await component.vm.$nextTick()
 
     expect(state.lastQueryRef?.value).toEqual({ role: 'participant', status: 'finished', page: 1, pageSize: 20 })
+  })
+
+  it('renders in English', async () => {
+    await setTestLocale('en')
+    state.list = {
+      items: [
+        item({ status: 'running', pairingSystem: 'round_robin', participantCount: 4, roundCount: 1, plannedRounds: null }),
+        item({ id: 'tournament-2', name: 'Samstagsturnier', status: 'registration', participantCount: 1, roundCount: 0, plannedRounds: 3 }),
+      ],
+      total: 1234,
+      page: 1,
+      pageSize: 20,
+    }
+    state.otherList = { items: [], total: 3, page: 1, pageSize: 1 }
+
+    const component = await mountSuspended(TournamentsPage)
+    const text = component.text()
+
+    expect(component.find('h1').text()).toBe('Tournaments')
+    expect(text).toContain('1,234 tournaments')
+    expect(text).toContain('New tournament')
+    expect(text).toContain('My tournaments (1,234)')
+    expect(text).toContain('Participations (3)')
+    expect(text).toContain('Active')
+    expect(text).toContain('Finished')
+    expect(text).toContain('Running')
+    expect(text).toContain('Registration')
+    expect(text).toContain('Round robin')
+    expect(text).toContain('Swiss')
+    expect(text).toContain('4 participants')
+    expect(text).toContain('1 participant')
+    expect(text).toContain('Round 1/–')
+    expect(text).toContain('Round 0/3')
+    expect(text).not.toContain('Turniere')
+    expect(text).not.toContain('Teilnehmer')
+  })
+
+  it('renders the English empty state and participation hint', async () => {
+    await setTestLocale('en')
+    state.list = { items: [], total: 0, page: 1, pageSize: 20 }
+    state.otherList = { items: [], total: 1, page: 1, pageSize: 1 }
+
+    const component = await mountSuspended(TournamentsPage)
+    const text = component.text()
+
+    expect(text).toContain('No tournaments yet')
+    expect(text).toContain('You\'re taking part in 1 tournament.')
+    expect(text).toContain('View tournaments you\'re invited to')
   })
 })

@@ -238,11 +238,11 @@ describe('public deck page', () => {
       sections: { main: [], extra: [], side: [] },
       counts: { main: 8, extra: 0, side: 0, total: 8 },
       limits: { mainMin: 40, mainMax: 60, extraMax: 15, sideMax: 15, maxCopies: 3 },
-      warnings: [{ code: 'main_deck_low', message: 'Das Main Deck hat 8 Karten, mindestens 40 sind üblich.' }],
+      warnings: [{ code: 'main_below_min', params: { section: 'main', count: 8, min: 40 }, message: 'The Main Deck has 8 cards; the usual minimum is 40.' }],
       format: { id: 'format-1', name: 'Standard', isBuiltin: true },
       validation: {
         legal: false,
-        issues: [{ severity: 'error', code: 'deck_size_min', section: 'main', message: 'Das Main Deck hat 8 Karten, mindestens 40 sind erforderlich.' }],
+        issues: [{ severity: 'error', code: 'deck_size_min', section: 'main', params: { section: 'main', count: 8, min: 40 }, message: 'The Main Deck has 8 cards; at least 40 are required.' }],
         cards: {},
       },
       isOwner: false,
@@ -270,6 +270,31 @@ describe('public deck page', () => {
     await component.vm.$nextTick()
 
     expect(component.text()).toContain('mindestens 40 sind erforderlich')
+  })
+
+  it('renders the player deck page in English', async () => {
+    state.error = null
+    state.deck = baseDeck({ isOwner: true, format: { id: 'goat', name: 'GOAT Format', isBuiltin: true } })
+    await setTestLocale('en')
+
+    const component = await mountSuspended(PlayerDeckPage)
+    const text = component.text()
+
+    expect(text).toContain('Shared by Fabian')
+    expect(text).toContain('8 cards in total · View only')
+    expect(text).toContain('Back to profile')
+    expect(text).toContain('Edit')
+    expect(text).toContain('Not legal')
+    expect(text).toContain('Show details')
+    expect(text).toContain('Deck-building hints')
+    expect(text).toContain('The Main Deck has 8 cards; the usual minimum is 40.')
+    expect(text).toContain('No cards in the Extra Deck yet.')
+    expect(text).not.toMatch(/Karte|Geteilt|Hinweise|Details anzeigen|Bearbeiten/)
+
+    const detailsButton = component.findAll('button').find(btn => btn.text().includes('Show details'))
+    await detailsButton!.trigger('click')
+    await component.vm.$nextTick()
+    expect(component.text()).toContain('The Main Deck has 8 cards; at least 40 are required.')
   })
 
   it('shows the deck-building coaching box to the owner', async () => {

@@ -176,7 +176,8 @@ describe('built-in formats', () => {
       match: 'not_matching',
       filter: { releasedBefore: '2005-07-01', region: 'tcg' },
       maxCopies: 0,
-      label: 'Nur Karten bis Juni 2005',
+      // Canonical English; the UI shows formats.builtin.goat.cutoffLabel.
+      label: 'Only cards up to June 2005',
     })
   })
 
@@ -198,6 +199,42 @@ describe('built-in formats', () => {
 
     // The clone is the caller's, not a second built-in.
     expect(listRuleFormats(db, 'user-b').items.map(format => format.id)).not.toContain(copy.id)
+  })
+
+  it('names and translates a clone from the optional request overrides', () => {
+    // The UI sends the copy's name and, for a built-in, its translated
+    // description and rule labels (ADR 0014).
+    const overrides = validateRuleFormatUpdateInput({
+      name: 'GOAT Format (copy)',
+      description: 'Retro format',
+      rules: {
+        rules: getRuleFormat(db, 'user-a', 'goat').rules.rules.map(rule => (
+          rule.kind === 'filter' ? { ...rule, label: 'Nur Karten bis Juni 2005' } : rule
+        )),
+      },
+    })
+    const copy = cloneRuleFormat(db, 'user-a', 'goat', overrides)
+
+    expect(copy.name).toBe('GOAT Format (copy)')
+    expect(copy.description).toBe('Retro format')
+    expect(copy.rules.rules).toContainEqual(expect.objectContaining({ kind: 'filter', label: 'Nur Karten bis Juni 2005' }))
+    // The built-in itself is untouched.
+    expect(getRuleFormat(db, 'user-a', 'goat').rules.rules)
+      .toContainEqual(expect.objectContaining({ kind: 'filter', label: 'Only cards up to June 2005' }))
+  })
+
+  it('stores the built-in names and descriptions in English and answers with error codes', () => {
+    expect(listRuleFormats(db, 'user-a').items.find(format => format.id === 'unlimited')).toMatchObject({
+      name: 'No banlist',
+      description: expect.stringContaining('no Forbidden & Limited List'),
+    })
+
+    expect(() => updateRuleFormat(db, 'user-a', 'tcg-advanced', { name: 'Meins' }))
+      .toThrow(expect.objectContaining({ statusCode: 403, data: { code: 'format_readonly' } }))
+    expect(() => getRuleFormat(db, 'user-a', 'missing'))
+      .toThrow(expect.objectContaining({ statusCode: 404, data: { code: 'format_not_found' } }))
+    expect(() => validateRuleFormatInput({ name: 'X', rules: { rules: [{ kind: 'deck_size', section: 'main', min: 5, max: 1 }] } }))
+      .toThrow(expect.objectContaining({ statusCode: 400, data: { code: 'invalid_rules' } }))
   })
 
   it('keeps the "(Kopie)" suffix inside the 80 character name limit', () => {
@@ -350,7 +387,11 @@ describe('deck ↔ format integration', () => {
     })
 
     expect(preview.legal).toBe(false)
-    expect(preview.issues[0]!.message).toBe('Dark Magician ist in diesem Format verboten.')
+    expect(preview.issues[0]!).toMatchObject({
+      code: 'card_forbidden',
+      params: { cardId: CARD.darkMagician, cardName: 'Dark Magician' },
+      message: 'Dark Magician is forbidden in this format.',
+    })
     // Nothing was stored.
     expect(getDeckDetail(db, 'user-a', deck.id).format).toBeNull()
 

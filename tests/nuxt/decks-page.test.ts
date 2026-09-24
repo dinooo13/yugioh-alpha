@@ -1,9 +1,12 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
 import { DecksDeckFormModal, USelect } from '#components'
 import DecksPage from '~/pages/decks/index.vue'
 import { optionLabels, selectWithOption } from './fixtures/select-wrapper'
 import type { DeckCover } from '~~/shared/deck-cover'
+import { setTestLocale } from './fixtures/locale'
+
+afterEach(() => setTestLocale('de'))
 
 interface DeckListItem {
   id: string
@@ -263,5 +266,58 @@ describe('deck form modal', () => {
     expect(messages).toContain('Bitte einen Namen angeben.')
     // Server errors keep their own live region; nothing to announce yet.
     expect(document.querySelector('[role="alert"]')).toBeNull()
+  })
+})
+
+describe('decks page in English', () => {
+  it('renders the list, badges and built-in format names in English', async () => {
+    state.decks = {
+      items: [
+        deck({ id: 'deck-1', name: 'Legal deck', formatId: 'unlimited', formatName: 'No banlist', legal: true }),
+        deck({ id: 'deck-2', name: 'Missing cards', complete: false, missingCount: 2, formatId: 'own-1', formatName: 'Nur alte Karten', legal: false }),
+        deck({ id: 'deck-3', name: 'Empty deck', mainCount: 0, extraCount: 0, cardCount: 0, cover: null }),
+      ],
+      total: 3,
+      page: 1,
+      pageSize: 20,
+    }
+    state.formats = { items: [{ id: 'tcg-advanced', name: 'TCG Advanced', isBuiltin: true }, { id: 'unlimited', name: 'No banlist', isBuiltin: true }] }
+    await setTestLocale('en')
+
+    const component = await mountSuspended(DecksPage)
+    const text = component.text()
+
+    expect(component.find('h1').text()).toBe('Decks')
+    expect(text).toContain('3 decks')
+    expect(text).toContain('New deck')
+    expect(text).toContain('Create with AI')
+    expect(text).toContain('All cards owned')
+    expect(text).toContain('2 cards not owned')
+    expect(text).toContain('No banlist')
+    expect(text).toContain('Nur alte Karten')
+    expect(text).toContain('Not legal')
+    expect(text).toContain('41 cards')
+    expect(text).toContain('Empty')
+    expect(component.find('input[aria-label="Search decks"]').exists()).toBe(true)
+    expect(component.find('[aria-label="Options for Legal deck"]').exists()).toBe(true)
+    expect(text).not.toMatch(/\d Karten|Besitz|Leer|Ohne Banliste|Neues Deck/)
+
+    const formatSelect = selectWithOption(component.findAllComponents(USelect), '__all_formats__')
+    expect(optionLabels(formatSelect!)).toEqual(['All formats', 'No format', 'No banlist', 'TCG Advanced'])
+    state.formats = { items: [{ id: 'tcg-advanced', name: 'TCG Advanced', isBuiltin: true }] }
+  })
+
+  it('shows a built-in format stored in English with its German name in German mode', async () => {
+    state.decks = {
+      items: [deck({ id: 'deck-1', name: 'Legal deck', formatId: 'unlimited', formatName: 'No banlist', legal: true })],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+    }
+
+    const component = await mountSuspended(DecksPage)
+
+    expect(component.text()).toContain('Ohne Banliste')
+    expect(component.text()).not.toContain('No banlist')
   })
 })

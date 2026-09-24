@@ -6,7 +6,7 @@
 import type { DeckCover } from './deck-cover'
 import type { DeckSection } from './deck-sections'
 import type { AppLocale } from './locale'
-import type { DeckValidation } from './rule-formats'
+import type { DeckValidation, DeckWarning } from './rule-formats'
 
 // Labels live in the i18n catalogues: `sharing.visibility.<v>.{label,description}`
 // (ADR 0014).
@@ -107,7 +107,7 @@ export interface SharedDeckView {
   sections: Record<DeckSection, SharedDeckCardRow[]>
   counts: { main: number, extra: number, side: number, total: number }
   limits: { mainMin: number, mainMax: number, extraMax: number, sideMax: number, maxCopies: number }
-  warnings: Array<{ code: string, message: string, cardId?: number }>
+  warnings: DeckWarning[]
   format: { id: string, name: string, isBuiltin: boolean } | null
   validation: DeckValidation | null
   /** True when the *viewer* is the owner (UI shows a "Bearbeiten" link). */

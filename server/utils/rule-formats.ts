@@ -15,7 +15,7 @@ import {
   RuleSetValidationError,
   validateRuleSet,
 } from '../../shared/rule-formats'
-import type { RuleSet } from '../../shared/rule-formats'
+import type { BuiltinFormatId, RuleSet } from '../../shared/rule-formats'
 import { loadCardNames, missingCatalogCardIds } from './deck-validation'
 
 type Db = ReturnType<typeof useDb>
@@ -59,7 +59,7 @@ const STANDARD_DECK_SIZES: RuleSet['rules'] = [
 ]
 
 export interface BuiltinFormatDefinition {
-  id: string
+  id: BuiltinFormatId
   name: string
   description: string
   rules: RuleSet
@@ -69,12 +69,16 @@ export interface BuiltinFormatDefinition {
  * Globally available formats (`user_id IS NULL`, `is_builtin = 1`). They are
  * read-only for everyone and re-seeded on every boot, so rule improvements
  * ship with a deploy instead of needing a data migration.
+ *
+ * Names, descriptions and rule labels are canonical English (the assistant
+ * model reads them); the UI shows them in the interface language by id
+ * (`formats.builtin.<id>.*`, ADR 0014).
  */
 export const BUILTIN_FORMATS: BuiltinFormatDefinition[] = [
   {
     id: 'tcg-advanced',
     name: 'TCG Advanced',
-    description: 'Offizielles Turnierformat des TCG: Standard-Deckgrößen, höchstens 3 Kopien pro Karte und die aktuelle TCG-Verbots- und Beschränkungsliste.',
+    description: 'Official TCG tournament format: standard deck sizes, at most 3 copies per card and the current TCG Forbidden & Limited List.',
     rules: {
       rules: [
         ...STANDARD_DECK_SIZES,
@@ -86,7 +90,7 @@ export const BUILTIN_FORMATS: BuiltinFormatDefinition[] = [
   {
     id: 'ocg',
     name: 'OCG',
-    description: 'Japanisches Turnierformat: Standard-Deckgrößen, höchstens 3 Kopien pro Karte und die OCG-Verbots- und Beschränkungsliste.',
+    description: 'Japanese tournament format: standard deck sizes, at most 3 copies per card and the OCG Forbidden & Limited List.',
     rules: {
       rules: [
         ...STANDARD_DECK_SIZES,
@@ -98,7 +102,7 @@ export const BUILTIN_FORMATS: BuiltinFormatDefinition[] = [
   {
     id: 'goat',
     name: 'GOAT Format',
-    description: 'Retro-Format auf dem Stand von April 2005: nur Karten, die bis Juni 2005 im TCG erschienen sind, plus die GOAT-Banliste.',
+    description: 'Retro format as of April 2005: only cards released in the TCG up to June 2005, plus the GOAT banlist.',
     rules: {
       rules: [
         ...STANDARD_DECK_SIZES,
@@ -109,15 +113,15 @@ export const BUILTIN_FORMATS: BuiltinFormatDefinition[] = [
           match: 'not_matching',
           filter: { releasedBefore: '2005-07-01', region: 'tcg' },
           maxCopies: 0,
-          label: 'Nur Karten bis Juni 2005',
+          label: 'Only cards up to June 2005',
         },
       ],
     },
   },
   {
     id: 'unlimited',
-    name: 'Ohne Banliste',
-    description: 'Standard-Deckgrößen und höchstens 3 Kopien pro Karte, aber keinerlei Verbots- oder Beschränkungsliste.',
+    name: 'No banlist',
+    description: 'Standard deck sizes and at most 3 copies per card, but no Forbidden & Limited List at all.',
     rules: {
       rules: [
         ...STANDARD_DECK_SIZES,
@@ -166,16 +170,16 @@ export function seedBuiltinFormats(db: Db) {
 
 // --- Errors ----------------------------------------------------------------
 
-function badRequest(message: string): never {
-  throw createError({ statusCode: 400, statusMessage: message })
+function badRequest(message: string, code?: string): never {
+  throw createError({ statusCode: 400, statusMessage: message, data: code ? { code } : undefined })
 }
 
 function notFound(message = 'Format not found'): never {
-  throw createError({ statusCode: 404, statusMessage: message })
+  throw createError({ statusCode: 404, statusMessage: message, data: { code: 'format_not_found' } })
 }
 
-function forbidden(message: string): never {
-  throw createError({ statusCode: 403, statusMessage: message })
+function forbidden(message: string, code: string): never {
+  throw createError({ statusCode: 403, statusMessage: message, data: { code } })
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -219,7 +223,7 @@ export function normalizeRuleSet(value: unknown): RuleSet {
   }
   catch (error) {
     if (error instanceof RuleSetValidationError) {
-      badRequest(error.message)
+      badRequest(error.message, 'invalid_rules')
     }
     throw error
   }
@@ -317,7 +321,7 @@ function requireOwnFormat(db: Db, userId: string, formatId: string) {
   const row = requireAccessibleFormat(db, userId, formatId)
 
   if (row.isBuiltin || row.userId === null) {
-    forbidden('Built-in formats are read-only. Clone the format to change its rules.')
+    forbidden('Built-in formats are read-only. Clone the format to change its rules.', 'format_readonly')
   }
   if (row.userId !== userId) {
     notFound()
@@ -413,8 +417,22 @@ export function cloneNameFor(name: string): string {
   return `${name.slice(0, RULE_FORMAT_NAME_MAX_LENGTH - suffix.length).trimEnd()}${suffix}`
 }
 
-export function cloneRuleFormat(db: Db, userId: string, formatId: string): RuleFormatDetail {
+/**
+ * Clones a format. `overrides` (the optional body of
+ * `POST /api/formats/:id/clone`) lets the UI name the copy in the interface
+ * language and, for a built-in, carry over its translated description and
+ * rule labels (ADR 0014); without them the copy keeps the source's text.
+ */
+export function cloneRuleFormat(
+  db: Db,
+  userId: string,
+  formatId: string,
+  overrides: Partial<RuleFormatInput> = {},
+): RuleFormatDetail {
   const source = requireAccessibleFormat(db, userId, formatId)
+  if (overrides.rules) {
+    assertRuleCardsExist(db, overrides.rules)
+  }
   const now = new Date()
 
   const [copy] = db
@@ -422,9 +440,9 @@ export function cloneRuleFormat(db: Db, userId: string, formatId: string): RuleF
     .values({
       id: randomUUID(),
       userId,
-      name: cloneNameFor(source.name),
-      description: source.description,
-      rules: source.rules ?? { rules: [] },
+      name: overrides.name ?? cloneNameFor(source.name),
+      description: overrides.description !== undefined ? overrides.description : source.description,
+      rules: overrides.rules ?? source.rules ?? { rules: [] },
       isBuiltin: false,
       createdAt: now,
       updatedAt: now,

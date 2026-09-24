@@ -1,6 +1,6 @@
-import { createError, getRouterParam, setResponseStatus } from 'h3'
+import { createError, getRouterParam, readBody, setResponseStatus } from 'h3'
 import { useDb } from '../../../db'
-import { cloneRuleFormat } from '../../../utils/rule-formats'
+import { cloneRuleFormat, validateRuleFormatUpdateInput } from '../../../utils/rule-formats'
 import { requireUser } from '../../../utils/session'
 
 export default defineEventHandler(async (event) => {
@@ -10,7 +10,10 @@ export default defineEventHandler(async (event) => {
   }
 
   const user = await requireUser(event)
-  const format = cloneRuleFormat(useDb(), user.id, id)
+  // Optional overrides (name, description, rules) — see cloneRuleFormat.
+  const body = await readBody(event).catch(() => undefined)
+  const overrides = body === undefined || body === null || body === '' ? {} : validateRuleFormatUpdateInput(body)
+  const format = cloneRuleFormat(useDb(), user.id, id, overrides)
 
   setResponseStatus(event, 201)
   return format

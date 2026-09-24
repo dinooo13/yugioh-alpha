@@ -1,14 +1,13 @@
 <script setup lang="ts">
-import { pluralize } from '~~/shared/plural'
-import {
-  PAIRING_SYSTEM_LABELS,
-  TOURNAMENT_STATUS_LABELS,
-} from '~~/shared/tournaments'
 import type { TournamentListItem, TournamentListResponse, TournamentStatus } from '~~/shared/tournaments'
 
 const PAGE_SIZE = 20
 
-useHead({ title: 'Turniere – yugioh alpha' })
+usePageTitle('tournaments.list.title')
+
+const { t, n } = useI18n()
+const count = useCount()
+const { formatName } = useFormatLabel()
 
 type RoleTab = 'organizer' | 'participant'
 type StatusFilter = 'active' | 'finished'
@@ -68,8 +67,7 @@ function countFor(tabRole: RoleTab): number {
 }
 
 function tabLabel(tabRole: RoleTab): string {
-  const base = tabRole === 'organizer' ? 'Meine Turniere' : 'Teilnahmen'
-  return `${base} (${countFor(tabRole)})`
+  return t(`tournaments.list.tabs.${tabRole}`, { count: n(countFor(tabRole), 'integer') })
 }
 
 function selectRole(next: RoleTab) {
@@ -91,7 +89,10 @@ function statusColor(status: TournamentStatus) {
 }
 
 function roundLabel(item: TournamentListItem) {
-  return `Runde ${item.roundCount}/${item.plannedRounds ?? '–'}`
+  return t('tournaments.list.roundProgress', {
+    current: n(item.roundCount, 'integer'),
+    planned: item.plannedRounds === null ? '–' : n(item.plannedRounds, 'integer'),
+  })
 }
 
 // The organizer tab is empty, but the user does have participations — the
@@ -100,32 +101,14 @@ function roundLabel(item: TournamentListItem) {
 const showParticipantHint = computed(() =>
   role.value === 'organizer' && tournaments.value.length === 0 && otherRoleTotal.value > 0)
 
+type EmptyStateKey = 'organizerActive' | 'organizerFinished' | 'participantActive' | 'participantFinished'
+
 const emptyState = computed(() => {
-  if (role.value === 'organizer') {
-    if (statusFilter.value === 'active') {
-      return {
-        heading: 'Noch keine Turniere',
-        text: 'Lege dein erstes Turnier an und lade Spieler per E-Mail oder als Gast ein.',
-        showButton: true,
-      }
-    }
-    return {
-      heading: 'Noch keine abgeschlossenen Turniere',
-      text: 'Turniere, die du leitest, erscheinen hier, sobald du sie abschließt.',
-      showButton: false,
-    }
-  }
-  if (statusFilter.value === 'active') {
-    return {
-      heading: 'Keine Teilnahmen',
-      text: 'Du bist noch zu keinem Turnier eingeladen.',
-      showButton: false,
-    }
-  }
+  const key: EmptyStateKey = `${role.value}${statusFilter.value === 'active' ? 'Active' : 'Finished'}`
   return {
-    heading: 'Keine abgeschlossenen Teilnahmen',
-    text: 'Turniere, an denen du teilgenommen hast, erscheinen hier, sobald sie abgeschlossen sind.',
-    showButton: false,
+    heading: t(`tournaments.list.empty.${key}.title`),
+    text: t(`tournaments.list.empty.${key}.text`),
+    showButton: key === 'organizerActive',
   }
 })
 </script>
@@ -133,13 +116,13 @@ const emptyState = computed(() => {
 <template>
   <div class="space-y-6">
     <LayoutPageHeader
-      title="Turniere"
-      :description="pluralize(total, 'Turnier', 'Turniere')"
+      :title="t('tournaments.list.title')"
+      :description="count('tournaments.list.count', total)"
     >
       <template #actions>
         <UButton
           icon="i-lucide-plus"
-          label="Neues Turnier"
+          :label="t('tournaments.list.newTournament')"
           to="/tournaments/new"
         />
       </template>
@@ -169,7 +152,7 @@ const emptyState = computed(() => {
           color="neutral"
           :variant="statusFilter === 'active' ? 'solid' : 'outline'"
           :aria-pressed="statusFilter === 'active'"
-          label="Aktiv"
+          :label="t('tournaments.list.filter.active')"
           @click="selectStatus('active')"
         />
         <UButton
@@ -177,7 +160,7 @@ const emptyState = computed(() => {
           color="neutral"
           :variant="statusFilter === 'finished' ? 'solid' : 'outline'"
           :aria-pressed="statusFilter === 'finished'"
-          label="Abgeschlossen"
+          :label="t('tournaments.list.filter.finished')"
           @click="selectStatus('finished')"
         />
       </div>
@@ -188,8 +171,8 @@ const emptyState = computed(() => {
       class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
     >
       <USkeleton
-        v-for="n in 3"
-        :key="n"
+        v-for="index in 3"
+        :key="index"
         class="h-36 w-full"
       />
     </div>
@@ -204,7 +187,7 @@ const emptyState = computed(() => {
         v-if="showParticipantHint"
         class="mt-1 max-w-sm text-sm text-gray-500"
       >
-        Du nimmst an {{ pluralize(otherRoleTotal, 'Turnier', 'Turnieren') }} teil.
+        {{ count('tournaments.list.participationHint', otherRoleTotal) }}
       </p>
       <template
         v-if="showParticipantHint || emptyState.showButton"
@@ -214,13 +197,13 @@ const emptyState = computed(() => {
           v-if="showParticipantHint"
           color="primary"
           variant="outline"
-          label="Eingeladene Turniere ansehen"
+          :label="t('tournaments.list.showInvited')"
           @click="selectRole('participant')"
         />
         <UButton
           v-if="emptyState.showButton"
           icon="i-lucide-plus"
-          label="Neues Turnier"
+          :label="t('tournaments.list.newTournament')"
           to="/tournaments/new"
         />
       </template>
@@ -251,23 +234,23 @@ const emptyState = computed(() => {
           <UBadge
             :color="statusColor(item.status)"
             variant="subtle"
-            :label="TOURNAMENT_STATUS_LABELS[item.status]"
+            :label="t(`tournaments.status.${item.status}`)"
           />
           <UBadge
             v-if="item.format"
             color="neutral"
             variant="subtle"
             icon="i-lucide-scroll-text"
-            :label="item.format.name"
+            :label="formatName(item.format)"
           />
         </div>
 
         <dl class="mt-3 space-y-0.5 text-sm text-gray-500">
-          <div>{{ item.participantCount }} Teilnehmer</div>
+          <div>{{ count('tournaments.list.participantCount', item.participantCount) }}</div>
           <div>{{ roundLabel(item) }}</div>
-          <div>{{ PAIRING_SYSTEM_LABELS[item.pairingSystem] }}</div>
+          <div>{{ t(`tournaments.pairingSystem.${item.pairingSystem}.label`) }}</div>
           <div v-if="role === 'participant'">
-            Von {{ item.organizerName }}
+            {{ t('tournaments.list.organizedBy', { name: item.organizerName }) }}
           </div>
         </dl>
       </li>

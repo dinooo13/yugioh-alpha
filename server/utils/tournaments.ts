@@ -70,17 +70,21 @@ const MAX_PAGE_SIZE = 60
 
 // --- Error helpers (D11: every 400/403/409 carries `data.code`) ------------
 
-function fail(statusCode: number, code: TournamentErrorCode, message: string): never {
-  throw createError({ statusCode, statusMessage: message, data: { code } })
+// `params` are the named values the client's `errors.api.<code>` message
+// needs (e.g. `{ max }`); the English `statusMessage` is never shown (ADR 0014).
+type ErrorParams = Record<string, string | number>
+
+function fail(statusCode: number, code: TournamentErrorCode, message: string, params?: ErrorParams): never {
+  throw createError({ statusCode, statusMessage: message, data: params ? { code, params } : { code } })
 }
-function badRequest(code: TournamentErrorCode, message: string): never {
-  fail(400, code, message)
+function badRequest(code: TournamentErrorCode, message: string, params?: ErrorParams): never {
+  fail(400, code, message, params)
 }
-function forbidden(code: TournamentErrorCode, message: string): never {
-  fail(403, code, message)
+function forbidden(code: TournamentErrorCode, message: string, params?: ErrorParams): never {
+  fail(403, code, message, params)
 }
-function conflict(code: TournamentErrorCode, message: string): never {
-  fail(409, code, message)
+function conflict(code: TournamentErrorCode, message: string, params?: ErrorParams): never {
+  fail(409, code, message, params)
 }
 function notFound(): never {
   throw createError({ statusCode: 404, statusMessage: 'Tournament not found' })
@@ -188,14 +192,14 @@ function normalizeDescription(raw: unknown): string | null {
     return null
   }
   if (typeof raw !== 'string') {
-    badRequest('invalid_description', 'description must be a string')
+    badRequest('invalid_description', 'description must be a string', { max: TOURNAMENT_DESCRIPTION_MAX_LENGTH })
   }
   const trimmed = raw.trim()
   if (trimmed.length === 0) {
     return null
   }
   if (trimmed.length > TOURNAMENT_DESCRIPTION_MAX_LENGTH) {
-    badRequest('invalid_description', `description must be at most ${TOURNAMENT_DESCRIPTION_MAX_LENGTH} characters`)
+    badRequest('invalid_description', `description must be at most ${TOURNAMENT_DESCRIPTION_MAX_LENGTH} characters`, { max: TOURNAMENT_DESCRIPTION_MAX_LENGTH })
   }
   return trimmed
 }
@@ -226,7 +230,7 @@ function normalizePlannedRounds(raw: unknown): number | null {
   }
   const value = typeof raw === 'string' ? Number(raw) : raw
   if (typeof value !== 'number' || !Number.isInteger(value) || value < 1 || value > MAX_PLANNED_ROUNDS) {
-    badRequest('invalid_planned_rounds', `plannedRounds must be an integer 1-${MAX_PLANNED_ROUNDS}`)
+    badRequest('invalid_planned_rounds', `plannedRounds must be an integer 1-${MAX_PLANNED_ROUNDS}`, { max: MAX_PLANNED_ROUNDS })
   }
   return value
 }
@@ -238,11 +242,11 @@ export function validateTournamentInput(body: unknown): TournamentInput {
 
   const rawName = body.name
   if (typeof rawName !== 'string') {
-    badRequest('invalid_name', 'name is required')
+    badRequest('invalid_name', 'name is required', { max: TOURNAMENT_NAME_MAX_LENGTH })
   }
   const name = rawName.trim()
   if (name.length === 0 || name.length > TOURNAMENT_NAME_MAX_LENGTH) {
-    badRequest('invalid_name', `name must be 1-${TOURNAMENT_NAME_MAX_LENGTH} characters`)
+    badRequest('invalid_name', `name must be 1-${TOURNAMENT_NAME_MAX_LENGTH} characters`, { max: TOURNAMENT_NAME_MAX_LENGTH })
   }
 
   return {
@@ -272,11 +276,11 @@ export function validateTournamentUpdateInput(body: unknown): TournamentUpdateIn
 
   if (body.name !== undefined) {
     if (typeof body.name !== 'string') {
-      badRequest('invalid_name', 'name must be a string')
+      badRequest('invalid_name', 'name must be a string', { max: TOURNAMENT_NAME_MAX_LENGTH })
     }
     const name = body.name.trim()
     if (name.length === 0 || name.length > TOURNAMENT_NAME_MAX_LENGTH) {
-      badRequest('invalid_name', `name must be 1-${TOURNAMENT_NAME_MAX_LENGTH} characters`)
+      badRequest('invalid_name', `name must be 1-${TOURNAMENT_NAME_MAX_LENGTH} characters`, { max: TOURNAMENT_NAME_MAX_LENGTH })
     }
     patch.name = name
   }
@@ -511,15 +515,15 @@ function buildDeckSnapshot(
       quantity: row.quantity,
     }))
     const cardData = loadCardDataForValidation(db, entries.map(entry => entry.catalogCardId))
-    const cardNames = Object.fromEntries(allRows.map(row => [row.catalogCardId, row.name]))
 
-    const result = evaluateDeck(format.rules, entries, cardData, { cardNames })
+    const result = evaluateDeck(format.rules, entries, cardData)
     legal = result.legal
     issueCount = result.issues.length
     validation = {
       legal: result.legal,
       issueCount: result.issues.length,
       issues: result.issues.slice(0, MAX_SNAPSHOT_ISSUES).map(issue => issue.message),
+      issueDetails: result.issues.slice(0, MAX_SNAPSHOT_ISSUES),
     }
   }
 
@@ -527,6 +531,7 @@ function buildDeckSnapshot(
     deckId,
     name: detail.name,
     formatName: format?.name,
+    formatId: format?.id,
     sections: {
       main: toSnapshotCards(detail.sections.main),
       extra: toSnapshotCards(detail.sections.extra),
@@ -984,7 +989,7 @@ export function addParticipant(db: Db, userId: string, id: string, input: Partic
       .where(eq(tournamentParticipant.tournamentId, id))
       .get()?.count ?? 0
     if (participantCount >= MAX_PARTICIPANTS) {
-      conflict('too_many_participants', 'Tournament is full')
+      conflict('too_many_participants', 'Tournament is full', { max: MAX_PARTICIPANTS })
     }
 
     let name: string
@@ -1202,7 +1207,7 @@ export function startTournament(db: Db, userId: string, id: string): TournamentD
     .orderBy(asc(tournamentParticipant.seed))
     .all()
   if (participants.length < MIN_PARTICIPANTS_TO_START) {
-    conflict('not_enough_participants', 'Not enough participants to start')
+    conflict('not_enough_participants', 'Not enough participants to start', { min: MIN_PARTICIPANTS_TO_START })
   }
 
   const now = new Date()
@@ -1269,7 +1274,7 @@ export function createNextRound(db: Db, userId: string, id: string): TournamentD
     .all()
   const activeCount = participants.filter(p => !p.dropped).length
   if (activeCount < 2) {
-    conflict('not_enough_participants', 'Not enough active participants')
+    conflict('not_enough_participants', 'Not enough active participants', { min: MIN_PARTICIPANTS_TO_START })
   }
 
   const matches = db

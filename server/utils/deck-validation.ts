@@ -13,7 +13,6 @@ import { DEFAULT_MAX_COPIES, evaluateDeck } from '../../shared/rule-formats'
 import type {
   DeckCardEntry,
   DeckValidation,
-  DescribeOptions,
   RuleSet,
   ValidationCardData,
 } from '../../shared/rule-formats'
@@ -110,10 +109,9 @@ export function validateDeckCards(
   db: Db,
   ruleSet: RuleSet,
   deckCards: DeckCardEntry[],
-  options?: DescribeOptions,
 ): DeckValidation {
   const cardData = loadCardDataForValidation(db, deckCards.map(entry => entry.catalogCardId))
-  return evaluateDeck(ruleSet, deckCards, cardData, options)
+  return evaluateDeck(ruleSet, deckCards, cardData)
 }
 
 /**
@@ -137,7 +135,6 @@ export function maxCopiesByCard(db: Db, rules: RuleSet | null, cardIds: number[]
     rules,
     cards.map(card => ({ catalogCardId: card.id, section: defaultSectionForCard(card), quantity: 1 })),
     cardData,
-    { cardNames: Object.fromEntries(cards.map(card => [card.id, card.name])) },
   )
 
   return new Map(uniqueIds.map(id => [id, validation.cards[id]?.maxCopies ?? DEFAULT_MAX_COPIES]))

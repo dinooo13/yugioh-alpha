@@ -17,14 +17,40 @@ const toast = useToast()
 const formatId = computed(() => String(route.params.id ?? ''))
 const errorMessage = ref('')
 
+const { t, locale } = useI18n()
+const apiError = useApiError()
+const cloneFormatRequest = useFormatClone()
+const { formatName, formatDescription, localizedRules } = useFormatLabel()
+
 const { data: format, error } = await useFetch<RuleFormatDetail>(() => `/api/formats/${formatId.value}`, {
   headers: import.meta.server ? useRequestHeaders(['cookie']) : undefined,
 })
 
-useHead({ title: computed(() => `${format.value?.name ?? 'Format'} – yugioh alpha`) })
+usePageTitle(() => (format.value ? formatName(format.value) : t('formats.detail.fallbackTitle')))
+
+// A built-in format is shown in the interface language (name, description,
+// rule labels); a user's own format as it is.
+const editorValues = computed(() => {
+  const current = format.value
+  if (!current || !current.isBuiltin) {
+    return current
+  }
+  return {
+    ...current,
+    name: formatName(current),
+    description: formatDescription(current),
+    rules: localizedRules(current, current.rules),
+  }
+})
+
+// The editor copies its initial values once; a built-in's translated text
+// follows a language switch by re-mounting it.
+const editorKey = computed(() => (format.value?.isBuiltin ? `${format.value.id}-${locale.value}` : format.value?.id))
+
+const loadErrorDescription = computed(() => (error.value ? apiError(error.value, 'formats.detail.loadFailedDescription') : undefined))
 
 async function onSaved(saved: { id: string, name: string }) {
-  toast.add({ title: `"${saved.name}" gespeichert`, color: 'success' })
+  toast.add({ title: t('formats.toast.saved', { name: saved.name }), color: 'success' })
   await navigateTo('/formats')
 }
 
@@ -35,12 +61,12 @@ async function cloneFormat() {
 
   errorMessage.value = ''
   try {
-    const copy = await $fetch<{ id: string, name: string }>(`/api/formats/${format.value.id}/clone`, { method: 'POST' })
-    toast.add({ title: `"${copy.name}" erstellt`, color: 'success' })
+    const copy = await cloneFormatRequest(format.value)
+    toast.add({ title: t('formats.toast.created', { name: copy.name }), color: 'success' })
     await navigateTo(`/formats/${copy.id}`)
   }
   catch (requestError) {
-    errorMessage.value = requestError instanceof Error ? requestError.message : 'Das Format konnte nicht kopiert werden.'
+    errorMessage.value = apiError(requestError, 'formats.errors.cloneFailed')
   }
 }
 </script>
@@ -50,7 +76,7 @@ async function cloneFormat() {
     <div>
       <LayoutBackLink
         to="/formats"
-        label="Zurück zu den Formaten"
+        :label="t('formats.back')"
       />
     </div>
 
@@ -58,16 +84,14 @@ async function cloneFormat() {
       v-if="error"
       color="error"
       variant="subtle"
-      title="Format konnte nicht geladen werden"
-      :description="error.message"
+      :title="t('formats.detail.loadFailed')"
+      :description="loadErrorDescription"
     />
 
-    <template v-else-if="format">
+    <template v-else-if="format && editorValues">
       <LayoutPageHeader
-        :title="format.name"
-        :description="format.isBuiltin
-          ? 'Offizielles Format – schreibgeschützt. Klone es, um eigene Regeln zu ergänzen.'
-          : 'Eigenes Format'"
+        :title="editorValues.name"
+        :description="format.isBuiltin ? t('formats.detail.builtinHint') : t('formats.detail.ownHint')"
         truncate
       >
         <template
@@ -78,7 +102,7 @@ async function cloneFormat() {
             icon="i-lucide-copy"
             color="neutral"
             variant="outline"
-            label="Klonen"
+            :label="t('formats.list.clone')"
             @click="cloneFormat"
           />
         </template>
@@ -92,8 +116,8 @@ async function cloneFormat() {
       </p>
 
       <FormatsRuleFormatEditor
-        :key="format.id"
-        :initial-values="format"
+        :key="editorKey"
+        :initial-values="editorValues"
         :readonly="format.isBuiltin"
         @saved="onSaved"
       />

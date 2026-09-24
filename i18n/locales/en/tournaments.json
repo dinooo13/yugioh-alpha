@@ -1,3 +1,233 @@
 {
-  "tournaments": {}
+  "tournaments": {
+    "noFormat": "No format",
+    "noDeck": "No deck",
+    "dropped": "Dropped",
+    "backToList": "Back to tournaments",
+    "status": {
+      "registration": "Registration",
+      "running": "Running",
+      "finished": "Finished"
+    },
+    "pairingSystem": {
+      "swiss": {
+        "label": "Swiss",
+        "description": "Players with similar records play each other; rematches are avoided."
+      },
+      "round_robin": {
+        "label": "Round robin",
+        "description": "Every player plays every other player exactly once."
+      }
+    },
+    "roundStatus": {
+      "pending": "Open",
+      "completed": "Completed"
+    },
+    "list": {
+      "title": "Tournaments",
+      "count": "{count} tournament | {count} tournaments",
+      "newTournament": "New tournament",
+      "tabs": {
+        "organizer": "My tournaments ({count})",
+        "participant": "Participations ({count})"
+      },
+      "filter": {
+        "active": "Active",
+        "finished": "Finished"
+      },
+      "empty": {
+        "organizerActive": {
+          "title": "No tournaments yet",
+          "text": "Create your first tournament and invite players by email or as guests."
+        },
+        "organizerFinished": {
+          "title": "No finished tournaments yet",
+          "text": "Tournaments you organize show up here once you finish them."
+        },
+        "participantActive": {
+          "title": "No participations",
+          "text": "You haven't been invited to a tournament yet."
+        },
+        "participantFinished": {
+          "title": "No finished participations",
+          "text": "Tournaments you took part in show up here once they're finished."
+        }
+      },
+      "participationHint": "You're taking part in {count} tournament. | You're taking part in {count} tournaments.",
+      "showInvited": "View tournaments you're invited to",
+      "participantCount": "{count} participant | {count} participants",
+      "roundProgress": "Round {current}/{planned}",
+      "organizedBy": "By {name}"
+    },
+    "new": {
+      "title": "New tournament",
+      "description": "Once it's created, you invite players by email or add them as guests.",
+      "name": "Tournament name",
+      "namePlaceholder": "e.g. Friday tournament",
+      "nameRequired": "Please enter a name.",
+      "descriptionLabel": "Description (optional)",
+      "descriptionAriaLabel": "Description",
+      "format": "Format",
+      "pairingSystem": "Pairing system",
+      "plannedRounds": "Planned rounds",
+      "plannedRoundsPlaceholder": "Automatic",
+      "plannedRoundsRoundRobinHint": "With \"Round robin\", the number of rounds follows from the number of participants.",
+      "plannedRoundsHint": "Leave empty to calculate it from the number of participants at the start.",
+      "includeSelf": "I'm playing too",
+      "submit": "Create tournament",
+      "createFailed": "The tournament couldn't be created."
+    },
+    "detail": {
+      "pageTitleFallback": "Tournament",
+      "loadFailed": {
+        "title": "Couldn't load the tournament",
+        "description": "This tournament isn't available, or you don't have access to it."
+      },
+      "pairingSystem": "Pairing system: {name}",
+      "notStarted": "Not started yet",
+      "roundProgress": "Round {current} of {planned}",
+      "organizer": "Organizer: {name}",
+      "actions": {
+        "start": "Start tournament",
+        "completeRound": "Complete round",
+        "nextRound": "Next round",
+        "finish": "Finish tournament",
+        "delete": "Delete tournament"
+      },
+      "hints": {
+        "minParticipants": "At least {min} participants needed",
+        "resultsMissing": "All results must be entered",
+        "completeCurrentRoundFirst": "Complete the current round first"
+      },
+      "finishedBanner": "This tournament is finished and can no longer be changed.",
+      "participantBanner": "You're taking part in this tournament. The organizer makes any changes.",
+      "confirm": {
+        "finish": {
+          "title": "Finish tournament",
+          "description": "Finish the tournament? Results and pairings can't be changed afterwards."
+        },
+        "delete": {
+          "title": "Delete tournament",
+          "description": "Really delete \"{name}\"? All rounds and results will be lost."
+        }
+      },
+      "errors": {
+        "startFailed": "The tournament couldn't be started.",
+        "createRoundFailed": "The next round couldn't be created.",
+        "completeRoundFailed": "The round couldn't be completed.",
+        "finishFailed": "The tournament couldn't be finished.",
+        "deleteFailed": "The tournament couldn't be deleted."
+      }
+    },
+    "participants": {
+      "title": "Participants ({count})",
+      "accountBadge": "Account",
+      "accountHint": "Player with their own user account – registers their own deck. The organizer manages guests without an account.",
+      "accountLegend": "“Account”: Player with their own user account – registers their own deck. The organizer manages guests without an account.",
+      "deckReminder": "Register your deck before the tournament starts.",
+      "registerDeck": "Register deck",
+      "changeDeck": "Change deck",
+      "managesOwnDeck": "Registers their own deck",
+      "add": {
+        "byEmail": "By email",
+        "asGuest": "As guest",
+        "emailPlaceholder": "player{'@'}example.com",
+        "emailAriaLabel": "Email address",
+        "guestNamePlaceholder": "Guest name",
+        "guestNameAriaLabel": "Name",
+        "submit": "Add participant",
+        "asGuestInstead": "Add as guest instead"
+      },
+      "columns": {
+        "name": "Name",
+        "deck": "Deck",
+        "actions": "Actions"
+      },
+      "showIssues": "Show rule violations for {name}",
+      "issuesTitle": "Rule violations",
+      "issueCount": "{count} rule violation | {count} rule violations",
+      "registeredAt": "Registered on {date}",
+      "optionsFor": "Options for {name}",
+      "menu": {
+        "rename": "Rename",
+        "reinstate": "Reinstate",
+        "drop": "Drop from tournament"
+      },
+      "confirm": {
+        "remove": {
+          "title": "Remove participant",
+          "description": "Remove {name} from the tournament? A registered deck will be lost."
+        }
+      },
+      "rename": {
+        "title": "Rename participant",
+        "name": "Name",
+        "nameAriaLabel": "Participant name"
+      },
+      "errors": {
+        "addFailed": "The participant couldn't be added.",
+        "renameFailed": "The participant couldn't be renamed.",
+        "dropFailed": "The status couldn't be changed.",
+        "removeFailed": "The participant couldn't be removed."
+      }
+    },
+    "deckRegistration": {
+      "title": "Register deck",
+      "deck": "Deck",
+      "checking": "Checking the rules …",
+      "counts": "{count} card (Main {main}, Extra {extra}, Side {side}) | {count} cards (Main {main}, Extra {extra}, Side {side})",
+      "checkedOnRegistration": "The rules are checked on registration.",
+      "noFormat": "This tournament has no required format.",
+      "copyHint": "Your deck is copied when you register it. Later changes to the deck don't affect the tournament.",
+      "submit": "Register",
+      "saveFailed": "The deck couldn't be registered."
+    },
+    "rounds": {
+      "title": "Rounds",
+      "startSwap": "Swap pairings",
+      "stopSwap": "Stop swapping",
+      "swapHint": "Pick two players to swap them. Once a result is entered, the pairings are fixed.",
+      "empty": "No round has been played yet.",
+      "round": "Round {number}",
+      "confirmRepeat": {
+        "title": "Repeat pairing?",
+        "description": "This pairing has already been played. Swap anyway?"
+      },
+      "swapFailed": "These pairings couldn't be swapped."
+    },
+    "match": {
+      "table": "Table {number}",
+      "bye": "Bye",
+      "byeScore": "Counts as {score}",
+      "versus": "vs.",
+      "draw": "Draw",
+      "win": "{name} wins",
+      "editResult": "Change result",
+      "saveResult": "Save result",
+      "enterResultFirst": "Enter a result first",
+      "gamesOf": "Games won by {name}",
+      "saveFailed": "The result couldn't be saved."
+    },
+    "standings": {
+      "title": "Standings",
+      "winner": "Winner: {name}",
+      "empty": "No results yet.",
+      "columns": {
+        "rank": "Rank",
+        "player": "Player",
+        "points": "Points"
+      },
+      "record": "W-L-D",
+      "recordTitle": "Wins–losses–draws",
+      "omw": "OMW%",
+      "omwTitle": "Opponents' match win rate",
+      "gw": "GW%",
+      "gwTitle": "Own game win rate",
+      "ogw": "OGW%",
+      "ogwTitle": "Opponents' game win rate",
+      "pointsShort": "pts",
+      "rate": "{value}%",
+      "legend": "Points: win {win}, draw {draw} · W-L-D = wins–losses–draws · OMW% = opponents' match win rate · GW% = own game win rate · OGW% = opponents' game win rate"
+    }
+  }
 }

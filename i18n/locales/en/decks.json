@@ -1,3 +1,146 @@
 {
-  "decks": {}
+  "decks": {
+    "section": {
+      "main": "Main Deck",
+      "extra": "Extra Deck",
+      "side": "Side Deck"
+    },
+    "sectionShort": {
+      "main": "Main",
+      "extra": "Extra",
+      "side": "Side"
+    },
+    "copyName": "{name} (copy)",
+    "warningsTitle": "Deck-building hints",
+    "menu": {
+      "edit": "Edit",
+      "rename": "Rename",
+      "duplicate": "Duplicate",
+      "share": "Share"
+    },
+    "confirm": {
+      "delete": {
+        "title": "Delete deck",
+        "description": "Really delete \"{name}\"?"
+      }
+    },
+    "toast": {
+      "duplicated": "Deck duplicated",
+      "deleted": "Deck deleted"
+    },
+    "errors": {
+      "duplicateFailed": "Couldn't duplicate the deck.",
+      "deleteFailed": "Couldn't delete the deck."
+    },
+    "list": {
+      "title": "Decks",
+      "count": "{count} deck | {count} decks",
+      "createWithAi": "Create with AI",
+      "newDeck": "New deck",
+      "searchPlaceholder": "Search decks (name or card)...",
+      "searchLabel": "Search decks",
+      "sortLabel": "Sort",
+      "sort": {
+        "updated": "Recently edited",
+        "newest": "Newest",
+        "nameAsc": "Name (A-Z)",
+        "nameDesc": "Name (Z-A)"
+      },
+      "formatLabel": "Format",
+      "allFormats": "All formats",
+      "noFormat": "No format",
+      "empty": {
+        "title": "No decks yet",
+        "description": "Create your first deck and fill it with cards from your inventory."
+      },
+      "noResults": {
+        "title": "No decks found",
+        "description": "No deck name and no card in a deck matches \"{query}\"."
+      },
+      "emptyCover": "Empty",
+      "options": "Options for {name}",
+      "status": {
+        "empty": "Empty",
+        "complete": "All cards owned",
+        "missing": "{count} card not owned | {count} cards not owned"
+      },
+      "cardCount": "{count} card | {count} cards"
+    },
+    "form": {
+      "createTitle": "New deck",
+      "editTitle": "Edit deck",
+      "name": "Name",
+      "nameLabel": "Deck name",
+      "namePlaceholder": "e.g. Blue-Eyes Control",
+      "nameRequired": "Please enter a name.",
+      "description": "Description (optional)",
+      "descriptionLabel": "Deck description",
+      "create": "Create",
+      "saveFailed": "Couldn't save the deck."
+    },
+    "editor": {
+      "fallbackTitle": "Deck",
+      "back": "Back to decks",
+      "loadFailed": "Couldn't load the deck",
+      "loadFailedDescription": "Please try again later.",
+      "totalCards": "{count} card in total | {count} cards in total",
+      "addCards": "Add cards",
+      "editWithAi": "Edit with AI",
+      "share": "Share",
+      "moreActions": "More actions",
+      "formatLabel": "Format",
+      "noFormat": "No format",
+      "ownFormat": "{name} (custom)",
+      "validation": {
+        "title": "Rule check",
+        "statusLabel": "Rule check status",
+        "noFormatSelected": "No format selected",
+        "chooseFormat": "Choose a format above to check this deck's legality automatically.",
+        "legal": "The deck meets all rules of \"{format}\"."
+      },
+      "countIn": "Count in the {section}",
+      "emptySection": "No cards in the {section} yet.",
+      "cover": {
+        "chosen": "Cover card",
+        "auto": "Cover card (automatic)"
+      },
+      "row": {
+        "ownedOnly": "You only own {owned}",
+        "removeOne": "Remove one copy of {name} from the {section}",
+        "quantity": "Quantity of {name} in the {section}",
+        "addOne": "Add one copy of {name} to the {section}",
+        "options": "Options for {name}",
+        "remove": "Remove {name} from the {section}",
+        "moveTo": "Move to {section}",
+        "coverAuto": "Choose cover card automatically",
+        "coverSet": "Set as cover card"
+      },
+      "errors": {
+        "saveFailed": "Couldn't save the change."
+      },
+      "addPanel": {
+        "title": "Add from inventory",
+        "hide": "Hide",
+        "show": "Show",
+        "searchPlaceholder": "Search cards...",
+        "searchLabel": "Search cards for the deck",
+        "type": "Type",
+        "attribute": "Attribute",
+        "allTypes": "All types",
+        "allAttributes": "All attributes",
+        "includeCatalog": "Also show catalog cards",
+        "shownOf": "{shown} of {total} cards",
+        "total": "{count} card | {count} cards",
+        "empty": "No cards found. Turn on “Also show catalog cards” or {link}.",
+        "emptyLink": "add cards to your inventory",
+        "ownedInDeck": "Owned: {owned} · in deck: {inDeck}",
+        "cannotAdd": "{name} can't go in the {section}",
+        "addButton": "+ {section}",
+        "addTo": "Add {name} to the {section}",
+        "noSection": "{name} can't go in any section of this deck.",
+        "loadMore": "Load more",
+        "loadMoreFailed": "Couldn't load more cards."
+      }
+    }
+  }
 }

@@ -1,7 +1,5 @@
 <script setup lang="ts">
-import { ROUND_STATUS_LABELS, TOURNAMENT_ERROR_MESSAGES } from '~~/shared/tournaments'
-import type { TournamentDetail, TournamentErrorCode, TournamentMatchDto, TournamentRoundDto } from '~~/shared/tournaments'
-import { apiErrorCode, apiErrorMessage } from '~/utils/card-entry'
+import type { TournamentDetail, TournamentMatchDto, TournamentRoundDto } from '~~/shared/tournaments'
 
 const props = defineProps<{
   tournament: TournamentDetail
@@ -11,10 +9,8 @@ const emit = defineEmits<{
   updated: [detail: TournamentDetail]
 }>()
 
-function errorText(error: unknown, fallback: string) {
-  const code = apiErrorCode(error) as TournamentErrorCode | undefined
-  return (code && TOURNAMENT_ERROR_MESSAGES[code]) || apiErrorMessage(error, fallback)
-}
+const { t } = useI18n()
+const apiError = useApiError()
 
 // Rounds are shown newest first; only the current (pending) round is
 // rendered expanded, everything else lives in a collapsed section.
@@ -131,8 +127,8 @@ async function onSelectSlot(matchId: string, slot: 'a' | 'b') {
 
   if (wouldRecreatePairing(first!.matchId, first!.slot, second!.matchId, second!.slot)) {
     const confirmed = await confirm({
-      title: 'Paarung wiederholen?',
-      description: 'Diese Paarung gab es bereits. Trotzdem tauschen?',
+      title: t('tournaments.rounds.confirmRepeat.title'),
+      description: t('tournaments.rounds.confirmRepeat.description'),
     })
     if (!confirmed) {
       return
@@ -149,7 +145,7 @@ async function onSelectSlot(matchId: string, slot: 'a' | 'b') {
     emit('updated', detail)
   }
   catch (error) {
-    swapError.value = errorText(error, 'Diese Paarungen konnten nicht getauscht werden.')
+    swapError.value = apiError(error, 'tournaments.rounds.swapFailed')
   }
   finally {
     isSwapping.value = false
@@ -161,14 +157,14 @@ async function onSelectSlot(matchId: string, slot: 'a' | 'b') {
   <section class="rounded-md border border-gray-200 bg-white p-4">
     <div class="flex flex-wrap items-center justify-between gap-2">
       <h2 class="text-base font-semibold text-gray-900">
-        Runden
+        {{ t('tournaments.rounds.title') }}
       </h2>
       <UButton
         v-if="tournament.canEditPairings"
         size="xs"
         :color="swapMode ? 'error' : 'neutral'"
         :variant="swapMode ? 'solid' : 'outline'"
-        :label="swapMode ? 'Tauschen beenden' : 'Paarungen tauschen'"
+        :label="swapMode ? t('tournaments.rounds.stopSwap') : t('tournaments.rounds.startSwap')"
         class="tap-target"
         @click="toggleSwapMode"
       />
@@ -178,7 +174,7 @@ async function onSelectSlot(matchId: string, slot: 'a' | 'b') {
       v-if="swapMode"
       class="mt-2 text-xs text-gray-500"
     >
-      Wähle zwei Spieler, um sie zu tauschen. Sobald ein Ergebnis eingetragen ist, sind die Paarungen fix.
+      {{ t('tournaments.rounds.swapHint') }}
     </p>
     <p
       v-if="swapError"
@@ -191,7 +187,7 @@ async function onSelectSlot(matchId: string, slot: 'a' | 'b') {
       v-if="orderedRounds.length === 0"
       class="mt-4 text-sm text-gray-500"
     >
-      Es wurde noch keine Runde gespielt.
+      {{ t('tournaments.rounds.empty') }}
     </p>
 
     <div class="mt-4 space-y-3">
@@ -205,13 +201,13 @@ async function onSelectSlot(matchId: string, slot: 'a' | 'b') {
         >
           <div class="flex items-center gap-2">
             <h3 class="text-sm font-semibold text-gray-900">
-              Runde {{ round.number }}
+              {{ t('tournaments.rounds.round', { number: round.number }) }}
             </h3>
             <UBadge
               size="sm"
               variant="subtle"
               color="warning"
-              :label="ROUND_STATUS_LABELS[round.status]"
+              :label="t(`tournaments.roundStatus.${round.status}`)"
             />
           </div>
           <TournamentsMatchRow
@@ -240,12 +236,12 @@ async function onSelectSlot(matchId: string, slot: 'a' | 'b') {
             trailing-icon="i-lucide-chevron-down"
           >
             <span class="flex items-center gap-2">
-              <span class="text-sm font-semibold text-gray-900">Runde {{ round.number }}</span>
+              <span class="text-sm font-semibold text-gray-900">{{ t('tournaments.rounds.round', { number: round.number }) }}</span>
               <UBadge
                 size="sm"
                 variant="subtle"
                 color="neutral"
-                :label="ROUND_STATUS_LABELS[round.status]"
+                :label="t(`tournaments.roundStatus.${round.status}`)"
               />
             </span>
           </UButton>

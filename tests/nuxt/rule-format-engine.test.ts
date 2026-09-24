@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import {
   banlistCopies,
   cardHasEffect,
-  describeRule,
   evaluateDeck,
   matchesCardFilter,
   RuleSetValidationError,
@@ -233,15 +232,17 @@ describe('deck size rules', () => {
     expect(tooSmall.legal).toBe(false)
     expect(codes(tooSmall.issues)).toEqual(['deck_size_min'])
     expect(tooSmall.issues[0]!.section).toBe('main')
-    expect(tooSmall.issues[0]!.message).toContain('Das Main Deck hat 3 Karten, mindestens 40 sind erforderlich.')
+    expect(tooSmall.issues[0]!.params).toEqual({ section: 'main', count: 3, min: 40 })
+    // `message` is canonical English for the assistant model (ADR 0014).
+    expect(tooSmall.issues[0]!.message).toBe('The Main Deck has 3 cards; at least 40 are required.')
 
     const tooBig = evaluateDeck(rules, [
       card('darkMagician', 'main', 40),
       card('stardustDragon', 'extra', 16),
     ], ALL_CARDS)
     expect(codes(tooBig.issues)).toContain('deck_size_max')
-    expect(tooBig.issues.find(issue => issue.code === 'deck_size_max')!.message)
-      .toContain('Das Extra Deck hat 16 Karten, höchstens 15 sind erlaubt.')
+    expect(tooBig.issues.find(issue => issue.code === 'deck_size_max')!.params)
+      .toEqual({ section: 'extra', count: 16, max: 15 })
   })
 
   it('is silent when every section is within range', () => {
@@ -270,7 +271,8 @@ describe('copy limits', () => {
     const tooMany = evaluateDeck([], [card('kuriboh', 'main', 3), card('kuriboh', 'side', 1)], ALL_CARDS)
     expect(codes(tooMany.issues)).toEqual(['card_limit_exceeded'])
     expect(tooMany.issues[0]!.cardId).toBe(CARDS.kuriboh.id)
-    expect(tooMany.issues[0]!.message).toBe('Kuriboh: 4 Kopien im Deck, erlaubt sind 3 Kopien.')
+    expect(tooMany.issues[0]!.params).toEqual({ cardId: CARDS.kuriboh.id, cardName: 'Kuriboh', copies: 4, maxCopies: 3 })
+    expect(tooMany.issues[0]!.message).toBe('Kuriboh: 4 copies in the deck; 3 copies are allowed.')
   })
 
   it('honours a custom copies rule in both directions', () => {
@@ -288,6 +290,7 @@ describe('copy limits', () => {
   it('reports an unknown card instead of silently skipping it', () => {
     const result = evaluateDeck([], [{ catalogCardId: 123456, section: 'main', quantity: 1 }], ALL_CARDS)
     expect(codes(result.issues)).toEqual(['unknown_card_data'])
+    expect(result.issues[0]!.params).toEqual({ cardId: 123456 })
     expect(result.cards[123456]).toBeUndefined()
   })
 })
@@ -308,13 +311,13 @@ describe('card_status rules', () => {
 
     expect(result.legal).toBe(false)
     expect(codes(result.issues)).toEqual(['card_forbidden'])
-    expect(result.issues[0]!.message).toBe('Pot of Greed ist in diesem Format verboten.')
+    expect(result.issues[0]!.params).toEqual({ cardId: CARDS.potOfGreed.id, cardName: 'Pot of Greed' })
 
     expect(result.cards[CARDS.potOfGreed.id]!.status).toBe('forbidden')
     expect(result.cards[CARDS.monsterReborn.id]).toEqual({
       maxCopies: 1,
       status: 'limited',
-      reasons: ['Formatregel: limitiert (1)'],
+      reasons: [{ kind: 'format_rule', status: 'limited' }],
     })
     expect(result.cards[CARDS.kuriboh.id]!.maxCopies).toBe(2)
   })
@@ -326,7 +329,7 @@ describe('card_status rules', () => {
     ], ALL_CARDS)
 
     expect(codes(result.issues)).toEqual(['card_limit_exceeded'])
-    expect(result.issues[0]!.message).toBe('Kuriboh: 3 Kopien im Deck, erlaubt sind 2 Kopien.')
+    expect(result.issues[0]!.params).toEqual({ cardId: CARDS.kuriboh.id, cardName: 'Kuriboh', copies: 3, maxCopies: 2 })
   })
 })
 
@@ -339,7 +342,7 @@ describe('banlist rules', () => {
     ], ALL_CARDS)
 
     expect(result.cards[CARDS.potOfGreed.id]!.status).toBe('forbidden')
-    expect(result.cards[CARDS.potOfGreed.id]!.reasons).toEqual(['TCG-Banliste: Forbidden'])
+    expect(result.cards[CARDS.potOfGreed.id]!.reasons).toEqual([{ kind: 'banlist', source: 'tcg', raw: 'Forbidden' }])
     expect(result.cards[CARDS.monsterReborn.id]!.maxCopies).toBe(1)
     // Raigeki is unlimited in the TCG today.
     expect(result.cards[CARDS.raigeki.id]!.status).toBe('unrestricted')
@@ -370,10 +373,8 @@ describe('banlist rules', () => {
     expect(result.cards[CARDS.monsterReborn.id]!.status).toBe('forbidden')
     expect(result.cards[CARDS.raigeki.id]!.status).toBe('forbidden')
 
-    expect(result.issues.map(issue => issue.message)).toEqual([
-      'Monster Reborn ist in diesem Format verboten.',
-      'Raigeki ist in diesem Format verboten.',
-    ])
+    // Sorted by card name.
+    expect(result.issues.map(issue => issue.params.cardName)).toEqual(['Monster Reborn', 'Raigeki'])
   })
 })
 
@@ -392,7 +393,7 @@ describe('filter rules', () => {
     expect(result.cards[CARDS.potOfGreed.id]).toEqual({
       maxCopies: 1,
       status: 'limited',
-      reasons: ['Zauber nur einmal'],
+      reasons: [{ kind: 'filter', label: 'Zauber nur einmal', rule: rules[0] }],
     })
     expect(result.cards[CARDS.darkMagician.id]!.status).toBe('unrestricted')
     expect(codes(result.issues)).toEqual(['card_limit_exceeded'])
@@ -417,7 +418,7 @@ describe('filter rules', () => {
     expect(result.cards[CARDS.darkMagician.id]!.status).toBe('unrestricted')
     expect(result.cards[CARDS.stardustDragon.id]!.status).toBe('forbidden')
     expect(result.cards[CARDS.ocgOnly.id]!.status).toBe('forbidden')
-    expect(result.cards[CARDS.ocgOnly.id]!.reasons).toEqual(['Nur Karten bis Juni 2005'])
+    expect(result.cards[CARDS.ocgOnly.id]!.reasons).toEqual([{ kind: 'filter', label: 'Nur Karten bis Juni 2005', rule: rules[0] }])
     expect(codes(result.issues)).toEqual(['card_forbidden', 'card_forbidden'])
   })
 
@@ -483,13 +484,16 @@ describe('rule interplay', () => {
 
     // GOAT limits Pot of Greed to 1, the filter would allow 2 -> 1 wins.
     expect(result.cards[CARDS.potOfGreed.id]!.maxCopies).toBe(1)
-    expect(result.cards[CARDS.potOfGreed.id]!.reasons).toEqual(['GOAT-Banliste: Limited', 'Zauber semi'])
+    expect(result.cards[CARDS.potOfGreed.id]!.reasons).toEqual([
+      { kind: 'banlist', source: 'goat', raw: 'Limited' },
+      { kind: 'filter', label: 'Zauber semi', rule: rules[2] },
+    ])
 
     expect(result.cards[CARDS.raigeki.id]!.maxCopies).toBe(0)
     expect(result.cards[CARDS.raigeki.id]!.reasons).toEqual([
-      'GOAT-Banliste: Forbidden',
-      'Zauber semi',
-      'Formatregel: verboten',
+      { kind: 'banlist', source: 'goat', raw: 'Forbidden' },
+      { kind: 'filter', label: 'Zauber semi', rule: rules[2] },
+      { kind: 'format_rule', status: 'forbidden' },
     ])
   })
 
@@ -502,37 +506,6 @@ describe('rule interplay', () => {
 
     expect(result.legal).toBe(true)
     expect(result.issues).toEqual([])
-  })
-})
-
-describe('rule summaries', () => {
-  it('describes every rule kind in German', () => {
-    expect(describeRule({ kind: 'deck_size', section: 'main', min: 40, max: 60 }))
-      .toBe('Main Deck: 40–60 Karten')
-    expect(describeRule({ kind: 'deck_size', section: 'extra', max: 15 }))
-      .toBe('Extra Deck: höchstens 15 Karten')
-    expect(describeRule({ kind: 'copies', maxCopies: 3 })).toBe('Höchstens 3 Kopien pro Karte')
-    expect(describeRule({ kind: 'banlist', source: 'goat' })).toBe('Offizielle Banliste (GOAT)')
-
-    expect(describeRule(
-      { kind: 'card_status', status: 'forbidden', cardIds: [CARDS.potOfGreed.id] },
-      { cardNames: { [CARDS.potOfGreed.id]: 'Pot of Greed' } },
-    )).toBe('Verboten: Pot of Greed')
-
-    expect(describeRule({
-      kind: 'filter',
-      match: 'matching',
-      filter: { releasedAfter: '2005-07-01' },
-      maxCopies: 0,
-    })).toBe('Karten mit erschienen nach dem 01.07.2005 (TCG): verboten')
-
-    expect(describeRule({
-      kind: 'filter',
-      match: 'not_matching',
-      filter: { releasedBefore: '2005-07-01', region: 'tcg' },
-      maxCopies: 0,
-      label: 'Nur Karten bis Juni 2005',
-    })).toContain('Nur Karten bis Juni 2005')
   })
 })
 

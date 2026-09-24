@@ -1,3 +1,233 @@
 {
-  "tournaments": {}
+  "tournaments": {
+    "noFormat": "Ohne Format",
+    "noDeck": "Kein Deck",
+    "dropped": "Ausgestiegen",
+    "backToList": "Zurück zu den Turnieren",
+    "status": {
+      "registration": "Anmeldung",
+      "running": "Läuft",
+      "finished": "Abgeschlossen"
+    },
+    "pairingSystem": {
+      "swiss": {
+        "label": "Schweizer System",
+        "description": "Gleich starke Spieler treffen aufeinander; Wiederholungen werden vermieden."
+      },
+      "round_robin": {
+        "label": "Jeder gegen jeden",
+        "description": "Jeder Spieler tritt genau einmal gegen jeden anderen an."
+      }
+    },
+    "roundStatus": {
+      "pending": "Offen",
+      "completed": "Abgeschlossen"
+    },
+    "list": {
+      "title": "Turniere",
+      "count": "{count} Turnier | {count} Turniere",
+      "newTournament": "Neues Turnier",
+      "tabs": {
+        "organizer": "Meine Turniere ({count})",
+        "participant": "Teilnahmen ({count})"
+      },
+      "filter": {
+        "active": "Aktiv",
+        "finished": "Abgeschlossen"
+      },
+      "empty": {
+        "organizerActive": {
+          "title": "Noch keine Turniere",
+          "text": "Lege dein erstes Turnier an und lade Spieler per E-Mail oder als Gast ein."
+        },
+        "organizerFinished": {
+          "title": "Noch keine abgeschlossenen Turniere",
+          "text": "Turniere, die du leitest, erscheinen hier, sobald du sie abschließt."
+        },
+        "participantActive": {
+          "title": "Keine Teilnahmen",
+          "text": "Du bist noch zu keinem Turnier eingeladen."
+        },
+        "participantFinished": {
+          "title": "Keine abgeschlossenen Teilnahmen",
+          "text": "Turniere, an denen du teilgenommen hast, erscheinen hier, sobald sie abgeschlossen sind."
+        }
+      },
+      "participationHint": "Du nimmst an {count} Turnier teil. | Du nimmst an {count} Turnieren teil.",
+      "showInvited": "Eingeladene Turniere ansehen",
+      "participantCount": "{count} Teilnehmer | {count} Teilnehmer",
+      "roundProgress": "Runde {current}/{planned}",
+      "organizedBy": "Von {name}"
+    },
+    "new": {
+      "title": "Neues Turnier",
+      "description": "Spieler lädst du nach dem Anlegen per E-Mail oder als Gast ein.",
+      "name": "Turniername",
+      "namePlaceholder": "z. B. Freitagsturnier",
+      "nameRequired": "Bitte einen Namen angeben.",
+      "descriptionLabel": "Beschreibung (optional)",
+      "descriptionAriaLabel": "Beschreibung",
+      "format": "Format",
+      "pairingSystem": "Paarungssystem",
+      "plannedRounds": "Geplante Runden",
+      "plannedRoundsPlaceholder": "Automatisch",
+      "plannedRoundsRoundRobinHint": "Bei \"Jeder gegen jeden\" ergibt sich die Rundenzahl aus der Teilnehmerzahl.",
+      "plannedRoundsHint": "Leer lassen: wird beim Start aus der Teilnehmerzahl berechnet.",
+      "includeSelf": "Ich spiele selbst mit",
+      "submit": "Turnier anlegen",
+      "createFailed": "Das Turnier konnte nicht angelegt werden."
+    },
+    "detail": {
+      "pageTitleFallback": "Turnier",
+      "loadFailed": {
+        "title": "Turnier konnte nicht geladen werden",
+        "description": "Das Turnier ist nicht verfügbar oder du hast keinen Zugriff darauf."
+      },
+      "pairingSystem": "Paarungssystem: {name}",
+      "notStarted": "Noch nicht gestartet",
+      "roundProgress": "Runde {current} von {planned}",
+      "organizer": "Turnierleitung: {name}",
+      "actions": {
+        "start": "Turnier starten",
+        "completeRound": "Runde abschließen",
+        "nextRound": "Nächste Runde",
+        "finish": "Turnier abschließen",
+        "delete": "Turnier löschen"
+      },
+      "hints": {
+        "minParticipants": "Mindestens {min} Teilnehmer nötig",
+        "resultsMissing": "Alle Ergebnisse müssen eingetragen sein",
+        "completeCurrentRoundFirst": "Schließe zuerst die laufende Runde ab"
+      },
+      "finishedBanner": "Dieses Turnier ist abgeschlossen und kann nicht mehr geändert werden.",
+      "participantBanner": "Du nimmst an diesem Turnier teil. Änderungen nimmt die Turnierleitung vor.",
+      "confirm": {
+        "finish": {
+          "title": "Turnier abschließen",
+          "description": "Turnier abschließen? Ergebnisse und Paarungen können danach nicht mehr geändert werden."
+        },
+        "delete": {
+          "title": "Turnier löschen",
+          "description": "\"{name}\" wirklich löschen? Alle Runden und Ergebnisse gehen verloren."
+        }
+      },
+      "errors": {
+        "startFailed": "Das Turnier konnte nicht gestartet werden.",
+        "createRoundFailed": "Die nächste Runde konnte nicht erstellt werden.",
+        "completeRoundFailed": "Die Runde konnte nicht abgeschlossen werden.",
+        "finishFailed": "Das Turnier konnte nicht abgeschlossen werden.",
+        "deleteFailed": "Das Turnier konnte nicht gelöscht werden."
+      }
+    },
+    "participants": {
+      "title": "Teilnehmer ({count})",
+      "accountBadge": "Konto",
+      "accountHint": "Spieler mit eigenem Benutzerkonto – meldet sein Deck selbst an. Gäste ohne Konto verwaltet die Turnierleitung.",
+      "accountLegend": "„Konto“: Spieler mit eigenem Benutzerkonto – meldet sein Deck selbst an. Gäste ohne Konto verwaltet die Turnierleitung.",
+      "deckReminder": "Melde dein Deck an, bevor das Turnier startet.",
+      "registerDeck": "Deck anmelden",
+      "changeDeck": "Deck ändern",
+      "managesOwnDeck": "Meldet Deck selbst an",
+      "add": {
+        "byEmail": "Per E-Mail",
+        "asGuest": "Als Gast",
+        "emailPlaceholder": "spieler{'@'}example.com",
+        "emailAriaLabel": "E-Mail-Adresse",
+        "guestNamePlaceholder": "Name des Gasts",
+        "guestNameAriaLabel": "Name",
+        "submit": "Teilnehmer hinzufügen",
+        "asGuestInstead": "Stattdessen als Gast hinzufügen"
+      },
+      "columns": {
+        "name": "Name",
+        "deck": "Deck",
+        "actions": "Aktionen"
+      },
+      "showIssues": "Regelverstöße von {name} anzeigen",
+      "issuesTitle": "Regelverstöße",
+      "issueCount": "{count} Regelverstoß | {count} Regelverstöße",
+      "registeredAt": "Angemeldet am {date}",
+      "optionsFor": "Optionen für {name}",
+      "menu": {
+        "rename": "Umbenennen",
+        "reinstate": "Zurückholen",
+        "drop": "Aussteigen lassen"
+      },
+      "confirm": {
+        "remove": {
+          "title": "Teilnehmer entfernen",
+          "description": "{name} aus dem Turnier entfernen? Ein angemeldetes Deck geht dabei verloren."
+        }
+      },
+      "rename": {
+        "title": "Teilnehmer umbenennen",
+        "name": "Name",
+        "nameAriaLabel": "Name des Teilnehmers"
+      },
+      "errors": {
+        "addFailed": "Der Teilnehmer konnte nicht hinzugefügt werden.",
+        "renameFailed": "Der Teilnehmer konnte nicht umbenannt werden.",
+        "dropFailed": "Der Status konnte nicht geändert werden.",
+        "removeFailed": "Der Teilnehmer konnte nicht entfernt werden."
+      }
+    },
+    "deckRegistration": {
+      "title": "Deck anmelden",
+      "deck": "Deck",
+      "checking": "Regelprüfung läuft …",
+      "counts": "{count} Karte (Main {main}, Extra {extra}, Side {side}) | {count} Karten (Main {main}, Extra {extra}, Side {side})",
+      "checkedOnRegistration": "Die Regelprüfung erfolgt bei der Anmeldung.",
+      "noFormat": "Dieses Turnier hat kein Pflichtformat.",
+      "copyHint": "Dein Deck wird beim Anmelden kopiert. Spätere Änderungen am Deck ändern das Turnier nicht.",
+      "submit": "Anmelden",
+      "saveFailed": "Das Deck konnte nicht angemeldet werden."
+    },
+    "rounds": {
+      "title": "Runden",
+      "startSwap": "Paarungen tauschen",
+      "stopSwap": "Tauschen beenden",
+      "swapHint": "Wähle zwei Spieler, um sie zu tauschen. Sobald ein Ergebnis eingetragen ist, sind die Paarungen fix.",
+      "empty": "Es wurde noch keine Runde gespielt.",
+      "round": "Runde {number}",
+      "confirmRepeat": {
+        "title": "Paarung wiederholen?",
+        "description": "Diese Paarung gab es bereits. Trotzdem tauschen?"
+      },
+      "swapFailed": "Diese Paarungen konnten nicht getauscht werden."
+    },
+    "match": {
+      "table": "Tisch {number}",
+      "bye": "Freilos",
+      "byeScore": "Gewertet als {score}",
+      "versus": "vs.",
+      "draw": "Unentschieden",
+      "win": "Sieg {name}",
+      "editResult": "Ergebnis ändern",
+      "saveResult": "Ergebnis speichern",
+      "enterResultFirst": "Trage zuerst ein Ergebnis ein",
+      "gamesOf": "Spiele {name}",
+      "saveFailed": "Das Ergebnis konnte nicht gespeichert werden."
+    },
+    "standings": {
+      "title": "Tabelle",
+      "winner": "Sieger: {name}",
+      "empty": "Noch keine Ergebnisse.",
+      "columns": {
+        "rank": "Platz",
+        "player": "Spieler",
+        "points": "Punkte"
+      },
+      "record": "S-N-U",
+      "recordTitle": "Siege–Niederlagen–Unentschieden",
+      "omw": "OMW%",
+      "omwTitle": "Siegquote der Gegner",
+      "gw": "GW%",
+      "gwTitle": "Eigene Spielquote",
+      "ogw": "OGW%",
+      "ogwTitle": "Spielquote der Gegner",
+      "pointsShort": "Pkt.",
+      "rate": "{value} %",
+      "legend": "Punkte: Sieg {win}, Unentschieden {draw} · S-N-U = Siege–Niederlagen–Unentschieden · OMW% = Siegquote der Gegner · GW% = eigene Spielquote · OGW% = Spielquote der Gegner"
+    }
+  }
 }

@@ -1,9 +1,12 @@
 import { defineComponent } from 'vue'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DOMWrapper } from '@vue/test-utils'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
 import FormatsPage from '~/pages/formats/index.vue'
 import ConfirmDialog from '~/components/layout/ConfirmDialog.vue'
+import { setTestLocale } from './fixtures/locale'
+
+afterEach(() => setTestLocale('de'))
 
 // `useConfirm()` is backed by a single shared `useState`, resolved by
 // `ConfirmDialog` (normally mounted once in `default.vue`) — mounting both
@@ -114,7 +117,15 @@ describe('formats page', () => {
     const component = await mountSuspended(FormatsPage)
     await component.find('[aria-label="TCG Advanced klonen"]').trigger('click')
 
-    expect(fetchMock).toHaveBeenCalledWith('/api/formats/tcg-advanced/clone', { method: 'POST' })
+    // The copy is named (and a built-in's description translated) in the
+    // interface language (ADR 0014).
+    expect(fetchMock).toHaveBeenCalledWith('/api/formats/tcg-advanced/clone', {
+      method: 'POST',
+      body: {
+        name: 'TCG Advanced (Kopie)',
+        description: expect.stringContaining('Offizielles Turnierformat des TCG'),
+      },
+    })
     vi.unstubAllGlobals()
   })
 
@@ -145,5 +156,46 @@ describe('formats page', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/formats/own-1', { method: 'DELETE' })
 
     vi.unstubAllGlobals()
+  })
+})
+
+describe('formats page in English', () => {
+  const builtins = () => [
+    format({ id: 'unlimited', name: 'No banlist', description: 'Standard deck sizes and at most 3 copies per card, but no Forbidden & Limited List at all.', ruleCount: 4 }),
+    format({ id: 'tcg-advanced', name: 'TCG Advanced', description: 'Official TCG tournament format.', ruleCount: 5 }),
+  ]
+
+  it('lists the built-ins translated by id and user formats as they are', async () => {
+    state.formats = { items: [...builtins(), format({ id: 'own-1', name: 'Hausregeln', isBuiltin: false, ruleCount: 1, description: 'Nur Spaß' })] }
+    await setTestLocale('en')
+
+    const component = await mountSuspended(FormatsPage)
+    const text = component.text()
+
+    expect(component.find('h1').text()).toBe('Formats')
+    expect(text).toContain('Official formats')
+    expect(text).toContain('My formats')
+    expect(text).toContain('No banlist')
+    expect(text).toContain('Official TCG tournament format: standard deck sizes')
+    expect(text).toContain('5 rules')
+    expect(text).toContain('1 rule')
+    expect(text).toContain('Hausregeln')
+    expect(text).toContain('Nur Spaß')
+    expect(component.find('[aria-label="Clone No banlist"]').exists()).toBe(true)
+    expect(component.find('[aria-label="Delete Hausregeln"]').exists()).toBe(true)
+    expect(text).not.toMatch(/Regel|Formate|Offiziell|Ohne Banliste|Klonen/)
+  })
+
+  it('shows the German names and descriptions of built-ins stored in English', async () => {
+    state.formats = { items: builtins() }
+
+    const component = await mountSuspended(FormatsPage)
+    const text = component.text()
+
+    expect(text).toContain('Ohne Banliste')
+    expect(text).toContain('Offizielles Turnierformat des TCG')
+    expect(text).not.toContain('No banlist')
+    // Built-ins keep their German order (as before the names moved to English).
+    expect(text.indexOf('Ohne Banliste')).toBeLessThan(text.indexOf('TCG Advanced'))
   })
 })

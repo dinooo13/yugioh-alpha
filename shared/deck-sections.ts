@@ -51,8 +51,5 @@ export function isSectionAllowedForCard(card: DeckSectionCard, section: DeckSect
   return allowedSectionsForCard(card).includes(section)
 }
 
-export const DECK_SECTION_LABELS: Record<DeckSection, string> = {
-  main: 'Main Deck',
-  extra: 'Extra Deck',
-  side: 'Side Deck',
-}
+export const DECK_NAME_MAX_LENGTH = 80
+export const DECK_DESCRIPTION_MAX_LENGTH = 500

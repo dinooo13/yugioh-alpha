@@ -1,3 +1,146 @@
 {
-  "decks": {}
+  "decks": {
+    "section": {
+      "main": "Main Deck",
+      "extra": "Extra Deck",
+      "side": "Side Deck"
+    },
+    "sectionShort": {
+      "main": "Main",
+      "extra": "Extra",
+      "side": "Side"
+    },
+    "copyName": "{name} (Kopie)",
+    "warningsTitle": "Hinweise zum Deckaufbau",
+    "menu": {
+      "edit": "Bearbeiten",
+      "rename": "Umbenennen",
+      "duplicate": "Duplizieren",
+      "share": "Teilen"
+    },
+    "confirm": {
+      "delete": {
+        "title": "Deck löschen",
+        "description": "\"{name}\" wirklich löschen?"
+      }
+    },
+    "toast": {
+      "duplicated": "Deck dupliziert",
+      "deleted": "Deck gelöscht"
+    },
+    "errors": {
+      "duplicateFailed": "Das Deck konnte nicht dupliziert werden.",
+      "deleteFailed": "Das Deck konnte nicht gelöscht werden."
+    },
+    "list": {
+      "title": "Decks",
+      "count": "{count} Deck | {count} Decks",
+      "createWithAi": "Mit KI erstellen",
+      "newDeck": "Neues Deck",
+      "searchPlaceholder": "Decks durchsuchen (Name oder Karte)...",
+      "searchLabel": "Decks durchsuchen",
+      "sortLabel": "Sortierung",
+      "sort": {
+        "updated": "Zuletzt bearbeitet",
+        "newest": "Neueste",
+        "nameAsc": "Name (A-Z)",
+        "nameDesc": "Name (Z-A)"
+      },
+      "formatLabel": "Format",
+      "allFormats": "Alle Formate",
+      "noFormat": "Ohne Format",
+      "empty": {
+        "title": "Noch keine Decks",
+        "description": "Lege dein erstes Deck an und fülle es mit Karten aus deinem Inventar."
+      },
+      "noResults": {
+        "title": "Keine Decks gefunden",
+        "description": "Kein Deckname und keine enthaltene Karte passt zu \"{query}\"."
+      },
+      "emptyCover": "Leer",
+      "options": "Optionen für {name}",
+      "status": {
+        "empty": "Leer",
+        "complete": "Alle Karten im Besitz",
+        "missing": "{count} fehlt im Besitz | {count} fehlen im Besitz"
+      },
+      "cardCount": "{count} Karte | {count} Karten"
+    },
+    "form": {
+      "createTitle": "Neues Deck",
+      "editTitle": "Deck bearbeiten",
+      "name": "Name",
+      "nameLabel": "Deckname",
+      "namePlaceholder": "z. B. Blue-Eyes Control",
+      "nameRequired": "Bitte einen Namen angeben.",
+      "description": "Beschreibung (optional)",
+      "descriptionLabel": "Deckbeschreibung",
+      "create": "Erstellen",
+      "saveFailed": "Das Deck konnte nicht gespeichert werden."
+    },
+    "editor": {
+      "fallbackTitle": "Deck",
+      "back": "Zurück zu den Decks",
+      "loadFailed": "Deck konnte nicht geladen werden",
+      "loadFailedDescription": "Bitte versuche es später erneut.",
+      "totalCards": "{count} Karte insgesamt | {count} Karten insgesamt",
+      "addCards": "Karten hinzufügen",
+      "editWithAi": "Mit KI bearbeiten",
+      "share": "Teilen",
+      "moreActions": "Weitere Aktionen",
+      "formatLabel": "Format",
+      "noFormat": "Kein Format",
+      "ownFormat": "{name} (eigenes)",
+      "validation": {
+        "title": "Regelprüfung",
+        "statusLabel": "Regelprüfung Status",
+        "noFormatSelected": "Kein Format gewählt",
+        "chooseFormat": "Wähle oben ein Format, um dieses Deck automatisch auf Legalität zu prüfen.",
+        "legal": "Das Deck erfüllt alle Regeln von \"{format}\"."
+      },
+      "countIn": "Anzahl im {section}",
+      "emptySection": "Noch keine Karten im {section}.",
+      "cover": {
+        "chosen": "Titelkarte",
+        "auto": "Titelkarte (automatisch)"
+      },
+      "row": {
+        "ownedOnly": "Du besitzt nur {owned}",
+        "removeOne": "Eine Kopie von {name} aus dem {section} entfernen",
+        "quantity": "Anzahl von {name} im {section}",
+        "addOne": "Eine Kopie von {name} zum {section} hinzufügen",
+        "options": "Optionen für {name}",
+        "remove": "{name} aus dem {section} entfernen",
+        "moveTo": "Nach {section}",
+        "coverAuto": "Titelkarte automatisch wählen",
+        "coverSet": "Als Titelkarte festlegen"
+      },
+      "errors": {
+        "saveFailed": "Die Änderung konnte nicht gespeichert werden."
+      },
+      "addPanel": {
+        "title": "Aus Inventar hinzufügen",
+        "hide": "Ausblenden",
+        "show": "Anzeigen",
+        "searchPlaceholder": "Karte suchen...",
+        "searchLabel": "Karten für das Deck suchen",
+        "type": "Typ",
+        "attribute": "Attribut",
+        "allTypes": "Alle Typen",
+        "allAttributes": "Alle Attribute",
+        "includeCatalog": "Auch Katalogkarten anzeigen",
+        "shownOf": "{shown} von {total} Karten",
+        "total": "{count} Karte | {count} Karten",
+        "empty": "Keine Karten gefunden. Aktiviere „Auch Katalogkarten anzeigen“ oder {link}.",
+        "emptyLink": "erfasse Karten im Inventar",
+        "ownedInDeck": "Besitz: {owned} · im Deck: {inDeck}",
+        "cannotAdd": "{name} kann nicht ins {section}",
+        "addButton": "+ {section}",
+        "addTo": "{name} zum {section} hinzufügen",
+        "noSection": "{name} kann in keine Sektion dieses Decks aufgenommen werden.",
+        "loadMore": "Mehr laden",
+        "loadMoreFailed": "Weitere Karten konnten nicht geladen werden."
+      }
+    }
+  }
 }

@@ -105,7 +105,7 @@ export function previewDeckProposal(db: Db, userId: string, input: DeckProposalI
   }
 
   const validation = rules
-    ? validateDeckCards(db, rules, entries, { cardNames: names })
+    ? validateDeckCards(db, rules, entries)
     : null
 
   const owned = ownedQuantitiesByCard(db, userId, cardIds)

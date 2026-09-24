@@ -1,3 +1,207 @@
 {
-  "formats": {}
+  "formats": {
+    "builtin": {
+      "tcg-advanced": {
+        "name": "TCG Advanced",
+        "description": "Official TCG tournament format: standard deck sizes, at most 3 copies per card and the current TCG Forbidden & Limited List."
+      },
+      "ocg": {
+        "name": "OCG",
+        "description": "Japanese tournament format: standard deck sizes, at most 3 copies per card and the OCG Forbidden & Limited List."
+      },
+      "goat": {
+        "name": "GOAT Format",
+        "description": "Retro format as of April 2005: only cards released in the TCG up to June 2005, plus the GOAT banlist.",
+        "cutoffLabel": "Only cards up to June 2005"
+      },
+      "unlimited": {
+        "name": "No banlist",
+        "description": "Standard deck sizes and at most 3 copies per card, but no Forbidden & Limited List at all."
+      }
+    },
+    "cardStatus": {
+      "forbidden": "Forbidden",
+      "limited": "Limited (1)",
+      "semi_limited": "Semi-limited (2)",
+      "unrestricted": "Allowed"
+    },
+    "ruleKind": {
+      "deck_size": "Deck size",
+      "copies": "Copies per card",
+      "card_status": "Individual cards",
+      "banlist": "Banlist",
+      "filter": "Card filter"
+    },
+    "rule": {
+      "incomplete": "Incomplete rule",
+      "deckSize": {
+        "range": "{section}: {min}–{max} card | {section}: {min}–{max} cards",
+        "min": "{section}: at least {min} card | {section}: at least {min} cards",
+        "max": "{section}: at most {max} card | {section}: at most {max} cards",
+        "none": "{section}: no size limit"
+      },
+      "copies": "At most {count} copy per card | At most {count} copies per card",
+      "cardStatus": "{status}: {cards}",
+      "noCardsSelected": "no cards selected",
+      "banlist": "Official banlist ({source})",
+      "filter": {
+        "matching": "Cards with {filter}: {copies}",
+        "notMatching": "Cards without {filter}: {copies}",
+        "labelled": "{label} — {rule}",
+        "copies": {
+          "forbidden": "forbidden",
+          "limited": "limited (max. 1)",
+          "semiLimited": "semi-limited (max. 2)",
+          "allowed": "allowed (max. {max})"
+        }
+      },
+      "cardFilter": {
+        "types": "card type {values}",
+        "frameTypes": "frame {values}",
+        "attributes": "attribute {values}",
+        "races": "monster type {values}",
+        "archetypes": "archetype {values}",
+        "sets": "set {values}",
+        "cards": "card {values}",
+        "or": "or",
+        "level": "Level",
+        "range": "{label} {min}–{max}",
+        "rangeMin": "{label} from {min}",
+        "rangeMax": "{label} up to {max}",
+        "withEffect": "with effect",
+        "withoutEffect": "without effect",
+        "releasedBefore": "released before {date} ({region})",
+        "releasedAfter": "released after {date} ({region})",
+        "nameContains": "name contains \"{text}\"",
+        "all": "all cards"
+      }
+    },
+    "capReason": {
+      "formatRule": {
+        "forbidden": "Format rule: forbidden",
+        "limited": "Format rule: limited (1)",
+        "semi_limited": "Format rule: semi-limited (2)"
+      },
+      "banlist": "{source} banlist: {status}"
+    },
+    "copyName": "{name} (copy)",
+    "back": "Back to formats",
+    "toast": {
+      "created": "\"{name}\" created",
+      "saved": "\"{name}\" saved",
+      "deleted": "\"{name}\" deleted"
+    },
+    "confirm": {
+      "delete": {
+        "title": "Delete format",
+        "description": "Really delete \"{name}\"? Decks with this format keep their cards and are left without a format."
+      }
+    },
+    "errors": {
+      "cloneFailed": "Couldn't copy the format.",
+      "deleteFailed": "Couldn't delete the format."
+    },
+    "list": {
+      "title": "Formats",
+      "description": "Rule formats decide which cards, and how many copies of each, a deck may contain.",
+      "newFormat": "New format",
+      "official": "Official formats",
+      "officialBadge": "Official",
+      "view": "View",
+      "clone": "Clone",
+      "cloneLabel": "Clone {name}",
+      "mine": "My formats",
+      "empty": {
+        "title": "No custom formats yet",
+        "description": "Create a format with your house rules or clone an official one."
+      },
+      "edit": "Edit",
+      "duplicate": "Duplicate",
+      "duplicateLabel": "Duplicate {name}",
+      "deleteLabel": "Delete {name}",
+      "ruleCount": "{count} rule | {count} rules"
+    },
+    "new": {
+      "title": "New format",
+      "description": "Set deck sizes, copy limits and your own rules."
+    },
+    "detail": {
+      "fallbackTitle": "Format",
+      "loadFailed": "Couldn't load the format",
+      "loadFailedDescription": "Please try again later.",
+      "builtinHint": "Official format – read-only. Clone it to add your own rules.",
+      "ownHint": "Custom format"
+    },
+    "editor": {
+      "name": "Name",
+      "nameLabel": "Format name",
+      "namePlaceholder": "e.g. Old cards only",
+      "nameRequired": "Please enter a name.",
+      "description": "Description (optional)",
+      "descriptionLabel": "Format description",
+      "rules": "Rules",
+      "noRules": "No rules yet. Without rules, every deck is legal.",
+      "removeRule": "Remove rule {index}",
+      "section": "Deck section",
+      "minPlaceholder": "min",
+      "minLabel": "Minimum",
+      "maxPlaceholder": "max",
+      "maxLabel": "Maximum",
+      "copiesLabel": "Copies per card",
+      "statusLabel": "Status",
+      "banlistLabel": "Banlist",
+      "matchLabel": "Filter direction",
+      "match": {
+        "matching": "Cards the filter matches",
+        "not_matching": "Cards the filter doesn't match"
+      },
+      "maxCopiesLabel": "Allowed copies",
+      "maxCopiesAllowed": "Allowed (3)",
+      "labelPlaceholder": "Label (optional)",
+      "labelLabel": "Rule label",
+      "types": "Card types",
+      "attributes": "Attributes",
+      "races": "Monster types",
+      "sets": "Sets",
+      "levelMin": "Level from",
+      "levelMax": "Level up to",
+      "atkMin": "ATK from",
+      "atkMax": "ATK up to",
+      "defMin": "DEF from",
+      "defMax": "DEF up to",
+      "effectLabel": "Effect",
+      "effect": {
+        "any": "Any",
+        "yes": "With effect",
+        "no": "Without effect"
+      },
+      "releasedBefore": "Released before",
+      "releasedAfter": "Released after",
+      "regionLabel": "Region",
+      "region": {
+        "tcg": "TCG date",
+        "ocg": "OCG date"
+      },
+      "nameContains": "Name contains",
+      "addRule": "Add rule",
+      "addRuleLabel": "Add rule: {kind}",
+      "check": {
+        "title": "Check a deck",
+        "description": "Checks one of your decks against the rules in this editor — even unsaved ones.",
+        "deckPlaceholder": "Choose a deck",
+        "deckLabel": "Deck to check",
+        "button": "Check deck",
+        "failed": "The check failed."
+      },
+      "create": "Create format",
+      "saveFailed": "Couldn't save the format."
+    },
+    "cardPicker": {
+      "remove": "Remove {name}",
+      "none": "No cards selected yet.",
+      "searchPlaceholder": "Search the catalog...",
+      "searchLabel": "Search a card for the rule",
+      "searching": "Searching..."
+    }
+  }
 }

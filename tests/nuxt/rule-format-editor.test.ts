@@ -5,6 +5,7 @@ import { USelect } from '#components'
 import RuleFormatEditor from '~/components/formats/RuleFormatEditor.vue'
 import type { RuleSet } from '~~/shared/rule-formats'
 import { selectWithOption } from './fixtures/select-wrapper'
+import { setTestLocale } from './fixtures/locale'
 
 const state = vi.hoisted(() => ({
   facets: {
@@ -48,7 +49,8 @@ function addRule(component: Awaited<ReturnType<typeof mountSuspended>>, label: s
   return component.find(`[aria-label="Regel hinzufügen: ${label}"]`).trigger('click')
 }
 
-afterEach(() => {
+afterEach(async () => {
+  await setTestLocale('de')
   vi.unstubAllGlobals()
 })
 
@@ -91,6 +93,42 @@ describe('rule format editor', () => {
     expect(text).toContain('Nur Karten bis Juni 2005')
 
     expect(component.find<HTMLInputElement>('input[aria-label="Formatname"]').element.value).toBe('Mein GOAT')
+  })
+
+  it('renders the editor and its rule summaries in English', async () => {
+    await setTestLocale('en')
+
+    const component = await mountSuspended(RuleFormatEditor, {
+      props: {
+        initialValues: {
+          id: 'own-1',
+          name: 'My GOAT',
+          description: null,
+          rules: {
+            rules: [
+              { kind: 'deck_size', section: 'main', min: 40, max: 60 },
+              { kind: 'copies', maxCopies: 1 },
+              { kind: 'card_status', status: 'limited', cardIds: [55144522] },
+              { kind: 'filter', match: 'matching', filter: { types: ['Spell Card'] }, maxCopies: 2 },
+            ],
+          },
+          cardNames: { 55144522: 'Pot of Greed' },
+        },
+      },
+    })
+    const text = component.text()
+
+    expect(text).toContain('4 rules')
+    expect(text).toContain('Main Deck: 40–60 cards')
+    expect(text).toContain('At most 1 copy per card')
+    expect(text).toContain('Limited (1): Pot of Greed')
+    expect(text).toContain('Cards with card type Spell Card: semi-limited (max. 2)')
+    expect(text).toContain('Card filter')
+    expect(text).toContain('Add rule')
+    expect(text).toContain('Check a deck')
+    expect(component.find('[aria-label="Add rule: Deck size"]').exists()).toBe(true)
+    expect(component.find('input[aria-label="Format name"]').exists()).toBe(true)
+    expect(text).not.toMatch(/Regel|Karten|Kopie|Deck prüfen|Speichern/)
   })
 
   it('adds and removes rules', async () => {

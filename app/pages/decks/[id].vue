@@ -1,14 +1,12 @@
 <script setup lang="ts">
 import {
-  DECK_SECTION_LABELS,
   DECK_SECTIONS,
   defaultSectionForCard,
   isSectionAllowedForCard,
 } from '~~/shared/deck-sections'
 import type { DeckCover } from '~~/shared/deck-cover'
 import type { DeckSection } from '~~/shared/deck-sections'
-import { CARD_STATUS_LABELS } from '~~/shared/rule-formats'
-import type { DeckValidation } from '~~/shared/rule-formats'
+import type { DeckValidation, DeckWarning } from '~~/shared/rule-formats'
 import type { Visibility } from '~~/shared/sharing'
 
 interface DeckCardRow {
@@ -38,7 +36,7 @@ interface DeckDetail {
   sections: Record<DeckSection, DeckCardRow[]>
   counts: { main: number, extra: number, side: number, total: number }
   limits: { mainMin: number, mainMax: number, extraMax: number, sideMax: number, maxCopies: number }
-  warnings: Array<{ code: string, message: string, cardId?: number }>
+  warnings: DeckWarning[]
   format: { id: string, name: string, isBuiltin: boolean } | null
   validation: DeckValidation | null
   visibility: Visibility
@@ -97,6 +95,13 @@ const SOURCE_PAGE_SIZE = 12
 const route = useRoute()
 const deckId = computed(() => String(route.params.id ?? ''))
 
+const { t, n } = useI18n()
+const count = useCount()
+const apiError = useApiError()
+const validationText = useValidationText()
+const { formatName, ruleLabel, sortFormats } = useFormatLabel()
+const { describeCapReason } = useRuleDescription()
+
 const errorMessage = ref('')
 const isFormOpen = ref(false)
 
@@ -108,7 +113,7 @@ const {
   headers: import.meta.server ? useRequestHeaders(['cookie']) : undefined,
 })
 
-useHead({ title: computed(() => `${deck.value?.name ?? 'Deck'} – yugioh alpha`) })
+usePageTitle(() => deck.value?.name ?? t('decks.editor.fallbackTitle'))
 
 // --- Card source panel (inventory, optionally the whole catalog) -----------
 
@@ -193,9 +198,9 @@ const { data: formatsData } = await useFetch<{ items: RuleFormatListItem[] }>('/
 const NO_FORMAT = '__no_format__'
 
 const formatItems = computed(() => [
-  { label: 'Kein Format', value: NO_FORMAT },
-  ...(formatsData.value?.items ?? []).map(format => ({
-    label: format.isBuiltin ? format.name : `${format.name} (eigenes)`,
+  { label: t('decks.editor.noFormat'), value: NO_FORMAT },
+  ...sortFormats(formatsData.value?.items ?? []).map(format => ({
+    label: format.isBuiltin ? formatName(format) : t('decks.editor.ownFormat', { name: format.name }),
     value: format.id,
   })),
 ])
@@ -232,7 +237,20 @@ function cardStatusFor(catalogCardId: number) {
 
 function statusLabelFor(catalogCardId: number): string | null {
   const entry = cardStatusFor(catalogCardId)
-  return entry ? CARD_STATUS_LABELS[entry.status] : null
+  return entry ? t(`formats.cardStatus.${entry.status}`) : null
+}
+
+// The status badge's tooltip: why the card's copy limit is lowered.
+function statusReasonsFor(catalogCardId: number): string | undefined {
+  const entry = cardStatusFor(catalogCardId)
+  if (!entry || !deck.value) {
+    return undefined
+  }
+  const format = deck.value.format
+  const cardNames = Object.fromEntries(DECK_SECTIONS.flatMap(section => sections.value[section].map(row => [row.catalogCardId, row.name])))
+  return entry.reasons
+    .map(reason => describeCapReason(reason, { cardNames, filterLabel: label => (format ? ruleLabel(format, label) : label) }))
+    .join(' · ')
 }
 
 function statusColorFor(catalogCardId: number) {
@@ -242,18 +260,17 @@ function statusColorFor(catalogCardId: number) {
 
 const validationBadge = computed(() => {
   if (!deck.value?.format) {
-    return { label: 'Kein Format gewählt', color: 'neutral' as const }
+    return { label: t('decks.editor.validation.noFormatSelected'), color: 'neutral' as const }
   }
   const current = validation.value
   if (!current) {
-    return { label: 'Kein Format gewählt', color: 'neutral' as const }
+    return { label: t('decks.editor.validation.noFormatSelected'), color: 'neutral' as const }
   }
   if (current.legal) {
-    return { label: 'Legal', color: 'success' as const }
+    return { label: t('validation.badge.legal'), color: 'success' as const }
   }
-  const count = current.issues.length
   return {
-    label: `Nicht legal – ${count} Problem${count === 1 ? '' : 'e'}`,
+    label: count('validation.badge.notLegalCount', current.issues.length),
     color: 'error' as const,
   }
 })
@@ -265,11 +282,11 @@ const ALL_TYPES = '__all_types__'
 const ALL_ATTRIBUTES = '__all_attributes__'
 
 const typeItems = computed(() => [
-  { label: 'Alle Typen', value: ALL_TYPES },
+  { label: t('decks.editor.addPanel.allTypes'), value: ALL_TYPES },
   ...(facets.value?.types ?? []).map(value => ({ label: value, value })),
 ])
 const attributeItems = computed(() => [
-  { label: 'Alle Attribute', value: ALL_ATTRIBUTES },
+  { label: t('decks.editor.addPanel.allAttributes'), value: ALL_ATTRIBUTES },
   ...(facets.value?.attributes ?? []).map(value => ({ label: value, value })),
 ])
 
@@ -379,7 +396,7 @@ async function loadMoreSourceCards() {
   }
   catch {
     if (generation === sourceGeneration) {
-      loadMoreError.value = 'Weitere Karten konnten nicht geladen werden.'
+      loadMoreError.value = t('decks.editor.addPanel.loadMoreFailed')
     }
   }
   finally {
@@ -404,6 +421,10 @@ async function openAddPanel() {
 }
 
 // --- Deck helpers ----------------------------------------------------------
+
+function sectionName(section: DeckSection): string {
+  return t(`decks.section.${section}`)
+}
 
 const sections = computed(() => deck.value?.sections ?? { main: [], extra: [], side: [] })
 const counts = computed(() => deck.value?.counts ?? { main: 0, extra: 0, side: 0, total: 0 })
@@ -446,7 +467,7 @@ function sectionCountClass(section: DeckSection): string {
 }
 
 function cardMetaLine(card: { type: string, level: number | null, attribute: string | null }): string {
-  return [card.type, card.level !== null ? `Stufe ${card.level}` : null, card.attribute]
+  return [card.type, card.level !== null ? t('card.stars', { level: card.level }) : null, card.attribute]
     .filter(Boolean)
     .join(' · ')
 }
@@ -478,9 +499,7 @@ async function applyDeck(request: Promise<DeckDetail>) {
   }
   catch (requestError) {
     if (token === mutationSequence) {
-      errorMessage.value = requestError instanceof Error
-        ? requestError.message
-        : 'Die Änderung konnte nicht gespeichert werden.'
+      errorMessage.value = apiError(requestError, 'decks.editor.errors.saveFailed')
     }
   }
   finally {
@@ -532,7 +551,7 @@ async function addCard(card: SourceCard, section: DeckSection) {
  */
 function allSectionsDisallowedReason(card: SourceCard): string | null {
   const disallowed = DECK_SECTIONS.every(section => !isSectionAllowedForCard(card, section))
-  return disallowed ? `${card.name} kann in keine Sektion dieses Decks aufgenommen werden.` : null
+  return disallowed ? t('decks.editor.addPanel.noSection', { name: card.name }) : null
 }
 
 async function removeCard(row: DeckCardRow) {
@@ -592,7 +611,7 @@ function rowMenuItems(row: DeckCardRow) {
   const moveItems = DECK_SECTIONS
     .filter(section => section !== row.section)
     .map(section => ({
-      label: `Nach ${DECK_SECTION_LABELS[section]}`,
+      label: t('decks.editor.row.moveTo', { section: sectionName(section) }),
       icon: 'i-lucide-arrow-right-left',
       disabled: !isSectionAllowedForCard(row, section),
       onSelect: () => moveCard(row, section),
@@ -605,8 +624,8 @@ function rowMenuItems(row: DeckCardRow) {
 
   // A rule-picked cover row still offers "festlegen", to pin it.
   const coverItem = isCoverRow(row) && deck.value?.coverIsChosen
-    ? { label: 'Titelkarte automatisch wählen', icon: 'i-lucide-image-off', onSelect: () => setCover(null) }
-    : { label: 'Als Titelkarte festlegen', icon: 'i-lucide-image', onSelect: () => setCover(row.catalogCardId) }
+    ? { label: t('decks.editor.row.coverAuto'), icon: 'i-lucide-image-off', onSelect: () => setCover(null) }
+    : { label: t('decks.editor.row.coverSet'), icon: 'i-lucide-image', onSelect: () => setCover(row.catalogCardId) }
 
   return [moveItems, [coverItem]]
 }
@@ -623,8 +642,8 @@ async function deleteDeck() {
   }
 
   const confirmed = await confirm({
-    title: 'Deck löschen',
-    description: `"${deck.value.name}" wirklich löschen?`,
+    title: t('decks.confirm.delete.title'),
+    description: t('decks.confirm.delete.description', { name: deck.value.name }),
   })
   if (!confirmed) {
     return
@@ -635,9 +654,7 @@ async function deleteDeck() {
     await $fetch(`/api/decks/${deckId.value}`, { method: 'DELETE' })
   }
   catch (requestError) {
-    errorMessage.value = requestError instanceof Error
-      ? requestError.message
-      : 'Das Deck konnte nicht gelöscht werden.'
+    errorMessage.value = apiError(requestError, 'decks.errors.deleteFailed')
     return
   }
 
@@ -646,10 +663,12 @@ async function deleteDeck() {
 
 // Secondary actions live in the "…" menu at every width (#25), so the header
 // toolbar stays one short row and the title keeps its full width (#40).
-const deckMenuItems = [
-  [{ label: 'Umbenennen', icon: 'i-lucide-pencil', onSelect: () => { isFormOpen.value = true } }],
-  [{ label: 'Löschen', icon: 'i-lucide-trash-2', color: 'error' as const, onSelect: deleteDeck }],
-]
+const deckMenuItems = computed(() => [
+  [{ label: t('decks.menu.rename'), icon: 'i-lucide-pencil', onSelect: () => { isFormOpen.value = true } }],
+  [{ label: t('common.delete'), icon: 'i-lucide-trash-2', color: 'error' as const, onSelect: deleteDeck }],
+])
+
+const loadErrorDescription = computed(() => (error.value ? apiError(error.value, 'decks.editor.loadFailedDescription') : undefined))
 </script>
 
 <template>
@@ -657,7 +676,7 @@ const deckMenuItems = [
     <div>
       <LayoutBackLink
         to="/decks"
-        label="Zurück zu den Decks"
+        :label="t('decks.editor.back')"
       />
     </div>
 
@@ -665,8 +684,8 @@ const deckMenuItems = [
       v-if="error"
       color="error"
       variant="subtle"
-      title="Deck konnte nicht geladen werden"
-      :description="error.message"
+      :title="t('decks.editor.loadFailed')"
+      :description="loadErrorDescription"
     />
 
     <div
@@ -686,7 +705,7 @@ const deckMenuItems = [
         :description="deck.description ?? undefined"
       >
         <p class="mt-1 text-sm text-gray-500">
-          {{ counts.total }} Karte<span v-if="counts.total !== 1">n</span> insgesamt
+          {{ count('decks.editor.totalCards', counts.total) }}
         </p>
 
         <div class="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
@@ -694,7 +713,7 @@ const deckMenuItems = [
             <!-- Mobile shortcut: the add panel lives below the deck sections. -->
             <UButton
               icon="i-lucide-plus"
-              label="Karten hinzufügen"
+              :label="t('decks.editor.addCards')"
               class="lg:hidden"
               @click="openAddPanel"
             />
@@ -703,14 +722,14 @@ const deckMenuItems = [
               icon="i-lucide-sparkles"
               color="neutral"
               variant="outline"
-              label="Mit KI bearbeiten"
+              :label="t('decks.editor.editWithAi')"
               :to="{ path: '/assistant', query: { deckId } }"
             />
             <UButton
               icon="i-lucide-share-2"
               color="neutral"
               variant="outline"
-              label="Teilen"
+              :label="t('decks.editor.share')"
               :disabled="!ownProfile?.handle"
               @click="() => { isShareOpen = true }"
             />
@@ -719,7 +738,7 @@ const deckMenuItems = [
                 icon="i-lucide-ellipsis"
                 color="neutral"
                 variant="ghost"
-                aria-label="Weitere Aktionen"
+                :aria-label="t('decks.editor.moreActions')"
                 class="tap-target"
               />
             </UDropdownMenu>
@@ -732,7 +751,7 @@ const deckMenuItems = [
               :items="formatItems"
               :disabled="isMutating"
               class="min-w-0 flex-1 sm:w-56 sm:flex-none"
-              aria-label="Format"
+              :aria-label="t('decks.editor.formatLabel')"
             />
           </div>
         </div>
@@ -741,13 +760,13 @@ const deckMenuItems = [
       <section class="rounded-md border border-gray-200 bg-white p-4">
         <div class="flex flex-wrap items-center justify-between gap-2">
           <h2 class="text-base font-semibold text-gray-900">
-            Regelprüfung
+            {{ t('decks.editor.validation.title') }}
           </h2>
           <UBadge
             :color="validationBadge.color"
             variant="subtle"
             :label="validationBadge.label"
-            aria-label="Regelprüfung Status"
+            :aria-label="t('decks.editor.validation.statusLabel')"
           />
         </div>
 
@@ -755,13 +774,13 @@ const deckMenuItems = [
           v-if="!deck.format"
           class="mt-2 text-sm text-gray-500"
         >
-          Wähle oben ein Format, um dieses Deck automatisch auf Legalität zu prüfen.
+          {{ t('decks.editor.validation.chooseFormat') }}
         </p>
         <p
           v-else-if="validation?.legal"
           class="mt-2 text-sm text-gray-500"
         >
-          Das Deck erfüllt alle Regeln von "{{ deck.format.name }}".
+          {{ t('decks.editor.validation.legal', { format: formatName(deck.format) }) }}
         </p>
         <ul
           v-else
@@ -771,7 +790,7 @@ const deckMenuItems = [
             v-for="(issue, index) in validation?.issues ?? []"
             :key="`${issue.code}-${issue.cardId ?? issue.section ?? index}`"
           >
-            {{ issue.message }}
+            {{ validationText(issue) }}
           </li>
         </ul>
       </section>
@@ -781,7 +800,7 @@ const deckMenuItems = [
         color="warning"
         variant="subtle"
         icon="i-lucide-triangle-alert"
-        title="Hinweise zum Deckaufbau"
+        :title="t('decks.warningsTitle')"
       >
         <template #description>
           <ul class="list-inside list-disc space-y-0.5">
@@ -789,7 +808,7 @@ const deckMenuItems = [
               v-for="warning in warnings"
               :key="`${warning.code}-${warning.cardId ?? ''}`"
             >
-              {{ warning.message }}
+              {{ validationText(warning) }}
             </li>
           </ul>
         </template>
@@ -814,12 +833,12 @@ const deckMenuItems = [
           >
             <header class="flex items-center justify-between border-b border-gray-200 px-4 py-3">
               <h2 class="text-base font-semibold text-gray-900">
-                {{ DECK_SECTION_LABELS[section] }}
+                {{ sectionName(section) }}
               </h2>
               <span
                 class="text-sm font-semibold tabular-nums"
                 :class="sectionCountClass(section)"
-                :aria-label="`Anzahl im ${DECK_SECTION_LABELS[section]}`"
+                :aria-label="t('decks.editor.countIn', { section: sectionName(section) })"
               >
                 {{ sectionLimitLabel(section) }}
               </span>
@@ -829,7 +848,7 @@ const deckMenuItems = [
               v-if="sections[section].length === 0"
               class="px-4 py-6 text-sm text-gray-500"
             >
-              Noch keine Karten im {{ DECK_SECTION_LABELS[section] }}.
+              {{ t('decks.editor.emptySection', { section: sectionName(section) }) }}
             </p>
 
             <ul
@@ -871,7 +890,7 @@ const deckMenuItems = [
                       variant="subtle"
                       :color="statusColorFor(row.catalogCardId)"
                       :label="statusLabelFor(row.catalogCardId) ?? ''"
-                      :title="cardStatusFor(row.catalogCardId)?.reasons.join(' · ')"
+                      :title="statusReasonsFor(row.catalogCardId)"
                     />
                     <UBadge
                       v-if="isCoverRow(row)"
@@ -879,7 +898,7 @@ const deckMenuItems = [
                       variant="subtle"
                       color="primary"
                       icon="i-lucide-image"
-                      :label="deck.coverIsChosen ? 'Titelkarte' : 'Titelkarte (automatisch)'"
+                      :label="deck.coverIsChosen ? t('decks.editor.cover.chosen') : t('decks.editor.cover.auto')"
                     />
                   </div>
                 </div>
@@ -887,7 +906,7 @@ const deckMenuItems = [
                 <span
                   class="self-start text-xs tabular-nums @lg:self-center"
                   :class="row.shortfall > 0 ? 'font-semibold text-red-600' : 'text-gray-500'"
-                  :title="row.shortfall > 0 ? `Du besitzt nur ${row.owned}` : undefined"
+                  :title="row.shortfall > 0 ? t('decks.editor.row.ownedOnly', { owned: row.owned }) : undefined"
                 >
                   {{ row.usedInDeck }}/{{ row.owned }}
                 </span>
@@ -900,7 +919,7 @@ const deckMenuItems = [
                     size="xs"
                     class="tap-target"
                     :disabled="isMutating"
-                    :aria-label="`Eine Kopie von ${row.name} aus dem ${DECK_SECTION_LABELS[section]} entfernen`"
+                    :aria-label="t('decks.editor.row.removeOne', { name: row.name, section: sectionName(section) })"
                     @click="setQuantity(row.catalogCardId, section, row.quantity - 1)"
                   />
                   <!-- Spin buttons hidden: − and + already step, and the
@@ -914,7 +933,7 @@ const deckMenuItems = [
                     class="w-12"
                     :ui="{ base: 'text-center tabular-nums max-lg:min-h-11 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none' }"
                     :disabled="isMutating"
-                    :aria-label="`Anzahl von ${row.name} im ${DECK_SECTION_LABELS[section]}`"
+                    :aria-label="t('decks.editor.row.quantity', { name: row.name, section: sectionName(section) })"
                     @change="(event: Event) => onQuantityInput(row, (event.target as HTMLInputElement).value)"
                   />
                   <UButton
@@ -924,7 +943,7 @@ const deckMenuItems = [
                     size="xs"
                     class="tap-target"
                     :disabled="isMutating"
-                    :aria-label="`Eine Kopie von ${row.name} zum ${DECK_SECTION_LABELS[section]} hinzufügen`"
+                    :aria-label="t('decks.editor.row.addOne', { name: row.name, section: sectionName(section) })"
                     @click="setQuantity(row.catalogCardId, section, row.quantity + 1)"
                   />
                   <UDropdownMenu :items="rowMenuItems(row)">
@@ -935,7 +954,7 @@ const deckMenuItems = [
                       size="xs"
                       class="tap-target"
                       :disabled="isMutating"
-                      :aria-label="`Optionen für ${row.name}`"
+                      :aria-label="t('decks.editor.row.options', { name: row.name })"
                     />
                   </UDropdownMenu>
                   <UButton
@@ -945,7 +964,7 @@ const deckMenuItems = [
                     size="xs"
                     class="tap-target"
                     :disabled="isMutating"
-                    :aria-label="`${row.name} aus dem ${DECK_SECTION_LABELS[section]} entfernen`"
+                    :aria-label="t('decks.editor.row.remove', { name: row.name, section: sectionName(section) })"
                     @click="removeCard(row)"
                   />
                 </div>
@@ -968,14 +987,14 @@ const deckMenuItems = [
                 id="deck-add-panel-title"
                 class="text-base font-semibold text-gray-900"
               >
-                Aus Inventar hinzufügen
+                {{ t('decks.editor.addPanel.title') }}
               </h2>
               <UButton
                 class="tap-target lg:hidden"
                 color="neutral"
                 variant="ghost"
                 size="sm"
-                :label="isAddPanelOpen ? 'Ausblenden' : 'Anzeigen'"
+                :label="isAddPanelOpen ? t('decks.editor.addPanel.hide') : t('decks.editor.addPanel.show')"
                 :trailing-icon="isAddPanelOpen ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'"
                 :aria-expanded="isAddPanelOpen"
                 aria-controls="deck-add-panel-body"
@@ -992,36 +1011,36 @@ const deckMenuItems = [
                 <UInput
                   v-model="sourceSearch"
                   icon="i-lucide-search"
-                  placeholder="Karte suchen..."
-                  aria-label="Karten für das Deck suchen"
+                  :placeholder="t('decks.editor.addPanel.searchPlaceholder')"
+                  :aria-label="t('decks.editor.addPanel.searchLabel')"
                   class="w-full"
                 />
                 <div class="flex gap-2">
                   <USelect
                     v-model="typeSelection"
                     :items="typeItems"
-                    aria-label="Typ"
+                    :aria-label="t('decks.editor.addPanel.type')"
                     class="flex-1"
                   />
                   <USelect
                     v-model="attributeSelection"
                     :items="attributeItems"
-                    aria-label="Attribut"
+                    :aria-label="t('decks.editor.addPanel.attribute')"
                     class="flex-1"
                   />
                 </div>
                 <UCheckbox
                   v-model="includeCatalog"
-                  label="Auch Katalogkarten anzeigen"
+                  :label="t('decks.editor.addPanel.includeCatalog')"
                 />
               </div>
 
               <p class="mt-3 shrink-0 text-xs text-gray-500">
                 <template v-if="hasMoreSource">
-                  {{ sourceCards.length }} von {{ sourceTotal }} Karten
+                  {{ t('decks.editor.addPanel.shownOf', { shown: n(sourceCards.length, 'integer'), total: n(sourceTotal, 'integer') }) }}
                 </template>
                 <template v-else>
-                  {{ sourceTotal }} Karte<span v-if="sourceTotal !== 1">n</span>
+                  {{ count('decks.editor.addPanel.total', sourceTotal) }}
                 </template>
               </p>
 
@@ -1031,8 +1050,8 @@ const deckMenuItems = [
                   class="space-y-2"
                 >
                   <USkeleton
-                    v-for="n in 3"
-                    :key="n"
+                    v-for="placeholder in 3"
+                    :key="placeholder"
                     class="h-16 w-full"
                   />
                 </div>
@@ -1041,13 +1060,19 @@ const deckMenuItems = [
                   v-else-if="sourceCards.length === 0"
                   class="text-sm text-gray-500"
                 >
-                  Keine Karten gefunden. Aktiviere „Auch Katalogkarten anzeigen“ oder
-                  <NuxtLink
-                    to="/inventory"
-                    class="font-medium text-primary"
+                  <i18n-t
+                    keypath="decks.editor.addPanel.empty"
+                    scope="global"
                   >
-                    erfasse Karten im Inventar
-                  </NuxtLink>.
+                    <template #link>
+                      <NuxtLink
+                        to="/inventory"
+                        class="font-medium text-primary"
+                      >
+                        {{ t('decks.editor.addPanel.emptyLink') }}
+                      </NuxtLink>
+                    </template>
+                  </i18n-t>
                 </p>
 
                 <ul
@@ -1083,8 +1108,17 @@ const deckMenuItems = [
                         :label="statusLabelFor(card.catalogCardId) ?? ''"
                       />
                       <p class="mt-0.5 text-xs text-gray-500">
-                        Besitz: <span class="font-semibold tabular-nums">{{ card.owned }}</span>
-                        · im Deck: <span class="font-semibold tabular-nums">{{ usedByCard.get(card.catalogCardId) ?? 0 }}</span>
+                        <i18n-t
+                          keypath="decks.editor.addPanel.ownedInDeck"
+                          scope="global"
+                        >
+                          <template #owned>
+                            <span class="font-semibold tabular-nums">{{ card.owned }}</span>
+                          </template>
+                          <template #inDeck>
+                            <span class="font-semibold tabular-nums">{{ usedByCard.get(card.catalogCardId) ?? 0 }}</span>
+                          </template>
+                        </i18n-t>
                       </p>
 
                       <div class="mt-1.5 flex flex-wrap gap-1">
@@ -1098,9 +1132,9 @@ const deckMenuItems = [
                           :disabled="!isSectionAllowedForCard(card, section) || isMutating"
                           :title="isSectionAllowedForCard(card, section)
                             ? undefined
-                            : `${card.name} kann nicht ins ${DECK_SECTION_LABELS[section]}`"
-                          :label="`+ ${section === 'main' ? 'Main' : section === 'extra' ? 'Extra' : 'Side'}`"
-                          :aria-label="`${card.name} zum ${DECK_SECTION_LABELS[section]} hinzufügen`"
+                            : t('decks.editor.addPanel.cannotAdd', { name: card.name, section: sectionName(section) })"
+                          :label="t('decks.editor.addPanel.addButton', { section: t(`decks.sectionShort.${section}`) })"
+                          :aria-label="t('decks.editor.addPanel.addTo', { name: card.name, section: sectionName(section) })"
                           @click="addCard(card, section)"
                         />
                       </div>
@@ -1122,7 +1156,7 @@ const deckMenuItems = [
                   block
                   color="neutral"
                   variant="outline"
-                  label="Mehr laden"
+                  :label="t('decks.editor.addPanel.loadMore')"
                   :loading="isLoadingMore"
                   class="mt-3 tap-target"
                   @click="loadMoreSourceCards"

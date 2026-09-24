@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { MAX_GAMES_PER_MATCH, TOURNAMENT_ERROR_MESSAGES } from '~~/shared/tournaments'
-import type { TournamentDetail, TournamentErrorCode, TournamentMatchDto } from '~~/shared/tournaments'
-import { apiErrorCode, apiErrorMessage } from '~/utils/card-entry'
+import { BYE_GAMES, MAX_GAMES_PER_MATCH } from '~~/shared/tournaments'
+import type { TournamentDetail, TournamentMatchDto } from '~~/shared/tournaments'
 
 const props = defineProps<{
   match: TournamentMatchDto
@@ -18,6 +17,9 @@ const emit = defineEmits<{
   selectSlot: [slot: 'a' | 'b']
 }>()
 
+const { t } = useI18n()
+const apiError = useApiError()
+
 const isEditing = ref(!props.match.reported)
 const gamesA = ref(props.match.gamesA)
 const gamesB = ref(props.match.gamesB)
@@ -29,11 +31,6 @@ watch(() => props.match, (match) => {
   gamesA.value = match.gamesA
   gamesB.value = match.gamesB
 }, { deep: true })
-
-function errorText(error: unknown, fallback: string) {
-  const code = apiErrorCode(error) as TournamentErrorCode | undefined
-  return (code && TOURNAMENT_ERROR_MESSAGES[code]) || apiErrorMessage(error, fallback)
-}
 
 async function submitResult(a: number, b: number) {
   if (isSubmitting.value) {
@@ -52,7 +49,7 @@ async function submitResult(a: number, b: number) {
     emit('updated', detail)
   }
   catch (error) {
-    errorMessage.value = errorText(error, 'Das Ergebnis konnte nicht gespeichert werden.')
+    errorMessage.value = apiError(error, 'tournaments.match.saveFailed')
   }
   finally {
     isSubmitting.value = false
@@ -89,6 +86,12 @@ const winnerName = computed(() => {
   return null
 })
 
+const resultLabel = computed(() => (props.match.isDraw
+  ? t('tournaments.match.draw')
+  : t('tournaments.match.win', { name: winnerName.value ?? '' })))
+
+const byeScore = computed(() => t('tournaments.match.byeScore', { score: `${BYE_GAMES}:0` }))
+
 function onChipClick(slot: 'a' | 'b') {
   if (!props.swapMode) {
     return
@@ -100,7 +103,7 @@ function onChipClick(slot: 'a' | 'b') {
 <template>
   <div class="flex flex-col gap-2 rounded-md border border-gray-200 p-3 sm:flex-row sm:items-center sm:justify-between">
     <div class="flex flex-wrap items-center gap-2">
-      <span class="text-xs font-semibold text-gray-500">Tisch {{ match.tableNumber }}</span>
+      <span class="text-xs font-semibold text-gray-500">{{ t('tournaments.match.table', { number: match.tableNumber }) }}</span>
 
       <!-- Names are only interactive in swap mode (#35): outside of it a
            `<button>` announced no affordance and did nothing on click. -->
@@ -124,12 +127,12 @@ function onChipClick(slot: 'a' | 'b') {
         <UBadge
           color="neutral"
           variant="subtle"
-          label="Freilos"
+          :label="t('tournaments.match.bye')"
         />
-        <span class="text-xs text-gray-500">Gewertet als 2:0</span>
+        <span class="text-xs text-gray-500">{{ byeScore }}</span>
       </template>
       <template v-else>
-        <span class="text-xs text-gray-400">vs.</span>
+        <span class="text-xs text-gray-400">{{ t('tournaments.match.versus') }}</span>
         <button
           v-if="swapMode"
           type="button"
@@ -157,14 +160,14 @@ function onChipClick(slot: 'a' | 'b') {
         <UBadge
           variant="subtle"
           :color="match.isDraw ? 'neutral' : 'success'"
-          :label="match.isDraw ? 'Unentschieden' : `Sieg ${winnerName}`"
+          :label="resultLabel"
         />
         <UButton
           v-if="canEdit"
           size="xs"
           color="neutral"
           variant="outline"
-          label="Ergebnis ändern"
+          :label="t('tournaments.match.editResult')"
           class="tap-target"
           @click="() => { isEditing = true }"
         />
@@ -193,7 +196,7 @@ function onChipClick(slot: 'a' | 'b') {
           />
           <UButton
             size="xs"
-            label="Unentschieden"
+            :label="t('tournaments.match.draw')"
             class="tap-target max-sm:flex-auto"
             :loading="isSubmitting"
             @click="submitResult(1, 1)"
@@ -209,7 +212,7 @@ function onChipClick(slot: 'a' | 'b') {
             size="xs"
             class="w-16"
             :ui="{ base: 'tap-target' }"
-            :aria-label="`Spiele ${match.participantAName}`"
+            :aria-label="t('tournaments.match.gamesOf', { name: match.participantAName })"
           />
           <span class="text-gray-400">:</span>
           <UInput
@@ -220,16 +223,16 @@ function onChipClick(slot: 'a' | 'b') {
             size="xs"
             class="w-16"
             :ui="{ base: 'tap-target' }"
-            :aria-label="`Spiele ${match.participantBName}`"
+            :aria-label="t('tournaments.match.gamesOf', { name: match.participantBName ?? '' })"
           />
           <UButton
             size="xs"
             color="neutral"
             variant="outline"
-            label="Ergebnis speichern"
+            :label="t('tournaments.match.saveResult')"
             class="tap-target"
             :disabled="isUntouchedZeroZero"
-            :title="isUntouchedZeroZero ? 'Trage zuerst ein Ergebnis ein' : undefined"
+            :title="isUntouchedZeroZero ? t('tournaments.match.enterResultFirst') : undefined"
             :loading="isSubmitting"
             @click="saveForm"
           />

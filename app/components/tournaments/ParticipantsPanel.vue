@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { TOURNAMENT_ERROR_MESSAGES } from '~~/shared/tournaments'
-import type { TournamentDetail, TournamentErrorCode, TournamentParticipantDto } from '~~/shared/tournaments'
-import { apiErrorCode, apiErrorMessage } from '~/utils/card-entry'
+import { PARTICIPANT_NAME_MAX_LENGTH } from '~~/shared/tournaments'
+import type { TournamentDetail, TournamentParticipantDto } from '~~/shared/tournaments'
+import { apiErrorCode } from '~/utils/card-entry'
 
 const props = defineProps<{
   tournament: TournamentDetail
@@ -11,13 +11,13 @@ const emit = defineEmits<{
   updated: [detail: TournamentDetail]
 }>()
 
-/** Explains the "Konto" badge — as its tooltip and in the legend under the table (#28). */
-const KONTO_HINT = 'Spieler mit eigenem Benutzerkonto – meldet sein Deck selbst an. Gäste ohne Konto verwaltet die Turnierleitung.'
+const { t, n, d } = useI18n()
+const count = useCount()
+const apiError = useApiError()
+const validationText = useValidationText()
 
-function errorText(error: unknown, fallback: string) {
-  const code = apiErrorCode(error) as TournamentErrorCode | undefined
-  return (code && TOURNAMENT_ERROR_MESSAGES[code]) || apiErrorMessage(error, fallback)
-}
+// The "Konto" badge is explained as its tooltip (`accountHint`) and in the
+// legend under the table (`accountLegend`) (#28).
 
 // --- Add participant --------------------------------------------------------
 
@@ -26,6 +26,8 @@ const emailInput = ref('')
 const nameInput = ref('')
 const isAdding = ref(false)
 const addError = ref('')
+/** `data.code` of the last failed add, for the "add as guest instead" offer. */
+const addErrorCode = ref<string | undefined>()
 
 const canAddParticipant = computed(() =>
   props.tournament.role === 'organizer' && props.tournament.status === 'registration')
@@ -37,6 +39,7 @@ async function addParticipant() {
 
   isAdding.value = true
   addError.value = ''
+  addErrorCode.value = undefined
 
   try {
     const body = addMode.value === 'email' ? { email: emailInput.value } : { name: nameInput.value }
@@ -49,7 +52,8 @@ async function addParticipant() {
     emit('updated', detail)
   }
   catch (error) {
-    addError.value = errorText(error, 'Der Teilnehmer konnte nicht hinzugefügt werden.')
+    addError.value = apiError(error, 'tournaments.participants.errors.addFailed')
+    addErrorCode.value = apiErrorCode(error)
   }
   finally {
     isAdding.value = false
@@ -62,7 +66,7 @@ async function addParticipant() {
  * typed (the e-mail's local part, if there was no name yet) so they don't
  * have to retype it (#37).
  */
-const showAddAsGuestHint = computed(() => addError.value === TOURNAMENT_ERROR_MESSAGES.user_not_found)
+const showAddAsGuestHint = computed(() => addError.value !== '' && addErrorCode.value === 'user_not_found')
 
 function addAsGuestInstead() {
   if (!nameInput.value && emailInput.value) {
@@ -70,6 +74,7 @@ function addAsGuestInstead() {
   }
   addMode.value = 'guest'
   addError.value = ''
+  addErrorCode.value = undefined
 }
 
 // --- Rename -----------------------------------------------------------------
@@ -110,7 +115,7 @@ async function saveRename() {
     renamingParticipant.value = null
   }
   catch (error) {
-    renameError.value = errorText(error, 'Der Teilnehmer konnte nicht umbenannt werden.')
+    renameError.value = apiError(error, 'tournaments.participants.errors.renameFailed')
   }
   finally {
     isRenaming.value = false
@@ -134,7 +139,7 @@ async function setDropped(participant: TournamentParticipantDto, dropped: boolea
     emit('updated', detail)
   }
   catch (error) {
-    rowError.value = errorText(error, 'Der Status konnte nicht geändert werden.')
+    rowError.value = apiError(error, 'tournaments.participants.errors.dropFailed')
   }
   finally {
     busyParticipantId.value = null
@@ -149,8 +154,8 @@ async function removeParticipant(participant: TournamentParticipantDto) {
   // app (#28), now via the themed useConfirm() dialog instead of a native
   // `window.confirm` (#14).
   const confirmed = await confirm({
-    title: 'Teilnehmer entfernen',
-    description: `${participant.name} aus dem Turnier entfernen? Ein angemeldetes Deck geht dabei verloren.`,
+    title: t('tournaments.participants.confirm.remove.title'),
+    description: t('tournaments.participants.confirm.remove.description', { name: participant.name }),
   })
   if (!confirmed) {
     return
@@ -167,7 +172,7 @@ async function removeParticipant(participant: TournamentParticipantDto) {
     emit('updated', detail)
   }
   catch (error) {
-    rowError.value = errorText(error, 'Der Teilnehmer konnte nicht entfernt werden.')
+    rowError.value = apiError(error, 'tournaments.participants.errors.removeFailed')
   }
   finally {
     busyParticipantId.value = null
@@ -179,7 +184,7 @@ function menuItemsFor(participant: TournamentParticipantDto) {
 
   if (props.tournament.role === 'organizer' && props.tournament.status !== 'finished') {
     items.push({
-      label: 'Umbenennen',
+      label: t('tournaments.participants.menu.rename'),
       icon: 'i-lucide-pencil',
       onSelect: () => openRename(participant),
     })
@@ -187,7 +192,7 @@ function menuItemsFor(participant: TournamentParticipantDto) {
 
   if (props.tournament.role === 'organizer' && props.tournament.status === 'running') {
     items.push({
-      label: participant.dropped ? 'Zurückholen' : 'Aussteigen lassen',
+      label: participant.dropped ? t('tournaments.participants.menu.reinstate') : t('tournaments.participants.menu.drop'),
       icon: participant.dropped ? 'i-lucide-undo-2' : 'i-lucide-user-x',
       onSelect: () => setDropped(participant, !participant.dropped),
     })
@@ -195,7 +200,7 @@ function menuItemsFor(participant: TournamentParticipantDto) {
 
   if (props.tournament.role === 'organizer' && props.tournament.status === 'registration') {
     items.push({
-      label: 'Entfernen',
+      label: t('common.remove'),
       icon: 'i-lucide-trash-2',
       color: 'error' as const,
       onSelect: () => removeParticipant(participant),
@@ -275,22 +280,33 @@ function deckBadge(participant: TournamentParticipantDto): { label: string, colo
     return null
   }
   if (participant.deckLegal === null) {
-    return { label: 'Ohne Format', color: 'neutral' }
+    return { label: t('tournaments.noFormat'), color: 'neutral' }
   }
   return participant.deckLegal
-    ? { label: 'Legal', color: 'success' }
-    : { label: 'Nicht legal', color: 'error' }
+    ? { label: t('validation.badge.legal'), color: 'success' }
+    : { label: t('validation.badge.notLegal'), color: 'error' }
 }
 
 function issueCountLabel(participant: TournamentParticipantDto): string | null {
   if (!participant.deckIssueCount) {
     return null
   }
-  return participant.deckIssueCount === 1 ? '1 Regelverstoß' : `${participant.deckIssueCount} Regelverstöße`
+  return count('tournaments.participants.issueCount', participant.deckIssueCount)
 }
 
+/**
+ * The snapshot's issues in the interface language: `issueDetails` (code +
+ * params, since #34 F2c) through the validation catalogue; older snapshots
+ * only have the stored message strings, shown as they are.
+ */
 function issueMessages(participant: TournamentParticipantDto): string[] {
-  return participant.deckSnapshot?.validation?.issues ?? []
+  const validation = participant.deckSnapshot?.validation
+  if (!validation) {
+    return []
+  }
+  return validation.issueDetails
+    ? validation.issueDetails.map(issue => validationText(issue))
+    : validation.issues.map(issue => validationText(issue))
 }
 
 // "Stand: 12.9.2026, 13:13:52" was overly precise and ambiguous about what
@@ -300,21 +316,14 @@ function capturedAtLabel(participant: TournamentParticipantDto): string | null {
   if (!capturedAt) {
     return null
   }
-  const formatted = new Intl.DateTimeFormat('de-DE', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(capturedAt))
-  return `Angemeldet am ${formatted}`
+  return t('tournaments.participants.registeredAt', { date: d(new Date(capturedAt), 'dateTime') })
 }
 </script>
 
 <template>
   <section class="rounded-md border border-gray-200 bg-white p-4">
     <h2 class="text-base font-semibold text-gray-900">
-      Teilnehmer ({{ tournament.participants.length }})
+      {{ t('tournaments.participants.title', { count: n(tournament.participants.length, 'integer') }) }}
     </h2>
 
     <UAlert
@@ -323,12 +332,12 @@ function capturedAtLabel(participant: TournamentParticipantDto): string | null {
       color="warning"
       variant="subtle"
       icon="i-lucide-alert-triangle"
-      title="Melde dein Deck an, bevor das Turnier startet."
+      :title="t('tournaments.participants.deckReminder')"
     >
       <template #actions>
         <UButton
           size="xs"
-          label="Deck anmelden"
+          :label="t('tournaments.participants.registerDeck')"
           class="tap-target"
           @click="openOwnDeckModal"
         />
@@ -347,7 +356,7 @@ function capturedAtLabel(participant: TournamentParticipantDto): string | null {
           color="neutral"
           :variant="addMode === 'email' ? 'solid' : 'outline'"
           :aria-pressed="addMode === 'email'"
-          label="Per E-Mail"
+          :label="t('tournaments.participants.add.byEmail')"
           @click="() => { addMode = 'email' }"
         />
         <UButton
@@ -356,7 +365,7 @@ function capturedAtLabel(participant: TournamentParticipantDto): string | null {
           color="neutral"
           :variant="addMode === 'guest' ? 'solid' : 'outline'"
           :aria-pressed="addMode === 'guest'"
-          label="Als Gast"
+          :label="t('tournaments.participants.add.asGuest')"
           @click="() => { addMode = 'guest' }"
         />
       </div>
@@ -365,21 +374,21 @@ function capturedAtLabel(participant: TournamentParticipantDto): string | null {
         v-if="addMode === 'email'"
         v-model="emailInput"
         type="email"
-        placeholder="spieler@example.com"
-        aria-label="E-Mail-Adresse"
+        :placeholder="t('tournaments.participants.add.emailPlaceholder')"
+        :aria-label="t('tournaments.participants.add.emailAriaLabel')"
       />
       <UInput
         v-else
         v-model="nameInput"
-        placeholder="Name des Gasts"
-        maxlength="60"
-        aria-label="Name"
+        :placeholder="t('tournaments.participants.add.guestNamePlaceholder')"
+        :maxlength="PARTICIPANT_NAME_MAX_LENGTH"
+        :aria-label="t('tournaments.participants.add.guestNameAriaLabel')"
       />
 
       <UButton
         type="submit"
         icon="i-lucide-user-plus"
-        label="Teilnehmer hinzufügen"
+        :label="t('tournaments.participants.add.submit')"
         :loading="isAdding"
       />
     </form>
@@ -395,7 +404,7 @@ function capturedAtLabel(participant: TournamentParticipantDto): string | null {
         size="xs"
         color="neutral"
         variant="outline"
-        label="Stattdessen als Gast hinzufügen"
+        :label="t('tournaments.participants.add.asGuestInstead')"
         @click="addAsGuestInstead"
       />
     </div>
@@ -435,20 +444,20 @@ function capturedAtLabel(participant: TournamentParticipantDto): string | null {
               role="columnheader"
               class="px-2 py-2"
             >
-              Name
+              {{ t('tournaments.participants.columns.name') }}
             </th>
             <th
               role="columnheader"
               class="px-2 py-2"
             >
-              Deck
+              {{ t('tournaments.participants.columns.deck') }}
             </th>
             <th
               v-if="hasRowActions"
               role="columnheader"
               class="px-2 py-2 text-right"
             >
-              Aktionen
+              {{ t('tournaments.participants.columns.actions') }}
             </th>
           </tr>
         </thead>
@@ -480,15 +489,15 @@ function capturedAtLabel(participant: TournamentParticipantDto): string | null {
                   color="neutral"
                   variant="subtle"
                   icon="i-lucide-user-check"
-                  label="Konto"
-                  :title="KONTO_HINT"
+                  :label="t('tournaments.participants.accountBadge')"
+                  :title="t('tournaments.participants.accountHint')"
                 />
                 <UBadge
                   v-if="participant.dropped"
                   size="sm"
                   color="neutral"
                   variant="subtle"
-                  label="Ausgestiegen"
+                  :label="t('tournaments.dropped')"
                 />
               </div>
             </td>
@@ -505,7 +514,7 @@ function capturedAtLabel(participant: TournamentParticipantDto): string | null {
                     <button
                       type="button"
                       class="tap-target inline-flex items-center gap-1 rounded hover:bg-gray-50"
-                      :aria-label="`Regelverstöße von ${participant.name} anzeigen`"
+                      :aria-label="t('tournaments.participants.showIssues', { name: participant.name })"
                     >
                       <UBadge
                         size="sm"
@@ -519,7 +528,7 @@ function capturedAtLabel(participant: TournamentParticipantDto): string | null {
                     <template #content>
                       <div class="max-w-xs space-y-1 p-3">
                         <p class="text-xs font-semibold text-gray-900">
-                          Regelverstöße
+                          {{ t('tournaments.participants.issuesTitle') }}
                         </p>
                         <ul class="list-inside list-disc space-y-0.5 text-xs text-gray-600">
                           <li
@@ -550,7 +559,7 @@ function capturedAtLabel(participant: TournamentParticipantDto): string | null {
               <span
                 v-else
                 class="text-gray-400"
-              >Kein Deck</span>
+              >{{ t('tournaments.noDeck') }}</span>
             </td>
             <td
               v-if="hasRowActions"
@@ -565,13 +574,13 @@ function capturedAtLabel(participant: TournamentParticipantDto): string | null {
                   color="neutral"
                   variant="outline"
                   class="tap-target"
-                  :label="participant.deckName ? 'Deck ändern' : 'Deck anmelden'"
+                  :label="participant.deckName ? t('tournaments.participants.changeDeck') : t('tournaments.participants.registerDeck')"
                   @click="openDeckModal(participant)"
                 />
                 <span
                   v-else-if="managesOwnDeck(participant)"
                   class="text-xs text-gray-400"
-                >Meldet Deck selbst an</span>
+                >{{ t('tournaments.participants.managesOwnDeck') }}</span>
                 <UDropdownMenu
                   v-if="menuItemsFor(participant).length > 0"
                   :items="menuItemsFor(participant)"
@@ -581,7 +590,7 @@ function capturedAtLabel(participant: TournamentParticipantDto): string | null {
                     color="neutral"
                     variant="ghost"
                     size="xs"
-                    :aria-label="`Optionen für ${participant.name}`"
+                    :aria-label="t('tournaments.participants.optionsFor', { name: participant.name })"
                     :loading="busyParticipantId === participant.id"
                     class="tap-target"
                   />
@@ -601,20 +610,20 @@ function capturedAtLabel(participant: TournamentParticipantDto): string | null {
         name="i-lucide-user-check"
         class="mt-px size-3.5 shrink-0"
       />
-      <span>„Konto“: {{ KONTO_HINT }}</span>
+      <span>{{ t('tournaments.participants.accountLegend') }}</span>
     </p>
 
     <UModal
       v-model:open="isRenameOpen"
-      title="Teilnehmer umbenennen"
+      :title="t('tournaments.participants.rename.title')"
     >
       <template #body>
         <div class="space-y-4">
-          <UFormField label="Name">
+          <UFormField :label="t('tournaments.participants.rename.name')">
             <UInput
               v-model="renameValue"
-              maxlength="60"
-              aria-label="Name des Teilnehmers"
+              :maxlength="PARTICIPANT_NAME_MAX_LENGTH"
+              :aria-label="t('tournaments.participants.rename.nameAriaLabel')"
             />
           </UFormField>
           <p
@@ -628,11 +637,11 @@ function capturedAtLabel(participant: TournamentParticipantDto): string | null {
               type="button"
               color="neutral"
               variant="ghost"
-              label="Abbrechen"
+              :label="t('common.cancel')"
               @click="() => { renamingParticipant = null }"
             />
             <UButton
-              label="Speichern"
+              :label="t('common.save')"
               :loading="isRenaming"
               @click="saveRename"
             />

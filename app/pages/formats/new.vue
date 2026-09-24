@@ -1,10 +1,11 @@
 <script setup lang="ts">
-useHead({ title: 'Neues Format – yugioh alpha' })
+usePageTitle('formats.new.title')
 
+const { t } = useI18n()
 const toast = useToast()
 
 async function onSaved(format: { id: string, name: string }) {
-  toast.add({ title: `"${format.name}" gespeichert`, color: 'success' })
+  toast.add({ title: t('formats.toast.saved', { name: format.name }), color: 'success' })
   await navigateTo('/formats')
 }
 </script>
@@ -14,11 +15,11 @@ async function onSaved(format: { id: string, name: string }) {
     <div class="space-y-2">
       <LayoutBackLink
         to="/formats"
-        label="Zurück zu den Formaten"
+        :label="t('formats.back')"
       />
       <LayoutPageHeader
-        title="Neues Format"
-        description="Lege Deckgrößen, Kopienlimits und eigene Regeln fest."
+        :title="t('formats.new.title')"
+        :description="t('formats.new.description')"
       />
     </div>
 

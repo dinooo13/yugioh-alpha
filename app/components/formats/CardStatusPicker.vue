@@ -22,6 +22,8 @@ const emit = defineEmits<{
   'resolved': [cards: Array<{ id: number, name: string }>]
 }>()
 
+const { t } = useI18n()
+
 const search = ref('')
 const results = ref<CatalogSearchItem[]>([])
 const isSearching = ref(false)
@@ -89,7 +91,7 @@ function removeCard(id: number) {
           variant="ghost"
           size="xs"
           :disabled="disabled"
-          :aria-label="`${nameFor(id)} entfernen`"
+          :aria-label="t('formats.cardPicker.remove', { name: nameFor(id) })"
           class="tap-target"
           @click="removeCard(id)"
         />
@@ -99,15 +101,15 @@ function removeCard(id: number) {
       v-else
       class="text-xs text-gray-500"
     >
-      Noch keine Karten ausgewählt.
+      {{ t('formats.cardPicker.none') }}
     </p>
 
     <UInput
       v-model="search"
       icon="i-lucide-search"
       :disabled="disabled"
-      placeholder="Karte im Katalog suchen..."
-      :aria-label="label ?? 'Karte für die Regel suchen'"
+      :placeholder="t('formats.cardPicker.searchPlaceholder')"
+      :aria-label="label ?? t('formats.cardPicker.searchLabel')"
     />
 
     <ul
@@ -134,7 +136,7 @@ function removeCard(id: number) {
       v-else-if="isSearching"
       class="text-xs text-gray-500"
     >
-      Suche läuft...
+      {{ t('formats.cardPicker.searching') }}
     </p>
   </div>
 </template>

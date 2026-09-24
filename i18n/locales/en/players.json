@@ -23,6 +23,14 @@
     "collection": {
       "title": "Collection “{name}” by {owner}",
       "fallbackTitle": "Collection"
+    },
+    "deck": {
+      "fallbackTitle": "Deck",
+      "sharedBy": "Shared by {name}",
+      "summary": "{count} card in total · View only | {count} cards in total · View only",
+      "legality": "Legality",
+      "showDetails": "Show details",
+      "hideDetails": "Hide details"
     }
   }
 }

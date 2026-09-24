@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { pluralize } from '~~/shared/plural'
 import type { SharedDeckView } from '~~/shared/sharing'
 
 definePageMeta({ layout: 'public' })
 
 const route = useRoute()
+const { t } = useI18n()
+const count = useCount()
+const validationText = useValidationText()
+const { formatName } = useFormatLabel()
 
 const { data, error } = await useFetch<SharedDeckView>(
   () => `/api/profiles/${route.params.handle}/decks/${route.params.id}`,
@@ -14,8 +17,8 @@ const { data, error } = await useFetch<SharedDeckView>(
   },
 )
 
+usePageTitle(() => data.value?.deck.name ?? t('players.deck.fallbackTitle'))
 useHead({
-  title: computed(() => `${data.value?.deck.name ?? 'Deck'} – yugioh alpha`),
   meta: [
     { name: 'referrer', content: 'no-referrer' },
     { name: 'robots', content: 'noindex, nofollow' },
@@ -31,7 +34,7 @@ useHead({
       <div>
         <LayoutBackLink
           :to="`/players/${route.params.handle}`"
-          label="Zurück zum Profil"
+          :label="t('players.backToProfile')"
         />
       </div>
 
@@ -46,7 +49,7 @@ useHead({
               :name="data.owner.displayName"
               :handle="data.owner.handle"
             />
-            <span>Geteilt von {{ data.owner.displayName }}</span>
+            <span>{{ t('players.deck.sharedBy', { name: data.owner.displayName }) }}</span>
           </span>
         </template>
         <p
@@ -56,7 +59,7 @@ useHead({
           {{ data.deck.description }}
         </p>
         <p class="mt-1 text-sm text-gray-500">
-          {{ pluralize(data.counts.total, 'Karte', 'Karten') }} insgesamt · Nur ansehen
+          {{ count('players.deck.summary', data.counts.total) }}
         </p>
 
         <template
@@ -65,7 +68,7 @@ useHead({
         >
           <UButton
             icon="i-lucide-pencil"
-            label="Bearbeiten"
+            :label="t('decks.menu.edit')"
             :to="`/decks/${route.params.id}`"
           />
         </template>
@@ -77,14 +80,14 @@ useHead({
       >
         <div class="flex flex-wrap items-center justify-between gap-2">
           <h2 class="text-base font-semibold text-gray-900">
-            {{ data.format.name }}
+            {{ formatName(data.format) }}
           </h2>
           <UBadge
             v-if="data.validation"
             :color="data.validation.legal ? 'success' : 'error'"
             variant="subtle"
-            :label="data.validation.legal ? 'Legal' : 'Nicht legal'"
-            aria-label="Legalität"
+            :label="data.validation.legal ? t('validation.badge.legal') : t('validation.badge.notLegal')"
+            :aria-label="t('players.deck.legality')"
           />
         </div>
 
@@ -105,7 +108,7 @@ useHead({
               variant="link"
               size="xs"
               class="tap-target px-0"
-              :label="open ? 'Details ausblenden' : 'Details anzeigen'"
+              :label="open ? t('players.deck.hideDetails') : t('players.deck.showDetails')"
               :trailing-icon="open ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'"
             />
           </template>
@@ -115,7 +118,7 @@ useHead({
                 v-for="(issue, index) in data.validation.issues"
                 :key="`${issue.code}-${issue.cardId ?? issue.section ?? index}`"
               >
-                {{ issue.message }}
+                {{ validationText(issue) }}
               </li>
             </ul>
           </template>
@@ -131,7 +134,7 @@ useHead({
         color="warning"
         variant="subtle"
         icon="i-lucide-triangle-alert"
-        title="Hinweise zum Deckaufbau"
+        :title="t('decks.warningsTitle')"
       >
         <template #description>
           <ul class="list-inside list-disc space-y-0.5">
@@ -139,7 +142,7 @@ useHead({
               v-for="warning in data.warnings"
               :key="`${warning.code}-${warning.cardId ?? ''}`"
             >
-              {{ warning.message }}
+              {{ validationText(warning) }}
             </li>
           </ul>
         </template>
