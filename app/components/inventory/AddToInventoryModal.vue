@@ -148,6 +148,7 @@ async function save() {
               name="quantity"
               type="number"
               min="1"
+              class="w-full"
             />
           </UFormField>
 
@@ -155,6 +156,7 @@ async function save() {
             <USelect
               v-model="form.collectionId"
               :items="collectionItems"
+              class="w-full"
             />
           </UFormField>
         </div>
@@ -164,6 +166,7 @@ async function save() {
             v-model="form.note"
             name="note"
             :rows="3"
+            class="w-full"
           />
         </UFormField>
 
