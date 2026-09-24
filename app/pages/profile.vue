@@ -142,7 +142,7 @@ const wishlistPublic = computed({
     </div>
 
     <template v-else-if="profile">
-      <section class="rounded-md border border-default bg-default p-4">
+      <section class="panel p-4">
         <ProfileForm
           :profile="profile"
           @saved="onSaved"
@@ -158,7 +158,7 @@ const wishlistPublic = computed({
         </div>
       </section>
 
-      <section class="flex items-center justify-between gap-4 rounded-md border border-default bg-default p-4">
+      <section class="flex items-center justify-between gap-4 panel p-4">
         <div>
           <h2 class="text-base font-semibold text-highlighted">
             {{ t('profile.inventoryShare.title') }}
@@ -184,7 +184,7 @@ const wishlistPublic = computed({
 
       <section
         id="wishlist"
-        class="flex items-center justify-between gap-4 rounded-md border border-default bg-default p-4"
+        class="flex items-center justify-between gap-4 panel p-4"
       >
         <div>
           <h2 class="text-base font-semibold text-highlighted">
@@ -209,7 +209,7 @@ const wishlistPublic = computed({
 
       <section
         id="settings"
-        class="rounded-md border border-default bg-default p-4"
+        class="panel p-4"
       >
         <h2 class="text-base font-semibold text-highlighted">
           {{ t('profile.settings.title') }}

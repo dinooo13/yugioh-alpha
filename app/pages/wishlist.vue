@@ -132,7 +132,7 @@ function nextPage() {
 
     <ul
       v-else
-      class="divide-y divide-default rounded-md border border-default bg-default"
+      class="panel divide-y divide-default overflow-hidden"
     >
       <WishlistRow
         v-for="item in items"

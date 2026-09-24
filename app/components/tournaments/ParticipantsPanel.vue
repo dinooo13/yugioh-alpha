@@ -321,7 +321,7 @@ function capturedAtLabel(participant: TournamentParticipantDto): string | null {
 </script>
 
 <template>
-  <section class="rounded-md border border-default bg-default p-4">
+  <section class="panel p-4">
     <h2 class="text-base font-semibold text-highlighted">
       {{ t('tournaments.participants.title', { count: n(tournament.participants.length, 'integer') }) }}
     </h2>
@@ -353,8 +353,8 @@ function capturedAtLabel(participant: TournamentParticipantDto): string | null {
         <UButton
           type="button"
           size="sm"
-          color="neutral"
-          :variant="addMode === 'email' ? 'solid' : 'outline'"
+          :color="addMode === 'email' ? 'primary' : 'neutral'"
+          :variant="addMode === 'email' ? 'subtle' : 'outline'"
           :aria-pressed="addMode === 'email'"
           :label="t('tournaments.participants.add.byEmail')"
           @click="() => { addMode = 'email' }"
@@ -362,8 +362,8 @@ function capturedAtLabel(participant: TournamentParticipantDto): string | null {
         <UButton
           type="button"
           size="sm"
-          color="neutral"
-          :variant="addMode === 'guest' ? 'solid' : 'outline'"
+          :color="addMode === 'guest' ? 'primary' : 'neutral'"
+          :variant="addMode === 'guest' ? 'subtle' : 'outline'"
           :aria-pressed="addMode === 'guest'"
           :label="t('tournaments.participants.add.asGuest')"
           @click="() => { addMode = 'guest' }"
@@ -432,11 +432,11 @@ function capturedAtLabel(participant: TournamentParticipantDto): string | null {
         >
           <tr
             role="row"
-            class="border-b border-default text-xs uppercase tracking-wide text-muted"
+            class="border-b border-default bg-elevated/50 text-[0.6875rem] tracking-wider text-muted uppercase"
           >
             <th
               role="columnheader"
-              class="py-2 pr-2"
+              class="py-2 pr-2 pl-3"
             >
               #
             </th>
@@ -469,11 +469,11 @@ function capturedAtLabel(participant: TournamentParticipantDto): string | null {
             v-for="participant in tournament.participants"
             :key="participant.id"
             role="row"
-            class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 rounded-md border border-default p-3 sm:table-row sm:rounded-none sm:border-0 sm:p-0"
+            class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 rounded-lg border border-default p-3 transition-colors sm:table-row sm:rounded-none sm:border-0 sm:p-0 sm:hover:bg-elevated/40"
           >
             <td
               role="cell"
-              class="tabular-nums text-muted sm:py-2 sm:pr-2"
+              class="font-numeric tracking-[0.04em] text-muted tabular-nums sm:py-2 sm:pr-2 sm:pl-3"
             >
               <span class="sm:hidden">#</span>{{ participant.seed }}
             </td>

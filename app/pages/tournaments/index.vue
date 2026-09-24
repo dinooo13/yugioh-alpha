@@ -131,15 +131,15 @@ const emptyState = computed(() => {
     <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
       <div class="flex flex-wrap gap-2">
         <UButton
-          color="neutral"
-          :variant="role === 'organizer' ? 'solid' : 'outline'"
+          :color="role === 'organizer' ? 'primary' : 'neutral'"
+          :variant="role === 'organizer' ? 'subtle' : 'outline'"
           :aria-pressed="role === 'organizer'"
           :label="tabLabel('organizer')"
           @click="selectRole('organizer')"
         />
         <UButton
-          color="neutral"
-          :variant="role === 'participant' ? 'solid' : 'outline'"
+          :color="role === 'participant' ? 'primary' : 'neutral'"
+          :variant="role === 'participant' ? 'subtle' : 'outline'"
           :aria-pressed="role === 'participant'"
           :label="tabLabel('participant')"
           @click="selectRole('participant')"
@@ -149,16 +149,16 @@ const emptyState = computed(() => {
       <div class="flex flex-wrap gap-2">
         <UButton
           size="sm"
-          color="neutral"
-          :variant="statusFilter === 'active' ? 'solid' : 'outline'"
+          :color="statusFilter === 'active' ? 'primary' : 'neutral'"
+          :variant="statusFilter === 'active' ? 'subtle' : 'outline'"
           :aria-pressed="statusFilter === 'active'"
           :label="t('tournaments.list.filter.active')"
           @click="selectStatus('active')"
         />
         <UButton
           size="sm"
-          color="neutral"
-          :variant="statusFilter === 'finished' ? 'solid' : 'outline'"
+          :color="statusFilter === 'finished' ? 'primary' : 'neutral'"
+          :variant="statusFilter === 'finished' ? 'subtle' : 'outline'"
           :aria-pressed="statusFilter === 'finished'"
           :label="t('tournaments.list.filter.finished')"
           @click="selectStatus('finished')"
@@ -216,7 +216,7 @@ const emptyState = computed(() => {
       <li
         v-for="item in tournaments"
         :key="item.id"
-        class="flex flex-col rounded-md border border-default bg-default p-4"
+        class="panel flex flex-col p-4 transition-[box-shadow,border-color] duration-200 hover:border-primary/40 hover:shadow-lift"
       >
         <NuxtLink :to="`/tournaments/${item.id}`">
           <h2 class="truncate text-base font-semibold text-highlighted hover:text-primary">

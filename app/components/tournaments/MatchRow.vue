@@ -103,10 +103,10 @@ function onChipClick(slot: 'a' | 'b') {
 <template>
   <div
     data-testid="match-row"
-    class="flex flex-col gap-2 rounded-md border border-default p-3 sm:flex-row sm:items-center sm:justify-between"
+    class="flex flex-col gap-2 rounded-lg border border-default p-3 sm:flex-row sm:items-center sm:justify-between"
   >
     <div class="flex flex-wrap items-center gap-2">
-      <span class="text-xs font-semibold text-muted">{{ t('tournaments.match.table', { number: match.tableNumber }) }}</span>
+      <span class="text-[0.6875rem] font-semibold tracking-wider text-muted uppercase">{{ t('tournaments.match.table', { number: match.tableNumber }) }}</span>
 
       <!-- Names are only interactive in swap mode (#35): outside of it a
            `<button>` announced no affordance and did nothing on click. -->
@@ -159,7 +159,7 @@ function onChipClick(slot: 'a' | 'b') {
       class="flex flex-wrap items-center gap-2"
     >
       <template v-if="match.reported && !isEditing">
-        <span class="font-semibold tabular-nums text-highlighted">{{ match.gamesA }}:{{ match.gamesB }}</span>
+        <span class="font-numeric text-base font-bold tracking-[0.04em] text-highlighted tabular-nums">{{ match.gamesA }}:{{ match.gamesB }}</span>
         <UBadge
           variant="subtle"
           :color="match.isDraw ? 'neutral' : 'success'"

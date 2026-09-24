@@ -72,7 +72,7 @@ function select(item: UserSearchItem) {
 
     <ul
       v-if="results.length > 0"
-      class="divide-y divide-default rounded-md border border-default bg-default"
+      class="divide-y divide-default rounded-lg border border-default bg-default"
     >
       <li
         v-for="item in results"

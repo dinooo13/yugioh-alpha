@@ -448,7 +448,7 @@ async function save() {
 
 <template>
   <div class="space-y-6">
-    <div class="space-y-4 rounded-md border border-default bg-default p-4">
+    <div class="space-y-4 panel p-4">
       <UFormField
         :label="t('formats.editor.name')"
         :error="nameError"
@@ -474,7 +474,7 @@ async function save() {
       </UFormField>
     </div>
 
-    <div class="space-y-3 rounded-md border border-default bg-default p-4">
+    <div class="space-y-3 panel p-4">
       <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <h2 class="text-base font-semibold text-highlighted">
           {{ t('formats.editor.rules') }}
@@ -495,7 +495,7 @@ async function save() {
         <li
           v-for="(rule, index) in rules"
           :key="`${rule.kind}-${index}`"
-          class="rounded-md border border-default p-3"
+          class="rounded-lg border border-default p-3"
         >
           <div class="flex items-start justify-between gap-2">
             <div class="min-w-0">
@@ -791,7 +791,7 @@ async function save() {
       </div>
     </div>
 
-    <div class="space-y-3 rounded-md border border-default bg-default p-4">
+    <div class="space-y-3 panel p-4">
       <h2 class="text-base font-semibold text-highlighted">
         {{ t('formats.editor.check.title') }}
       </h2>

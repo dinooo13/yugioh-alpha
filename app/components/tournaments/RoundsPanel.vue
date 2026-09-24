@@ -154,7 +154,7 @@ async function onSelectSlot(matchId: string, slot: 'a' | 'b') {
 </script>
 
 <template>
-  <section class="rounded-md border border-default bg-default p-4">
+  <section class="panel p-4">
     <div class="flex flex-wrap items-center justify-between gap-2">
       <h2 class="text-base font-semibold text-highlighted">
         {{ t('tournaments.rounds.title') }}

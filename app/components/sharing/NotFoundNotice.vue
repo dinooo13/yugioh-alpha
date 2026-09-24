@@ -29,7 +29,7 @@ const loginTarget = computed(() => ({ path: '/login', query: { redirect: route.f
 </script>
 
 <template>
-  <div class="rounded-md border border-default bg-default px-6 py-12 text-center">
+  <div class="panel px-6 py-12 text-center">
     <h1 class="text-lg font-semibold text-highlighted">
       {{ t('sharing.notFound.title') }}
     </h1>

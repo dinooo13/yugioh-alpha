@@ -50,7 +50,7 @@ const { data, pending } = await useFetch<{ items: CatalogCard[] }>('/api/invento
       autofocus
     />
 
-    <div class="max-h-96 overflow-y-auto rounded-md border border-default bg-default">
+    <div class="max-h-96 overflow-y-auto rounded-lg border border-default bg-default">
       <div
         v-if="pending"
         class="p-4 text-sm text-muted"

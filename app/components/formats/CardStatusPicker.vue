@@ -117,7 +117,7 @@ function removeCard(id: number) {
 
     <ul
       v-if="results.length > 0"
-      class="max-h-48 divide-y divide-default overflow-y-auto rounded-md border border-default"
+      class="max-h-48 divide-y divide-default overflow-y-auto rounded-lg border border-default"
     >
       <li
         v-for="card in results"

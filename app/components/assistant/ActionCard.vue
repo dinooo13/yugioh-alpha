@@ -441,7 +441,7 @@ async function reject() {
         >
           <table class="w-full text-left text-xs">
             <thead>
-              <tr class="text-muted">
+              <tr class="text-[0.6875rem] tracking-wider text-muted uppercase">
                 <th
                   v-for="column in columns"
                   :key="column"

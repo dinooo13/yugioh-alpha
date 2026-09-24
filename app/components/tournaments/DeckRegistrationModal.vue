@@ -200,7 +200,7 @@ async function save() {
 
         <div
           v-if="selectedDeckId !== NO_DECK"
-          class="rounded-md border border-default bg-muted p-3 text-sm"
+          class="rounded-lg border border-default bg-muted p-3 text-sm"
         >
           <template v-if="previewPending">
             <p class="text-muted">

@@ -266,7 +266,7 @@ async function removeGrant(userId: string) {
             </p>
             <ul
               v-else
-              class="divide-y divide-default rounded-md border border-default bg-default"
+              class="divide-y divide-default rounded-lg border border-default bg-default"
             >
               <li
                 v-for="grant in state.grants"
