@@ -3,10 +3,11 @@
 //
 // A tool call is a `tool-<name>` part of an assistant message (AI SDK
 // UIMessage): its input, its state (running, done, failed) and — once done —
-// its output, which holds the result exactly as the model read it and the
-// current name of the deck the call refers to (#53); `get_card`'s result
-// names the card, so its chip shows the name instead of the id (#128). The
-// outcome is derived
+// its output, which holds the result exactly as the model read it, the
+// current name of the deck the call refers to (#53) and, for `get_card`, the
+// card's names in both languages (#132), so its chip shows the name instead
+// of the id (#128) and follows the current card language. The outcome is
+// derived
 // from that result with the same `summarizeToolResult`
 // (shared/assistant-chat.ts) whether the part is streaming right now or was
 // loaded with the conversation, so both look the same. The text itself is
@@ -75,27 +76,33 @@ export function isToolPart(part: AssistantUIMessagePart): part is AssistantUIMes
   return part.type.startsWith('tool-') && 'state' in part
 }
 
+/** A card's names from a record with a non-empty `name` (and optional `nameDe`), else null. */
+function cardNames(value: unknown): CardNameFields | null {
+  if (!isRecord(value) || typeof value.name !== 'string' || value.name === '') {
+    return null
+  }
+  return { name: value.name, ...(typeof value.nameDe === 'string' ? { nameDe: value.nameDe } : {}) }
+}
+
 /**
- * The card a finished `get_card` call read, from its result (`name`, and
- * `nameDe` when the turn ran with German card language); null while it runs,
- * when it failed or when the result holds no card.
+ * The card a finished `get_card` call read: `output.card`, both names as
+ * resolved when the conversation was read or the call ran (#132), else the
+ * result itself (`name`, and `nameDe` only when that turn ran with German
+ * card language — parts from before #132); null while it runs, when it
+ * failed or when neither holds a card.
  */
 function toolPartCard(part: AssistantToolPartLike): CardNameFields | null {
   if (part.type !== 'tool-get_card' || part.state !== 'output-available' || !isRecord(part.output)) {
     return null
   }
-  const result = part.output.result
-  if (!isRecord(result) || typeof result.name !== 'string' || result.name === '') {
-    return null
-  }
-  return { name: result.name, ...(typeof result.nameDe === 'string' ? { nameDe: result.nameDe } : {}) }
+  return cardNames(part.output.card) ?? cardNames(part.output.result)
 }
 
 /**
  * The call a chip names: the tool, its input, the deck's current name from
- * the output (#53), and — for `get_card` — the card's name from the result,
- * picked by `pickCardName` (the card language, `useCardText().cardName`;
- * #128). Without a name the chip keeps the card's id.
+ * the output (#53), and — for `get_card` — the card's name (`output.card`,
+ * else the result; #128, #132), picked by `pickCardName` (the card language,
+ * `useCardText().cardName`). Without a name the chip keeps the card's id.
  */
 export function toolPartCall(part: AssistantToolPartLike, pickCardName: (card: CardNameFields) => string = card => card.name): ToolActivityCall {
   const output = isRecord(part.output) ? part.output : undefined

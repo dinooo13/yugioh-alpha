@@ -39,7 +39,7 @@ import {
 } from './assistant-chat'
 import { getAssistantLimits } from './assistant-limits'
 import type { AssistantLimits } from './assistant-limits'
-import { assistantErrorCode, assistantStreamErrorText, toolErrorText } from './assistant-model'
+import { assistantErrorCode, assistantErrorText, assistantStreamErrorText, toolErrorText } from './assistant-model'
 import type { AssistantLanguageModel } from './assistant-model'
 import { buildSystemPrompt, TOOL_TEXT, TURN_TEXT } from './assistant-prompts'
 import type { TurnText } from './assistant-prompts'
@@ -391,7 +391,7 @@ export function startAssistantTurn(options: AssistantTurnOptions): AssistantTurn
       maxRetries: 2,
       ...(model.providerOptions ? { providerOptions: model.providerOptions } : {}),
       headers: { 'x-opencode-session': conversationId },
-      // The client gets the error as a code (`assistantStreamErrorText`); the log keeps the cause.
+      // The client gets the error as a code, with the provider's hint for a model setup problem (`assistantStreamErrorText`, #124); the log keeps the cause.
       onError: ({ error }) => {
         console.warn(`[assistant] model call failed (${assistantErrorCode(error)}):`, error instanceof Error ? error.message : error)
       },
@@ -451,7 +451,7 @@ export function startAssistantTurn(options: AssistantTurnOptions): AssistantTurn
       return { status, steps: await result.steps, responseMessages: await result.responseMessages }
     }
     catch (error) {
-      writer.write({ type: 'error', errorText: assistantErrorCode(error) })
+      writer.write({ type: 'error', errorText: assistantErrorText(error) })
       return { status: 'error', steps: [], responseMessages: [] }
     }
   }
@@ -475,7 +475,7 @@ export function startAssistantTurn(options: AssistantTurnOptions): AssistantTurn
   const stream = createUIMessageStream<AssistantUIMessage>({
     generateId: () => assistantId,
     originalMessages: history,
-    onError: assistantErrorCode,
+    onError: assistantErrorText,
     execute: async ({ writer }) => {
       try {
         const modelMessages = pruneMessages({

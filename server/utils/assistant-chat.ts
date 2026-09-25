@@ -1,6 +1,7 @@
 // Conversations of the chat assistant (docs/adr/0010-chat-assistant-with-tools.md,
 // docs/adr/0020-assistant-on-the-ai-sdk.md): creating, listing and deleting
-// them, and the display data of pending actions (#53, #69). The turn itself runs in
+// them, and the display data of pending actions and tool chips (#53, #69,
+// #132). The turn itself runs in
 // assistant-turn.ts; the messages are read and written in
 // assistant-ui-messages.ts.
 
@@ -19,6 +20,7 @@ import type {
 import { DEFAULT_APP_LOCALE } from '../../shared/locale'
 import type { AppLocale } from '../../shared/locale'
 import { TURN_TEXT } from './assistant-prompts'
+import { loadCardNameRecords } from './deck-validation'
 
 type Db = ReturnType<typeof useDb>
 type ConversationRow = typeof assistantConversation.$inferSelect
@@ -112,6 +114,24 @@ export function resolveDeckNames(db: Db, userId: string, ids: Array<string | nul
     .where(and(eq(deck.userId, userId), inArray(deck.id, unique)))
     .all()
   return new Map(rows.map(row => [row.id, row.name]))
+}
+
+/**
+ * The names of the catalog cards among `ids`, in both languages (#132; the
+ * UI picks by the card language). Catalog-wide, retired cards included; an
+ * unknown id is simply missing.
+ */
+export function resolveCardNames(db: Db, ids: Array<number | null>): Map<number, { name: string, nameDe?: string }> {
+  const unique = [...new Set(ids.filter((id): id is number => typeof id === 'number'))]
+  const { cardNames, cardNamesDe } = loadCardNameRecords(db, unique)
+  return new Map(unique.flatMap((id) => {
+    const name = cardNames[id]
+    if (name === undefined) {
+      return []
+    }
+    const nameDe = cardNamesDe[id]
+    return [[id, nameDe ? { name, nameDe } : { name }] as const]
+  }))
 }
 
 /** The current names of the caller's own collections among `ids` (#69) — a foreign or deleted collection is simply missing. */

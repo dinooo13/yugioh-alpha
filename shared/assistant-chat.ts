@@ -167,6 +167,22 @@ export function toolCallDeckId(call: Pick<AssistantToolCallView, 'name' | 'argum
 }
 
 /**
+ * The catalog card a `get_card` call reads (#132): the result's `id` when it
+ * is a positive integer, else the call's `id` argument, else null. Every
+ * other tool: null.
+ */
+export function toolCallCardId(name: string, input: Record<string, unknown>, result?: unknown): number | null {
+  if (name !== 'get_card') {
+    return null
+  }
+  if (isRecord(result) && typeof result.id === 'number' && Number.isSafeInteger(result.id) && result.id > 0) {
+    return result.id
+  }
+  const id = typeof input.id === 'number' || typeof input.id === 'string' ? Number(input.id) : Number.NaN
+  return Number.isSafeInteger(id) && id > 0 ? id : null
+}
+
+/**
  * What a tool activity chip names after the tool's label: the search query,
  * the proposed deck's name, the deck the call refers to (its name, #53 —
  * nothing when the name isn't known), or the card's name (from the result,
@@ -249,6 +265,7 @@ export const ASSISTANT_ERROR_CODES = [
   'assistant_unreachable',
   'regenerate_not_allowed',
   'assistant_model_not_allowed',
+  'assistant_model_unavailable',
   'unexpected',
 ] as const
 

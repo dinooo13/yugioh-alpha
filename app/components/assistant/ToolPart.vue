@@ -6,8 +6,8 @@ import type { AssistantToolPartLike } from '~/utils/assistant-tool-activity'
 // does ("Sucht im Katalog: Dark Magician", with the deck's name instead of
 // its id, #53, and the card's name — in the card language — instead of its
 // id once `get_card` is done, #128), shimmering while it runs, then its
-// outcome. A failed call
-// opens to show the (technical, English) error the model got.
+// outcome. A long label wraps instead of cutting off the outcome (#125). A
+// failed call opens to show the (technical, English) error the model got.
 const props = defineProps<{
   part: AssistantToolPartLike
 }>()
@@ -25,6 +25,18 @@ const summary = computed(() => isRunning.value || !result.value.outcome
   ? undefined
   : `— ${toolOutcomeSummary(t, !isFailed.value, result.value.outcome, count => n(count, 'integer'))}`)
 const errorDetail = computed(() => isFailed.value ? result.value.outcome?.error || undefined : undefined)
+
+// The theme truncates the label, and the outcome (`suffix`) sits inside it,
+// so on a phone "— 15 Ergebnisse" got cut off (#125). The label wraps
+// instead, start-aligned (the button would center it), and the icons stay
+// on the first line.
+const ui = computed(() => ({
+  label: 'whitespace-normal break-words text-start',
+  trigger: isFailed.value ? 'items-start text-error hover:text-error disabled:hover:text-error' : 'items-start',
+  leading: 'mt-0.5',
+  trailingIcon: 'mt-0.5',
+  ...(isFailed.value ? { suffix: 'text-error' } : {}),
+}))
 </script>
 
 <template>
@@ -35,7 +47,7 @@ const errorDetail = computed(() => isFailed.value ? result.value.outcome?.error 
     :loading="isRunning"
     loading-icon="i-lucide-loader-circle"
     :streaming="isRunning"
-    :ui="isFailed ? { trigger: 'text-error hover:text-error disabled:hover:text-error', suffix: 'text-error' } : undefined"
+    :ui="ui"
     data-testid="assistant-tool"
     :data-outcome="result.state"
   >

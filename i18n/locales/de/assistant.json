@@ -35,7 +35,8 @@
       "errors": {
         "load": "Die Unterhaltung konnte nicht geladen werden.",
         "connectionLost": "Die Verbindung wurde unterbrochen. Bitte versuche es erneut.",
-        "unexpected": "Es ist ein unerwarteter Fehler aufgetreten."
+        "unexpected": "Es ist ein unerwarteter Fehler aufgetreten.",
+        "providerHint": "Hinweis des Anbieters: {hint}"
       }
     },
     "composer": {

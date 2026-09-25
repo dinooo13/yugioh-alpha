@@ -48,10 +48,11 @@ import { listRuleFormats, requireAccessibleFormat, requireAssignableFormat } fro
 import { loadCardDataForValidation, loadCardNameRecords, maxCopiesByCard, missingCatalogCardIds } from './deck-validation'
 import { previewDeckProposal } from './deck-proposal'
 import { ACTION_SUMMARY, TOOL_DESCRIPTIONS, TOOL_PARAM_DESCRIPTIONS, TOOL_TEXT } from './assistant-prompts'
-import { toolCallDeckId } from '../../shared/assistant-chat'
+import { toolCallCardId, toolCallDeckId } from '../../shared/assistant-chat'
 import type { AssistantActionKind, AssistantActionView, AssistantDeckPreview, AssistantToolName } from '../../shared/assistant-chat'
 import type { AssistantToolOutput } from '../../shared/assistant-ui'
 import { AssistantToolError } from './assistant-model'
+import { resolveCardNames } from './assistant-chat'
 import type { DeckValidation } from '../../shared/rule-formats'
 import type { AppLocale } from '../../shared/locale'
 import { cardNameDeSql } from './card-translation-sql'
@@ -192,6 +193,16 @@ function germanNameField(nameDe: string | null | undefined, cardLocale: AppLocal
   return cardLocale === 'de' && nameDe ? { nameDe } : {}
 }
 
+/**
+ * An ATK/DEF value as the model reads it (#139): YGOPRODeck's -1 for a "?"
+ * stat becomes "?", null (no such stat, e.g. a Link monster's DEF) stays
+ * null. The model-facing twin of `formatCardStat` (shared/card-stats.ts),
+ * which the UI uses; numbers stay numbers here.
+ */
+function statForModel(value: number | null): number | '?' | null {
+  return value !== null && value < 0 ? '?' : value
+}
+
 // --- Read tools ----------------------------------------------------------------
 
 function toolSearchCatalog(db: Db, cardLocale: AppLocale, args: unknown) {
@@ -252,6 +263,8 @@ function toolSearchCatalog(db: Db, cardLocale: AppLocale, args: unknown) {
       name,
       ...germanNameField(nameDe, cardLocale),
       ...row,
+      atk: statForModel(row.atk),
+      def: statForModel(row.def),
       imageSmall: imageByCard.get(id) ?? null,
     })),
     truncated,
@@ -283,8 +296,8 @@ async function toolGetCard(db: Db, cardLocale: AppLocale, args: unknown) {
     attribute: detail.card.attribute,
     race: detail.card.race,
     level: detail.card.level,
-    atk: detail.card.atk,
-    def: detail.card.def,
+    atk: statForModel(detail.card.atk),
+    def: statForModel(detail.card.def),
     archetype: detail.card.archetype,
     banlistInfo: detail.card.banlistInfo,
     printings: capItems(detail.printings, GET_CARD_PRINTINGS_MAX),
@@ -386,8 +399,8 @@ function toolSearchInventory(db: Db, userId: string, cardLocale: AppLocale, args
       attribute: card.attribute,
       race: card.race,
       level: card.level,
-      atk: card.atk,
-      def: card.def,
+      atk: statForModel(card.atk),
+      def: statForModel(card.def),
       archetype: card.archetype,
       isExtra: isExtraDeckCard(card),
       quantity,
@@ -1053,7 +1066,9 @@ export type AssistantToolSet = Record<AssistantToolName, Tool<Record<string, unk
  * the English message the model reads), capping the serialized result at
  * `limits.toolResultChars`, and turning a write tool's proposal into a
  * pending `assistant_action` of `ctx.messageId`. The tool part's output is
- * `{ result, deckName? }`; the model only ever reads `result`
+ * `{ result, deckName?, card?, actionId? }`: the chip's display names (#53,
+ * #132) and the proposal a write call created (#116, so the history can
+ * report its current status); the model only ever reads `result`
  * (`toModelOutput`).
  */
 export function buildAssistantToolSet(ctx: AssistantToolSetContext): AssistantToolSet {
@@ -1069,6 +1084,7 @@ export function buildAssistantToolSet(ctx: AssistantToolSetContext): AssistantTo
         try {
           const outcome = await definition.run(ctx, input)
           const result: unknown = JSON.parse(serializeToolResult(outcome.result, ctx.limits.toolResultChars))
+          let actionId: string | undefined
           if ('action' in outcome) {
             const row = insertPendingAction(ctx.db, {
               conversationId: ctx.conversationId,
@@ -1076,11 +1092,19 @@ export function buildAssistantToolSet(ctx: AssistantToolSetContext): AssistantTo
               userId: ctx.userId,
               action: outcome.action,
             })
+            actionId = row.id
             ctx.onAction(toolCallId, ctx.actionView(row))
           }
           const deckId = toolCallDeckId({ name, arguments: input })
           const deckName = deckId ? ctx.deckName(deckId) : undefined
-          return { result, ...(deckName !== undefined ? { deckName } : {}) }
+          const cardId = toolCallCardId(name, input, outcome.result)
+          const card = cardId !== null ? resolveCardNames(ctx.db, [cardId]).get(cardId) : undefined
+          return {
+            result,
+            ...(deckName !== undefined ? { deckName } : {}),
+            ...(card ? { card } : {}),
+            ...(actionId ? { actionId } : {}),
+          }
         }
         catch (error) {
           throw error instanceof AssistantToolError ? error : new AssistantToolError(toolErrorMessage(error))

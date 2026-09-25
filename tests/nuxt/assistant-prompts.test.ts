@@ -1,13 +1,16 @@
 // What the chat assistant's model reads (server/utils/assistant-prompts.ts):
-// the #77 and #54 rules in the system prompt, the order of its parts, and
-// the title model's prompt (#129).
+// the #77, #54, #116 and #117 rules in the system prompt, the order of its
+// parts, the card-term glossary (#117), and the title model's prompt (#129).
 
 import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
 import {
+  buildCardTermGlossary,
   buildSystemPrompt,
   buildTitleInstructions,
   buildTitlePrompt,
   CARD_NAME_INSTRUCTION,
+  CARD_TERMS_INSTRUCTION,
   IMAGE_HINT,
   REPLY_LANGUAGE_INSTRUCTION,
   SYSTEM_PROMPT,
@@ -25,8 +28,20 @@ describe('SYSTEM_PROMPT', () => {
     expect(SYSTEM_PROMPT).not.toContain('Propose changes (inventory, decks) only through a tool')
   })
 
-  it('keeps card-data terms as the tool results give them (#77)', () => {
-    expect(SYSTEM_PROMPT).toContain('Keep card-data terms (card type, attribute, monster type/race, archetype) exactly as the tool results give them; don\'t translate or gloss them yourself.')
+  it('points card-data terms at the card-term instruction and forbids made-up translations (#77, #117)', () => {
+    expect(SYSTEM_PROMPT).toContain('- Card-data terms (card type, attribute, monster type/race, archetype): follow the card-term instruction below; never make up a translation or add one in parentheses.')
+    expect(SYSTEM_PROMPT).not.toContain('don\'t translate or gloss them yourself')
+  })
+
+  it('tells the model to trust a proposal\'s current status (#116)', () => {
+    expect(SYSTEM_PROMPT).toContain('- A write tool\'s result shows the proposal\'s current status: pending_confirmation (waiting for the user), applied, rejected or failed. Don\'t call an applied or rejected proposal pending, and don\'t propose the same change again unless the user asks for it.')
+    // Right after the write-proposal rule.
+    expect(SYSTEM_PROMPT.indexOf('A write tool\'s result shows')).toBeGreaterThan(SYSTEM_PROMPT.indexOf('A proposal changes nothing until the user confirms it'))
+    expect(TOOL_TEXT.proposalStatus).toEqual({
+      applied: 'The user confirmed this proposal; it has been applied.',
+      rejected: 'The user rejected this proposal; nothing was changed.',
+      failed: 'The user confirmed this proposal, but applying it failed; nothing was changed.',
+    })
   })
 
   it('asks for tool calls through the tool-calling interface only (#54)', () => {
@@ -40,10 +55,10 @@ describe('SYSTEM_PROMPT', () => {
 })
 
 describe('buildSystemPrompt', () => {
-  it('puts the image hint before the reply- and card-language instructions, which stay last', () => {
+  it('puts the image hint before the reply-language, card-term and card-name instructions, which stay last', () => {
     const prompt = buildSystemPrompt({ hasImages: true, locale: 'en', cardLocale: 'de' })
     const paragraphs = prompt.split('\n\n')
-    expect(paragraphs.slice(-2)).toEqual([REPLY_LANGUAGE_INSTRUCTION.en, CARD_NAME_INSTRUCTION.de])
+    expect(paragraphs.slice(-3)).toEqual([REPLY_LANGUAGE_INSTRUCTION.en, CARD_TERMS_INSTRUCTION.de, CARD_NAME_INSTRUCTION.de])
     expect(prompt.indexOf(IMAGE_HINT)).toBeLessThan(prompt.indexOf(REPLY_LANGUAGE_INSTRUCTION.en))
     expect(prompt.startsWith(SYSTEM_PROMPT)).toBe(true)
   })
@@ -52,7 +67,7 @@ describe('buildSystemPrompt', () => {
     for (const locale of ['de', 'en'] as const) {
       for (const cardLocale of ['de', 'en'] as const) {
         const prompt = buildSystemPrompt({ hasImages: false, locale, cardLocale })
-        expect(prompt.endsWith(`\n\n${REPLY_LANGUAGE_INSTRUCTION[locale]}\n\n${CARD_NAME_INSTRUCTION[cardLocale]}`), `${locale}/${cardLocale}`).toBe(true)
+        expect(prompt.endsWith(`\n\n${REPLY_LANGUAGE_INSTRUCTION[locale]}\n\n${CARD_TERMS_INSTRUCTION[cardLocale]}\n\n${CARD_NAME_INSTRUCTION[cardLocale]}`), `${locale}/${cardLocale}`).toBe(true)
       }
     }
     expect(REPLY_LANGUAGE_INSTRUCTION.en).toContain('Reply in English unless the user explicitly asks for another language.')
@@ -69,7 +84,49 @@ describe('buildSystemPrompt', () => {
 
   it('leaves out the image hint when there are no images', () => {
     expect(buildSystemPrompt({ hasImages: false, locale: 'de', cardLocale: 'de' }))
-      .toBe([SYSTEM_PROMPT, REPLY_LANGUAGE_INSTRUCTION.de, CARD_NAME_INSTRUCTION.de].join('\n\n'))
+      .toBe([SYSTEM_PROMPT, REPLY_LANGUAGE_INSTRUCTION.de, CARD_TERMS_INSTRUCTION.de, CARD_NAME_INSTRUCTION.de].join('\n\n'))
+  })
+})
+
+describe('card-data terms (#117)', () => {
+  // Read as plain JSON: vitest's Nuxt environment compiles an imported locale file into message ASTs.
+  const deCardMessages = JSON.parse(readFileSync('i18n/locales/de/card.json', 'utf8')) as { card: { value: Record<'type' | 'attribute' | 'race', Record<string, string>> } }
+  const glossary = buildCardTermGlossary(deCardMessages)
+  const labels = deCardMessages.card.value
+
+  it('lists the UI\'s official German terms (ADR 0015 decision 6), English = German, on one line', () => {
+    const entries = glossary.split('; ')
+    expect(entries).toContain('Spellcaster = Hexer')
+    expect(entries).toContain('DARK = FINSTERNIS')
+    expect(entries).toContain('Beast Warrior = Ungeheuer-Krieger')
+    expect(entries).toContain('Effect Monster = Effektmonster')
+    expect(entries).toContain('Quick Play = Schnell')
+    expect(glossary).not.toContain('\n')
+    expect(CARD_TERMS_INSTRUCTION.de).toContain(glossary)
+    expect(CARD_TERMS_INSTRUCTION.de).toContain('Spellcaster is "Hexer", never "Zauberer"')
+  })
+
+  it('leaves out terms whose German label is the English one, and stays short', () => {
+    const englishSides = glossary.split('; ').map(entry => entry.split(' = ')[0])
+    for (const term of ['Zombie', 'Aqua', 'WIND', 'Normal', 'Ritual']) {
+      expect(englishSides, term).not.toContain(term)
+    }
+    expect(glossary.length).toBeLessThan(3000)
+  })
+
+  it('keeps the English card language free of German terms', () => {
+    const germanLabels = [...Object.values(labels.type), ...Object.values(labels.attribute), ...Object.values(labels.race)]
+      .filter(label => !glossary.split('; ').every(entry => !entry.endsWith(` = ${label}`)))
+    expect(germanLabels.length).toBeGreaterThan(50)
+    for (const label of germanLabels) {
+      expect(CARD_TERMS_INSTRUCTION.en, label).not.toContain(label)
+    }
+    expect(CARD_TERMS_INSTRUCTION.en).toContain('Never translate them or add a translation in parentheses.')
+  })
+
+  it('builds from any label set, e.g. one with a new race', () => {
+    expect(buildCardTermGlossary({ card: { value: { type: { spell_card: 'Zauberkarte' }, attribute: { light: 'LICHT' }, race: { sea_serpent: 'Seeschlange', aqua: 'Aqua' } } } }))
+      .toBe('Spell Card = Zauberkarte; LIGHT = LICHT; Sea Serpent = Seeschlange')
   })
 })
 

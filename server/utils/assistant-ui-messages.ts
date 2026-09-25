@@ -18,11 +18,12 @@ import {
   ASSISTANT_MESSAGE_IMAGES_MAX,
   ASSISTANT_MESSAGE_TEXT_MAX,
   ASSISTANT_MESSAGE_TOTAL_BYTES_MAX,
+  toolCallCardId,
   toolCallDeckId,
 } from '../../shared/assistant-chat'
-import type { AssistantActionView } from '../../shared/assistant-chat'
-import type { AssistantTurnTrigger, AssistantUIMessage, AssistantUIMessagePart } from '../../shared/assistant-ui'
-import { hydrateActionViews, resolveDeckNames } from './assistant-chat'
+import type { AssistantActionKind, AssistantActionStatus, AssistantActionView } from '../../shared/assistant-chat'
+import type { AssistantToolOutput, AssistantTurnTrigger, AssistantUIMessage, AssistantUIMessagePart } from '../../shared/assistant-ui'
+import { hydrateActionViews, resolveCardNames, resolveDeckNames, toActionView } from './assistant-chat'
 import { TOOL_TEXT } from './assistant-prompts'
 
 type Db = ReturnType<typeof useDb>
@@ -181,16 +182,34 @@ function loadRows(db: Db, conversationId: string): MessageRow[] {
     .all()
 }
 
+/** The tool name and input of a tool part. */
+function toolPartCall(part: Extract<AssistantUIMessagePart, { toolCallId: string }>): { name: string, arguments: Record<string, unknown> } {
+  return { name: part.type.slice('tool-'.length), arguments: isRecord(part.input) ? part.input : {} }
+}
+
+/** The catalog card a finished `get_card` part read (#132), else null. */
+function toolPartCardId(part: AssistantUIMessagePart): number | null {
+  if (!isToolPart(part) || part.state !== 'output-available') {
+    return null
+  }
+  const call = toolPartCall(part)
+  return toolCallCardId(call.name, call.arguments, isRecord(part.output) ? part.output.result : undefined)
+}
+
 /**
  * Refreshes display data in stored parts: every `data-action` part gets its
  * action's current view (status, #69 names) and is dropped when the action
  * is gone; a tool part's `output.deckName` becomes the current name of the
- * caller's deck it refers to (#53), and is removed when that deck is gone.
+ * caller's deck it refers to (#53), and is removed when that deck is gone;
+ * a `get_card` part's `output.card` becomes the card's names in both
+ * languages (#132), so its chip follows the current card language, and is
+ * removed when the card is unknown.
  */
 export function hydrateUiParts(
   parts: AssistantUIMessagePart[],
   actionViews: Map<string, AssistantActionView>,
   deckNames: Map<string, string>,
+  cardNames: Map<number, { name: string, nameDe?: string }> = new Map(),
 ): AssistantUIMessagePart[] {
   return parts.flatMap((part): AssistantUIMessagePart[] => {
     if (part.type === 'data-action') {
@@ -198,10 +217,15 @@ export function hydrateUiParts(
       return view ? [{ ...part, id: view.id, data: view }] : []
     }
     if (isToolPart(part) && part.state === 'output-available' && isRecord(part.output)) {
-      const deckId = toolCallDeckId({ name: part.type.slice('tool-'.length), arguments: isRecord(part.input) ? part.input : {} })
-      const { deckName: _stale, ...output } = part.output as { deckName?: string, result: unknown }
+      const deckId = toolCallDeckId(toolPartCall(part))
+      const cardId = toolPartCardId(part)
+      const { deckName: _staleDeck, card: _staleCard, ...output } = part.output as AssistantToolOutput
       const deckName = deckId ? deckNames.get(deckId) : undefined
-      return [{ ...part, output: deckName !== undefined ? { ...output, deckName } : output } as AssistantUIMessagePart]
+      const card = cardId !== null ? cardNames.get(cardId) : undefined
+      return [{
+        ...part,
+        output: { ...output, ...(deckName !== undefined ? { deckName } : {}), ...(card ? { card } : {}) },
+      } as AssistantUIMessagePart]
     }
     return [part]
   })
@@ -225,14 +249,14 @@ export function loadUiMessages(db: Db, userId: string, conversationId: string): 
   }
 
   const messages = legacyRowsToUIMessages(rows, viewsByMessage)
-  const deckIds = messages.flatMap(message => message.parts.flatMap(part =>
-    isToolPart(part) ? [toolCallDeckId({ name: part.type.slice('tool-'.length), arguments: isRecord(part.input) ? part.input : {} })] : []))
-  const deckNames = resolveDeckNames(db, userId, deckIds)
+  const parts = messages.flatMap(message => message.parts)
+  const deckNames = resolveDeckNames(db, userId, parts.flatMap(part => isToolPart(part) ? [toolCallDeckId(toolPartCall(part))] : []))
+  const cardNames = resolveCardNames(db, parts.map(toolPartCardId))
 
   return messages
     // A turn still running has an empty answer until its first step ends.
     .filter(message => message.role !== 'assistant' || !isEmptyAssistantParts(message.parts))
-    .map(message => ({ ...message, parts: hydrateUiParts(message.parts, viewsById, deckNames) }))
+    .map(message => ({ ...message, parts: hydrateUiParts(message.parts, viewsById, deckNames, cardNames) }))
 }
 
 /** What a message costs in the model's history budget: its parts minus those the model never reads (data parts, reasoning). */
@@ -260,9 +284,88 @@ export function trimUiHistory(messages: AssistantUIMessage[], limits: { historyM
   return firstUser >= 0 ? trimmed.slice(firstUser) : []
 }
 
-/** The model's history (not hydrated: the model never reads display data): every message, converted and trimmed. */
+const WRITE_TOOL_KINDS: readonly AssistantActionKind[] = ['add_to_inventory', 'create_deck', 'update_deck_cards', 'set_deck_format']
+
+function isWriteToolKind(name: string): name is AssistantActionKind {
+  return (WRITE_TOOL_KINDS as readonly string[]).includes(name)
+}
+
+/**
+ * The model's view of each proposal's current status (#116). A write tool's
+ * stored result always says `pending_confirmation`; once the user applied or
+ * rejected the proposal (or applying it failed), the result becomes
+ * `{ ...result, status, message }` with the `TOOL_TEXT.proposalStatus` text,
+ * plus `failureReason` for a failed one (not `error`, which would make the
+ * call itself look failed). A write call finds its action by
+ * `output.actionId` (turns since #116), else among the actions of the
+ * message's `data-action` parts, in order: the first unused one of the same
+ * kind with the same summary, else the first unused one of the same kind.
+ * Pure: returns new objects and never touches what is stored.
+ */
+export function withProposalStatus(messages: AssistantUIMessage[], actions: ActionRow[]): AssistantUIMessage[] {
+  const actionsById = new Map(actions.map(action => [action.id, action]))
+  return messages.map((message) => {
+    const candidates = message.parts.flatMap((part) => {
+      const action = part.type === 'data-action' ? actionsById.get(part.id ?? part.data.id) : undefined
+      return action ? [action] : []
+    })
+    const used = new Set<string>()
+    let changed = false
+    const parts = message.parts.map((part): AssistantUIMessagePart => {
+      if (!isToolPart(part) || part.state !== 'output-available' || !isRecord(part.output)) {
+        return part
+      }
+      const kind = toolPartCall(part).name
+      const output = part.output as AssistantToolOutput
+      const result = output.result
+      if (!isWriteToolKind(kind) || !isRecord(result) || result.status !== 'pending_confirmation') {
+        return part
+      }
+      const unused = candidates.filter(candidate => !used.has(candidate.id) && candidate.kind === kind)
+      const action = typeof output.actionId === 'string'
+        ? actionsById.get(output.actionId)
+        : unused.find(candidate => candidate.summary === result.summary) ?? unused[0]
+      if (!action) {
+        return part
+      }
+      used.add(action.id)
+      if (action.status === 'pending') {
+        return part
+      }
+      const status: Exclude<AssistantActionStatus, 'pending'> = action.status
+      const failureReason = status === 'failed' && isRecord(action.result) && typeof action.result.error === 'string'
+        ? { failureReason: action.result.error }
+        : {}
+      changed = true
+      return {
+        ...part,
+        output: { ...output, result: { ...result, status, message: TOOL_TEXT.proposalStatus[status], ...failureReason } },
+      } as AssistantUIMessagePart
+    })
+    return changed ? { ...message, parts } : message
+  })
+}
+
+/**
+ * The model's history: every message, converted and trimmed. Not hydrated
+ * for display (the model never reads display data), but proposals carry
+ * their current status (#116, `withProposalStatus`). Legacy answers get
+ * their `data-action` parts for that; `convertToModelMessages` leaves them
+ * out like every data part.
+ */
 export function loadUiHistory(db: Db, conversationId: string, limits: { historyMessages: number, historyChars: number }): AssistantUIMessage[] {
-  return trimUiHistory(legacyRowsToUIMessages(loadRows(db, conversationId), new Map()), limits)
+  const actionRows: ActionRow[] = db
+    .select()
+    .from(assistantAction)
+    .where(eq(assistantAction.conversationId, conversationId))
+    .orderBy(asc(assistantAction.createdAt))
+    .all()
+  const viewsByMessage = new Map<string, AssistantActionView[]>()
+  for (const row of actionRows) {
+    viewsByMessage.set(row.messageId, [...(viewsByMessage.get(row.messageId) ?? []), toActionView(row)])
+  }
+  const messages = legacyRowsToUIMessages(loadRows(db, conversationId), viewsByMessage)
+  return trimUiHistory(withProposalStatus(messages, actionRows), limits)
 }
 
 // --- Writing --------------------------------------------------------------------

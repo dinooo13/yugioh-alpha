@@ -1,9 +1,11 @@
 // Conversation messages as AI SDK UIMessages (server/utils/assistant-ui-messages.ts,
 // ADR 0020): the read-time conversion of the former engine's rows, display
-// hydration (#53, #69), the history window, and turn request validation.
+// hydration (#53, #69, #132), the proposals' current status in the model's
+// history (#116), the history window, and turn request validation.
 
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
 import { drizzle } from 'drizzle-orm/better-sqlite3'
+import { eq } from 'drizzle-orm'
 import Database from 'better-sqlite3'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { convertToModelMessages } from 'ai'
@@ -13,12 +15,16 @@ import { buildAssistantToolSet } from '../../server/utils/assistant-tools'
 import { TOOL_TEXT } from '../../server/utils/assistant-prompts'
 import {
   legacyRowsToUIMessages,
+  loadUiHistory,
   loadUiMessages,
   trimUiHistory,
   validateAssistantTurnRequest,
+  withProposalStatus,
 } from '../../server/utils/assistant-ui-messages'
 import { createDeck, updateDeck } from '../../server/utils/decks'
-import type { AssistantUIMessage } from '../../shared/assistant-ui'
+import type { AssistantActionKind, AssistantActionStatus } from '../../shared/assistant-chat'
+import type { AssistantUIMessage, AssistantUIMessagePart } from '../../shared/assistant-ui'
+import { seedGermanNames } from './fixtures/german-names'
 
 function createTestDb() {
   const sqlite = new Database(':memory:')
@@ -242,6 +248,143 @@ describe('loadUiMessages (display hydration)', () => {
     expect(views.get('named-deck-action')!.display).toBeUndefined()
     expect(views.get('gone-deck-action')!.display).toEqual({ deckName: null })
     expect(views.get('inventory-action')!.display).toEqual({ collectionNames: { 'col-own': 'Ordner', 'col-foreign': null } })
+  })
+})
+
+describe('loadUiMessages: get_card chips in the current card language (#132)', () => {
+  const getCardPart = (toolCallId: string, output: { result: unknown, card?: unknown }): AssistantUIMessagePart =>
+    ({ type: 'tool-get_card', toolCallId, state: 'output-available', input: { id: 46986414 }, output } as AssistantUIMessagePart)
+
+  it('gives a get_card part both names of its card, replacing a stale one; an unknown card gets none', () => {
+    const now = new Date()
+    db.insert(schema.catalogCard).values({ id: 46986414, name: 'Dark Magician', type: 'Normal Monster', desc: 'The ultimate wizard.', syncedAt: now }).run()
+    seedGermanNames(db, { 46986414: 'Dunkler Magier' })
+    legacyRow({ id: 'u1', role: 'user', content: 'zeige karte', parts: [{ type: 'text', text: 'zeige karte' }] })
+    legacyRow({ id: 'a1', role: 'assistant', parts: [
+      // A turn in English card language stored only the English name.
+      getCardPart('c1', { result: { id: 46986414, name: 'Dark Magician' } }),
+      getCardPart('c2', { result: { id: 46986414, name: 'Dark Magician' }, card: { name: 'Old', nameDe: 'Alt' } }),
+      { type: 'tool-get_card', toolCallId: 'c3', state: 'output-available', input: { id: 5 }, output: { result: { id: 5, name: 'Gone' }, card: { name: 'Gone' } } } as AssistantUIMessagePart,
+    ] })
+    legacyRow({ id: 'u2', role: 'user', content: 'x' })
+    legacyRow({ id: 'a2', role: 'assistant', toolCalls: [{ id: 'c4', name: 'get_card', arguments: { id: 46986414 } }] })
+    legacyRow({ id: 't4', role: 'tool', content: JSON.stringify({ id: 46986414, name: 'Dark Magician' }), toolCallId: 'c4', toolName: 'get_card' })
+
+    const outputs = loadUiMessages(db, 'user-a', conversationId).flatMap(message => message.parts.flatMap(part => 'output' in part ? [part.output] : []))
+
+    const both = { name: 'Dark Magician', nameDe: 'Dunkler Magier' }
+    expect(outputs).toEqual([
+      { result: { id: 46986414, name: 'Dark Magician' }, card: both },
+      { result: { id: 46986414, name: 'Dark Magician' }, card: both },
+      { result: { id: 5, name: 'Gone' } },
+      { result: { id: 46986414, name: 'Dark Magician' }, card: both },
+    ])
+  })
+})
+
+describe('withProposalStatus / loadUiHistory (#116)', () => {
+  let actionClock = Date.UTC(2026, 1, 1)
+
+  function action(id: string, kind: AssistantActionKind, status: AssistantActionStatus, fields: { summary?: string, messageId?: string, result?: unknown } = {}) {
+    actionClock += 1000
+    db.insert(schema.assistantAction).values({
+      id,
+      conversationId,
+      messageId: fields.messageId ?? 'a1',
+      userId: 'user-a',
+      kind,
+      payload: {},
+      summary: fields.summary ?? `summary ${id}`,
+      status,
+      ...(fields.result !== undefined ? { result: fields.result } : {}),
+      createdAt: new Date(actionClock),
+    }).run()
+    return db.select().from(schema.assistantAction).where(eq(schema.assistantAction.id, id)).get()!
+  }
+
+  const pending = (summary: string) => ({ status: 'pending_confirmation', message: TOOL_TEXT.pending, summary })
+
+  function writePart(toolCallId: string, kind: AssistantActionKind, summary: string, actionId?: string): AssistantUIMessagePart {
+    return { type: `tool-${kind}`, toolCallId, state: 'output-available', input: {}, output: { result: pending(summary), ...(actionId ? { actionId } : {}) } } as AssistantUIMessagePart
+  }
+
+  function actionPart(id: string): AssistantUIMessagePart {
+    return { type: 'data-action', id, data: { id, messageId: 'a1', kind: 'add_to_inventory', summary: '', payload: {}, status: 'pending' } }
+  }
+
+  function results(messages: AssistantUIMessage[]) {
+    return messages.flatMap(message => message.parts.flatMap(part => 'output' in part ? [(part.output as { result: unknown }).result] : []))
+  }
+
+  function seedAnswer(parts: AssistantUIMessagePart[]) {
+    legacyRow({ id: 'u1', role: 'user', content: 'x', parts: [{ type: 'text', text: 'x' }] })
+    legacyRow({ id: 'a1', role: 'assistant', parts })
+  }
+
+  it('reports applied, rejected and failed (with its reason) and leaves a pending proposal as it is', () => {
+    seedAnswer([
+      writePart('c1', 'add_to_inventory', 's1', 'act-applied'), actionPart('act-applied'),
+      writePart('c2', 'create_deck', 's2', 'act-rejected'), actionPart('act-rejected'),
+      writePart('c3', 'update_deck_cards', 's3', 'act-failed'), actionPart('act-failed'),
+      writePart('c4', 'set_deck_format', 's4', 'act-pending'), actionPart('act-pending'),
+    ])
+    const actions = [
+      action('act-applied', 'add_to_inventory', 'applied'),
+      action('act-rejected', 'create_deck', 'rejected'),
+      action('act-failed', 'update_deck_cards', 'failed', { result: { error: 'Deck not found' } }),
+      action('act-pending', 'set_deck_format', 'pending'),
+    ]
+    const messages = legacyRowsToUIMessages(db.select().from(schema.assistantMessage).all(), new Map())
+    const stored = JSON.stringify(messages)
+
+    expect(results(withProposalStatus(messages, actions))).toEqual([
+      { status: 'applied', message: TOOL_TEXT.proposalStatus.applied, summary: 's1' },
+      { status: 'rejected', message: TOOL_TEXT.proposalStatus.rejected, summary: 's2' },
+      { status: 'failed', message: TOOL_TEXT.proposalStatus.failed, summary: 's3', failureReason: 'Deck not found' },
+      pending('s4'),
+    ])
+    // Pure: what was read stays as it was.
+    expect(JSON.stringify(messages)).toBe(stored)
+  })
+
+  it('matches proposals stored before actionId by summary, then by kind in order — two in one message', () => {
+    seedAnswer([
+      writePart('c1', 'add_to_inventory', 'second'),
+      writePart('c2', 'add_to_inventory', 'first'),
+      writePart('c3', 'create_deck', 'renamed since'),
+      actionPart('act-1'), actionPart('act-2'), actionPart('act-3'),
+    ])
+    const actions = [
+      action('act-1', 'add_to_inventory', 'rejected', { summary: 'first' }),
+      action('act-2', 'add_to_inventory', 'applied', { summary: 'second' }),
+      action('act-3', 'create_deck', 'applied', { summary: 'something else' }),
+    ]
+    const messages = legacyRowsToUIMessages(db.select().from(schema.assistantMessage).all(), new Map())
+
+    expect(results(withProposalStatus(messages, actions)).map(result => (result as { status: string }).status)).toEqual(['applied', 'rejected', 'applied'])
+  })
+
+  it('gives a legacy conversation (rows without parts) its proposals\' status in the model\'s history', async () => {
+    seedLegacyConversation()
+    db.update(schema.assistantAction).set({ status: 'applied', result: { added: 2 } }).run()
+
+    const history = loadUiHistory(db, conversationId, { historyMessages: 100, historyChars: 100_000 })
+
+    expect(results(history)).toContainEqual({ status: 'applied', message: TOOL_TEXT.proposalStatus.applied })
+    expect(JSON.stringify(results(history))).not.toContain('pending_confirmation')
+    // The legacy answer now carries its data-action part; the model never sees it.
+    expect(history[1]!.parts.some(part => part.type === 'data-action')).toBe(true)
+    const tools = buildAssistantToolSet({
+      db, userId: 'user-a', cardLocale: 'de', conversationId, messageId: 'x',
+      limits: { toolResultChars: 60_000, toolResultItems: 100 },
+      actionView: toActionView, deckName: () => undefined, onAction: () => {},
+    })
+    const model = await convertToModelMessages<AssistantUIMessage>(history, { tools, ignoreIncompleteToolCalls: true })
+    expect(JSON.stringify(model)).not.toContain('data-action')
+    expect(model[4]).toMatchObject({ role: 'tool', content: [{ toolCallId: 'c2', output: { type: 'json', value: { status: 'applied', message: TOOL_TEXT.proposalStatus.applied } } }, {}, {}] })
+    // Stored rows are untouched: the display still reads the stored result.
+    expect(loadUiMessages(db, 'user-a', conversationId)[1]!.parts.find(part => part.type === 'tool-add_to_inventory'))
+      .toMatchObject({ output: { result: { status: 'pending_confirmation' } } })
   })
 })
 

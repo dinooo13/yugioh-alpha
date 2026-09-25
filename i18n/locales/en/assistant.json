@@ -35,7 +35,8 @@
       "errors": {
         "load": "The conversation couldn't be loaded.",
         "connectionLost": "The connection was interrupted. Please try again.",
-        "unexpected": "An unexpected error occurred."
+        "unexpected": "An unexpected error occurred.",
+        "providerHint": "Provider's note: {hint}"
       }
     },
     "composer": {
