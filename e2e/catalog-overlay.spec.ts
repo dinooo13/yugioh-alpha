@@ -76,10 +76,11 @@ test.describe('catalog card overlay', () => {
 
     for (const expected of [1, 2]) {
       await detail.getByRole('button', { name: 'Zum Deck' }).click()
-      await page.getByRole('menuitem', { name: 'Katalog-Deck' }).click()
+      // One flat menu: the section (Main Deck preselected), then the deck.
+      await expect(page.getByRole('menuitemcheckbox', { name: 'Main Deck' })).toHaveAttribute('aria-checked', 'true')
       const saved = page.waitForResponse(response =>
         response.request().method() === 'PUT' && response.url().includes(`/api/decks/${deckId}/cards`))
-      await page.getByRole('menuitem', { name: 'Main Deck' }).click()
+      await page.getByRole('menuitem', { name: 'Katalog-Deck' }).click()
       expect((await saved).ok()).toBe(true)
 
       await expect(page.getByText('Zu „Katalog-Deck“ hinzugefügt').first()).toBeVisible()
@@ -87,9 +88,20 @@ test.describe('catalog card overlay', () => {
       expect(await deckQuantity(page, deckId)).toBe(expected)
     }
 
-    // The open overlay hides the toasts from the accessibility tree (reka's
-    // modal), so the action is found by its text.
-    await page.getByText('Deck öffnen').first().click()
+    // Choosing the Side Deck keeps the menu open for the deck.
+    await detail.getByRole('button', { name: 'Zum Deck' }).click()
+    await page.getByRole('menuitemcheckbox', { name: 'Side Deck' }).click()
+    await expect(page.getByRole('menuitemcheckbox', { name: 'Side Deck' })).toHaveAttribute('aria-checked', 'true')
+    const savedSide = page.waitForResponse(response =>
+      response.request().method() === 'PUT' && response.url().includes(`/api/decks/${deckId}/cards`))
+    await page.getByRole('menuitem', { name: 'Katalog-Deck' }).click()
+    expect((await savedSide).ok()).toBe(true)
+    await expect(page.getByText(`${CARD.darkMagician}: jetzt 1× im Side Deck.`, { exact: true })).toBeVisible()
+
+    // The toasts stay in the accessibility tree while the overlay is open
+    // (app.vue's toast host), so the action is found by its role.
+    await expect(detail).toBeVisible()
+    await page.getByRole('link', { name: 'Deck öffnen' }).first().click()
     await expect(page).toHaveURL(`/decks/${deckId}`)
     await expect(page.getByRole('heading', { level: 1, name: 'Katalog-Deck' })).toBeVisible()
     // Closing the overlay on the way out doesn't navigate back to the catalog.
