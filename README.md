@@ -44,6 +44,11 @@ Start the dev server at `http://localhost:3000`:
 pnpm dev
 ```
 
+The service worker is off in dev (#94). Start with `PWA_DEV_SW=1 pnpm dev` to test PWA behaviour; then
+restart the dev server by hand whenever `.nuxt` was wiped (`pnpm install`, `nuxt prepare`, `pnpm build`).
+A dev service worker left over from earlier runs is harmless (it only precaches `suppress-warnings.js`);
+unregister it once in DevTools → Application → Service workers.
+
 ## Database / Migrations
 
 Drizzle migrations live in `server/db/migrations` and are **applied automatically on server startup** (`server/plugins/migrate.ts`), so no manual step is required for normal development or production operation.
