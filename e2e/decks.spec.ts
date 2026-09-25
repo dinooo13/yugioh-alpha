@@ -7,7 +7,7 @@ import { CARD } from './helpers/cards'
 // (server/db/fixtures/catalog-fixture.ts).
 const DARK_MAGICIAN = 46986414
 const STARDUST_DRAGON = 44508094
-const ODD_EYES_PENDULUM_DRAGON = 16178681
+const ODD_EYES_PENDULUM_DRAGON = 16178683
 const BLUE_EYES_ULTIMATE_DRAGON = 23995346
 const POT_OF_GREED = 55144522
 

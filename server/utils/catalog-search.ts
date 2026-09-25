@@ -3,6 +3,7 @@ import type { useDb } from '../db'
 import { catalogCard, catalogCardImage, catalogPrinting, catalogSet } from '../db/schema'
 import type { AppLocale } from '../../shared/locale'
 import { activeCatalogCard } from './card-name-search'
+import { resolveCatalogCardId } from './card-passcode'
 import { cardDescDeSql, cardNameDeSql, cardSortKey } from './card-translation-sql'
 import { buildCardListWhere, type CardListQuery } from './catalog-query'
 
@@ -94,6 +95,14 @@ export async function searchCatalog(db: Db, filters: CardListQuery, cardLocale: 
 }
 
 export async function getCatalogCardDetail(db: Db, id: number) {
+  // A printed passcode YGOPRODeck keeps as an alternate artwork resolves to
+  // its card (ADR 0023), so the returned `card.id` can differ from `id`. A
+  // card row wins over an artwork with the same id.
+  const cardId = resolveCatalogCardId(db, id)
+  if (cardId === null) {
+    return null
+  }
+
   // An explicit column list: the internal join/search columns (`konamiId`,
   // `nameSearch`, ADR 0015) stay out of the API. A retired card (ADR 0019)
   // still resolves by id; only the flag and its replacement are exposed.
@@ -125,7 +134,7 @@ export async function getCatalogCardDetail(db: Db, id: number) {
       replacedById: catalogCard.replacedById,
     })
     .from(catalogCard)
-    .where(eq(catalogCard.id, id))
+    .where(eq(catalogCard.id, cardId))
     .get()
 
   if (!row) {
@@ -143,7 +152,7 @@ export async function getCatalogCardDetail(db: Db, id: number) {
     })
     .from(catalogPrinting)
     .innerJoin(catalogSet, eq(catalogPrinting.setId, catalogSet.id))
-    .where(eq(catalogPrinting.cardId, id))
+    .where(eq(catalogPrinting.cardId, cardId))
     .orderBy(asc(catalogSet.name), asc(catalogPrinting.setCode))
 
   const images = await db
@@ -154,7 +163,7 @@ export async function getCatalogCardDetail(db: Db, id: number) {
       imageUrlCropped: catalogCardImage.imageUrlCropped,
     })
     .from(catalogCardImage)
-    .where(eq(catalogCardImage.cardId, id))
+    .where(eq(catalogCardImage.cardId, cardId))
     .orderBy(asc(catalogCardImage.id))
 
   return { card, printings, images }

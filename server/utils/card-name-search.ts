@@ -24,16 +24,14 @@
 // references (inventory, wishlist, decks, shared views) do **not**, so the
 // retired cards they still reference stay findable. A retired passcode typed
 // into a catalog-wide passcode search (quick entry, the inventory's card
-// picker) resolves to its replacement (`retiredPasscodeReplacement`), since
-// that passcode is still printed on real cards.
+// picker) resolves to its replacement (`resolvePasscode` in
+// `card-passcode.ts`, ADR 0023), since that passcode is still printed on real
+// cards.
 
-import { and, eq, isNotNull, isNull, or, sql, type SQL } from 'drizzle-orm'
+import { isNull, or, sql, type SQL } from 'drizzle-orm'
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core'
 import { foldCardName } from '../../shared/card-name-fold'
-import type { useDb } from '../db'
 import { catalogCard, catalogCardTranslation } from '../db/schema'
-
-type Db = ReturnType<typeof useDb>
 
 /**
  * Only cards the latest YGOPRODeck sync listed (ADR 0019). Every
@@ -42,16 +40,6 @@ type Db = ReturnType<typeof useDb>
  */
 export function activeCatalogCard(): SQL {
   return isNull(catalogCard.retiredAt)
-}
-
-/** The replacement of a retired card with this id (ADR 0019), if it has one. */
-export function retiredPasscodeReplacement(db: Db, passcode: number): number | null {
-  const row = db
-    .select({ replacedById: catalogCard.replacedById })
-    .from(catalogCard)
-    .where(and(eq(catalogCard.id, passcode), isNotNull(catalogCard.retiredAt)))
-    .get()
-  return row?.replacedById ?? null
 }
 
 /** Escapes SQLite `LIKE` wildcards so a user's search term matches literally. */

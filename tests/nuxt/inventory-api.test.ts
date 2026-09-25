@@ -350,6 +350,20 @@ describe('inventory persistence helpers', () => {
       expect(searchCatalogCards(db, '4698641').map(card => card.id)).toEqual([146986414, 46986414])
     })
 
+    it('finds the card of an alternate-artwork passcode first (ADR 0023)', () => {
+      // Sorts before "Dark Magician" by name, and its id contains the artwork id.
+      db.insert(schema.catalogCard).values({
+        id: 146986420,
+        name: 'Axe Raider',
+        type: 'Normal Monster',
+        desc: 'Placeholder.',
+        syncedAt: new Date(),
+      }).run()
+      db.insert(schema.catalogCardImage).values({ id: 46986420, cardId: 46986414, imageUrl: 'https://img/46986420.jpg' }).run()
+
+      expect(searchCatalogCards(db, '46986420').map(card => card.id)).toEqual([46986414, 146986420])
+    })
+
     it('filters rows by type, attribute, race and level (#145)', () => {
       db.update(schema.catalogCard).set({ race: 'Spellcaster', level: 7 }).where(eq(schema.catalogCard.id, 46986414)).run()
       db.update(schema.catalogCard).set({ race: 'Normal' }).where(eq(schema.catalogCard.id, 55144522)).run()
@@ -434,6 +448,12 @@ describe('inventory persistence helpers', () => {
       expect((await addTwice('Binder', ' Binder ')).note).toBe('Binder')
     })
 
+    it('does not repeat a note that is already one line of the joined note', async () => {
+      await addTwice('Binder', 'From the trade')
+      const third = await addOwnedCard(db, 'user-a', validateInventoryInput({ catalog_card_id: 46986414, quantity: 1, note: 'Binder' }))
+      expect(third).toMatchObject({ note: 'Binder\nFrom the trade', quantity: 4 })
+    })
+
     it('keeps the existing note when the new copies have none', async () => {
       expect((await addTwice('A', null)).note).toBe('A')
     })
@@ -477,6 +497,18 @@ describe('inventory persistence helpers', () => {
     it('joins distinct, trimmed, non-blank notes', () => {
       expect(joinNotes('A', '  ', null, undefined, 'B', 'A')).toBe('A\nB')
       expect(joinNotes(null, ' ')).toBeNull()
+    })
+
+    it('does not repeat a note that is already one line of a joined note', () => {
+      expect(joinNotes('Binder\nFrom the trade', 'Binder')).toBe('Binder\nFrom the trade')
+      expect(joinNotes('Binder\n From the trade ', ' From the trade')).toBe('Binder\n From the trade')
+      expect(joinNotes('Binder\nFrom the trade', 'Binder\nFrom the trade')).toBe('Binder\nFrom the trade')
+      // A line is not a substring match.
+      expect(joinNotes('Binder 2', 'Binder')).toBe('Binder 2\nBinder')
+    })
+
+    it('does not repeat a joined note\'s line when a row moves onto it', async () => {
+      expect(await moveOnto('Binder\nFrom the trade', 'Binder')).toBe('Binder\nFrom the trade')
     })
   })
 

@@ -5,7 +5,8 @@ import type { useDb } from '../db'
 import { catalogCard, catalogCardImage, ownedCard } from '../db/schema'
 import { CARD_TEXT_EXCERPT_LENGTH, MAX_OWNED_QUANTITY, UNASSIGNED_COLLECTION_ID } from '../../shared/inventory'
 import type { AppLocale } from '../../shared/locale'
-import { activeCatalogCard, cardNameMatches, escapedLike, escapeLikeTerm, retiredPasscodeReplacement } from './card-name-search'
+import { activeCatalogCard, cardNameMatches, escapedLike, escapeLikeTerm } from './card-name-search'
+import { resolvePasscode } from './card-passcode'
 import { cardDescDeSql, cardNameDeSql, cardSortKey } from './card-translation-sql'
 import { assertCollectionOwnedByUser } from './collections'
 import { inventoryCardFilterClauses, parseInventorySearchQuery } from './inventory-search'
@@ -172,16 +173,24 @@ export function toOwnedCardView(row: OwnedCardRow): OwnedCardView {
 
 /**
  * The distinct, trimmed, non-blank notes in order, one per line; `null` when
- * none is left. Used whenever two notes meet on one row (ADR 0017 §3): adding
+ * none is left. A note equal to a line of an earlier note is dropped too. Used whenever two notes meet on one row (ADR 0017 §3): adding
  * copies to an existing row (`addOwnedCard`, the bulk and assistant paths,
  * #146) and an edit that moves a row into another row's tuple.
  */
 export function joinNotes(...notes: Array<string | null | undefined>): string | null {
   const distinct: string[] = []
+  // Every trimmed line kept so far: a note already stored as one line of a
+  // joined note ("Binder" in "Binder\nFrom the trade") is not added again.
+  const lines = new Set<string>()
   for (const note of notes) {
     const trimmed = note?.trim()
-    if (trimmed && !distinct.includes(trimmed)) {
-      distinct.push(trimmed)
+    if (!trimmed || lines.has(trimmed)) {
+      continue
+    }
+    distinct.push(trimmed)
+    lines.add(trimmed)
+    for (const line of trimmed.split('\n')) {
+      lines.add(line.trim())
     }
   }
   return distinct.length > 0 ? distinct.join('\n') : null
@@ -593,11 +602,11 @@ export function ownedQuantitiesByCard(db: Db, userId: string, catalogCardIds: nu
  */
 export function searchCatalogCards(db: Db, q = '', cardLocale: AppLocale = 'en') {
   const term = q.trim()
-  // A typed passcode: a retired one resolves to its replacement (ADR 0019,
-  // #110), like in quick entry, and the exact card sorts first.
+  // A typed passcode resolves like in quick entry: an alternate artwork to
+  // its card (ADR 0023), a retired one to its replacement (ADR 0019, #110).
+  // The exact card sorts first.
   const passcode = /^\d+$/.test(term) && Number.isSafeInteger(Number(term)) ? Number(term) : null
-  const replacementId = passcode !== null ? retiredPasscodeReplacement(db, passcode) : null
-  const exactId = replacementId ?? passcode
+  const exactId = passcode !== null ? resolvePasscode(db, passcode) : null
   // Catalog-wide: retired cards are not offered (ADR 0019).
   const where = and(
     activeCatalogCard(),
@@ -605,7 +614,7 @@ export function searchCatalogCards(db: Db, q = '', cardLocale: AppLocale = 'en')
       ? or(
           cardNameMatches(term),
           escapedLike(sql`${catalogCard.id}`, `%${escapeLikeTerm(term)}%`),
-          replacementId !== null ? eq(catalogCard.id, replacementId) : undefined,
+          exactId !== null ? eq(catalogCard.id, exactId) : undefined,
         )
       : undefined,
   )

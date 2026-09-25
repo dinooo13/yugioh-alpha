@@ -139,6 +139,9 @@ export interface MappedCard {
   images: CatalogCardImageRow[]
 }
 
+// Link monsters: "Link Monster" (the only type YGOPRODeck names that way).
+const LINK_TYPE = /\blink\b/i
+
 /**
  * Maps a single YGOPRODeck card into catalog row shapes. Pure function so
  * it is directly unit-testable without a database.
@@ -183,7 +186,9 @@ export function mapCardToRows(card: YgoproCard, syncedAt: Date): MappedCard {
       attribute: card.attribute ?? null,
       atk: card.atk ?? null,
       def: card.def ?? null,
-      level: card.level ?? null,
+      // YGOPRODeck sends `level: 0` for Link monsters; they have no level
+      // (ADR 0023), so the level facet and format level ranges skip them.
+      level: LINK_TYPE.test(card.type) ? null : card.level ?? null,
       linkval: card.linkval ?? null,
       scale: card.scale ?? null,
       linkMarkers: card.linkmarkers ?? null,

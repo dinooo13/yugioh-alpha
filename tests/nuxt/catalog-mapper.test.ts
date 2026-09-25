@@ -73,6 +73,26 @@ describe('mapCardToRows', () => {
     expect(malformed.card.konamiId).toBeNull()
   })
 
+  it('maps the level 0 YGOPRODeck sends for Link monsters to null', () => {
+    const link = mapCardToRows({
+      id: 1861629,
+      name: 'Decode Talker',
+      type: 'Link Monster',
+      frameType: 'link',
+      desc: '2+ Effect Monsters',
+      race: 'Cyberse',
+      attribute: 'DARK',
+      atk: 2300,
+      level: 0,
+      linkval: 3,
+      linkmarkers: ['Top', 'Bottom-Left', 'Bottom-Right'],
+    }, SYNCED_AT)
+    expect(link.card).toMatchObject({ level: null, linkval: 3 })
+
+    // Other monsters keep their level, a level 0 included.
+    expect(mapCardToRows({ ...darkMagicianFixture, level: 0 }, SYNCED_AT).card.level).toBe(0)
+  })
+
   it('dedupes a shared set name across two cards into one set with two printings', () => {
     const mappedDarkMagician = mapCardToRows(darkMagicianFixture, SYNCED_AT)
     const mappedPotOfGreed = mapCardToRows(potOfGreedFixture, SYNCED_AT)
