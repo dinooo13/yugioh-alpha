@@ -15,6 +15,8 @@ Consequences no longer holds. The legacy converter stays.
 
 The per-turn deck context kept under Decision was removed by [ADR 0021](0021-no-deck-link-in-assistant-conversations.md).
 
+Nuxt UI upgraded to 4.11 with #86; answers render as Markdown since [ADR 0023](0023-markdown-in-assistant-answers.md) (#123).
+
 ## Context
 
 The chat assistant (ADR 0010) ran on a hand-written engine: a `fetch` + SSE
