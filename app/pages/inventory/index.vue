@@ -538,10 +538,6 @@ function openFromList(item: InventoryItem) {
       v-if="mode === 'gallery'"
       class="space-y-4"
     >
-      <p class="text-sm text-muted">
-        {{ count('inventory.cardCount', searchTotal) }}
-      </p>
-
       <!-- Skeletons only before there is anything to show: a refresh after
            an edit in the detail panel keeps the tiles (and so the tile the
            panel returns focus to). -->
