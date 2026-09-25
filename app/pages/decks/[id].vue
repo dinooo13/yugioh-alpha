@@ -1328,7 +1328,7 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
             :quantities="overlayQuantities"
             :owned="overlayOwned"
             :disabled="isMutating"
-            :error="errorMessage"
+            :error="errorMessage || undefined"
             @set="setOverlayQuantity"
           />
         </template>
