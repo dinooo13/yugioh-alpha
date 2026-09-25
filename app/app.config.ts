@@ -138,9 +138,15 @@ export default defineAppConfig({
         },
       ],
     },
+    // Focus comes from Nuxt UI 4.10's built-in highlight (a solid primary
+    // ring plus a soft outline while the textarea is focused, like UInput),
+    // so the root no longer adds its own `focus-within` ring. 4.10 also
+    // zeroed the textarea's inline padding (`base: 'px-0'`); keep it, so the
+    // text stays in line with the attach button below it.
     chatPrompt: {
       slots: {
-        root: 'bg-elevated/50 ring ring-default rounded-xl focus-within:ring-primary/60 transition-shadow',
+        root: 'bg-elevated/50 ring ring-default rounded-xl',
+        base: 'px-2.5',
       },
     },
     chatTool: {
