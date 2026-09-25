@@ -29,12 +29,25 @@ export const pwaOptions: ModuleOptions = {
         type: 'image/svg+xml',
         purpose: 'any',
       },
+      // PNGs for launchers and install prompts that don't take SVG.
       {
-        // Same file: the mark sits inside the 80% safe zone on a full
-        // background, so a launcher mask never cuts into it.
-        src: '/icon.svg',
-        sizes: 'any',
-        type: 'image/svg+xml',
+        src: '/pwa-192.png',
+        sizes: '192x192',
+        type: 'image/png',
+        purpose: 'any',
+      },
+      {
+        src: '/pwa-512.png',
+        sizes: '512x512',
+        type: 'image/png',
+        purpose: 'any',
+      },
+      {
+        // Full-bleed background with the mark inside the 80% safe zone, so a
+        // launcher mask never cuts into it or shows transparent corners.
+        src: '/pwa-maskable-512.png',
+        sizes: '512x512',
+        type: 'image/png',
         purpose: 'maskable',
       },
     ],
