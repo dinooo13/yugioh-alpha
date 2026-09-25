@@ -112,7 +112,15 @@ export default defineNuxtConfig({
       title: 'YGO Alpha',
       // <html lang>, the color-mode class and `theme-color` follow the UI
       // language and color mode: app/app.vue sets them.
-      link: [{ rel: 'icon', type: 'image/svg+xml', href: '/icon.svg' }],
+      // favicon.svg is the mark tuned for tab size; favicon.ico (16/32/48) is
+      // the fallback for browsers without SVG favicons, apple-touch-icon.png
+      // the iOS home-screen icon (iOS ignores SVG). public/icon.svg stays the
+      // PWA icon.
+      link: [
+        { rel: 'icon', href: '/favicon.ico', sizes: '48x48' },
+        { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
+        { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' },
+      ],
     },
   },
   // UI language (docs/adr/0014-ui-internationalisation.md). The module only

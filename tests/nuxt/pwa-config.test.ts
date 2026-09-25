@@ -52,6 +52,12 @@ describe('PWA manifest', () => {
     expect(purposes).toContain('any')
     expect(purposes).toContain('maskable')
   })
+
+  it('offers PNG icons for launchers without SVG support', () => {
+    const manifest = pwaOptions.manifest || {}
+    const pngSizes = (manifest.icons ?? []).filter(icon => icon.type === 'image/png').map(icon => icon.sizes)
+    expect(pngSizes).toEqual(expect.arrayContaining(['192x192', '512x512']))
+  })
 })
 
 // The dev service worker broke the dev server after every .nuxt wipe (#94);
