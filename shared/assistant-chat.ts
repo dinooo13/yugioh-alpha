@@ -116,6 +116,13 @@ export interface AssistantDeckPreview {
   validation: { legal: boolean, issues: string[], issueDetails?: ValidationIssue[] } | null
   /** `nameDe` (ADR 0015) is display only and missing on previews stored before #34 F3c. */
   missing: Array<{ catalogCardId: number, name: string, nameDe?: string | null, needed: number, owned: number }>
+  /**
+   * The canonical English messages of the format-independent deck warnings
+   * (`buildWarnings`: usual deck sizes, more than 3 copies, retired cards),
+   * model-facing (#148). Missing on previews stored before R6; the action
+   * card doesn't show them yet.
+   */
+  warnings?: string[]
 }
 
 // --- Limits, shared by client-side validation and the server ------------------

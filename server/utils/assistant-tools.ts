@@ -42,7 +42,7 @@ import {
   validateDeckCreateCardsInput,
   validateDeckWithRules,
 } from './decks'
-import type { DeckCardInput, DeckCardRow, DeckDetail, DeckSection } from './decks'
+import type { DeckCardInput, DeckCardRow, DeckDetail, DeckSection, DeckWarning } from './decks'
 import { isExtraDeckCard, isSectionAllowedForCard } from '../../shared/deck-sections'
 import { listRuleFormats, requireAccessibleFormat, requireAssignableFormat } from './rule-formats'
 import { loadCardDataForValidation, loadCardNameRecords, maxCopiesByCard, missingCatalogCardIds } from './deck-validation'
@@ -470,7 +470,13 @@ function toolGetDeck(db: Db, userId: string, cardLocale: AppLocale, args: unknow
     validation: detail.validation
       ? { legal: detail.validation.legal, issues: detail.validation.issues.map(issue => issue.message) }
       : null,
+    warnings: warningMessages(detail.warnings),
   }
+}
+
+/** A deck's format-independent warnings as the model reads them: their canonical English messages (#148). */
+function warningMessages(warnings: DeckWarning[]): string[] {
+  return warnings.map(warning => warning.message)
 }
 
 function toolListFormats(db: Db, userId: string) {
@@ -539,14 +545,17 @@ function toolValidateDeck(db: Db, userId: string, cardLocale: AppLocale, args: u
 
   if (formatId) {
     const format = requireAccessibleFormat(db, userId, formatId)
-    return validationForModel(validateDeckWithRules(db, userId, deckId, format.rules), cardLocale)
+    return {
+      ...validationForModel(validateDeckWithRules(db, userId, deckId, format.rules), cardLocale),
+      warnings: warningMessages(getDeckDetail(db, userId, deckId).warnings),
+    }
   }
 
   const detail = getDeckDetail(db, userId, deckId)
   if (!detail.validation) {
     badRequest(TOOL_TEXT.noFormatAssigned)
   }
-  return validationForModel(detail.validation, cardLocale)
+  return { ...validationForModel(detail.validation, cardLocale), warnings: warningMessages(detail.warnings) }
 }
 
 // --- Write tools (propose a pending action; never mutate directly) ------------

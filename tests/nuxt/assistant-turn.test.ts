@@ -1,7 +1,8 @@
 // The chat turn on the AI SDK (server/utils/assistant-turn.ts, ADR 0020):
 // streamText's tool loop driven by scripted `MockLanguageModelV4`s, the UI
-// message stream it produces, what gets persisted, the fallback texts and
-// the #54 guards against looping tool calls.
+// message stream it produces, what gets persisted, the fallback texts, the
+// #54 guards against looping tool calls, and the proposal that ends the turn
+// (ADR 0025).
 
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
 import { drizzle } from 'drizzle-orm/better-sqlite3'
@@ -21,12 +22,16 @@ import {
   appendToLastText,
   cleanToolErrorOutputs,
   detectTextWrittenToolCall,
+  fallbackText,
+  shouldStopAfterProposal,
   startAssistantTurn,
+  stepProposals,
 } from '../../server/utils/assistant-turn'
 import type { AssistantTurnOptions } from '../../server/utils/assistant-turn'
 import { loadUiMessages, validateAssistantTurnRequest } from '../../server/utils/assistant-ui-messages'
 import { CARD_NAME_INSTRUCTION, CARD_TERMS_INSTRUCTION, REPLY_LANGUAGE_INSTRUCTION, TOOL_TEXT, TURN_TEXT } from '../../server/utils/assistant-prompts'
 import { createDeck, upsertDeckCard } from '../../server/utils/decks'
+import { createRuleFormat, validateRuleFormatInput } from '../../server/utils/rule-formats'
 import type { AssistantUIMessage } from '../../shared/assistant-ui'
 import { seedGermanNames } from './fixtures/german-names'
 
@@ -102,6 +107,9 @@ function step(fields: { text?: string, reasoning?: string, calls?: Array<{ name:
 const text = (value: string, finish?: FinishUnified) => step({ text: value, finish })
 const call = (name: string, input: Record<string, unknown> | string, extra: { text?: string } = {}) =>
   step({ ...extra, calls: [{ name, input: typeof input === 'string' ? input : JSON.stringify(input) }] })
+/** One step with several tool calls. */
+const callsInOneStep = (list: Array<[string, Record<string, unknown>]>, extra: { text?: string } = {}) =>
+  step({ ...extra, calls: list.map(([name, input]) => ({ name, input: JSON.stringify(input) })) })
 
 function streamOf(parts: StreamPart[]): ReadableStream<StreamPart> {
   return new ReadableStream({
@@ -210,23 +218,89 @@ describe('startAssistantTurn: the tool loop', () => {
     expect(result).toMatchObject({ type: 'tool-result', toolName: 'search_catalog', output: { type: 'json', value: { items: [{ id: CARD.darkMagician }] } } })
   })
 
-  it('stores a write tool\'s proposal as a pending action of the answer and streams it as a data-action part after its chip', async () => {
+  it('stores a write tool\'s proposal as a pending action of the answer, streams it as a data-action part after its chip, and ends the turn there (ADR 0025)', async () => {
     const conversationId = newConversation()
-    const { model } = scriptedModel([
-      call('add_to_inventory', { items: [{ catalogCardId: CARD.darkMagician, quantity: 2 }] }),
-      text('Ich habe einen Vorschlag angelegt.'),
+    const { model, calls } = scriptedModel([
+      call('add_to_inventory', { items: [{ catalogCardId: CARD.darkMagician, quantity: 2 }] }, { text: 'Hier ist mein Vorschlag.' }),
+      text('Nachtrag, der nie kommt.'),
     ])
 
     const { chunks, turn } = await runTurn(conversationId, model, { body: userText('füge 2 Dark Magician hinzu') })
 
+    expect(calls).toHaveLength(1)
     const actionRow = db.select().from(schema.assistantAction).get()!
     expect(actionRow).toMatchObject({ messageId: turn.assistantMessageId, status: 'pending', kind: 'add_to_inventory' })
     const types = chunks.map(chunk => chunk.type)
     expect(types.indexOf('data-action')).toBe(types.indexOf('tool-output-available') + 1)
     expect(chunks.find(chunk => chunk.type === 'data-action')).toMatchObject({ id: actionRow.id, data: { id: actionRow.id, status: 'pending' } })
+    // Nothing after the card but the end of the step and the finish.
+    expect(types.slice(types.indexOf('data-action') + 1)).toEqual(['finish-step', 'finish'])
+    expect(chunks.at(-1)).toMatchObject({ type: 'finish' })
 
     const parts = assistantParts(conversationId)
-    expect(parts.map(part => part.type)).toEqual(['step-start', 'tool-add_to_inventory', 'data-action', 'step-start', 'text'])
+    expect(parts.map(part => part.type)).toEqual(['step-start', 'text', 'tool-add_to_inventory', 'data-action'])
+    const answer = storedMessages(conversationId).at(-1)!
+    expect(answer.content).toBe('Hier ist mein Vorschlag.')
+  })
+
+  it('ends the turn on a proposal without any text, and adds no fallback text (ADR 0025)', async () => {
+    const conversationId = newConversation()
+    const { model, calls } = scriptedModel([
+      call('add_to_inventory', { items: [{ catalogCardId: CARD.darkMagician, quantity: 1 }] }),
+      text('Nachtrag, der nie kommt.'),
+    ])
+
+    const { chunks } = await runTurn(conversationId, model, { body: userText('füge Dark Magician hinzu') })
+
+    expect(calls).toHaveLength(1)
+    expect(chunks.some(chunk => chunk.type === 'text-delta')).toBe(false)
+    const answer = storedMessages(conversationId).at(-1)!
+    expect(answer.role).toBe('assistant')
+    expect(answer.content).toBe('')
+    expect(answer.parts!.map(part => part.type)).toEqual(['step-start', 'tool-add_to_inventory', 'data-action'])
+    for (const value of Object.values(TURN_TEXT.de)) {
+      expect(JSON.stringify(answer.parts)).not.toContain(value)
+    }
+  })
+
+  it('goes on after a failed write call, so the model can fix it (ADR 0025)', async () => {
+    const conversationId = newConversation()
+    const { model, calls } = scriptedModel([
+      call('add_to_inventory', { items: [{ catalogCardId: 12345, quantity: 1 }] }),
+      text('Diese Karte kenne ich nicht.'),
+    ])
+
+    await runTurn(conversationId, model, { body: userText('füge Karte 12345 hinzu') })
+
+    expect(calls).toHaveLength(2)
+    expect(db.select().from(schema.assistantAction).all()).toHaveLength(0)
+    expect(assistantParts(conversationId).find(part => part.type === 'tool-add_to_inventory')).toMatchObject({ state: 'output-error' })
+    expect(storedMessages(conversationId).at(-1)!.content).toBe('Diese Karte kenne ich nicht.')
+  })
+
+  it('stores and streams every proposal of one step, each card after its chip, then ends the turn (ADR 0025)', async () => {
+    const conversationId = newConversation()
+    const { model, calls } = scriptedModel([
+      callsInOneStep([
+        ['add_to_inventory', { items: [{ catalogCardId: CARD.darkMagician, quantity: 1 }] }],
+        ['add_to_inventory', { items: [{ catalogCardId: CARD.potOfGreed, quantity: 2 }] }],
+      ], { text: 'Zwei Vorschläge.' }),
+      text('Nachtrag, der nie kommt.'),
+    ])
+
+    const { chunks } = await runTurn(conversationId, model, { body: userText('füge beide hinzu') })
+
+    expect(calls).toHaveLength(1)
+    expect(db.select().from(schema.assistantAction).all()).toHaveLength(2)
+    const types = chunks.map(chunk => chunk.type)
+    const outputs = types.flatMap((type, index) => type === 'tool-output-available' ? [index] : [])
+    expect(outputs).toHaveLength(2)
+    for (const index of outputs) {
+      expect(types[index + 1]).toBe('data-action')
+    }
+    expect(assistantParts(conversationId).map(part => part.type))
+      .toEqual(['step-start', 'text', 'tool-add_to_inventory', 'tool-add_to_inventory', 'data-action', 'data-action'])
+    expect(storedMessages(conversationId).at(-1)!.content).toBe('Zwei Vorschläge.')
   })
 
   it('hands unparseable arguments back to the model as a tool error and goes on', async () => {
@@ -419,6 +493,124 @@ describe('startAssistantTurn: the tool loop', () => {
   })
 })
 
+describe('startAssistantTurn: a proposal ends the turn (ADR 0025)', () => {
+  /** A user format allowing one copy per card, and a deck with 2x Dark Magician that isn't legal in it. */
+  function illegalFormatSetup() {
+    const format = createRuleFormat(db, 'user-a', validateRuleFormatInput({ name: 'Highlander', rules: { rules: [{ kind: 'copies', maxCopies: 1 }] } }))
+    const deck = createDeck(db, 'user-a', { name: 'Magier-Deck', description: null })
+    upsertDeckCard(db, 'user-a', deck.id, { catalogCardId: CARD.darkMagician, section: 'main', quantity: 2 })
+    return { formatId: format.id, deckId: deck.id }
+  }
+
+  it('lets the model add the card changes after an illegal set_deck_format, then stops', async () => {
+    const { formatId, deckId } = illegalFormatSetup()
+    const conversationId = newConversation()
+    const { model, calls } = scriptedModel([
+      call('set_deck_format', { deckId, formatId }, { text: 'Erst das Format.' }),
+      call('update_deck_cards', { deckId, changes: [{ catalogCardId: CARD.darkMagician, section: 'main', quantity: 1 }] }, { text: 'Dann die Karten.' }),
+      text('Nachtrag, der nie kommt.'),
+    ])
+
+    const { chunks } = await runTurn(conversationId, model, { body: userText('mach das Deck legal für Highlander') })
+
+    expect(calls).toHaveLength(2)
+    expect(db.select().from(schema.assistantAction).all().map(action => action.kind).sort()).toEqual(['set_deck_format', 'update_deck_cards'])
+    const types = chunks.map(chunk => chunk.type)
+    expect(types.slice(types.lastIndexOf('data-action') + 1)).toEqual(['finish-step', 'finish'])
+    expect(assistantParts(conversationId).at(-1)).toMatchObject({ type: 'data-action', data: { kind: 'update_deck_cards' } })
+    expect(storedMessages(conversationId).at(-1)!.content).toBe('Erst das Format.\n\nDann die Karten.')
+  })
+
+  it('stops right after a set_deck_format whose preview is legal', async () => {
+    const format = createRuleFormat(db, 'user-a', validateRuleFormatInput({ name: 'Offen', rules: { rules: [] } }))
+    const deck = createDeck(db, 'user-a', { name: 'Magier-Deck', description: null })
+    upsertDeckCard(db, 'user-a', deck.id, { catalogCardId: CARD.darkMagician, section: 'main', quantity: 2 })
+    const { model, calls } = scriptedModel([
+      call('set_deck_format', { deckId: deck.id, formatId: format.id }),
+      text('Nachtrag, der nie kommt.'),
+    ])
+
+    await runTurn(newConversation(), model)
+
+    expect(calls).toHaveLength(1)
+    expect(db.select().from(schema.assistantAction).all()).toHaveLength(1)
+  })
+
+  it('grants the exemption once per turn: a second illegal set_deck_format stops', async () => {
+    const { formatId, deckId } = illegalFormatSetup()
+    const { model, calls } = scriptedModel([
+      call('set_deck_format', { deckId, formatId }),
+      call('set_deck_format', { deckId, formatId }),
+      text('Nachtrag, der nie kommt.'),
+    ])
+
+    await runTurn(newConversation(), model)
+
+    expect(calls).toHaveLength(2)
+    expect(db.select().from(schema.assistantAction).all()).toHaveLength(2)
+  })
+
+  it('stops after set_deck_format and update_deck_cards proposed together in one step', async () => {
+    const { formatId, deckId } = illegalFormatSetup()
+    const { model, calls } = scriptedModel([
+      callsInOneStep([
+        ['set_deck_format', { deckId, formatId }],
+        ['update_deck_cards', { deckId, changes: [{ catalogCardId: CARD.darkMagician, section: 'main', quantity: 1 }] }],
+      ]),
+      text('Nachtrag, der nie kommt.'),
+    ])
+
+    await runTurn(newConversation(), model)
+
+    expect(calls).toHaveLength(1)
+    expect(db.select().from(schema.assistantAction).all()).toHaveLength(2)
+  })
+})
+
+describe('the proposal stop condition\'s helpers (ADR 0025)', () => {
+  const proposal = (toolName: string, legal?: boolean) => ({
+    type: 'tool-result',
+    toolName,
+    output: {
+      actionId: `action-${toolName}`,
+      result: { status: 'pending_confirmation', ...(legal === undefined ? {} : { preview: { validation: { legal } } }) },
+    },
+  })
+  const readCall = { type: 'tool-result', toolName: 'search_catalog', output: { result: { items: [] } } }
+  const failedWrite = { type: 'tool-error', toolName: 'add_to_inventory', input: {}, error: new Error('Unknown card IDs: 1') }
+
+  it('finds the successful write calls of a step by their actionId', () => {
+    expect(stepProposals({ content: [readCall, failedWrite] })).toEqual([])
+    expect(stepProposals({ content: [{ type: 'tool-result', toolName: 'add_to_inventory', output: { result: {} } }] })).toEqual([])
+    expect(stepProposals({ content: [{ type: 'text' }, readCall, proposal('add_to_inventory')] }))
+      .toEqual([{ toolName: 'add_to_inventory', output: proposal('add_to_inventory').output }])
+  })
+
+  it('stops after a proposal step, except once for a first step of only illegal format changes', () => {
+    expect(shouldStopAfterProposal([])).toBe(false)
+    expect(shouldStopAfterProposal([{ content: [readCall] }])).toBe(false)
+    expect(shouldStopAfterProposal([{ content: [failedWrite] }])).toBe(false)
+    expect(shouldStopAfterProposal([{ content: [readCall] }, { content: [proposal('add_to_inventory')] }])).toBe(true)
+    expect(shouldStopAfterProposal([{ content: [proposal('set_deck_format', true)] }])).toBe(true)
+    expect(shouldStopAfterProposal([{ content: [proposal('set_deck_format')] }])).toBe(true)
+    // The exemption: the turn's first proposal step, only illegal format changes.
+    expect(shouldStopAfterProposal([{ content: [readCall] }, { content: [proposal('set_deck_format', false)] }])).toBe(false)
+    expect(shouldStopAfterProposal([{ content: [proposal('set_deck_format', false), proposal('update_deck_cards', true)] }])).toBe(true)
+    // Only once per turn.
+    expect(shouldStopAfterProposal([{ content: [proposal('set_deck_format', false)] }, { content: [proposal('set_deck_format', false)] }])).toBe(true)
+    expect(shouldStopAfterProposal([{ content: [proposal('set_deck_format', false)] }, { content: [readCall] }])).toBe(false)
+    expect(shouldStopAfterProposal([{ content: [proposal('set_deck_format', false)] }, { content: [readCall] }, { content: [proposal('update_deck_cards', false)] }])).toBe(true)
+  })
+
+  it('takes a turn that ended on a proposal as answered, but still marks a cut-off first', () => {
+    const last = { content: [proposal('add_to_inventory')], finishReason: 'tool-calls', text: '', toolCalls: [{}] }
+    type Steps = Parameters<typeof fallbackText>[0]
+    expect(fallbackText([last] as unknown as Steps, TURN_TEXT.de)).toBeNull()
+    expect(fallbackText([{ ...last, finishReason: 'length' }] as unknown as Steps, TURN_TEXT.de)).toBe(`${TURN_TEXT.de.cutOffFallback} ${TURN_TEXT.de.cutOffSuffix}`)
+    expect(fallbackText([{ ...last, content: [readCall] }] as unknown as Steps, TURN_TEXT.de)).toBe(TURN_TEXT.de.tooManySteps)
+  })
+})
+
 describe('startAssistantTurn: cancel, timeouts and errors', () => {
   /** A step that streams `text`, then waits until the call is aborted (and errors like a cancelled fetch). */
   function hangingAfter(value: string) {
@@ -579,8 +771,7 @@ describe('startAssistantTurn: history, images and regenerate', () => {
   it('regenerates the last answer while its proposals are all pending, removing them', async () => {
     const conversationId = newConversation()
     const { model, calls } = scriptedModel([
-      call('add_to_inventory', { items: [{ catalogCardId: CARD.darkMagician, quantity: 1 }] }),
-      text('Vorschlag angelegt.'),
+      call('add_to_inventory', { items: [{ catalogCardId: CARD.darkMagician, quantity: 1 }] }, { text: 'Vorschlag:' }),
       text('Neue Antwort.'),
     ])
     await runTurn(conversationId, model, { body: userText('füge Dark Magician hinzu') })
@@ -588,7 +779,7 @@ describe('startAssistantTurn: history, images and regenerate', () => {
 
     await runTurn(conversationId, model, { body: { trigger: 'regenerate-message', messageId: 'whatever' } })
 
-    expect(calls).toHaveLength(3)
+    expect(calls).toHaveLength(2)
     expect(storedMessages(conversationId).map(row => [row.role, row.content])).toEqual([
       ['user', 'füge Dark Magician hinzu'],
       ['assistant', 'Neue Antwort.'],
@@ -599,8 +790,7 @@ describe('startAssistantTurn: history, images and regenerate', () => {
   it('refuses to regenerate an answer whose proposal was already resolved (409)', async () => {
     const conversationId = newConversation()
     const { model } = scriptedModel([
-      call('add_to_inventory', { items: [{ catalogCardId: CARD.darkMagician, quantity: 1 }] }),
-      text('Vorschlag angelegt.'),
+      call('add_to_inventory', { items: [{ catalogCardId: CARD.darkMagician, quantity: 1 }] }, { text: 'Vorschlag:' }),
     ])
     await runTurn(conversationId, model, { body: userText('füge Dark Magician hinzu') })
     await applyAction(db, 'user-a', db.select().from(schema.assistantAction).get()!.id)
@@ -614,17 +804,17 @@ describe('startAssistantTurn: history, images and regenerate', () => {
     const conversationId = newConversation()
     const { model, calls } = scriptedModel([
       call('add_to_inventory', { items: [{ catalogCardId: CARD.darkMagician, quantity: 1 }] }),
-      text('Vorschlag angelegt.'),
       text('Ist erledigt.'),
     ])
     await runTurn(conversationId, model, { body: userText('füge Dark Magician hinzu') })
+    // The proposal ended the first turn (ADR 0025).
+    expect(calls).toHaveLength(1)
     const actionId = db.select().from(schema.assistantAction).get()!.id
-    // The first turn's second call read the proposal as pending.
-    expect(toolResultsOf(calls[1]!)).toEqual([expect.objectContaining({ output: { type: 'json', value: expect.objectContaining({ status: 'pending_confirmation' }) } })])
 
     await applyAction(db, 'user-a', actionId)
     await runTurn(conversationId, model, { body: userText('Ist das schon passiert?') })
 
+    expect(calls).toHaveLength(2)
     const results = toolResultsOf(calls.at(-1)!)
     expect(results).toHaveLength(1)
     expect(results[0]).toMatchObject({ output: { type: 'json', value: { status: 'applied', message: TOOL_TEXT.proposalStatus.applied } } })
@@ -706,7 +896,7 @@ describe('the fake model end-to-end (NUXT_ASSISTANT_PROVIDER=fake)', () => {
     expect(storedMessages(conversationId).at(-1)!.content).toBe('Ich habe 1 Karte gefunden: Dark Magician')
 
     await runTurn(conversationId, fake, { body: userText('füge 2 hinzu') })
-    expect(storedMessages(conversationId).at(-1)!.content).toBe('Ich habe einen Vorschlag angelegt.')
+    expect(storedMessages(conversationId).at(-1)!.content).toBe('Hier ist mein Vorschlag.')
     const action = db.select().from(schema.assistantAction).get()!
     expect(action.payload).toMatchObject({ items: [{ catalogCardId: CARD.darkMagician, quantity: 2 }] })
 

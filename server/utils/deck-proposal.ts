@@ -13,14 +13,18 @@
 // guarantee before its "Übernehmen" (ADR 0006): legality is the rule
 // engine's verdict (`evaluateDeck` via `validateDeckCards`), never the
 // model's claim, and cards the user doesn't own (enough of) are listed
-// separately from the deck itself.
+// separately from the deck itself. On top of that it has the deck's
+// format-independent warnings (`buildWarnings`, #148): counts, legality,
+// warnings and missing cards.
 
+import { and, inArray, isNotNull } from 'drizzle-orm'
 import type { useDb } from '../db'
+import { catalogCard } from '../db/schema'
 import { DECK_SECTIONS } from '../../shared/deck-sections'
 import type { DeckSection } from '../../shared/deck-sections'
 import type { RuleSet } from '../../shared/rule-formats'
 import type { AssistantDeckPreview } from '../../shared/assistant-chat'
-import { getDeckDetail } from './decks'
+import { buildWarnings, getDeckDetail } from './decks'
 import type { DeckCardInput } from './decks'
 import { loadCardNameRecords, validateDeckCards } from './deck-validation'
 import { ownedQuantitiesByCard } from './inventory'
@@ -49,7 +53,7 @@ function keyOf(catalogCardId: number, section: DeckSection): string {
 
 /**
  * Builds the resulting card list (deck + changes, or the planned cards) and
- * reports counts, legality, and missing cards for it. Throws the same 404s as
+ * reports counts, legality, warnings and missing cards for it. Throws the same 404s as
  * the rest of the server for a foreign/unknown deck or format.
  */
 export function previewDeckProposal(db: Db, userId: string, input: DeckProposalInput): AssistantDeckPreview {
@@ -102,6 +106,20 @@ export function previewDeckProposal(db: Db, userId: string, input: DeckProposalI
     neededByCard.set(entry.catalogCardId, (neededByCard.get(entry.catalogCardId) ?? 0) + entry.quantity)
   }
 
+  const retiredIds = cardIds.length > 0
+    ? new Set(db.select({ id: catalogCard.id }).from(catalogCard)
+        .where(and(inArray(catalogCard.id, cardIds), isNotNull(catalogCard.retiredAt)))
+        .all()
+        .map(row => row.id))
+    : new Set<number>()
+  const warnings = buildWarnings(counts, entries.map(entry => ({
+    catalogCardId: entry.catalogCardId,
+    name: names[entry.catalogCardId] ?? `#${entry.catalogCardId}`,
+    nameDe: namesDe[entry.catalogCardId] ?? null,
+    quantity: entry.quantity,
+    retired: retiredIds.has(entry.catalogCardId),
+  })))
+
   let formatName: string | null = null
   let rules: RuleSet | null = null
   if (formatId) {
@@ -140,5 +158,7 @@ export function previewDeckProposal(db: Db, userId: string, input: DeckProposalI
         }
       : null,
     missing,
+    // Model-facing, canonical English (like `issues`).
+    warnings: warnings.map(warning => warning.message),
   }
 }

@@ -64,6 +64,13 @@ test.describe('Chat assistant', () => {
 
     await expect(page.getByText('Karten ins Inventar aufnehmen')).toBeVisible()
     await expect(page.getByText('Wartet auf Bestätigung')).toBeVisible()
+    // The proposal ends the answer (ADR 0025): the text comes before the card, nothing after it.
+    const proposalText = page.getByText('Hier ist mein Vorschlag.')
+    await expect(proposalText).toBeVisible()
+    await expect(page.getByText('Ich habe einen Vorschlag angelegt.')).toHaveCount(0)
+    const textBox = await proposalText.boundingBox()
+    const buttonBox = await page.getByRole('button', { name: 'Übernehmen', exact: true }).boundingBox()
+    expect(textBox!.y).toBeLessThan(buttonBox!.y)
     await page.getByRole('button', { name: 'Übernehmen', exact: true }).click()
     await expect(page.getByText('Übernommen')).toBeVisible()
     await expect(nachricht).toBeEnabled()
@@ -274,7 +281,7 @@ test.describe('Chat assistant on the AI SDK (#84)', () => {
     await expect(page.getByText(`1 Karte zum Inventar hinzufügen: ${CARD.darkMagician} x2`)).toBeVisible()
     await expect(page.getByText('Übernommen')).toBeVisible()
     await expect(page.getByRole('button', { name: 'Übernehmen', exact: true })).toHaveCount(0)
-    await expect(page.getByText('Ich habe einen Vorschlag angelegt.')).toBeVisible()
+    await expect(page.getByText('Hier ist mein Vorschlag.')).toBeVisible()
   })
 
   test('a conversation of the former engine opens and goes on', async ({ page }) => {

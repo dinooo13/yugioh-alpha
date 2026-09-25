@@ -148,6 +148,44 @@ describe('previewDeckProposal', () => {
     expect(preview.counts.total).toBe(1)
   })
 
+  it('lists the format-independent warnings: sizes, copies, and a retired card by its retired flag (#148)', async () => {
+    db.insert(schema.catalogCard).values({
+      id: 101402024, name: 'Old Magician', type: 'Normal Monster', frameType: 'normal', desc: 'x', syncedAt: new Date(), retiredAt: new Date(), replacedById: CARD.darkMagician,
+    }).run()
+    const retiredMessage = 'Old Magician is no longer in the catalog; its banlist status and card data are no longer updated.'
+
+    const planned = previewDeckProposal(db, 'user-a', {
+      cards: [
+        { catalogCardId: CARD.potOfGreed, section: 'main', quantity: 4 },
+        { catalogCardId: 101402024, section: 'main', quantity: 1 },
+      ],
+    })
+    expect(planned.warnings).toEqual([
+      'The Main Deck has 5 cards; the usual minimum is 40.',
+      'Pot of Greed: 4 copies in the deck; the usual maximum is 3.',
+      retiredMessage,
+    ])
+
+    const deck = createDeck(db, 'user-a', { name: 'Mein Deck', description: null })
+    upsertDeckCard(db, 'user-a', deck.id, { catalogCardId: CARD.darkMagician, section: 'main', quantity: 1 })
+    const changed = previewDeckProposal(db, 'user-a', {
+      deckId: deck.id,
+      changes: [{ catalogCardId: 101402024, section: 'side', quantity: 1 }],
+    })
+    expect(changed.warnings).toEqual(['The Main Deck has 1 card; the usual minimum is 40.', retiredMessage])
+  })
+
+  it('has no warnings for a 42-card deck with at most 3 copies each', () => {
+    const now = new Date()
+    const ids = Array.from({ length: 14 }, (_, index) => 900_000 + index)
+    db.insert(schema.catalogCard).values(ids.map(id => ({ id, name: `Card ${id}`, type: 'Spell Card', frameType: 'spell', desc: 'x', syncedAt: now }))).run()
+
+    const preview = previewDeckProposal(db, 'user-a', { cards: ids.map(id => ({ catalogCardId: id, section: 'main' as const, quantity: 3 })) })
+
+    expect(preview.counts.main).toBe(42)
+    expect(preview.warnings).toEqual([])
+  })
+
   it('404s for another user\'s deck', async () => {
     const foreign = createDeck(db, 'user-b', { name: 'Fremd', description: null })
     let statusCode: number | undefined
