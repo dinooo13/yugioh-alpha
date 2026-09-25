@@ -5,6 +5,10 @@
 Accepted (#72, `fix/catalog-stale-cards`). Extends
 [0001](0001-card-catalog-data-model.md).
 
+Extended by [0024](0024-passcode-aliases-and-catalog-cleanup.md): artwork
+passcodes resolve to their card, and the sync deletes printings and images
+YGOPRODeck no longer lists.
+
 ## Context
 
 `syncCatalog` (ADR 0001) only ever upserts. A card that YGOPRODeck no longer
