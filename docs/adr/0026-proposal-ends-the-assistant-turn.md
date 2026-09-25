@@ -60,6 +60,17 @@ it with a wall of text below.
    whichever order the model made the calls. Previewing each proposal on
    its own was the alternative; it is what a user who applies only one of
    them gets, but it contradicts the package the model proposed.
+   Such a preview is marked (`preview.combined`), and the action card says
+   so ("Vorschau mit den anderen Vorschlägen dieser Antwort").
+8. **A package follows what the user does.** When the user applies or
+   rejects one proposal of a package (or applying it fails), the apply and
+   reject endpoints recompute the previews of the package's remaining
+   pending proposals (`refreshPackagePreviews`: the same answer's pending
+   deck proposals for the same deck) on the deck as it is now: together
+   while more than one is left, in the order they were made, else the last
+   one alone (no longer marked). They are stored and returned as `related`
+   views, which the thread shows at once; a reload reads them from the
+   database anyway.
 
 ## Consequences
 
@@ -72,10 +83,9 @@ it with a wall of text below.
   format flow) gets only the first; the prompt asks for them in one step,
   and the user can ask for the rest.
 - One model call fewer per proposal turn.
-- A package's previews are optimistic when the user applies only some of
-  its proposals; the deck editor then shows the real state. The model read
-  the first proposal's own preview in its tool result; that result is not
-  rewritten.
+- A package's previews always match what is still pending; the model read
+  the first proposal's own preview in its tool result, and that result is
+  not rewritten.
 - The next turn's history ends the answer with the tool call and its result,
   followed by the user's message, which OpenAI-compatible APIs accept. The
   #116 status rewrite of a resolved proposal works unchanged.

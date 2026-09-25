@@ -185,6 +185,8 @@ interface DeckPreview {
   missing: Array<{ catalogCardId: number, name: string, needed: number, owned: number }>
   /** The format-independent deck warnings (`warningDetails`, #148); none on previews stored before. */
   warnings: ValidationTextSource[]
+  /** Computed with the other pending proposals of this answer for the same deck applied (a package, ADR 0026). */
+  combined: boolean
 }
 
 const PREVIEW_ISSUES_SHOWN = 5
@@ -217,6 +219,7 @@ const preview = computed<DeckPreview | null>(() => {
       owned: Number(card.owned) || 0,
     })),
     warnings: Array.isArray(raw.warningDetails) ? raw.warningDetails.filter(isIssueDetail) : [],
+    combined: raw.combined === true,
   }
 })
 
@@ -294,6 +297,19 @@ const metaEntries = computed(() => {
 
 const hasDetails = computed(() => rows.value.length > 0 || metaEntries.value.length > 0)
 
+/** apply/reject: the action, plus the other proposals of its package with their recomputed previews (ADR 0026). */
+interface ResolveResponse {
+  action: AssistantActionView
+  related?: AssistantActionView[]
+}
+
+function emitResolved(response: ResolveResponse) {
+  emit('updated', response.action)
+  for (const view of response.related ?? []) {
+    emit('updated', view)
+  }
+}
+
 async function apply() {
   if (isApplying.value || isRejecting.value) {
     return
@@ -301,11 +317,11 @@ async function apply() {
   isApplying.value = true
   errorMessage.value = ''
   try {
-    const response = await $fetch<{ action: AssistantActionView }>(
+    const response = await $fetch<ResolveResponse>(
       `/api/assistant/chat/actions/${props.action.id}/apply`,
       { method: 'POST' },
     )
-    emit('updated', response.action)
+    emitResolved(response)
   }
   catch (error) {
     errorMessage.value = apiError(error, 'assistant.action.errors.apply')
@@ -322,11 +338,11 @@ async function reject() {
   isRejecting.value = true
   errorMessage.value = ''
   try {
-    const response = await $fetch<{ action: AssistantActionView }>(
+    const response = await $fetch<ResolveResponse>(
       `/api/assistant/chat/actions/${props.action.id}/reject`,
       { method: 'POST' },
     )
-    emit('updated', response.action)
+    emitResolved(response)
   }
   catch (error) {
     errorMessage.value = apiError(error, 'assistant.action.errors.reject')
@@ -349,18 +365,24 @@ async function reject() {
       class="frame-stripe absolute inset-x-0 top-0 h-[3px]"
       aria-hidden="true"
     />
-    <div class="flex items-center justify-between gap-2">
-      <span class="inline-flex min-w-0 items-center gap-2 font-semibold text-highlighted">
+    <!-- The status badge wraps under the title when both don't fit (a phone),
+         so the title is never cut off. -->
+    <div class="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+      <span
+        class="inline-flex min-w-0 items-center gap-2 font-semibold text-highlighted"
+        data-testid="action-title"
+      >
         <UIcon
           name="i-lucide-scroll-text"
           class="size-4 shrink-0 text-secondary"
           aria-hidden="true"
         />
-        <span class="truncate">{{ t(`assistant.action.kind.${action.kind}`) }}</span>
+        <span class="min-w-0 break-words">{{ t(`assistant.action.kind.${action.kind}`) }}</span>
       </span>
       <UBadge
         :color="statusColor"
         variant="subtle"
+        class="shrink-0"
         :label="t(`assistant.action.status.${action.status}`)"
       />
     </div>
@@ -434,6 +456,19 @@ async function reject() {
           </li>
         </ul>
       </div>
+
+      <p
+        v-if="preview.combined"
+        class="flex items-start gap-1.5 text-toned"
+        data-testid="action-preview-combined"
+      >
+        <UIcon
+          name="i-lucide-layers"
+          class="mt-px size-3.5 shrink-0"
+          aria-hidden="true"
+        />
+        <span>{{ t('assistant.action.preview.combined') }}</span>
+      </p>
 
       <p class="text-muted">
         {{ t('assistant.action.preview.snapshot') }}
