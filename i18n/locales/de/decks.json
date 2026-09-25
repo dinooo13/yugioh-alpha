@@ -141,6 +141,27 @@
         "noSection": "{name} kann in keine Sektion dieses Decks aufgenommen werden.",
         "loadMore": "Mehr laden",
         "loadMoreFailed": "Weitere Karten konnten nicht geladen werden."
+      },
+      "overlay": {
+        "title": "Im Deck",
+        "quantity": "Kopien im {section}",
+        "decrease": "Eine Kopie weniger im {section}",
+        "increase": "Eine Kopie mehr im {section}"
+      },
+      "breakdown": {
+        "label": "Kartenarten im {section}",
+        "kind": {
+          "normal": "{count} Normales Monster | {count} Normale Monster",
+          "effect": "{count} Effektmonster | {count} Effektmonster",
+          "ritual": "{count} Ritualmonster | {count} Ritualmonster",
+          "spell": "{count} Zauberkarte | {count} Zauberkarten",
+          "trap": "{count} Fallenkarte | {count} Fallenkarten",
+          "fusion": "{count} Fusion",
+          "synchro": "{count} Synchro",
+          "xyz": "{count} Xyz",
+          "link": "{count} Link",
+          "other": "{count} sonstige Karte | {count} sonstige Karten"
+        }
       }
     }
   }

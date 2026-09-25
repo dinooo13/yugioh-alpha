@@ -63,8 +63,11 @@ export interface CardDetailPreview {
   imageLarge?: string | null
 }
 
-/** `catalog` adds the English name, printings and release dates; `inventory` shows only the card. */
-export type CardDetailVariant = 'catalog' | 'inventory'
+/**
+ * `catalog` adds the English name, printings and release dates; `deck` (the
+ * deck editor) is `catalog` without the printings; `inventory` shows only the card.
+ */
+export type CardDetailVariant = 'catalog' | 'deck' | 'inventory'
 
 /** The card an overlay action works on (the shape `AddToInventoryModal` takes). */
 export interface CardDetailSummary {

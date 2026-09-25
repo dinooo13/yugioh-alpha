@@ -141,6 +141,27 @@
         "noSection": "{name} can't go in any section of this deck.",
         "loadMore": "Load more",
         "loadMoreFailed": "Couldn't load more cards."
+      },
+      "overlay": {
+        "title": "In the deck",
+        "quantity": "Copies in the {section}",
+        "decrease": "One copy fewer in the {section}",
+        "increase": "One more copy in the {section}"
+      },
+      "breakdown": {
+        "label": "Card kinds in the {section}",
+        "kind": {
+          "normal": "{count} Normal Monster | {count} Normal Monsters",
+          "effect": "{count} Effect Monster | {count} Effect Monsters",
+          "ritual": "{count} Ritual Monster | {count} Ritual Monsters",
+          "spell": "{count} Spell Card | {count} Spell Cards",
+          "trap": "{count} Trap Card | {count} Trap Cards",
+          "fusion": "{count} Fusion",
+          "synchro": "{count} Synchro",
+          "xyz": "{count} Xyz",
+          "link": "{count} Link",
+          "other": "{count} other card | {count} other cards"
+        }
       }
     }
   }

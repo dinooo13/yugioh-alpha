@@ -11,6 +11,7 @@ import type { DeckValidation, DeckWarning } from '~~/shared/rule-formats'
 import type { Visibility } from '~~/shared/sharing'
 import { cardFrame } from '~/utils/card-frame'
 import type { CardDetailPreview } from '~/utils/card-detail'
+import { deckKindBreakdown } from '~/utils/deck-breakdown'
 import { deckCountState, deckMeterFill } from '~/utils/deck-meter'
 
 interface DeckCardRow {
@@ -459,6 +460,11 @@ function quantityInSection(catalogCardId: number, section: DeckSection): number 
   return sections.value[section].find(row => row.catalogCardId === catalogCardId)?.quantity ?? 0
 }
 
+// The header's card-kind chips (owner feedback in #148), live from the rendered deck.
+const breakdown = computed(() => (['main', 'extra'] as const)
+  .map(section => ({ section, kinds: deckKindBreakdown(sections.value[section]) }))
+  .filter(group => group.kinds.length > 0))
+
 function sectionLimitLabel(section: DeckSection): string {
   if (section === 'main') {
     return `${counts.value.main}/${limits.value.mainMin}–${limits.value.mainMax}`
@@ -585,14 +591,40 @@ async function moveCard(row: DeckCardRow, to: DeckSection) {
   }))
 }
 
-// The card overlay (#114), from a deck row or a card in the add panel:
-// the catalog variant, without actions.
-const overlayCard = ref<{ id: number, preview: CardDetailPreview } | null>(null)
+// The card overlay (#114), from a deck row or a card in the add panel: the
+// `deck` variant (no printings), with the card's quantity per section in
+// `#context` (`DecksDeckCardEditor`, owner feedback in #148).
+const overlayCard = ref<{ id: number, preview: CardDetailPreview, owned: number } | null>(null)
 const isOverlayOpen = ref(false)
+
+// From the rendered deck, so the overlay, the rows and the counts update
+// from the same write response.
+const overlayQuantities = computed<Record<DeckSection, number>>(() => {
+  const id = overlayCard.value?.id
+  return {
+    main: id ? quantityInSection(id, 'main') : 0,
+    extra: id ? quantityInSection(id, 'extra') : 0,
+    side: id ? quantityInSection(id, 'side') : 0,
+  }
+})
+
+// The deck rows' owned total is the freshest; a card not in the deck keeps the add panel's value.
+const overlayOwned = computed(() => {
+  const id = overlayCard.value?.id
+  const deckRow = DECK_SECTIONS.flatMap(section => sections.value[section]).find(row => row.catalogCardId === id)
+  return deckRow?.owned ?? overlayCard.value?.owned ?? 0
+})
+
+function setOverlayQuantity(section: DeckSection, quantity: number) {
+  if (overlayCard.value) {
+    setQuantity(overlayCard.value.id, section, quantity)
+  }
+}
 
 function openCardOverlay(card: DeckCardRow | SourceCard) {
   overlayCard.value = {
     id: card.catalogCardId,
+    owned: card.owned,
     preview: {
       name: card.name,
       nameDe: card.nameDe,
@@ -737,6 +769,46 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
         <p class="mt-1 text-sm text-muted">
           {{ count('decks.editor.totalCards', counts.total) }}
         </p>
+
+        <!-- Copies per card kind in Main and Extra (owner feedback in #148);
+             kinds without copies are left out. Updates silently, like the
+             section counts. -->
+        <div
+          v-if="breakdown.length > 0"
+          class="mt-2 flex flex-col gap-1.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-5"
+          data-testid="deck-breakdown"
+        >
+          <div
+            v-for="group in breakdown"
+            :key="group.section"
+            class="flex min-w-0 flex-wrap items-center gap-1.5"
+            :data-section="group.section"
+          >
+            <span
+              class="eyebrow"
+              aria-hidden="true"
+            >{{ t(`decks.sectionShort.${group.section}`) }}</span>
+            <ul
+              class="flex min-w-0 flex-wrap gap-1.5"
+              :aria-label="t('decks.editor.breakdown.label', { section: sectionName(group.section) })"
+            >
+              <li
+                v-for="entry in group.kinds"
+                :key="entry.kind"
+                class="inline-flex items-center gap-1.5 rounded-full bg-elevated/60 px-2 py-0.5 text-xs text-default ring-1 ring-default ring-inset"
+                :data-kind="entry.kind"
+                :data-frame="entry.kind === 'other' ? undefined : entry.kind"
+              >
+                <span
+                  v-if="entry.kind !== 'other'"
+                  class="frame-dot"
+                  aria-hidden="true"
+                />
+                <span class="tabular-nums">{{ count(`decks.editor.breakdown.kind.${entry.kind}`, entry.count) }}</span>
+              </li>
+            </ul>
+          </div>
+        </div>
 
         <div class="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
           <div class="flex flex-wrap items-center gap-2">
@@ -1246,8 +1318,21 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
         v-model:open="isOverlayOpen"
         :card-id="overlayCard?.id ?? null"
         :preview="overlayCard?.preview ?? null"
-        variant="catalog"
-      />
+        variant="deck"
+      >
+        <template #context>
+          <DecksDeckCardEditor
+            v-if="overlayCard"
+            :key="overlayCard.id"
+            :card="overlayCard.preview"
+            :quantities="overlayQuantities"
+            :owned="overlayOwned"
+            :disabled="isMutating"
+            :error="errorMessage"
+            @set="setOverlayQuantity"
+          />
+        </template>
+      </CardDetailModal>
     </template>
   </div>
 </template>
