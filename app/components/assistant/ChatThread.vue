@@ -193,6 +193,8 @@ watch(conversation, (summary) => {
               <AssistantMessageText
                 v-if="part.type === 'text' && part.text.trim() !== ''"
                 :text="part.text"
+                markdown
+                :streaming="part.state === 'streaming' && isTurnRunning && message.id === lastMessageId"
                 class="w-fit max-w-full rounded-2xl rounded-bl-md bg-elevated px-3.5 py-2.5 text-default ring-1 ring-default sm:max-w-[85%]"
               />
               <AssistantReasoning

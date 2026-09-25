@@ -1,53 +1,62 @@
 <script setup lang="ts">
-import { parseAssistantMessageBlocks } from '~/utils/assistant-message'
+import { AssistantMarkdown, createAssistantMarkdownParser } from '~/utils/assistant-markdown'
+import type { AssistantMarkdownDocument, AssistantMarkdownParser } from '~/utils/assistant-markdown'
 
-// A message's text with the few constructs the assistant is asked to use —
-// paragraphs, `- ` lists, `**bold**` — rendered with plain interpolation,
-// never `v-html` (app/utils/assistant-message.ts).
-const props = defineProps<{
+// A message's text. The assistant's answers render as sanitized Markdown via
+// Comark (app/utils/assistant-markdown.ts): an allow-list of tags, no raw
+// HTML, no components, protocol-checked links, no images. The user's own
+// text stays plain, exactly as typed. Never `v-html`.
+//
+// Parsing is async, so the plain text shows until the first parse is done
+// (also on the server), and while a newer parse runs the previous document
+// stays visible. A failed parse falls back to the plain text.
+const props = withDefaults(defineProps<{
   text: string
-}>()
+  markdown?: boolean
+  streaming?: boolean
+}>(), {
+  markdown: false,
+  streaming: false,
+})
 
-const blocks = computed(() => parseAssistantMessageBlocks(props.text))
+const doc = shallowRef<AssistantMarkdownDocument | null>(null)
+let parser: AssistantMarkdownParser | undefined
+let request = 0
+
+watch(() => [props.text, props.streaming, props.markdown] as const, ([text, streaming, markdown]) => {
+  const id = ++request
+  if (!markdown || import.meta.server) {
+    doc.value = null
+    return
+  }
+  parser ??= createAssistantMarkdownParser()
+  parser(text, { streaming }).then(
+    (result) => {
+      if (id === request) {
+        doc.value = result
+      }
+    },
+    () => {
+      if (id === request) {
+        doc.value = null
+      }
+    },
+  )
+}, { immediate: true })
 </script>
 
 <template>
   <div class="text-sm leading-6">
-    <template
-      v-for="(block, blockIndex) in blocks"
-      :key="blockIndex"
+    <AssistantMarkdown
+      v-if="markdown && doc"
+      :value="doc"
+      class="min-w-0 space-y-2 wrap-break-word"
+    />
+    <p
+      v-else
+      class="whitespace-pre-wrap wrap-break-word"
     >
-      <p
-        v-if="block.type === 'paragraph'"
-        class="whitespace-pre-wrap"
-        :class="{ 'mt-2': blockIndex > 0 }"
-      >
-        <template
-          v-for="(segment, segmentIndex) in block.segments"
-          :key="segmentIndex"
-        >
-          <strong v-if="segment.bold">{{ segment.text }}</strong>
-          <template v-else>{{ segment.text }}</template>
-        </template>
-      </p>
-      <ul
-        v-else
-        class="list-inside list-disc space-y-0.5"
-        :class="{ 'mt-2': blockIndex > 0 }"
-      >
-        <li
-          v-for="(item, itemIndex) in block.items"
-          :key="itemIndex"
-        >
-          <template
-            v-for="(segment, segmentIndex) in item"
-            :key="segmentIndex"
-          >
-            <strong v-if="segment.bold">{{ segment.text }}</strong>
-            <template v-else>{{ segment.text }}</template>
-          </template>
-        </li>
-      </ul>
-    </template>
+      {{ text }}
+    </p>
   </div>
 </template>
