@@ -30,9 +30,9 @@
     "better-sqlite3": "^12.11.1",
     "comark": "^0.7.0",
     "drizzle-orm": "^0.45.2",
-    "nuxt": "^4.4.8",
-    "vue": "^3.5.39",
-    "vue-router": "^5.1.0"
+    "nuxt": "^4.5.2",
+    "vue": "^3.5.43",
+    "vue-router": "^5.3.1"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
@@ -43,7 +43,7 @@
     "@intlify/eslint-plugin-vue-i18n": "^4.5.1",
     "@intlify/message-compiler": "~11.4.12",
     "@nuxt/eslint": "^1.16.0",
-    "@nuxt/test-utils": "^4.0.3",
+    "@nuxt/test-utils": "^4.3.2",
     "@playwright/test": "^1.61.1",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^26.1.0",
@@ -56,6 +56,6 @@
     "tailwindcss": "^4.3.3",
     "typescript": "^6.0.3",
     "vitest": "^4.1.9",
-    "vue-tsc": "^3.3.6"
+    "vue-tsc": "^3.3.11"
   }
 }
