@@ -7,7 +7,7 @@ import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm'
 import type { SQL } from 'drizzle-orm'
 import type { useDb } from '../db'
 import { catalogCard, collection, deck, deckCard, ownedCard, ruleFormat } from '../db/schema'
-import { buildWarnings, DECK_LIMITS, loadDeckCovers, sortDeckSections } from './decks'
+import { buildWarnings, DECK_LIMITS, deckBreakdownsFor, loadDeckCovers, sortDeckSections } from './decks'
 import { loadCardDataForValidation } from './deck-validation'
 import { ruleFormatsById } from './rule-formats'
 import { grantedResourceIds } from './sharing'
@@ -328,8 +328,12 @@ export function listVisibleDecks(db: Db, ownerUserId: string, viewerUserId: stri
       catalogCardId: deckCard.catalogCardId,
       section: deckCard.section,
       quantity: deckCard.quantity,
+      // For the tile chips (#148); a left join, so the counts never lose a row.
+      type: catalogCard.type,
+      frameType: catalogCard.frameType,
     })
     .from(deckCard)
+    .leftJoin(catalogCard, eq(catalogCard.id, deckCard.catalogCardId))
     .where(inArray(deckCard.deckId, deckIds))
     .all()
 
@@ -352,6 +356,7 @@ export function listVisibleDecks(db: Db, ownerUserId: string, viewerUserId: stri
 
   // Only the listed (already visible) decks — no cover leaks a hidden deck.
   const covers = loadDeckCovers(db, deckIds)
+  const breakdowns = deckBreakdownsFor(cardRows, deckIds)
 
   return visibleRows.map((row) => {
     const counts = countsByDeck.get(row.id) ?? { main: 0, extra: 0, side: 0 }
@@ -371,6 +376,7 @@ export function listVisibleDecks(db: Db, ownerUserId: string, viewerUserId: stri
       visibility: isOwner ? row.visibility : null,
       updatedAt: row.updatedAt.toISOString(),
       cover: covers.get(row.id) ?? null,
+      breakdown: breakdowns.get(row.id) ?? [],
     }
   })
 }

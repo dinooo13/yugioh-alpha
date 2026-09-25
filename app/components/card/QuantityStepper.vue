@@ -2,8 +2,8 @@
 /**
  * The shared − / input / + control for a card quantity: the inventory's
  * detail panel (`InventoryOwnedCardEditor`), the add dialog
- * (`InventoryAddToInventoryModal`), the deck editor rows and the wishlist
- * rows (#144).
+ * (`InventoryAddToInventoryModal`), the deck editor rows and overlay, the
+ * wishlist rows (#144) and the quick-entry review rows (#148).
  *
  * - − and + emit the value ∓ 1 and are disabled only at `min` / `max`
  *   (and with `disabled`).
@@ -11,11 +11,11 @@
  *   whole number within `min`…`max`; anything else snaps back to
  *   `modelValue`. So does a value the parent didn't take over (e.g. a
  *   cancelled removal at 0).
- * - The inventory editor never disables it while it saves (disabling a
- *   focused button would drop keyboard focus to the page): it queues its
- *   writes instead. Callers whose writes send an absolute quantity (deck
- *   editor, wishlist) pass `disabled` while a write is in flight, so two
- *   writes never compute from the same stale value.
+ * - Callers don't disable it while they save (disabling a focused button
+ *   would drop keyboard focus to the page): the inventory editor, the deck
+ *   editor and the wishlist rows queue their writes (`useQueuedWrites`) and
+ *   show the new value at once, so a quick "+ + +" sends 2, 3, 4 in order.
+ *   `disabled` remains for callers that need it.
  */
 import { MAX_OWNED_QUANTITY } from '~~/shared/inventory'
 

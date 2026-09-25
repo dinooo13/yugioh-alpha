@@ -182,20 +182,6 @@ function onPicked(card: PickedCatalogCard) {
         </p>
       </div>
 
-      <UFormField
-        :label="t('card.field.quantity')"
-        size="xs"
-        class="w-20 shrink-0"
-      >
-        <UInput
-          v-model.number="quantityValue"
-          type="number"
-          min="1"
-          :max="MAX_ENTRY_QUANTITY"
-          :aria-label="t('quickEntry.row.quantityFor', { line: row.raw })"
-        />
-      </UFormField>
-
       <UButton
         icon="i-lucide-x"
         color="neutral"
@@ -206,7 +192,20 @@ function onPicked(card: PickedCatalogCard) {
       />
     </div>
 
-    <div class="grid gap-3 sm:grid-cols-[2fr_2fr_auto]">
+    <!-- The stepper leads the second row: in the top row its tap targets
+         would squeeze the card name on a phone. Its labels name the line. -->
+    <div class="grid gap-3 sm:grid-cols-[auto_2fr_2fr_auto] sm:items-center">
+      <CardQuantityStepper
+        v-model="quantityValue"
+        :min="1"
+        :max="MAX_ENTRY_QUANTITY"
+        size="xs"
+        class="justify-self-start"
+        :input-label="t('quickEntry.row.quantityFor', { line: row.raw })"
+        :decrease-label="t('quickEntry.row.decreaseFor', { line: row.raw })"
+        :increase-label="t('quickEntry.row.increaseFor', { line: row.raw })"
+      />
+
       <USelect
         v-if="row.candidates.length > 0"
         v-model="candidateValue"

@@ -171,6 +171,13 @@ const isEmpty = computed(() => {
                 <p class="mt-1 text-xs text-muted">
                   {{ count('players.cardCount', deck.cardCount) }}
                 </p>
+                <!-- Card kinds in Main and Extra (#148); fixtures may lack them. -->
+                <DecksDeckKindBreakdown
+                  v-if="deck.breakdown?.length"
+                  :groups="deck.breakdown"
+                  compact
+                  class="mt-2"
+                />
                 <SharingVisibilityBadge
                   v-if="data.viewer.isOwner"
                   class="mt-2"

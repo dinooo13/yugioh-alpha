@@ -29,6 +29,8 @@ import {
 import type { DeckSection, DeckSectionCard } from '../../shared/deck-sections'
 import type { Visibility } from '../../shared/sharing'
 import type { DeckCover } from '../../shared/deck-cover'
+import { deckBreakdownGroups } from '../../shared/deck-breakdown'
+import type { DeckBreakdownGroup } from '../../shared/deck-breakdown'
 
 type Db = ReturnType<typeof useDb>
 
@@ -192,6 +194,36 @@ export function validateDeckInput(body: unknown): DeckInput {
   return { name, description }
 }
 
+/**
+ * `format_id` (or `formatId`) of a create or update body: `undefined` when
+ * absent, `null` for `null`/`''` (no format). Whether the format exists is
+ * checked by the write (`requireAssignableFormat`).
+ */
+function parseFormatIdField(body: Record<string, unknown>): string | null | undefined {
+  const rawFormatId = body.format_id !== undefined ? body.format_id : body.formatId
+  if (rawFormatId === undefined) {
+    return undefined
+  }
+  if (rawFormatId === null || rawFormatId === '') {
+    return null
+  }
+  if (typeof rawFormatId !== 'string') {
+    badRequest('format_id must be a string or null')
+  }
+  return rawFormatId
+}
+
+export interface DeckCreateInput extends DeckInput {
+  /** The rule format to assign right away; `null` for none. */
+  formatId: string | null
+}
+
+/** A `POST /api/decks` body: name, description and the optional `format_id` (#148). */
+export function validateDeckCreateInput(body: unknown): DeckCreateInput {
+  const input = validateDeckInput(body)
+  return { ...input, formatId: parseFormatIdField(body as Record<string, unknown>) ?? null }
+}
+
 export interface DeckUpdateInput extends Partial<DeckInput> {
   /** `null` removes the format assignment (validation off). */
   formatId?: string | null
@@ -215,17 +247,9 @@ export function validateDeckUpdateInput(body: unknown): DeckUpdateInput {
     input.description = validateDeckInput({ name: 'placeholder', description: body.description }).description
   }
 
-  const rawFormatId = body.format_id !== undefined ? body.format_id : body.formatId
-  if (rawFormatId !== undefined) {
-    if (rawFormatId === null || rawFormatId === '') {
-      input.formatId = null
-    }
-    else if (typeof rawFormatId !== 'string') {
-      badRequest('format_id must be a string or null')
-    }
-    else {
-      input.formatId = rawFormatId
-    }
+  const formatId = parseFormatIdField(body)
+  if (formatId !== undefined) {
+    input.formatId = formatId
   }
 
   const rawCoverCardId = body.cover_card_id !== undefined ? body.cover_card_id : body.coverCardId
@@ -697,10 +721,21 @@ export function validateDeckWithRules(db: Db, userId: string, deckId: string, ru
  * Creates a deck, optionally seeded with a set of cards (e.g. a chat
  * assistant `create_deck` proposal being applied) — the deck row and every card
  * row are written in one transaction, so a bad card never leaves behind an
- * empty deck.
+ * empty deck. An optional `formatId` is assigned at once; it is checked like
+ * PATCH does (a built-in format or one of the caller's own, else 400
+ * `format_id does not exist`) before anything is written.
  */
-export function createDeck(db: Db, userId: string, input: DeckInput, cards?: DeckCardInput[]): DeckDetail {
+export function createDeck(
+  db: Db,
+  userId: string,
+  input: DeckInput & { formatId?: string | null },
+  cards?: DeckCardInput[],
+): DeckDetail {
   const now = new Date()
+
+  if (input.formatId) {
+    requireAssignableFormat(db, userId, input.formatId)
+  }
 
   const created = db.transaction((tx) => {
     const txDb = tx as unknown as Db
@@ -711,6 +746,7 @@ export function createDeck(db: Db, userId: string, input: DeckInput, cards?: Dec
         userId,
         name: input.name,
         description: input.description,
+        formatId: input.formatId ?? null,
         createdAt: now,
         updatedAt: now,
       })
@@ -1046,6 +1082,36 @@ export interface DeckListItem {
   visibility: Visibility
   /** Cover card for the deck tile (#29); `null` for a deck without Main/Extra cards. */
   cover: DeckCover | null
+  /** Copies per card kind in Main and Extra (#148), for the tile chips. */
+  breakdown: DeckBreakdownGroup[]
+}
+
+/** A `deck_card` row with its card's type, as the deck lists load it for {@link deckBreakdownsFor}. */
+export interface DeckBreakdownSourceRow {
+  deckId: string
+  section: string
+  type: string | null
+  frameType: string | null
+  quantity: number
+}
+
+/**
+ * The card-kind chips (#148) of the given decks, from rows already loaded
+ * for the list (no extra query). The Side Deck is never counted; a deck
+ * without Main/Extra cards gets `[]`.
+ */
+export function deckBreakdownsFor(rows: DeckBreakdownSourceRow[], deckIds: string[]): Map<string, DeckBreakdownGroup[]> {
+  const wanted = new Set(deckIds)
+  const sectionsByDeck = new Map<string, { main: DeckBreakdownSourceRow[], extra: DeckBreakdownSourceRow[] }>()
+  for (const row of rows) {
+    if (!wanted.has(row.deckId) || (row.section !== 'main' && row.section !== 'extra')) {
+      continue
+    }
+    const sections = sectionsByDeck.get(row.deckId) ?? { main: [], extra: [] }
+    sections[row.section].push(row)
+    sectionsByDeck.set(row.deckId, sections)
+  }
+  return new Map(deckIds.map(deckId => [deckId, deckBreakdownGroups(sectionsByDeck.get(deckId) ?? { main: [], extra: [] })]))
 }
 
 /** One Main/Extra Deck row considered for a deck's cover — see {@link pickDeckCover}. */
@@ -1228,8 +1294,12 @@ export function listDecks(db: Db, userId: string, options: DeckListOptions = {})
           catalogCardId: deckCard.catalogCardId,
           section: deckCard.section,
           quantity: deckCard.quantity,
+          // For the tile chips (#148); a left join, so the counts never lose a row.
+          type: catalogCard.type,
+          frameType: catalogCard.frameType,
         })
         .from(deckCard)
+        .leftJoin(catalogCard, eq(catalogCard.id, deckCard.catalogCardId))
         .where(inArray(deckCard.deckId, deckIds))
         .all()
     : []
@@ -1282,8 +1352,9 @@ export function listDecks(db: Db, userId: string, options: DeckListOptions = {})
     usedByDeck.set(row.deckId, used)
   }
 
-  // Covers only for the page actually returned, not the whole legality scan.
+  // Covers and chips only for the page actually returned, not the whole legality scan.
   const covers = loadDeckCovers(db, deckRows.map(row => row.id))
+  const breakdowns = deckBreakdownsFor(cardRows, deckRows.map(row => row.id))
 
   const items: DeckListItem[] = deckRows.map((row) => {
     const counts = countsByDeck.get(row.id) ?? { main: 0, extra: 0, side: 0 }
@@ -1315,6 +1386,7 @@ export function listDecks(db: Db, userId: string, options: DeckListOptions = {})
       updatedAt: row.updatedAt,
       visibility: row.visibility,
       cover: covers.get(row.id) ?? null,
+      breakdown: breakdowns.get(row.id) ?? [],
     }
   })
 

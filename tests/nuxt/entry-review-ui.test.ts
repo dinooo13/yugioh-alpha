@@ -247,6 +247,25 @@ describe('EntryReviewTable', () => {
     expect(component.emitted('update:rows')).toBeUndefined()
   })
 
+  it('sets a row\'s quantity with the stepper (#148)', async () => {
+    const component = await mountTable(createEntryRows([exactResult]))
+    const minus = () => component.find('button[aria-label="Eine Kopie weniger für Dark Magician"]')
+    const input = () => component.find<HTMLInputElement>('input[aria-label="Anzahl für Dark Magician"]')
+
+    expect(input().element.value).toBe('1')
+    // A line always stands for at least one copy.
+    expect(minus().attributes('disabled')).toBeDefined()
+
+    await component.find('button[aria-label="Eine Kopie mehr für Dark Magician"]').trigger('click')
+    const updates = component.emitted('update:rows') as Array<[EntryRow[]]>
+    const updated = updates.at(-1)![0]
+    expect(updated[0]!.quantity).toBe(2)
+
+    await component.setProps({ rows: updated })
+    expect(input().element.value).toBe('2')
+    expect(minus().attributes('disabled')).toBeUndefined()
+  })
+
   it('removes a row through its remove button', async () => {
     const component = await mountTable(createEntryRows([exactResult, noMatchResult]))
 

@@ -3,6 +3,7 @@
 // shared/assistant-chat.ts): no Drizzle, no h3, no Vue. See
 // docs/adr/0007-sharing-and-profile-model.md for the design rationale.
 
+import type { DeckBreakdownGroup } from './deck-breakdown'
 import type { DeckCover } from './deck-cover'
 import type { DeckSection } from './deck-sections'
 import type { AppLocale } from './locale'
@@ -68,6 +69,8 @@ export interface SharedDeckSummary {
   updatedAt: string
   /** Cover card for the deck tile (#29); `null` for a deck without Main/Extra cards. */
   cover: DeckCover | null
+  /** Copies per card kind in Main and Extra (#148), for the tile chips; `[]` for a deck without Main/Extra cards. */
+  breakdown: DeckBreakdownGroup[]
 }
 
 export interface SharedCollectionSummary {

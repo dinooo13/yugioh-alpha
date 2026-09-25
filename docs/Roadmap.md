@@ -518,6 +518,13 @@ Round 6 (#148, card data): lists show a card's own artwork (ADR 0025), Link
 ratings in all lists, no empty sets in the set filter, the Pendulum scale in
 the overlay, a `?` ATK/DEF card in the E2E catalog.
 
+Round 6 (#148, decks): the deck editor's add panel can also search the card
+text; the card-kind chips also show on the shared deck view and, compact, on
+the deck tiles (`/decks` and the profile page); `POST /api/decks` takes
+`format_id` (the assistant's `create_deck` uses it too); the deck, wishlist
+and inventory steppers queue their writes (`useQueuedWrites`) and keep the
+keyboard focus; quick entry uses the quantity stepper.
+
 ## Recommended Build Order
 
 1. Card catalog and personal inventory

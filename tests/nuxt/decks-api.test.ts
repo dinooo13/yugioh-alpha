@@ -26,13 +26,14 @@ import {
   validateDeckCardInput,
   validateDeckCardMoveInput,
   validateDeckCreateCardsInput,
+  validateDeckCreateInput,
   validateDeckInput,
   validateDeckUpdateInput,
 } from '../../server/utils/decks'
 import type { DeckCoverCandidate } from '../../server/utils/decks'
 import { createCollection } from '../../server/utils/collections'
 import { addOwnedCard, validateInventoryInput } from '../../server/utils/inventory'
-import { seedBuiltinFormats } from '../../server/utils/rule-formats'
+import { createRuleFormat, seedBuiltinFormats, validateRuleFormatInput } from '../../server/utils/rule-formats'
 import { setShareState } from '../../server/utils/sharing'
 import { seedGermanNames } from './fixtures/german-names'
 
@@ -1189,5 +1190,109 @@ describe('pickDeckCover', () => {
     const monster = candidate({ catalogCardId: 1, type: 'Normal Monster' })
     const sideSpell = candidate({ catalogCardId: 2, section: 'side', type: 'Spell Card' })
     expect(pickDeckCover([monster, sideSpell], 2)?.catalogCardId).toBe(1)
+  })
+})
+
+// POST /api/decks takes the format right away (#148).
+describe('validateDeckCreateInput', () => {
+  it('reads format_id or formatId, and null or an empty string as no format', () => {
+    expect(validateDeckCreateInput({ name: 'Deck', format_id: 'unlimited' })).toEqual({ name: 'Deck', description: null, formatId: 'unlimited' })
+    expect(validateDeckCreateInput({ name: 'Deck', formatId: 'goat' }).formatId).toBe('goat')
+    expect(validateDeckCreateInput({ name: 'Deck', format_id: null }).formatId).toBeNull()
+    expect(validateDeckCreateInput({ name: 'Deck', formatId: '' }).formatId).toBeNull()
+    expect(validateDeckCreateInput({ name: 'Deck' }).formatId).toBeNull()
+  })
+
+  it('400s for a format id that is not a string, and still checks the name', () => {
+    expect(() => validateDeckCreateInput({ name: 'Deck', format_id: 5 })).toThrow(expect.objectContaining({ statusCode: 400 }))
+    expect(() => validateDeckCreateInput({ format_id: 'unlimited' })).toThrow(expect.objectContaining({ statusCode: 400 }))
+    expect(() => validateDeckCreateInput(null)).toThrow(expect.objectContaining({ statusCode: 400 }))
+  })
+})
+
+describe('deck creation with a format', () => {
+  let db: TestDb
+
+  beforeEach(() => {
+    db = createTestDb()
+    seedUsersAndCatalog(db)
+    seedBuiltinFormats(db)
+  })
+
+  it('assigns a built-in format at once', () => {
+    const created = createDeck(db, 'user-a', { name: 'Deck', description: null, formatId: 'unlimited' })
+
+    expect(created.format?.id).toBe('unlimited')
+    expect(created.validation).not.toBeNull()
+    expect(listDecks(db, 'user-a', { formatId: 'unlimited' }).items.map(item => item.id)).toEqual([created.id])
+  })
+
+  it('assigns the caller\'s own format', () => {
+    const own = createRuleFormat(db, 'user-a', validateRuleFormatInput({ name: 'Eigenes', rules: { rules: [] } }))
+    expect(createDeck(db, 'user-a', { name: 'Deck', description: null, formatId: own.id }).format?.id).toBe(own.id)
+  })
+
+  it('400s for an unknown or someone else\'s format and writes nothing', () => {
+    const foreign = createRuleFormat(db, 'user-b', validateRuleFormatInput({ name: 'Fremd', rules: { rules: [] } }))
+
+    expect(() => createDeck(db, 'user-a', { name: 'Deck', description: null, formatId: 'does-not-exist' }))
+      .toThrow(expect.objectContaining({ statusCode: 400 }))
+    expect(() => createDeck(db, 'user-a', { name: 'Deck', description: null, formatId: foreign.id }, [
+      { catalogCardId: CARD.darkMagician, section: 'main', quantity: 1 },
+    ])).toThrow(expect.objectContaining({ statusCode: 400 }))
+    expect(listDecks(db, 'user-a').items).toEqual([])
+    expect(db.select().from(schema.deckCard).all()).toEqual([])
+  })
+
+  it('stores the cards and the format together', () => {
+    const created = createDeck(db, 'user-a', { name: 'Deck', description: null, formatId: 'unlimited' }, [
+      { catalogCardId: CARD.darkMagician, section: 'main', quantity: 2 },
+    ])
+
+    expect(created.format?.id).toBe('unlimited')
+    expect(getDeckDetail(db, 'user-a', created.id).sections.main).toEqual([
+      expect.objectContaining({ catalogCardId: CARD.darkMagician, quantity: 2 }),
+    ])
+  })
+
+  it('keeps a deck without a format when none is given', () => {
+    expect(createDeck(db, 'user-a', { name: 'Deck', description: null }).format).toBeNull()
+    expect(createDeck(db, 'user-a', { name: 'Deck', description: null, formatId: null }).format).toBeNull()
+  })
+})
+
+// The deck tiles' card-kind chips (#148).
+describe('deck list card-kind breakdown', () => {
+  let db: TestDb
+
+  beforeEach(() => {
+    db = createTestDb()
+    seedUsersAndCatalog(db)
+  })
+
+  it('counts the copies per kind in Main and Extra, never the Side Deck', () => {
+    createDeck(db, 'user-a', { name: 'Deck', description: null }, [
+      { catalogCardId: CARD.darkMagician, section: 'main', quantity: 3 },
+      { catalogCardId: CARD.potOfGreed, section: 'main', quantity: 2 },
+      { catalogCardId: CARD.stardustDragon, section: 'extra', quantity: 1 },
+      { catalogCardId: CARD.mirrorForce, section: 'side', quantity: 2 },
+    ])
+
+    expect(listDecks(db, 'user-a').items[0]!.breakdown).toEqual([
+      { section: 'main', kinds: [{ kind: 'normal', count: 3 }, { kind: 'spell', count: 2 }] },
+      { section: 'extra', kinds: [{ kind: 'synchro', count: 1 }] },
+    ])
+  })
+
+  it('is empty for an empty deck or one with only Side Deck cards', () => {
+    createDeck(db, 'user-a', { name: 'Leer', description: null })
+    createDeck(db, 'user-a', { name: 'Nur Side', description: null }, [
+      { catalogCardId: CARD.mirrorForce, section: 'side', quantity: 1 },
+    ])
+
+    expect(listDecks(db, 'user-a', { sort: 'name' }).items.map(item => [item.name, item.breakdown])).toEqual([
+      ['Leer', []],
+      ['Nur Side', []],
+    ])
   })
 })

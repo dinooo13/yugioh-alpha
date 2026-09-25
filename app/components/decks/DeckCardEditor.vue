@@ -9,21 +9,26 @@
  *   section without asking, as the row stepper does; the line stays, so the
  *   card can be added back from here.
  * - The page does the writes through its `setQuantity` (absolute
- *   quantities), so the list and the overlay show the same deck. The
- *   controls are disabled while a write is in flight, as in the rows.
+ *   quantities), so the list and the overlay show the same deck. The page
+ *   queues the writes (`useQueuedWrites`): the steppers show the wanted
+ *   value at once and stay enabled, so keyboard focus stays on − / +.
  */
 import { allowedSectionsForCard, DECK_SECTIONS, MAX_DECK_CARD_QUANTITY } from '~~/shared/deck-sections'
 import type { DeckSection, DeckSectionCard } from '~~/shared/deck-sections'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   /** `type`/`frameType` decide the sections. */
   card: DeckSectionCard
   quantities: Record<DeckSection, number>
   owned: number
-  disabled: boolean
+  /** Kept for callers that need it; the deck editor queues its writes instead. */
+  disabled?: boolean
   /** The page's last write error; the page's own error line is hidden behind the overlay. */
   error?: string
-}>()
+}>(), {
+  disabled: false,
+  error: undefined,
+})
 
 const emit = defineEmits<{ set: [section: DeckSection, quantity: number] }>()
 
@@ -37,38 +42,10 @@ const inDeck = computed(() => DECK_SECTIONS.reduce((sum, section) => sum + props
 function sectionName(section: DeckSection): string {
   return t(`decks.section.${section}`)
 }
-
-// Disabling the focused − / + while a write is in flight drops keyboard
-// focus to <body> (Chromium), and the next Enter would do nothing. So the
-// last focused control here gets focus back once the write is done — but
-// only when focus really was lost, so a click elsewhere in the dialog
-// during the write isn't taken over. A − that reached 0 stays disabled;
-// `focus()` on it is a harmless no-op.
-let lastFocused: HTMLElement | null = null
-
-function onFocusIn(event: FocusEvent) {
-  if (event.target instanceof HTMLElement) {
-    lastFocused = event.target
-  }
-}
-
-watch(() => props.disabled, async (now, before) => {
-  if (!before || now) {
-    return
-  }
-  await nextTick()
-  const active = document.activeElement
-  if ((!active || active === document.body) && lastFocused?.isConnected) {
-    lastFocused.focus()
-  }
-})
 </script>
 
 <template>
-  <section
-    class="space-y-3"
-    @focusin="onFocusIn"
-  >
+  <section class="space-y-3">
     <div class="flex items-baseline justify-between gap-3">
       <h3 class="text-sm font-semibold text-highlighted">
         {{ t('decks.editor.overlay.title') }}

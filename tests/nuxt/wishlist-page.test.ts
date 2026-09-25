@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { flushPromises } from '@vue/test-utils'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
 import { UApp } from '#components'
 import WishlistPage from '~/pages/wishlist.vue'
@@ -102,6 +103,7 @@ describe('wishlist page', () => {
     expect(removeButton).toBeTruthy()
 
     await removeButton!.trigger('click')
+    await flushPromises()
 
     expect(fetchMock).toHaveBeenCalledWith('/api/wishlist/wish-1', { method: 'DELETE' })
   })
@@ -144,6 +146,87 @@ describe('wishlist page', () => {
     const minusButton = component.find('button[aria-label="Ein Exemplar von Kuriboh entfernen"]')
 
     expect(minusButton.attributes('disabled')).toBeUndefined()
+  })
+})
+
+// The row stepper queues its writes (#148): the new value shows at once,
+// nothing is disabled, and the PATCHes go out one after another.
+describe('wishlist row quantity writes', () => {
+  const plus = 'button[aria-label="Ein Exemplar von Kuriboh hinzufügen"]'
+  const minus = 'button[aria-label="Ein Exemplar von Kuriboh entfernen"]'
+  const input = 'input[aria-label="Anzahl von Kuriboh"]'
+
+  function deferredPatches() {
+    const settle: Array<{ resolve: (value: unknown) => void, reject: (error: unknown) => void }> = []
+    const fetchMock = vi.fn((url: string, _options?: unknown) => (url.startsWith('/api/wishlist/')
+      ? new Promise((resolve, reject) => {
+          settle.push({ resolve, reject })
+        })
+      : Promise.resolve(null)))
+    vi.stubGlobal('$fetch', fetchMock)
+    const calls = () => fetchMock.mock.calls.filter(([url]) => url.startsWith('/api/wishlist/'))
+    return { calls, settle }
+  }
+
+  it('queues quick "+" clicks and keeps the stepper enabled', async () => {
+    state.wishlist = { items: [item({ quantity: 1 })], total: 1, page: 1, pageSize: 24 }
+    const { calls, settle } = deferredPatches()
+
+    const component = await mountSuspended(WishlistPage)
+    await component.find(plus).trigger('click')
+    await component.find(plus).trigger('click')
+    await flushPromises()
+
+    expect(component.find<HTMLInputElement>(input).element.value).toBe('3')
+    expect(component.find(plus).attributes('disabled')).toBeUndefined()
+    expect(component.find(minus).attributes('disabled')).toBeUndefined()
+    expect(calls()).toEqual([['/api/wishlist/wish-1', { method: 'PATCH', body: { quantity: 2 } }]])
+
+    settle[0]!.resolve(item({ quantity: 2 }))
+    await flushPromises()
+    expect(calls()[1]).toEqual(['/api/wishlist/wish-1', { method: 'PATCH', body: { quantity: 3 } }])
+    // The first answer is outdated by the queued write.
+    expect(component.find<HTMLInputElement>(input).element.value).toBe('3')
+
+    settle[1]!.resolve(item({ quantity: 3 }))
+    await flushPromises()
+    expect(component.find<HTMLInputElement>(input).element.value).toBe('3')
+    expect(component.text()).not.toContain('Die Wunschliste konnte nicht aktualisiert werden.')
+  })
+
+  it('rolls back to the last confirmed quantity when the last write fails', async () => {
+    state.wishlist = { items: [item({ quantity: 1 })], total: 1, page: 1, pageSize: 24 }
+    const { settle } = deferredPatches()
+
+    const component = await mountSuspended(WishlistPage)
+    await component.find(plus).trigger('click')
+    await component.find(plus).trigger('click')
+    await flushPromises()
+
+    settle[0]!.resolve(item({ quantity: 2 }))
+    await flushPromises()
+    settle[1]!.reject(new Error('[PATCH] "/api/wishlist/wish-1": 500'))
+    await flushPromises()
+
+    expect(component.find<HTMLInputElement>(input).element.value).toBe('2')
+    expect(component.text()).toContain('Die Wunschliste konnte nicht aktualisiert werden.')
+  })
+
+  it('shows the server quantity again when the only write fails', async () => {
+    state.wishlist = { items: [item({ quantity: 2 })], total: 1, page: 1, pageSize: 24 }
+    const { settle } = deferredPatches()
+
+    const component = await mountSuspended(WishlistPage)
+    await component.find(minus).trigger('click')
+    await flushPromises()
+    expect(component.find<HTMLInputElement>(input).element.value).toBe('1')
+    // At the minimum the "−" is disabled as always, the "+" is not.
+    expect(component.find(minus).attributes('disabled')).toBeDefined()
+
+    settle[0]!.reject(new Error('offline'))
+    await flushPromises()
+    expect(component.find<HTMLInputElement>(input).element.value).toBe('2')
+    expect(component.text()).toContain('Die Wunschliste konnte nicht aktualisiert werden.')
   })
 })
 

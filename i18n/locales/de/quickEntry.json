@@ -73,6 +73,8 @@
       "useDefault": "Standard",
       "conflict": "Set-Code und Name zeigen auf verschiedene Karten — bitte auswählen.",
       "quantityFor": "Anzahl für {line}",
+      "decreaseFor": "Eine Kopie weniger für {line}",
+      "increaseFor": "Eine Kopie mehr für {line}",
       "remove": "{line} entfernen",
       "pickCandidate": "Treffer auswählen...",
       "candidateFor": "Treffer für {line}",

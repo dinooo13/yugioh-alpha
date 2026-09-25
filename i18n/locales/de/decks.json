@@ -129,6 +129,7 @@
         "attribute": "Attribut",
         "allTypes": "Alle Typen",
         "allAttributes": "Alle Attribute",
+        "inText": "Auch im Kartentext suchen",
         "includeCatalog": "Auch Katalogkarten anzeigen",
         "shownOf": "{shown} von {total} Karten",
         "total": "{count} Karte | {count} Karten",
@@ -147,21 +148,34 @@
         "quantity": "Kopien im {section}",
         "decrease": "Eine Kopie weniger im {section}",
         "increase": "Eine Kopie mehr im {section}"
+      }
+    },
+    "breakdown": {
+      "label": "Kartenarten im {section}",
+      "labelAll": "Kartenarten im Main und Extra Deck",
+      "kind": {
+        "normal": "{count} Normales Monster | {count} Normale Monster",
+        "effect": "{count} Effektmonster | {count} Effektmonster",
+        "ritual": "{count} Ritualmonster | {count} Ritualmonster",
+        "spell": "{count} Zauberkarte | {count} Zauberkarten",
+        "trap": "{count} Fallenkarte | {count} Fallenkarten",
+        "fusion": "{count} Fusion",
+        "synchro": "{count} Synchro",
+        "xyz": "{count} Xyz",
+        "link": "{count} Link",
+        "other": "{count} sonstige Karte | {count} sonstige Karten"
       },
-      "breakdown": {
-        "label": "Kartenarten im {section}",
-        "kind": {
-          "normal": "{count} Normales Monster | {count} Normale Monster",
-          "effect": "{count} Effektmonster | {count} Effektmonster",
-          "ritual": "{count} Ritualmonster | {count} Ritualmonster",
-          "spell": "{count} Zauberkarte | {count} Zauberkarten",
-          "trap": "{count} Fallenkarte | {count} Fallenkarten",
-          "fusion": "{count} Fusion",
-          "synchro": "{count} Synchro",
-          "xyz": "{count} Xyz",
-          "link": "{count} Link",
-          "other": "{count} sonstige Karte | {count} sonstige Karten"
-        }
+      "short": {
+        "normal": "Normal",
+        "effect": "Effekt",
+        "ritual": "Ritual",
+        "spell": "Zauber",
+        "trap": "Falle",
+        "fusion": "Fusion",
+        "synchro": "Synchro",
+        "xyz": "Xyz",
+        "link": "Link",
+        "other": "Sonstige"
       }
     }
   }

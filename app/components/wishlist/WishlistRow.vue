@@ -4,6 +4,11 @@
  * removal. The card name is the row's button (#114): `stretched-link` makes
  * the whole row open the card overlay (`open`); the retired badge, the note
  * field, the stepper and the remove button sit above it.
+ *
+ * Writes are queued (`useQueuedWrites`, #148): the stepper shows the new
+ * quantity at once and stays enabled (focus stays on − / +), the PATCHes go
+ * out one after another, and only the last answer reaches the page. A failed
+ * last write rolls back to the last confirmed item.
  */
 import { MAX_WISHLIST_QUANTITY } from '~~/shared/sharing'
 import type { WishlistItemView } from '~~/shared/sharing'
@@ -27,31 +32,42 @@ watch(() => props.item.note, (value) => {
   noteDraft.value = value ?? ''
 })
 
-const isSaving = ref(false)
 const errorMessage = ref('')
+const writes = useQueuedWrites()
+/** The quantity asked for but not yet confirmed. */
+const pendingQuantity = ref<number | null>(null)
+const shownQuantity = computed(() => pendingQuantity.value ?? props.item.quantity)
+// The last successful answer while writes are queued.
+let confirmed: WishlistItemView | null = null
 
 async function patch(body: Record<string, unknown>) {
-  isSaving.value = true
   errorMessage.value = ''
-  try {
-    const updated = await $fetch<WishlistItemView>(`/api/wishlist/${props.item.id}`, {
-      method: 'PATCH',
-      body,
-    })
-    emit('updated', updated)
+  const result = await writes.enqueue(() => $fetch<WishlistItemView>(`/api/wishlist/${props.item.id}`, {
+    method: 'PATCH',
+    body,
+  }))
+  if (result.ok) {
+    confirmed = result.value
   }
-  catch (error) {
-    errorMessage.value = apiError(error, 'wishlist.errors.updateFailed')
+  else {
+    errorMessage.value = apiError(result.error, 'wishlist.errors.updateFailed')
   }
-  finally {
-    isSaving.value = false
+  if (!result.latest) {
+    return
   }
+  // The last success; after a failed last write this is the rollback.
+  if (confirmed) {
+    emit('updated', confirmed)
+  }
+  confirmed = null
+  pendingQuantity.value = null
 }
 
 function setQuantity(quantity: number) {
-  if (quantity < 1 || quantity > MAX_WISHLIST_QUANTITY || isSaving.value) {
+  if (quantity < 1 || quantity > MAX_WISHLIST_QUANTITY) {
     return
   }
+  pendingQuantity.value = quantity
   patch({ quantity })
 }
 
@@ -63,14 +79,18 @@ function onNoteBlur() {
   patch({ note: trimmed || null })
 }
 
+// Queued too, so a pending PATCH can't hit a deleted row.
 async function remove() {
   errorMessage.value = ''
-  try {
-    await $fetch(`/api/wishlist/${props.item.id}`, { method: 'DELETE' })
-    emit('removed', props.item.id)
+  const { id } = props.item
+  const result = await writes.enqueue(async () => {
+    await $fetch(`/api/wishlist/${id}`, { method: 'DELETE' })
+  })
+  if (result.ok) {
+    emit('removed', id)
   }
-  catch (error) {
-    errorMessage.value = apiError(error, 'wishlist.errors.removeFailed')
+  else {
+    errorMessage.value = apiError(result.error, 'wishlist.errors.removeFailed')
   }
 }
 </script>
@@ -132,11 +152,10 @@ async function remove() {
 
       <div class="relative z-10 shrink-0">
         <CardQuantityStepper
-          :model-value="item.quantity"
+          :model-value="shownQuantity"
           :min="1"
           :max="MAX_WISHLIST_QUANTITY"
           size="xs"
-          :disabled="isSaving"
           :input-label="t('wishlist.row.quantityOf', { name: cardName(item) })"
           :decrease-label="t('wishlist.row.decrease', { name: cardName(item) })"
           :increase-label="t('wishlist.row.increase', { name: cardName(item) })"
