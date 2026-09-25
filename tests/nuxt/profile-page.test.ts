@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { flushPromises } from '@vue/test-utils'
+import { enableAutoUnmount, flushPromises } from '@vue/test-utils'
 import type { VueWrapper } from '@vue/test-utils'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
 import { ULocaleSelect, USelect } from '#components'
@@ -36,6 +36,9 @@ afterEach(async () => {
   document.cookie = 'ui_locale=; Max-Age=0; path=/'
   await setTestLocale('de')
 })
+
+// mountSuspended never unmounts; a later locale switch would re-render every earlier mount (#104).
+enableAutoUnmount(afterEach)
 
 describe('profile page', () => {
   it('renders the profile fields, the public profile link, the sharing panel and the wishlist toggle', async () => {

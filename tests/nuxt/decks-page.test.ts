@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { enableAutoUnmount } from '@vue/test-utils'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
 import { DecksDeckFormModal, USelect } from '#components'
 import DecksPage from '~/pages/decks/index.vue'
@@ -8,6 +9,9 @@ import { setTestLocale } from './fixtures/locale'
 import { mountAtRoute } from './fixtures/route'
 
 afterEach(() => setTestLocale('de'))
+
+// mountSuspended never unmounts; a later locale switch would re-render every earlier mount (#104).
+enableAutoUnmount(afterEach)
 
 interface DeckListItem {
   id: string

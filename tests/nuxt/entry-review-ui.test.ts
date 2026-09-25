@@ -1,5 +1,5 @@
 import { mockNuxtImport, mountSuspended } from '@nuxt/test-utils/runtime'
-import { flushPromises } from '@vue/test-utils'
+import { enableAutoUnmount, flushPromises } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import EntryReviewTable from '~/components/entry/EntryReviewTable.vue'
@@ -29,6 +29,9 @@ afterEach(async () => {
   vi.unstubAllGlobals()
   await setTestLocale('de')
 })
+
+// mountSuspended never unmounts; a later locale switch would re-render every earlier mount (#104).
+enableAutoUnmount(afterEach)
 
 function candidate(overrides: Partial<EntryCandidate> & { name: string, cardId: number }): EntryCandidate {
   return {

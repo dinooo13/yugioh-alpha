@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { enableAutoUnmount } from '@vue/test-utils'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
 import DashboardPage from '~/pages/index.vue'
 import { setTestLocale } from './fixtures/locale'
@@ -26,6 +27,9 @@ mockNuxtImport('useFetch', () => {
 })
 
 afterEach(() => setTestLocale('de'))
+
+// mountSuspended never unmounts; a later locale switch would re-render every earlier mount (#104).
+enableAutoUnmount(afterEach)
 
 describe('dashboard page', () => {
   it('shows a first-run hint and zero counts for a brand-new account', async () => {

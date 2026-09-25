@@ -1,10 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { enableAutoUnmount } from '@vue/test-utils'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
 import TournamentsPage from '~/pages/tournaments/index.vue'
 import type { TournamentListItem, TournamentListResponse } from '~~/shared/tournaments'
 import { setTestLocale } from './fixtures/locale'
 
 afterEach(() => setTestLocale('de'))
+
+// mountSuspended never unmounts; a later locale switch would re-render every earlier mount (#104).
+enableAutoUnmount(afterEach)
 
 const state = vi.hoisted(() => ({
   list: { items: [] as TournamentListItem[], total: 0, page: 1, pageSize: 20 } as TournamentListResponse,
