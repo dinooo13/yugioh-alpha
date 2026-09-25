@@ -9,6 +9,16 @@ the owned-card grain tuple, the validation of language, condition and edition,
 and the use of `printing_id`. Supersedes the UI-credit part of decision 7 in
 [0015](0015-german-card-data.md).
 
+Note (round 6, #148): decision 2's reason holds for `printing_id` only. Its
+foreign key is a table-level `FOREIGN KEY (printing_id) REFERENCES
+catalog_printing(id)` clause (migration 0002), and SQLite refuses
+`ALTER TABLE … DROP COLUMN` for a column named in such a clause ("unknown
+column … in foreign key definition"), so dropping it still needs a table
+rebuild. `language`, `condition` and `edition` have no foreign key and no
+index; they could be dropped with a plain `DROP COLUMN`, like
+`assistant_conversation.deck_id` in migration 0017, whose foreign key is a
+column constraint. All four columns stay for now (owner decision, 2026-09-25).
+
 ## Context
 
 The inventory exists for tournaments and for knowing what you own. It is not a
