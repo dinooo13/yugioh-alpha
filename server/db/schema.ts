@@ -716,18 +716,13 @@ export const assistantConversation = sqliteTable(
     // Seeded from the first user message (truncated), shown in the conversation
     // list.
     title: text('title').notNull(),
-    // Deprecated (ADR 0021): formerly the deck this conversation was linked to
-    // (ADR 0011). Nothing reads or writes it any more; kept (with its index and
-    // ON DELETE SET NULL) because dropping a column needs a table rebuild,
-    // which the migrator can't do safely (ADR 0011). Old rows keep their value.
-    deckId: text('deck_id')
-      .references(() => deck.id, { onDelete: 'set null' }),
+    // No deck link (ADR 0021): the former `deck_id` and its index were dropped
+    // by migration 0017 (#137).
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
     updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
   },
   table => [
     index('idx_assistant_conversation_user_updated').on(table.userId, table.updatedAt),
-    index('idx_assistant_conversation_deck').on(table.deckId),
   ],
 )
 

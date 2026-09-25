@@ -17,7 +17,6 @@ import type { AssistantTitleModel } from '../../server/utils/assistant-model'
 import { TITLE_LANGUAGE_INSTRUCTION } from '../../server/utils/assistant-prompts'
 import { automaticTitles, cleanGeneratedTitle, generateConversationTitle } from '../../server/utils/assistant-title'
 import { insertAssistantPlaceholder, persistUserMessage, updateAssistantMessage } from '../../server/utils/assistant-ui-messages'
-import { createDeck } from '../../server/utils/decks'
 
 function createTestDb() {
   const sqlite = new Database(':memory:')
@@ -132,12 +131,11 @@ describe('generateConversationTitle', () => {
   })
 
   it('keeps a legacy "Deck: <name>" title (ADR 0021: a user title, not an automatic one)', async () => {
-    const deck = createDeck(db, 'user-a', { name: 'Magier-Deck', description: null })
     const conversation = createConversation(db, 'user-a')
     addTurn(conversation.id, 'Was fehlt meinem Deck?')
     // A conversation linked before ADR 0021 kept its deck title after the first message.
     db.update(schema.assistantConversation)
-      .set({ deckId: deck.id, title: 'Deck: Magier-Deck' })
+      .set({ title: 'Deck: Magier-Deck' })
       .where(eq(schema.assistantConversation.id, conversation.id))
       .run()
     const { titleModel, calls } = mockTitleModel('Sollte nicht kommen')
