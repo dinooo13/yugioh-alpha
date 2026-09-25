@@ -134,7 +134,7 @@ test.describe('deck editor card overlay and card-kind breakdown', () => {
     await expect(page.getByText('Keine Karten gefunden.')).toBeVisible()
 
     await page.getByRole('checkbox', { name: 'Auch im Kartentext suchen' }).check()
-    await expect(page.getByRole('button', { name: `${CARD.darkMagician} zum Main Deck hinzufügen` })).toBeVisible()
+    await expect(page.getByRole('button', { name: `${CARD.darkMagician} zum Main Deck hinzufügen`, exact: true })).toBeVisible()
   })
 
   test('the deck tiles show the compact card kinds (#148)', async ({ page }) => {
