@@ -5,6 +5,7 @@
 // binds them to the active locale.
 
 import type { CardValueKind } from '~/utils/card-values'
+import { banlistSourceLabel, isOfficialBanlist } from '~~/shared/rule-formats'
 import type { CapReason, CardFilter, DescribeOptions, Rule } from '~~/shared/rule-formats'
 
 export interface RuleDescriptionI18n {
@@ -147,7 +148,7 @@ export function describeRule(i18n: RuleDescriptionI18n, rule: Rule, options?: De
       })
     }
     case 'banlist':
-      return t('formats.rule.banlist', { source: rule.source.toUpperCase() })
+      return t(isOfficialBanlist(rule.source) ? 'formats.rule.banlist' : 'formats.rule.houseBanlist', { source: banlistSourceLabel(rule.source) })
     case 'filter': {
       const params = { filter: describeCardFilter(i18n, rule.filter, options), copies: copiesLabel(i18n, rule.maxCopies) }
       const body = t(rule.match === 'matching' ? 'formats.rule.filter.matching' : 'formats.rule.filter.notMatching', params)
@@ -170,7 +171,7 @@ export function describeCapReason(
     case 'format_rule':
       return i18n.t(`formats.capReason.formatRule.${reason.status}`)
     case 'banlist':
-      return i18n.t('formats.capReason.banlist', { source: reason.source.toUpperCase(), status: reason.raw })
+      return i18n.t('formats.capReason.banlist', { source: banlistSourceLabel(reason.source), status: reason.raw })
     case 'filter': {
       const label = reason.label ?? reason.rule.label
       if (label) {

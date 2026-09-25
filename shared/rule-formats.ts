@@ -52,7 +52,7 @@ export interface CardFilter {
 }
 
 export type CardStatusName = 'forbidden' | 'limited' | 'semi_limited'
-export type BanlistSource = 'tcg' | 'ocg' | 'goat'
+export type BanlistSource = 'tcg' | 'ocg' | 'goat' | 'classic-plus'
 export type FilterMatch = 'matching' | 'not_matching'
 export type FilterMaxCopies = 0 | 1 | 2 | 3
 
@@ -61,7 +61,11 @@ export type Rule =
   /** Default per-card cap across main + extra + side (normally 3). */
   | { kind: 'copies', maxCopies: number }
   | { kind: 'card_status', status: CardStatusName, cardIds: number[] }
-  /** Reads `catalog_card.banlist_info` (Forbidden / Limited / Semi-Limited). */
+  /**
+   * Reads the card's banlist status (Forbidden / Limited / Semi-Limited): the
+   * official lists from `catalog_card.banlist_info`, Classic Plus from its
+   * generated list (`loadCardDataForValidation`, ADR 0022).
+   */
   | { kind: 'banlist', source: BanlistSource }
   | { kind: 'filter', match: FilterMatch, filter: CardFilter, maxCopies: FilterMaxCopies, label?: string }
 
@@ -73,7 +77,7 @@ export const RULE_KINDS = ['deck_size', 'copies', 'card_status', 'banlist', 'fil
 export type RuleKind = typeof RULE_KINDS[number]
 
 export const CARD_STATUSES = ['forbidden', 'limited', 'semi_limited'] as const
-export const BANLIST_SOURCES = ['tcg', 'ocg', 'goat'] as const
+export const BANLIST_SOURCES = ['tcg', 'ocg', 'goat', 'classic-plus'] as const
 export const FILTER_MATCHES = ['matching', 'not_matching'] as const
 
 /**
@@ -81,7 +85,7 @@ export const FILTER_MATCHES = ['matching', 'not_matching'] as const
  * Their names and descriptions are stored in English; the UI shows them in
  * the interface language by id (`useFormatLabel`, ADR 0014).
  */
-export const BUILTIN_FORMAT_IDS = ['tcg-advanced', 'ocg', 'goat', 'unlimited'] as const
+export const BUILTIN_FORMAT_IDS = ['tcg-advanced', 'ocg', 'goat', 'classic-plus', 'unlimited'] as const
 export type BuiltinFormatId = typeof BUILTIN_FORMAT_IDS[number]
 
 export function isBuiltinFormatId(id: string | null | undefined): id is BuiltinFormatId {
@@ -94,6 +98,23 @@ export interface BanlistInfo {
   ban_tcg?: string
   ban_ocg?: string
   ban_goat?: string
+  /** Not from YGOPRODeck: added from the generated Classic Plus list (ADR 0022). */
+  ban_classic_plus?: string
+}
+
+/** Where a banlist source's status sits in `BanlistInfo`. */
+export function banlistInfoKey(source: BanlistSource): keyof BanlistInfo {
+  return source === 'classic-plus' ? 'ban_classic_plus' : `ban_${source}`
+}
+
+/** Konami's lists; Classic Plus is a house list (ADR 0022). */
+export function isOfficialBanlist(source: BanlistSource): boolean {
+  return source !== 'classic-plus'
+}
+
+/** How the UI names a banlist source, e.g. "GOAT" or "Classic Plus". */
+export function banlistSourceLabel(source: BanlistSource): string {
+  return source === 'classic-plus' ? 'Classic Plus' : source.toUpperCase()
 }
 
 /** The catalog fields the engine needs; see `loadCardDataForValidation`. */
@@ -414,7 +435,7 @@ function capsForCard(rules: Rule[], card: ValidationCardData): CapCandidate[] {
     }
 
     if (rule.kind === 'banlist') {
-      const raw = card.banlistInfo?.[`ban_${rule.source}` as const]
+      const raw = card.banlistInfo?.[banlistInfoKey(rule.source)]
       const maxCopies = banlistCopies(raw)
       if (raw && maxCopies !== null) {
         caps.push({

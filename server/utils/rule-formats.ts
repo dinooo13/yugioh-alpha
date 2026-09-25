@@ -16,6 +16,7 @@ import {
   validateRuleSet,
 } from '../../shared/rule-formats'
 import type { BuiltinFormatId, RuleSet } from '../../shared/rule-formats'
+import { CLASSIC_PLUS_FORBIDDEN_TYPES } from '../../shared/classic-plus'
 import { loadCardNameRecords, missingCatalogCardIds } from './deck-validation'
 
 type Db = ReturnType<typeof useDb>
@@ -116,6 +117,30 @@ export const BUILTIN_FORMATS: BuiltinFormatDefinition[] = [
           filter: { releasedBefore: '2005-07-01', region: 'tcg' },
           maxCopies: 0,
           label: 'Only cards up to June 2005',
+        },
+      ],
+    },
+  },
+  {
+    id: 'classic-plus',
+    name: 'Classic Plus',
+    description: 'House format on the 2005 field (no Extra Monster Zones or Pendulum Zones, one shared Field Zone; the first player does not draw): Main Deck 40–50, Extra Deck up to 10, no Side Deck. No Synchro, Xyz, Pendulum or Link; floodgates, hand traps, draw, burn, revival, mass removal, protection and negation are forbidden or limited by the Classic Plus rules. Everything else is playable at 3.',
+    // Rule 1 is a card-type filter; rules 2–11 are the generated Classic Plus
+    // banlist (ADR 0022). The board rules are only in the description.
+    rules: {
+      rules: [
+        { kind: 'deck_size', section: 'main', min: 40, max: 50 },
+        { kind: 'deck_size', section: 'extra', max: 10 },
+        { kind: 'deck_size', section: 'side', max: 0 },
+        { kind: 'copies', maxCopies: 3 },
+        { kind: 'banlist', source: 'classic-plus' },
+        {
+          kind: 'filter',
+          match: 'matching',
+          filter: { types: [...CLASSIC_PLUS_FORBIDDEN_TYPES] },
+          maxCopies: 0,
+          // Canonical English; the UI shows formats.builtin.classic-plus.cutoffLabel.
+          label: 'Rule 1: Synchro, Xyz, Pendulum and Link monsters',
         },
       ],
     },
