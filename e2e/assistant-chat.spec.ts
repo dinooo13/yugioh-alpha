@@ -64,7 +64,7 @@ test.describe('Chat assistant', () => {
 
     await expect(page.getByText('Karten ins Inventar aufnehmen')).toBeVisible()
     await expect(page.getByText('Wartet auf Bestätigung')).toBeVisible()
-    // The proposal ends the answer (ADR 0025): the text comes before the card, nothing after it.
+    // The proposal ends the answer (ADR 0026): the text comes before the card, nothing after it.
     const proposalText = page.getByText('Hier ist mein Vorschlag.')
     await expect(proposalText).toBeVisible()
     await expect(page.getByText('Ich habe einen Vorschlag angelegt.')).toHaveCount(0)

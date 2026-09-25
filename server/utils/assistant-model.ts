@@ -518,7 +518,7 @@ export function assistantStreamErrorText(error: unknown): string {
 // docs/adr/0010-chat-assistant-with-tools.md, ported to the AI SDK's
 // language model interface (ADR 0020). `NUXT_ASSISTANT_PROVIDER=fake`.
 // An add request answers with its text before the add_to_inventory call, in
-// the same step: the proposal ends the turn (ADR 0025), so a tool result
+// the same step: the proposal ends the turn (ADR 0026), so a tool result
 // after an add request only ever follows a failed call.
 
 type FakeCallOptions = Parameters<MockLanguageModelV4['doStream']>[0]
@@ -655,7 +655,7 @@ const FAKE_GET_CARD_PATTERN = /\bkarte\s+(\d+)\b/i
 /** Test trigger (#128): an answer with reasoning before its text. */
 const FAKE_REASONING_TRIGGER = 'denk nach'
 
-/** The fake's text before its add_to_inventory proposal (ADR 0025). */
+/** The fake's text before its add_to_inventory proposal (ADR 0026). */
 const FAKE_PROPOSAL_TEXT = 'Hier ist mein Vorschlag.'
 
 function fakeText(text: string): FakeTurn {
