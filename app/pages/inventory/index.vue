@@ -4,6 +4,8 @@ import { UNASSIGNED_COLLECTION_ID } from '~~/shared/inventory'
 import type { InventorySearchFilters } from '~/components/inventory/InventorySearchPanel.vue'
 import type { CardDetailPreview } from '~/utils/card-detail'
 import type { InventorySearchResultItem } from '~/utils/inventory-search-result'
+import { isPreviousHistoryEntry } from '~/utils/history-entry'
+import { csvQueryValue, queryList } from '~/utils/query-list'
 
 interface InventoryItem {
   id: string
@@ -83,10 +85,20 @@ const selectedCard = ref<CatalogCard | null>(null)
 //   rewritten on load.
 // - `?card=<catalogCardId>` — the card's detail panel is open (#145), as
 //   in the catalog. Opening it from a tile or row pushes a history entry, so
-//   Back closes it and Forward opens it again; closing it goes back to that
-//   entry, or (deep link, reload) drops the param. An invalid value is
-//   dropped on load.
-// Defaults are never written, so the plain page stays at `/inventory`.
+//   Back closes it and Forward opens it again; closing it goes back when the
+//   previous entry is this view without the card, else (deep link, reload,
+//   filters changed meanwhile) drops the param. An invalid value is dropped
+//   on load.
+// - The search (#148): `?q=` (the debounced text), `?inText=1` ("Auch im
+//   Kartentext suchen", kept even without a text, as in the catalog),
+//   `?type=` / `attribute` / `race` / `level` (comma lists) and `?sort=`
+//   (Galerie; `name` is not written).
+// - `?page=` — the shown view's page (#148); each view keeps its own counter,
+//   the other one starts at 1 on a reload. Any filter or scope change goes
+//   back to page 1.
+// Search, facets and pages are written with `replace`, so they add no
+// history entries. Defaults are never written, so the plain page stays at
+// `/inventory`.
 // Patches build on the one still being navigated to, so two in a row (e.g.
 // on load: a stale collection and the old view value) don't undo each other.
 let pendingQuery: LocationQueryRaw | null = null
@@ -137,20 +149,37 @@ onMounted(() => {
   }
 })
 
+const SEARCH_SORTS: ReadonlyArray<SearchFilters['sort']> = ['name', '-name', 'quantity', 'newest']
+
+function querySort(value: unknown): SearchFilters['sort'] {
+  return SEARCH_SORTS.find(sort => sort === value) ?? 'name'
+}
+
+// A positive integer `?page=`, else 1.
+function queryPage(value: unknown): number {
+  const parsed = typeof value === 'string' && /^\d+$/.test(value) ? Number(value) : 1
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 1
+}
+
+// `?page=` belongs to the view it was written in (see the URL comment above).
+const initialPage = queryPage(route.query.page)
+page.value = mode.value === 'list' ? initialPage : 1
+
 const filters = ref<SearchFilters>({
-  q: '',
-  inText: false,
-  type: [],
-  attribute: [],
-  race: [],
-  level: [],
-  sort: 'name',
-  page: 1,
+  q: typeof route.query.q === 'string' ? route.query.q : '',
+  inText: route.query.inText === '1',
+  type: queryList(route.query.type),
+  attribute: queryList(route.query.attribute),
+  race: queryList(route.query.race),
+  level: queryList(route.query.level).map(Number).filter(Number.isInteger),
+  sort: querySort(route.query.sort),
+  page: mode.value === 'gallery' ? initialPage : 1,
 })
 
 // The search text is debounced (~300ms) before it drives either fetch, while
 // the input itself stays bound directly to `filters.q` for instant feedback.
-const debouncedQ = ref('')
+// A deep link starts with its text, so SSR already fetches the filtered data.
+const debouncedQ = ref(filters.value.q)
 let qTimeout: ReturnType<typeof setTimeout> | undefined
 watch(() => filters.value.q, (value) => {
   if (qTimeout) {
@@ -265,6 +294,38 @@ watch(
   { deep: true },
 )
 
+// The search state and the shown view's page go into the URL (#148, see the
+// URL comment above). `setQuery` builds on a patch still being navigated to,
+// so this can't undo the load-time view/card rewrite.
+watch(
+  () => [
+    debouncedQ.value,
+    filters.value.inText,
+    filters.value.type,
+    filters.value.attribute,
+    filters.value.race,
+    filters.value.level,
+    filters.value.sort,
+    mode.value,
+    page.value,
+    filters.value.page,
+  ],
+  () => {
+    const shownPage = mode.value === 'gallery' ? filters.value.page : page.value
+    setQuery({
+      q: debouncedQ.value.trim() || undefined,
+      inText: filters.value.inText ? '1' : undefined,
+      type: csvQueryValue(filters.value.type),
+      attribute: csvQueryValue(filters.value.attribute),
+      race: csvQueryValue(filters.value.race),
+      level: csvQueryValue(filters.value.level),
+      sort: filters.value.sort === 'name' ? undefined : filters.value.sort,
+      page: shownPage > 1 ? String(shownPage) : undefined,
+    })
+  },
+  { deep: true, flush: 'post' },
+)
+
 // Whether any of the panel's facets is set.
 const hasActiveFacets = computed(() => Boolean(
   filters.value.type.length
@@ -312,6 +373,20 @@ const {
 const searchItems = computed<SearchResultItem[]>(() => searchData.value?.items ?? [])
 const searchTotal = computed(() => searchData.value?.total ?? 0)
 const searchPageCount = computed(() => Math.max(1, Math.ceil(searchTotal.value / searchPageSize)))
+
+// A `?page=` past the end (cards removed since, an old link) shows the last
+// page instead of an empty one without pagination. After mount, so SSR and
+// hydration render the same page.
+function clampPages() {
+  if (!pending?.value && page.value > pageCount.value) {
+    page.value = pageCount.value
+  }
+  if (!searchPending?.value && !searchError?.value && filters.value.page > searchPageCount.value) {
+    filters.value.page = searchPageCount.value
+  }
+}
+onMounted(clampPages)
+watch(() => [pageCount.value, pending?.value, searchPageCount.value, searchPending?.value], clampPages)
 
 const { data: facetsData, refresh: refreshFacets } = await useFetch<SearchFacets>('/api/inventory/search/facets', {
   default: emptyFacets,
@@ -390,13 +465,8 @@ function loadedPreview(cardId: number): CardDetailPreview | null {
   return row ? previewFromListItem(row) : null
 }
 
-// Only an entry this page pushed is "gone back" from on close; a deep link
-// or a reload replaces the URL instead, so closing never leaves the site.
-let pushedDetail = false
-
 watch(detailCardId, (id) => {
   if (id === null) {
-    pushedDetail = false
     return
   }
   const context = detailContext.value?.cardId === id ? detailContext.value : null
@@ -409,14 +479,18 @@ watch(detailCardId, (id) => {
 
 function openDetail(context: DetailContext) {
   detailContext.value = context
-  pushedDetail = true
   // Push, not replace: Back closes the panel.
   router.push({ query: { ...(pendingQuery ?? route.query), card: String(context.cardId) } })
 }
 
+// Goes back only when the previous history entry is this view without the
+// card (the entry `openDetail` pushed, also after Back → Forward, #148); a
+// deep link, a reload or filters changed meanwhile replace the URL instead,
+// so closing never leaves the page or leaves a duplicate entry behind.
 function closeDetail() {
-  if (pushedDetail && import.meta.client && window.history.state?.back) {
-    pushedDetail = false
+  const query = { ...(pendingQuery ?? route.query) }
+  delete query.card
+  if (isPreviousHistoryEntry(router, { path: route.path, query })) {
     router.back()
   }
   else {
