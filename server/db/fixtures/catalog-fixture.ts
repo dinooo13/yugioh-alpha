@@ -13,6 +13,9 @@
 // old passcode, renumbered, and a placeholder without a replacement), and
 // one alternate artwork of Dark Magician with its own passcode (46986420,
 // Dark Magician's card id in the real catalog), which resolves to the card.
+//
+// Ten Thousand Dragon has `?` ATK/DEF (stored as -1): the overlay shows `?`,
+// and no format ATK/DEF range matches it (#140).
 import { foldCardName } from '../../../shared/card-name-fold'
 import type { useDb } from '../index'
 import { catalogCard, catalogCardImage, catalogCardTranslation, catalogPrinting, catalogSet } from '../schema'
@@ -45,6 +48,7 @@ export const CATALOG_FIXTURE_IDS = {
   decodeTalker: 1861629,
   oddEyesPendulumDragon: 16178683,
   effectVeiler: 97268402,
+  tenThousandDragon: 10000,
 } as const satisfies Record<string, number>
 
 function imageUrls(id: number) {
@@ -381,6 +385,30 @@ export const CATALOG_FIXTURE_CARDS: CatalogCardRow[] = ([
     syncedAt: SYNCED_AT,
     konamiId: 8933,
   },
+  {
+    id: CATALOG_FIXTURE_IDS.tenThousandDragon,
+    name: 'Ten Thousand Dragon',
+    type: 'Effect Monster',
+    frameType: 'effect',
+    desc: 'Cannot be Normal Summoned/Set. Must be Special Summoned by Tributing monsters you control whose combined ATK & DEF is 10,000 or more. If Summoned this way, the ATK/DEF of this card becomes 10,000.',
+    race: 'Dragon',
+    archetype: null,
+    attribute: 'DARK',
+    // `?` on the card.
+    atk: -1,
+    def: -1,
+    level: 10,
+    linkval: null,
+    scale: null,
+    linkMarkers: null,
+    banlistInfo: null,
+    cardPrices: null,
+    tcgDate: '2020-01-30',
+    ocgDate: '2019-10-12',
+    ygoprodeckUrl: 'https://ygoprodeck.com/card/ten-thousand-dragon-10518',
+    syncedAt: SYNCED_AT,
+    konamiId: 14809,
+  },
 ] satisfies Omit<CatalogCardRow, 'nameSearch'>[]).map(card => ({ ...card, nameSearch: foldCardName(card.name) }))
 
 /** Retired rows (ADR 0019), as a real sync leaves them. */
@@ -443,6 +471,7 @@ export const CATALOG_FIXTURE_SETS: CatalogSetRow[] = [
   { id: 'starter-deck-link-strike', name: 'Starter Deck: Link Strike' },
   { id: 'duelist-alliance', name: 'Duelist Alliance' },
   { id: 'duel-devastator', name: 'Duel Devastator' },
+  { id: 'battles-of-legend-armageddon', name: 'Battles of Legend: Armageddon' },
 ]
 
 export const CATALOG_FIXTURE_PRINTINGS: CatalogPrintingRow[] = [
@@ -461,11 +490,13 @@ export const CATALOG_FIXTURE_PRINTINGS: CatalogPrintingRow[] = [
   { id: 'YS17-EN041', cardId: CATALOG_FIXTURE_IDS.decodeTalker, setId: 'starter-deck-link-strike', setCode: 'YS17-EN041', rarity: 'Ultra Rare', price: '1.47' },
   { id: 'DUEA-EN004', cardId: CATALOG_FIXTURE_IDS.oddEyesPendulumDragon, setId: 'duelist-alliance', setCode: 'DUEA-EN004', rarity: 'Secret Rare', price: '7.54' },
   { id: 'DUDE-EN028', cardId: CATALOG_FIXTURE_IDS.effectVeiler, setId: 'duel-devastator', setCode: 'DUDE-EN028', rarity: 'Ultra Rare', price: '5.91' },
+  { id: 'BLAR-EN10K', cardId: CATALOG_FIXTURE_IDS.tenThousandDragon, setId: 'battles-of-legend-armageddon', setCode: 'BLAR-EN10K', rarity: '10000 Secret Rare', price: '1961.53' },
 ]
 
 export const CATALOG_FIXTURE_IMAGES: CatalogCardImageRow[] = [
   ...Object.values(CATALOG_FIXTURE_IDS).map(id => ({ id, cardId: id, ...imageUrls(id) })),
-  // The old passcode is an artwork of the renumbered card.
+  // The old passcode is an artwork of the renumbered card. It is lower than
+  // 16178683, but the card's own-id image is its primary artwork (ADR 0025).
   {
     id: CATALOG_FIXTURE_RETIRED_IDS.oddEyesPendulumDragonOld,
     cardId: CATALOG_FIXTURE_IDS.oddEyesPendulumDragon,
@@ -476,7 +507,7 @@ export const CATALOG_FIXTURE_IMAGES: CatalogCardImageRow[] = [
     cardId: CATALOG_FIXTURE_RETIRED_IDS.leviathanOfAtlantisDaedalus,
     ...imageUrls(CATALOG_FIXTURE_RETIRED_IDS.leviathanOfAtlantisDaedalus),
   },
-  // Larger than 46986414, so Dark Magician's primary (lowest) image stays.
+  // Dark Magician's primary artwork stays 46986414, its own id (ADR 0025).
   { id: CATALOG_FIXTURE_ALIAS_ARTWORK_ID, cardId: CATALOG_FIXTURE_IDS.darkMagician, ...imageUrls(CATALOG_FIXTURE_ALIAS_ARTWORK_ID) },
 ]
 
@@ -535,6 +566,10 @@ const GERMAN_FIXTURE_TEXT: Partial<Record<keyof typeof CATALOG_FIXTURE_IDS, { na
   oddEyesPendulumDragon: {
     name: 'Buntäugiger Pendeldrache',
     desc: '[ Pendeleffekt ]\nDu kannst den Kampfschaden, den du aus einem Angriff erhältst, an dem ein Pendelmonster beteiligt ist, das du kontrollierst, auf 0 reduzieren. Während deiner End Phase: Du kannst diese Karte zerstören und falls du dies tust, füge deiner Hand 1 Pendelmonster mit 1500 oder weniger ATK von deinem Deck hinzu. Du kannst jeden Pendeleffekt von „Buntäugiger Pendeldrache“ nur einmal pro Spielzug verwenden.\n\n[ Monstereffekt ]\nFalls diese Karte gegen ein Monster eines Gegners kämpft, wird der Kampfschaden verdoppelt, den diese Karte deinem Gegner zufügt.',
+  },
+  tenThousandDragon: {
+    name: 'Zehntausend-Drache',
+    desc: 'Kann nicht als Normalbeschwörung beschworen/gesetzt werden. Muss als Spezialbeschwörung beschworen werden, indem du Monster als Tribut anbietest, die du kontrollierst und deren kombinierte ATK und DEF 10.000 oder mehr sind. Falls diese Karte auf diese Art beschworen wird, werden die ATK/DEF dieser Karte zu 10.000.',
   },
   effectVeiler: {
     name: 'Effektverschleierin',

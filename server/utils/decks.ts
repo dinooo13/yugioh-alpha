@@ -3,9 +3,10 @@ import { and, asc, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm'
 import type { SQL } from 'drizzle-orm'
 import { createError } from 'h3'
 import type { useDb } from '../db'
-import { catalogCard, catalogCardImage, deck, deckCard, ruleFormat } from '../db/schema'
+import { catalogCard, deck, deckCard, ruleFormat } from '../db/schema'
 import { ownedQuantitiesByCard } from './inventory'
 import { cardNameMatches, escapedLike, escapeLikeTerm } from './card-name-search'
+import { primaryImageUrlSql } from './card-image-sql'
 import { cardNameDeSql } from './card-translation-sql'
 import { compareCardNames } from '../../shared/card-text'
 import type { AppLocale } from '../../shared/locale'
@@ -97,8 +98,11 @@ export interface DeckCardRow {
   attribute: string | null
   race: string | null
   level: number | null
+  /** A Link monster's rating; null for other cards. */
+  linkval: number | null
   atk: number | null
   def: number | null
+  /** The primary artwork (ADR 0025). */
   imageSmall: string | null
   section: DeckSection
   quantity: number
@@ -552,16 +556,15 @@ function loadDeckCardRows(db: Db, userId: string, deckId: string): DeckCardRow[]
       attribute: catalogCard.attribute,
       race: catalogCard.race,
       level: catalogCard.level,
+      linkval: catalogCard.linkval,
       atk: catalogCard.atk,
       def: catalogCard.def,
-      imageSmall: sql<string | null>`min(${catalogCardImage.imageUrlSmall})`,
+      imageSmall: primaryImageUrlSql('imageUrlSmall'),
       retiredAt: catalogCard.retiredAt,
     })
     .from(deckCard)
     .innerJoin(catalogCard, eq(deckCard.catalogCardId, catalogCard.id))
-    .leftJoin(catalogCardImage, eq(catalogCardImage.cardId, catalogCard.id))
     .where(eq(deckCard.deckId, deckId))
-    .groupBy(deckCard.id)
     .all()
 
   const owned = ownedQuantitiesByCard(db, userId, rows.map(row => row.catalogCardId))
@@ -1102,13 +1105,11 @@ function loadCoverCard(db: Db, catalogCardId: number): DeckCover | null {
       catalogCardId: catalogCard.id,
       name: catalogCard.name,
       nameDe: cardNameDeSql(),
-      imageSmall: sql<string | null>`min(${catalogCardImage.imageUrlSmall})`,
-      imageLarge: sql<string | null>`min(${catalogCardImage.imageUrl})`,
+      imageSmall: primaryImageUrlSql('imageUrlSmall'),
+      imageLarge: primaryImageUrlSql('imageUrl'),
     })
     .from(catalogCard)
-    .leftJoin(catalogCardImage, eq(catalogCardImage.cardId, catalogCard.id))
     .where(eq(catalogCard.id, catalogCardId))
-    .groupBy(catalogCard.id)
     .get() ?? null
 }
 
@@ -1135,15 +1136,13 @@ export function loadDeckCovers(db: Db, deckIds: string[]): Map<string, DeckCover
       name: catalogCard.name,
       nameDe: cardNameDeSql(),
       type: catalogCard.type,
-      imageSmall: sql<string | null>`min(${catalogCardImage.imageUrlSmall})`,
-      imageLarge: sql<string | null>`min(${catalogCardImage.imageUrl})`,
+      imageSmall: primaryImageUrlSql('imageUrlSmall'),
+      imageLarge: primaryImageUrlSql('imageUrl'),
     })
     .from(deckCard)
     .innerJoin(deck, eq(deck.id, deckCard.deckId))
     .innerJoin(catalogCard, eq(deckCard.catalogCardId, catalogCard.id))
-    .leftJoin(catalogCardImage, eq(catalogCardImage.cardId, catalogCard.id))
     .where(and(inArray(deckCard.deckId, deckIds), inArray(deckCard.section, ['main', 'extra'])))
-    .groupBy(deckCard.id)
     .all()
 
   const rowsByDeck = new Map<string, DeckCoverCandidate[]>()

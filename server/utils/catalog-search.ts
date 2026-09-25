@@ -1,9 +1,10 @@
-import { and, asc, count, desc, eq, inArray, isNotNull, ne, sql } from 'drizzle-orm'
+import { and, asc, count, desc, eq, isNotNull, ne, sql } from 'drizzle-orm'
 import type { useDb } from '../db'
 import { catalogCard, catalogCardImage, catalogPrinting, catalogSet } from '../db/schema'
 import type { AppLocale } from '../../shared/locale'
 import { activeCatalogCard } from './card-name-search'
 import { resolveCatalogCardId } from './card-passcode'
+import { primaryImageFirst, primaryImageUrlSql } from './card-image-sql'
 import { cardDescDeSql, cardNameDeSql, cardSortKey } from './card-translation-sql'
 import { buildCardListWhere, type CardListQuery } from './catalog-query'
 
@@ -19,8 +20,11 @@ export interface CatalogCardSummary {
   attribute: string | null
   race: string | null
   level: number | null
+  /** A Link monster's rating ("Link 3"); null for other cards. */
+  linkval: number | null
   atk: number | null
   def: number | null
+  /** The primary artwork (ADR 0025). */
   imageSmall: string | null
 }
 
@@ -43,7 +47,7 @@ export async function searchCatalog(db: Db, filters: CardListQuery, cardLocale: 
     .from(catalogCard)
     .where(where)
 
-  const cards = await db
+  const items: CatalogCardSummary[] = await db
     .select({
       id: catalogCard.id,
       name: catalogCard.name,
@@ -53,38 +57,16 @@ export async function searchCatalog(db: Db, filters: CardListQuery, cardLocale: 
       attribute: catalogCard.attribute,
       race: catalogCard.race,
       level: catalogCard.level,
+      linkval: catalogCard.linkval,
       atk: catalogCard.atk,
       def: catalogCard.def,
+      imageSmall: primaryImageUrlSql('imageUrlSmall'),
     })
     .from(catalogCard)
     .where(where)
     .orderBy(...orderBy)
     .limit(filters.pageSize)
     .offset(offset)
-
-  const ids = cards.map(card => card.id)
-  const imageRows = ids.length > 0
-    ? await db
-        .select({
-          cardId: catalogCardImage.cardId,
-          imageSmall: catalogCardImage.imageUrlSmall,
-        })
-        .from(catalogCardImage)
-        .where(inArray(catalogCardImage.cardId, ids))
-        .orderBy(asc(catalogCardImage.cardId), asc(catalogCardImage.id))
-    : []
-
-  const primaryImages = new Map<number, string | null>()
-  for (const image of imageRows) {
-    if (!primaryImages.has(image.cardId)) {
-      primaryImages.set(image.cardId, image.imageSmall)
-    }
-  }
-
-  const items: CatalogCardSummary[] = cards.map(card => ({
-    ...card,
-    imageSmall: primaryImages.get(card.id) ?? null,
-  }))
 
   return {
     items,
@@ -164,7 +146,9 @@ export async function getCatalogCardDetail(db: Db, id: number) {
     })
     .from(catalogCardImage)
     .where(eq(catalogCardImage.cardId, cardId))
-    .orderBy(asc(catalogCardImage.id))
+    // Primary artwork first (ADR 0025): the overlay shows `images[0]`, the
+    // same picture as every list.
+    .orderBy(...primaryImageFirst())
 
   return { card, printings, images }
 }
@@ -196,16 +180,33 @@ export async function getCatalogFacets(db: Db) {
       .where(and(activeCatalogCard(), isNotNull(catalogCard.level)))
       .orderBy(asc(catalogCard.level)),
     db
-      .select({ id: catalogSet.id, name: catalogSet.name })
+      .select({
+        id: catalogSet.id,
+        name: catalogSet.name,
+        // Nested, so drizzle keeps the table names in this single-table
+        // select (see card-image-sql.ts).
+        hasCards: sql<number>`exists (${sql`
+          select 1 from ${catalogPrinting}
+          inner join ${catalogCard} on ${catalogCard.id} = ${catalogPrinting.cardId}
+          where ${catalogPrinting.setId} = ${catalogSet.id} and ${activeCatalogCard()}
+        `})`,
+      })
       .from(catalogSet)
       .orderBy(asc(catalogSet.name)),
   ])
+
+  // A set without a printing of an active card would find nothing in the set
+  // filter, so the facet leaves it out. The rows stay because a format's
+  // `setIds` can still name one, and the format editor needs its name
+  // (`setsWithoutCards`, ADR 0024/0025).
+  const toOption = ({ id, name }: { id: string, name: string }) => ({ id, name })
 
   return {
     types: types.map(item => item.value),
     attributes: attributes.flatMap(item => item.value ? [item.value] : []),
     races: races.flatMap(item => item.value ? [item.value] : []),
     levels: levels.flatMap(item => item.value === null ? [] : [item.value]),
-    sets,
+    sets: sets.filter(set => set.hasCards).map(toOption),
+    setsWithoutCards: sets.filter(set => !set.hasCards).map(toOption),
   }
 }

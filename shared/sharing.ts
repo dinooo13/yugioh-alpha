@@ -99,6 +99,8 @@ export interface SharedDeckCardRow {
   attribute: string | null
   race: string | null
   level: number | null
+  /** A Link monster's rating; null for other cards. */
+  linkval: number | null
   atk: number | null
   def: number | null
   imageSmall: string | null
@@ -133,6 +135,8 @@ export interface SharedCardListItem {
   attribute: string | null
   race: string | null
   level: number | null
+  /** A Link monster's rating; null for other cards. */
+  linkval: number | null
   atk: number | null
   def: number | null
   imageSmall: string | null

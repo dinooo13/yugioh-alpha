@@ -309,7 +309,8 @@ describe('getCatalogCardDetail with artwork passcodes (ADR 0023)', () => {
 
     expect(detail?.card).toMatchObject({ id: DARK_MAGICIAN, name: 'Dark Magician', retired: false })
     expect(detail?.printings.map(printing => printing.setCode)).toEqual(['LOB-005'])
-    expect(detail?.images.map(image => image.id)).toEqual([555, PRINTED, DARK_MAGICIAN])
+    // The primary artwork (the card's own id, ADR 0025) first, then by id.
+    expect(detail?.images.map(image => image.id)).toEqual([DARK_MAGICIAN, 555, PRINTED])
   })
 
   it('prefers a card row over an artwork with the same id', async () => {

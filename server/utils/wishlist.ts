@@ -3,8 +3,9 @@ import { and, asc, eq, sql } from 'drizzle-orm'
 import type { SQL } from 'drizzle-orm'
 import { createError } from 'h3'
 import type { useDb } from '../db'
-import { catalogCard, catalogCardImage, wishlistItem } from '../db/schema'
+import { catalogCard, wishlistItem } from '../db/schema'
 import { ownedQuantitiesByCard } from './inventory'
+import { primaryImageUrlSql } from './card-image-sql'
 import { cardNameMatches } from './card-name-search'
 import { cardNameDeSql, cardSortKey } from './card-translation-sql'
 import type { AppLocale } from '../../shared/locale'
@@ -135,13 +136,11 @@ function buildWishlistItemView(
       name: catalogCard.name,
       nameDe: cardNameDeSql(),
       type: catalogCard.type,
-      imageSmall: sql<string | null>`min(${catalogCardImage.imageUrlSmall})`,
+      imageSmall: primaryImageUrlSql('imageUrlSmall'),
       retiredAt: catalogCard.retiredAt,
     })
     .from(catalogCard)
-    .leftJoin(catalogCardImage, eq(catalogCardImage.cardId, catalogCard.id))
     .where(eq(catalogCard.id, row.catalogCardId))
-    .groupBy(catalogCard.id)
     .get()!
 
   const view: WishlistItemView = {
@@ -266,14 +265,12 @@ function wishlistCardRowsQuery(db: Db, where: SQL, page: number, pageSize: numbe
       name: catalogCard.name,
       nameDe: cardNameDeSql(),
       type: catalogCard.type,
-      imageSmall: sql<string | null>`min(${catalogCardImage.imageUrlSmall})`,
+      imageSmall: primaryImageUrlSql('imageUrlSmall'),
       retiredAt: catalogCard.retiredAt,
     })
     .from(wishlistItem)
     .innerJoin(catalogCard, eq(wishlistItem.catalogCardId, catalogCard.id))
-    .leftJoin(catalogCardImage, eq(catalogCardImage.cardId, catalogCard.id))
     .where(where)
-    .groupBy(wishlistItem.id)
     .orderBy(asc(cardSortKey(cardLocale)))
     .limit(pageSize)
     .offset((page - 1) * pageSize)

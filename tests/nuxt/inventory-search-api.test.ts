@@ -474,7 +474,7 @@ describe('loadInventoryCardDisplay', () => {
     db = createTestDb()
   })
 
-  it('takes both image sizes from the artwork with the lowest image id', () => {
+  it('takes both image sizes from the primary artwork, the image with the card\'s own id (ADR 0025)', () => {
     seedCards(db, [{
       id: 46986414,
       name: 'Dark Magician',
@@ -485,8 +485,9 @@ describe('loadInventoryCardDisplay', () => {
       atk: 2500,
       def: 2100,
     }])
-    // Inserted out of order, and the alternate art's small URL sorts first
-    // alphabetically — the old `min(image_url_small)` would have picked it.
+    // Inserted out of order: one alternate art has the lowest id (the old
+    // lowest-id rule would have picked it), the other's small URL sorts first
+    // alphabetically (the old `min(image_url_small)` would have picked it).
     db.insert(schema.catalogCardImage).values([
       {
         id: 2,
@@ -495,10 +496,16 @@ describe('loadInventoryCardDisplay', () => {
         imageUrlSmall: 'https://img/a-alt-small.jpg',
       },
       {
-        id: 1,
+        id: 46986414,
         cardId: 46986414,
         imageUrl: 'https://img/main-large.jpg',
         imageUrlSmall: 'https://img/main-small.jpg',
+      },
+      {
+        id: 1,
+        cardId: 46986414,
+        imageUrl: 'https://img/low-large.jpg',
+        imageUrlSmall: 'https://img/low-small.jpg',
       },
     ]).run()
 
@@ -512,6 +519,7 @@ describe('loadInventoryCardDisplay', () => {
       attribute: 'DARK',
       race: 'Spellcaster',
       level: 7,
+      linkval: null,
       atk: 2500,
       def: 2100,
       imageSmall: 'https://img/main-small.jpg',

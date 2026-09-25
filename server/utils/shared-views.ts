@@ -6,11 +6,12 @@
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm'
 import type { SQL } from 'drizzle-orm'
 import type { useDb } from '../db'
-import { catalogCard, catalogCardImage, collection, deck, deckCard, ownedCard, ruleFormat } from '../db/schema'
+import { catalogCard, collection, deck, deckCard, ownedCard, ruleFormat } from '../db/schema'
 import { buildWarnings, DECK_LIMITS, loadDeckCovers, sortDeckSections } from './decks'
 import { loadCardDataForValidation } from './deck-validation'
 import { ruleFormatsById } from './rule-formats'
 import { grantedResourceIds } from './sharing'
+import { primaryImageUrlSql } from './card-image-sql'
 import { cardNameMatches } from './card-name-search'
 import { cardNameDeSql, cardSortKey } from './card-translation-sql'
 import { evaluateDeck } from '../../shared/rule-formats'
@@ -43,19 +44,17 @@ function loadSharedDeckCardRows(db: Db, deckId: string): SharedDeckCardRow[] {
       attribute: catalogCard.attribute,
       race: catalogCard.race,
       level: catalogCard.level,
+      linkval: catalogCard.linkval,
       atk: catalogCard.atk,
       def: catalogCard.def,
-      imageSmall: sql<string | null>`min(${catalogCardImage.imageUrlSmall})`,
-      // Same artwork as `imageSmall`: both URLs only differ in the directory,
-      // so min() picks the same image id.
-      imageLarge: sql<string | null>`min(${catalogCardImage.imageUrl})`,
+      // The primary artwork (ADR 0025), both sizes from the same image.
+      imageSmall: primaryImageUrlSql('imageUrlSmall'),
+      imageLarge: primaryImageUrlSql('imageUrl'),
       retiredAt: catalogCard.retiredAt,
     })
     .from(deckCard)
     .innerJoin(catalogCard, eq(deckCard.catalogCardId, catalogCard.id))
-    .leftJoin(catalogCardImage, eq(catalogCardImage.cardId, catalogCard.id))
     .where(eq(deckCard.deckId, deckId))
-    .groupBy(deckCard.id)
     .all()
 
   // Only the flag leaves the server, not the date (ADR 0019).
@@ -221,16 +220,15 @@ function listAggregatedCards(db: Db, where: SQL, options: SharedCardListOptions)
           attribute: catalogCard.attribute,
           race: catalogCard.race,
           level: catalogCard.level,
+          linkval: catalogCard.linkval,
           atk: catalogCard.atk,
           def: catalogCard.def,
-          imageSmall: sql<string | null>`min(${catalogCardImage.imageUrlSmall})`,
-          imageLarge: sql<string | null>`min(${catalogCardImage.imageUrl})`,
+          imageSmall: primaryImageUrlSql('imageUrlSmall'),
+          imageLarge: primaryImageUrlSql('imageUrl'),
           retiredAt: catalogCard.retiredAt,
         })
         .from(catalogCard)
-        .leftJoin(catalogCardImage, eq(catalogCardImage.cardId, catalogCard.id))
         .where(inArray(catalogCard.id, catalogCardIds))
-        .groupBy(catalogCard.id)
         .all()
     : []
 
@@ -247,6 +245,7 @@ function listAggregatedCards(db: Db, where: SQL, options: SharedCardListOptions)
       attribute: display?.attribute ?? null,
       race: display?.race ?? null,
       level: display?.level ?? null,
+      linkval: display?.linkval ?? null,
       atk: display?.atk ?? null,
       def: display?.def ?? null,
       imageSmall: display?.imageSmall ?? null,

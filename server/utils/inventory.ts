@@ -2,10 +2,11 @@ import { randomUUID } from 'node:crypto'
 import { and, desc, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm'
 import { createError } from 'h3'
 import type { useDb } from '../db'
-import { catalogCard, catalogCardImage, ownedCard } from '../db/schema'
+import { catalogCard, ownedCard } from '../db/schema'
 import { CARD_TEXT_EXCERPT_LENGTH, MAX_OWNED_QUANTITY, UNASSIGNED_COLLECTION_ID } from '../../shared/inventory'
 import type { AppLocale } from '../../shared/locale'
 import { activeCatalogCard, cardNameMatches, escapedLike, escapeLikeTerm } from './card-name-search'
+import { primaryImageUrlSql } from './card-image-sql'
 import { resolvePasscode } from './card-passcode'
 import { cardDescDeSql, cardNameDeSql, cardSortKey } from './card-translation-sql'
 import { assertCollectionOwnedByUser } from './collections'
@@ -547,13 +548,11 @@ export function listOwnedCards(db: Db, userId: string, options: InventoryListOpt
       cardTextExcerpt: sql<string>`substr(${catalogCard.desc}, 1, ${CARD_TEXT_EXCERPT_LENGTH})`,
       cardTextExcerptDe: sql<string | null>`substr(${cardDescDeSql()}, 1, ${CARD_TEXT_EXCERPT_LENGTH})`,
       cardRetiredAt: catalogCard.retiredAt,
-      imageUrlSmall: sql<string | null>`min(${catalogCardImage.imageUrlSmall})`,
+      imageUrlSmall: primaryImageUrlSql('imageUrlSmall'),
     })
     .from(ownedCard)
     .innerJoin(catalogCard, eq(ownedCard.catalogCardId, catalogCard.id))
-    .leftJoin(catalogCardImage, eq(catalogCardImage.cardId, catalogCard.id))
     .where(where)
-    .groupBy(ownedCard.id)
     .orderBy(desc(ownedCard.updatedAt))
     .limit(pageSize)
     .offset((page - 1) * pageSize)
@@ -625,12 +624,10 @@ export function searchCatalogCards(db: Db, q = '', cardLocale: AppLocale = 'en')
       name: catalogCard.name,
       nameDe: cardNameDeSql(),
       type: catalogCard.type,
-      imageUrlSmall: sql<string | null>`min(${catalogCardImage.imageUrlSmall})`,
+      imageUrlSmall: primaryImageUrlSql('imageUrlSmall'),
     })
     .from(catalogCard)
-    .leftJoin(catalogCardImage, eq(catalogCardImage.cardId, catalogCard.id))
     .where(where)
-    .groupBy(catalogCard.id)
     .orderBy(...(exactId !== null ? [sql`${catalogCard.id} = ${exactId} desc`] : []), cardSortKey(cardLocale))
     .limit(20)
     .all()

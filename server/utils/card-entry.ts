@@ -3,7 +3,8 @@ import type { SQL } from 'drizzle-orm'
 import { createError } from 'h3'
 import { foldCardName } from '../../shared/card-name-fold'
 import type { useDb } from '../db'
-import { catalogCard, catalogCardImage, catalogCardTranslation, catalogPrinting } from '../db/schema'
+import { catalogCard, catalogCardTranslation, catalogPrinting } from '../db/schema'
+import { primaryImageUrlSql } from './card-image-sql'
 import { activeCatalogCard, escapedLike, escapeLikeTerm } from './card-name-search'
 import { resolvePasscode } from './card-passcode'
 
@@ -293,14 +294,14 @@ function imagesByCardId(db: Db, cardIds: number[]): Map<number, string | null> {
     return byCardId
   }
 
+  // The primary artwork (ADR 0025), like every other list.
   const rows = db
     .select({
-      cardId: catalogCardImage.cardId,
-      imageSmall: sql<string | null>`min(${catalogCardImage.imageUrlSmall})`,
+      cardId: catalogCard.id,
+      imageSmall: primaryImageUrlSql('imageUrlSmall'),
     })
-    .from(catalogCardImage)
-    .where(inArray(catalogCardImage.cardId, cardIds))
-    .groupBy(catalogCardImage.cardId)
+    .from(catalogCard)
+    .where(inArray(catalogCard.id, cardIds))
     .all()
 
   for (const row of rows) {

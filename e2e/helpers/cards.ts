@@ -22,6 +22,7 @@ export const CARD = {
   decodeTalker: 'Dekodier-Sprecher',
   oddEyesPendulumDragon: 'Buntäugiger Pendeldrache',
   effectVeiler: 'Effektverschleierin',
+  tenThousandDragon: 'Zehntausend-Drache',
 } as const
 
 /** The same cards' English names — shown in an English interface or with the card language "Englisch". */
@@ -40,4 +41,5 @@ export const CARD_EN = {
   decodeTalker: 'Decode Talker',
   oddEyesPendulumDragon: 'Odd-Eyes Pendulum Dragon',
   effectVeiler: 'Effect Veiler',
+  tenThousandDragon: 'Ten Thousand Dragon',
 } as const satisfies Record<keyof typeof CARD, string>

@@ -4,7 +4,7 @@
  *
  * - Both variants: the card name as the dialog title, the type / attribute /
  *   race / level / rank / link chips, the floating tilt/foil card (`CardFloatingImage`,
- *   ADR 0016), ATK/DEF and the card text in the card language, with a hint
+ *   ADR 0016), ATK/DEF (and a Pendulum monster's scale) and the card text in the card language, with a hint
  *   when a card has no German text (ADR 0015).
  * - `variant="catalog"` adds the English-name subtitle, the printings and
  *   the TCG/OCG release dates; `variant="deck"` (the deck editor) is the
@@ -66,6 +66,8 @@ const imageSrc = computed(() => detail.value?.images[0]?.imageUrl
   ?? null)
 
 const isMonster = computed(() => Boolean(shown.value) && (shown.value!.atk !== null || shown.value!.def !== null))
+// Only the full detail has it; the preview doesn't. Scale 0 is a real value.
+const scale = computed(() => detail.value?.card.scale ?? null)
 
 const summary = computed<CardDetailSummary | null>(() => {
   if (detail.value) {
@@ -179,7 +181,7 @@ const hasDates = computed(() => Boolean(detail.value?.card.tcgDate || detail.val
 
           <dl
             v-if="shown && isMonster"
-            class="flex justify-center gap-6 text-sm"
+            class="flex flex-wrap justify-center gap-x-6 gap-y-1 text-sm"
           >
             <div class="flex items-baseline gap-1.5">
               <dt class="eyebrow">
@@ -195,6 +197,17 @@ const hasDates = computed(() => Boolean(detail.value?.card.tcgDate || detail.val
               </dt>
               <dd class="font-numeric text-base font-bold tracking-[0.04em] text-highlighted tabular-nums">
                 {{ formatCardStat(shown.def) }}
+              </dd>
+            </div>
+            <div
+              v-if="scale !== null"
+              class="flex items-baseline gap-1.5"
+            >
+              <dt class="eyebrow">
+                {{ t('card.detail.pendulumScale') }}
+              </dt>
+              <dd class="font-numeric text-base font-bold tracking-[0.04em] text-highlighted tabular-nums">
+                {{ scale }}
               </dd>
             </div>
           </dl>

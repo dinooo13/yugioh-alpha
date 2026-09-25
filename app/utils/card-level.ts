@@ -6,7 +6,7 @@ export type CardLevelKind = 'level' | 'rank' | 'link'
 export interface CardLevelFields {
   type: string
   level: number | null
-  /** Only the card detail payload carries it; lists leave it out. */
+  /** The card detail and the card list payloads carry it. */
   linkval?: number | null
 }
 
@@ -14,8 +14,7 @@ export interface CardLevel { kind: CardLevelKind, value: number }
 
 /**
  * The card's level, rank or link rating, or null when it has none. A Link
- * monster without `linkval` (every list payload) has none. Level 0 and
- * Rank 0 are real values.
+ * monster without `linkval` has none. Level 0 and Rank 0 are real values.
  */
 export function cardLevel(card: CardLevelFields): CardLevel | null {
   if (/\blink\b/i.test(card.type)) {
