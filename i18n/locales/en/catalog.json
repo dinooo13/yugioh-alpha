@@ -28,6 +28,19 @@
       "noCatalog": "No catalog imported yet",
       "noCatalogDescription": "Run the catalog sync first so cards can be searched and filtered here."
     },
-    "addToInventory": "Add to inventory"
+    "addToInventory": "Add to inventory",
+    "addToDeck": {
+      "button": "Add to deck",
+      "loading": "Loading decks …",
+      "loadFailed": "Couldn't load your decks",
+      "noDecks": "No decks yet",
+      "createDeck": "Create a deck",
+      "search": "Search decks …",
+      "noMatches": "No deck found",
+      "added": "Added to “{deck}”",
+      "addedDescription": "{card}: now {count}× in the {section}.",
+      "openDeck": "Open deck",
+      "failed": "Couldn't add the card to the deck."
+    }
   }
 }

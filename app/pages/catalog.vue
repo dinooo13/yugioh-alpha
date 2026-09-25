@@ -132,6 +132,16 @@ const {
   default: () => ({ items: [], total: 0, page: 1, pageSize: PAGE_SIZE }),
 })
 
+// Skeletons only before the first result; later searches keep the previous
+// grid, dimmed, until the new one arrives (#148). `useFetch` keeps the old
+// data while a new query loads.
+const hasLoadedOnce = ref(!pending.value)
+watch(pending, (value) => {
+  if (!value) {
+    hasLoadedOnce.value = true
+  }
+})
+
 watch([type, attribute, race, level, setId, sort, debouncedSearch, inText], () => {
   page.value = 1
 }, { deep: true })
@@ -320,7 +330,7 @@ async function onAddedToInventory() {
     </UAlert>
 
     <div
-      v-else-if="pending"
+      v-else-if="pending && !hasLoadedOnce"
       class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6"
     >
       <USkeleton
@@ -330,89 +340,100 @@ async function onAddedToInventory() {
       />
     </div>
 
-    <LayoutEmptyState
-      v-else-if="cards.total === 0"
-      :icon="filtersActive ? 'i-lucide-search-x' : 'i-lucide-book-open'"
-      :title="filtersActive ? t('catalog.empty.noMatches') : t('catalog.empty.noCatalog')"
-      :description="filtersActive ? t('catalog.empty.noMatchesDescription') : t('catalog.empty.noCatalogDescription')"
-    />
-
-    <section
+    <!-- A later search keeps the previous results, dimmed, until the new ones
+         arrive (#148). The delay is on the dimmed state only, so a fast answer
+         doesn't flicker and un-dimming is immediate. -->
+    <div
       v-else
-      class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6"
+      :aria-busy="pending || undefined"
+      class="motion-safe:transition-opacity motion-safe:duration-200"
+      :class="pending ? 'opacity-50 motion-safe:delay-150' : undefined"
+      data-testid="catalog-results"
     >
-      <!-- The card name is the tile's button; `stretched-link` makes the
-           whole tile clickable, while the action buttons sit above it. Not a
-           `role="button"` wrapper: that would nest the action buttons inside
-           another control. -->
-      <article
-        v-for="card in cards.items"
-        :key="card.id"
-        :aria-label="cardName(card)"
-        class="group panel relative flex min-w-0 flex-col text-left transition-[translate,box-shadow,border-color] duration-200 ease-out-expo hover:border-primary/40 hover:shadow-lift motion-safe:hover:-translate-y-0.5"
+      <LayoutEmptyState
+        v-if="cards.total === 0"
+        :icon="filtersActive ? 'i-lucide-search-x' : 'i-lucide-book-open'"
+        :title="filtersActive ? t('catalog.empty.noMatches') : t('catalog.empty.noCatalog')"
+        :description="filtersActive ? t('catalog.empty.noMatchesDescription') : t('catalog.empty.noCatalogDescription')"
+      />
+
+      <section
+        v-else
+        class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6"
       >
-        <!-- Plain thumbnail: the tile already opens the card. -->
-        <CardThumb
-          :src="card.imageSmall"
-          :alt="cardName(card)"
-          :frame="cardFrame(card)?.frame"
-          :pendulum="cardFrame(card)?.pendulum"
-          size="full"
-          foil
-          class="p-2 pb-0"
-        />
-        <div class="flex flex-1 flex-col gap-2 p-3">
-          <h2 class="min-h-10 text-sm font-semibold leading-5 text-highlighted transition-colors group-hover:text-primary">
-            <button
-              type="button"
-              class="stretched-link block w-full text-left"
-              @click="openCard(card.id)"
-            >
-              <span class="line-clamp-2">{{ cardName(card) }}</span>
-            </button>
-          </h2>
-          <div class="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1.5">
-            <CardTypeChip
-              :type="card.type"
-              :frame-type="card.frameType"
-              size="xs"
-            />
-            <CardAttributeOrb
-              v-if="card.attribute"
-              :attribute="card.attribute"
-              size="xs"
-            />
-            <span
-              v-if="cardLevel(card)"
-              class="inline-flex items-center gap-1 font-numeric text-[0.6875rem] font-semibold tracking-[0.04em] text-toned tabular-nums"
-            >
-              <UIcon
-                :name="CARD_LEVEL_ICON[cardLevel(card)!.kind]"
-                class="size-3 text-secondary"
-                aria-hidden="true"
+        <!-- The card name is the tile's button; `stretched-link` makes the
+             whole tile clickable, while the action buttons sit above it. Not a
+             `role="button"` wrapper: that would nest the action buttons inside
+             another control. -->
+        <article
+          v-for="card in cards.items"
+          :key="card.id"
+          :aria-label="cardName(card)"
+          class="group panel relative flex min-w-0 flex-col text-left transition-[translate,box-shadow,border-color] duration-200 ease-out-expo hover:border-primary/40 hover:shadow-lift motion-safe:hover:-translate-y-0.5"
+        >
+          <!-- Plain thumbnail: the tile already opens the card. -->
+          <CardThumb
+            :src="card.imageSmall"
+            :alt="cardName(card)"
+            :frame="cardFrame(card)?.frame"
+            :pendulum="cardFrame(card)?.pendulum"
+            size="full"
+            foil
+            class="p-2 pb-0"
+          />
+          <div class="flex flex-1 flex-col gap-2 p-3">
+            <h2 class="min-h-10 text-sm font-semibold leading-5 text-highlighted transition-colors group-hover:text-primary">
+              <button
+                type="button"
+                class="stretched-link block w-full text-left"
+                @click="openCard(card.id)"
+              >
+                <span class="line-clamp-2">{{ cardName(card) }}</span>
+              </button>
+            </h2>
+            <div class="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1.5">
+              <CardTypeChip
+                :type="card.type"
+                :frame-type="card.frameType"
+                size="xs"
               />
-              {{ cardLevelLabel(card) }}
-            </span>
+              <CardAttributeOrb
+                v-if="card.attribute"
+                :attribute="card.attribute"
+                size="xs"
+              />
+              <span
+                v-if="cardLevel(card)"
+                class="inline-flex items-center gap-1 font-numeric text-[0.6875rem] font-semibold tracking-[0.04em] text-toned tabular-nums"
+              >
+                <UIcon
+                  :name="CARD_LEVEL_ICON[cardLevel(card)!.kind]"
+                  class="size-3 text-secondary"
+                  aria-hidden="true"
+                />
+                {{ cardLevelLabel(card) }}
+              </span>
+            </div>
+            <div class="relative z-10 mt-auto flex flex-wrap gap-1 pt-1">
+              <UButton
+                icon="i-lucide-archive-restore"
+                color="primary"
+                size="xs"
+                :label="t('catalog.addToInventory')"
+                class="tap-target"
+                @click="openAddToInventory(card)"
+              />
+              <WishlistAddToWishlistButton
+                :in-wishlist="wishlist.isWishlisted(card.id)"
+                :loading="wishlist.isSaving(card.id)"
+                :error="wishlist.errorFor(card.id)"
+                @toggle="wishlist.toggle(card.id)"
+              />
+            </div>
           </div>
-          <div class="relative z-10 mt-auto flex flex-wrap gap-1 pt-1">
-            <UButton
-              icon="i-lucide-archive-restore"
-              color="primary"
-              size="xs"
-              :label="t('catalog.addToInventory')"
-              class="tap-target"
-              @click="openAddToInventory(card)"
-            />
-            <WishlistAddToWishlistButton
-              :in-wishlist="wishlist.isWishlisted(card.id)"
-              :loading="wishlist.isSaving(card.id)"
-              :error="wishlist.errorFor(card.id)"
-              @toggle="wishlist.toggle(card.id)"
-            />
-          </div>
-        </div>
-      </article>
-    </section>
+        </article>
+      </section>
+    </div>
 
     <div
       v-if="cards.total > PAGE_SIZE"
@@ -447,7 +468,7 @@ async function onAddedToInventory() {
       :preview="selectedSummary"
       variant="catalog"
       @update:open="value => { if (!value) closeCard() }"
-      @resolved="openCard"
+      @resolved="showCanonicalCard"
     >
       <template #actions="{ card }">
         <UButton
@@ -458,6 +479,7 @@ async function onAddedToInventory() {
           class="tap-target"
           @click="card ? openAddToInventory(card) : undefined"
         />
+        <CardAddToDeckMenu :card="card" />
         <WishlistAddToWishlistButton
           v-if="isDetailOpen"
           :in-wishlist="wishlist.isWishlisted(selectedCardId)"

@@ -28,6 +28,19 @@
       "noCatalog": "Noch kein Katalog importiert",
       "noCatalogDescription": "Starte zuerst den Katalog-Sync, damit Karten hier durchsucht und gefiltert werden können."
     },
-    "addToInventory": "Zum Inventar"
+    "addToInventory": "Zum Inventar",
+    "addToDeck": {
+      "button": "Zum Deck",
+      "loading": "Decks werden geladen …",
+      "loadFailed": "Decks konnten nicht geladen werden",
+      "noDecks": "Noch keine Decks",
+      "createDeck": "Deck anlegen",
+      "search": "Deck suchen …",
+      "noMatches": "Kein Deck gefunden",
+      "added": "Zu „{deck}“ hinzugefügt",
+      "addedDescription": "{card}: jetzt {count}× im {section}.",
+      "openDeck": "Deck öffnen",
+      "failed": "Die Karte konnte nicht zum Deck hinzugefügt werden."
+    }
   }
 }
