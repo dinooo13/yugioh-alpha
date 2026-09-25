@@ -28,6 +28,16 @@ describe('parseCardListQuery', () => {
     expect(parsed.races).toEqual(['Dragon'])
     expect(parsed.sort).toBe('-name')
   })
+
+  // One flag rule with the inventory (#148, server/utils/query-flag.ts).
+  it('reads "Auch im Kartentext suchen" from `1` and `true`', () => {
+    expect(parseCardListQuery({ inText: '1' }).inText).toBe(true)
+    expect(parseCardListQuery({ inText: 'true' }).inText).toBe(true)
+    expect(parseCardListQuery({ inText: ['1', '0'] }).inText).toBe(true)
+    expect(parseCardListQuery({ inText: '0' }).inText).toBe(false)
+    expect(parseCardListQuery({ inText: '' }).inText).toBe(false)
+    expect(parseCardListQuery({}).inText).toBe(false)
+  })
 })
 
 describe('buildCardListWhere', () => {

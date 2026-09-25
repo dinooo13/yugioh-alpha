@@ -344,4 +344,15 @@ describe('view in the URL', () => {
       expect(route.value.query).toEqual({})
     })
   })
+
+  it('reads the gallery sort from ?sort= (#148)', async () => {
+    state.inventory = { items: [], total: 0 }
+    state.facets = { ...emptyFacets }
+    state.search = { items: [blueEyes], total: 1, page: 1, pageSize: 24 }
+
+    const component = await mountSuspended(InventoryPage, { route: '/inventory?sort=quantity&view=gallery' })
+
+    expect(component.find('[aria-label="Sortierung"]').text()).toContain('Anzahl')
+    expect(useRouter().currentRoute.value.query).toEqual({ sort: 'quantity', view: 'gallery' })
+  })
 })

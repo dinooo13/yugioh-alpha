@@ -161,6 +161,13 @@ describe('inventory validation', () => {
       inText: false,
     })
   })
+
+  it('reads `inText` like the catalog: `1` and `true` are on (#148)', () => {
+    expect(parseInventoryListQuery({ inText: 'true' }).inText).toBe(true)
+    expect(parseInventoryListQuery({ inText: '1' }).inText).toBe(true)
+    expect(parseInventoryListQuery({ inText: '0' }).inText).toBe(false)
+    expect(parseInventoryListQuery({ inText: 'false' }).inText).toBe(false)
+  })
 })
 
 describe('inventory persistence helpers', () => {

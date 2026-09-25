@@ -233,4 +233,64 @@ test.describe('inventory detail panel', () => {
     await expect(page).not.toHaveURL(/view=gallery/)
     await expect(page.getByRole('button', { name: 'Liste', exact: true })).toHaveAttribute('aria-pressed', 'true')
   })
+
+  test('Back → Forward → close leaves no duplicate entry (#148)', async ({ page }) => {
+    await registerAndLogin(page)
+    await addCopies(page, { quantity: 1 })
+
+    await page.goto('/')
+    await waitForHydration(page)
+    await page.goto('/inventory')
+    await waitForHydration(page)
+    await cardButton(page).click()
+    const quantity = page.getByRole('dialog', { name: CARD.darkMagician }).getByRole('spinbutton', { name: 'Anzahl in (keine Sammlung)' })
+    await expect(quantity).toBeVisible()
+
+    await page.goBack()
+    await expect(page.getByRole('dialog')).toHaveCount(0)
+    await page.goForward()
+    await expect(quantity).toBeVisible()
+
+    // Closing goes back to the entry without the card…
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('dialog')).toHaveCount(0)
+    await expect(page).toHaveURL(/\/inventory$/)
+    // …so Back leaves the inventory instead of landing on it again.
+    await page.goBack()
+    await expect(page).toHaveURL(/\/$/)
+  })
+
+  test('search text, text search, facets and the page survive a reload (#148)', async ({ page }) => {
+    await registerAndLogin(page)
+    await addCopies(page, { quantity: 1 })
+
+    await page.goto('/inventory')
+    await waitForHydration(page)
+    const listed = page.waitForResponse(response => response.url().includes('/api/inventory?') && response.url().includes('q=Magier'))
+    await page.getByLabel('Inventar durchsuchen').fill('Magier')
+    await page.getByRole('checkbox', { name: 'Auch im Kartentext suchen' }).click()
+    await listed
+    await expect(page).toHaveURL(/q=Magier/)
+    await expect(page).toHaveURL(/inText=1/)
+
+    const typed = page.waitForResponse(response => response.url().includes('/api/inventory?') && response.url().includes('type='))
+    await page.getByRole('button', { name: 'Typ', exact: true }).click()
+    await page.getByRole('option', { name: 'Normales Monster', exact: true }).click()
+    await typed
+    await page.keyboard.press('Escape')
+    await expect(page).toHaveURL(/type=Normal(\+|%20)Monster/)
+
+    await page.reload()
+    await waitForHydration(page)
+    await expect(page.getByLabel('Inventar durchsuchen')).toHaveValue('Magier')
+    await expect(page.getByRole('checkbox', { name: 'Auch im Kartentext suchen' })).toBeChecked()
+    await expect(page.getByRole('button', { name: 'Typ', exact: true })).toContainText('Normales Monster')
+    await expect(cardButton(page)).toHaveCount(1)
+
+    // A page number past the end shows the last page.
+    await page.goto('/inventory?page=5')
+    await waitForHydration(page)
+    await expect(page).toHaveURL(/\/inventory$/)
+    await expect(cardButton(page)).toHaveCount(1)
+  })
 })
