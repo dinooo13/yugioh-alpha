@@ -1350,17 +1350,14 @@ function executeActionPayload(db: Db, userId: string, action: AssistantActionRow
       }
       assertCardsFitSections(db, cards)
 
-      // `createDeck` and the optional format assignment both run here, inside
-      // the caller's transaction (`applyAction`) — `updateDeck` re-validates
-      // the format itself (`requireAssignableFormat`), so a format removed
-      // since the action was proposed fails *after* `createDeck` already
-      // wrote the deck row; the transaction rolls that back too, leaving no
-      // orphan deck.
-      const detail = createDeck(db, userId, { name: payload.name, description: payload.description }, cards)
-      if (payload.formatId) {
-        return updateDeck(db, userId, detail.id, { formatId: payload.formatId })
-      }
-      return detail
+      // One write with the format: `createDeck` re-validates it
+      // (`requireAssignableFormat`) before it writes anything, so a format
+      // removed since the action was proposed leaves no orphan deck.
+      return createDeck(db, userId, {
+        name: payload.name,
+        description: payload.description,
+        formatId: payload.formatId || null,
+      }, cards)
     }
     case 'update_deck_cards': {
       const payload = action.payload as unknown as { deckId: string, changes: unknown }

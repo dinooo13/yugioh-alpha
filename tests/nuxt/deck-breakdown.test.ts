@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { deckCardKind, deckKindBreakdown } from '~/utils/deck-breakdown'
+import { deckBreakdownGroups, deckCardKind, deckKindBreakdown } from '~~/shared/deck-breakdown'
 
 // The deck header's card-kind chips (owner feedback in #148).
 describe('deckCardKind', () => {
@@ -54,5 +54,44 @@ describe('deckKindBreakdown', () => {
 
   it('is empty for no rows', () => {
     expect(deckKindBreakdown([])).toEqual([])
+  })
+})
+
+describe('deckBreakdownGroups', () => {
+  const normal = { type: 'Normal Monster', frameType: 'normal', quantity: 3 }
+  const spell = { type: 'Spell Card', frameType: 'spell', quantity: 2 }
+  const synchro = { type: 'Synchro Monster', frameType: 'synchro', quantity: 1 }
+
+  it('is empty for an empty deck', () => {
+    expect(deckBreakdownGroups({ main: [], extra: [] })).toEqual([])
+  })
+
+  it('lists Main, then Extra', () => {
+    expect(deckBreakdownGroups({ extra: [synchro], main: [spell, normal] })).toEqual([
+      { section: 'main', kinds: [{ kind: 'normal', count: 3 }, { kind: 'spell', count: 2 }] },
+      { section: 'extra', kinds: [{ kind: 'synchro', count: 1 }] },
+    ])
+  })
+
+  it('drops a section without copies', () => {
+    expect(deckBreakdownGroups({ main: [normal], extra: [] })).toEqual([
+      { section: 'main', kinds: [{ kind: 'normal', count: 3 }] },
+    ])
+    expect(deckBreakdownGroups({ main: [], extra: [synchro] })).toEqual([
+      { section: 'extra', kinds: [{ kind: 'synchro', count: 1 }] },
+    ])
+  })
+
+  it('never counts the Side Deck', () => {
+    const sections = { main: [normal], extra: [], side: [{ type: 'Trap Card', frameType: 'trap', quantity: 2 }] }
+    expect(deckBreakdownGroups(sections)).toEqual([
+      { section: 'main', kinds: [{ kind: 'normal', count: 3 }] },
+    ])
+  })
+
+  it('counts rows without card data as "other"', () => {
+    expect(deckBreakdownGroups({ main: [{ type: null, frameType: null, quantity: 2 }], extra: [] })).toEqual([
+      { section: 'main', kinds: [{ kind: 'other', count: 2 }] },
+    ])
   })
 })

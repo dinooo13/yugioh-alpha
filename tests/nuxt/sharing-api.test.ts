@@ -423,6 +423,23 @@ describe('listVisibleDecks', () => {
     })
     expect(decks.find(item => item.id === emptyId)?.cover).toBeNull()
   })
+
+  it('carries each listed deck\'s card-kind breakdown for the tile chips (#148)', () => {
+    const deckId = createDeck(db, 'user-a', { name: 'Public', description: null }).id
+    upsertDeckCard(db, 'user-a', deckId, { catalogCardId: CARD.darkMagician, section: 'main', quantity: 3 })
+    upsertDeckCard(db, 'user-a', deckId, { catalogCardId: CARD.potOfGreed, section: 'side', quantity: 1 })
+    setShareState(db, 'user-a', 'deck', deckId, { visibility: 'public' })
+    const emptyId = createDeck(db, 'user-a', { name: 'Leer', description: null }).id
+    setShareState(db, 'user-a', 'deck', emptyId, { visibility: 'public' })
+
+    const decks = listVisibleDecks(db, 'user-a', null)
+
+    // The Side Deck is never counted.
+    expect(decks.find(item => item.id === deckId)?.breakdown).toEqual([
+      { section: 'main', kinds: [{ kind: 'normal', count: 3 }] },
+    ])
+    expect(decks.find(item => item.id === emptyId)?.breakdown).toEqual([])
+  })
 })
 
 describe('buildSharedDeckView', () => {

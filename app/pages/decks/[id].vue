@@ -9,9 +9,9 @@ import type { DeckCover } from '~~/shared/deck-cover'
 import type { DeckSection } from '~~/shared/deck-sections'
 import type { DeckValidation, DeckWarning } from '~~/shared/rule-formats'
 import type { Visibility } from '~~/shared/sharing'
-import { cardFrame } from '~/utils/card-frame'
+import { cardFrame } from '~~/shared/card-frame'
+import { deckBreakdownGroups } from '~~/shared/deck-breakdown'
 import type { CardDetailPreview } from '~/utils/card-detail'
-import { deckKindBreakdown } from '~/utils/deck-breakdown'
 import { deckCountState, deckMeterFill } from '~/utils/deck-meter'
 
 interface DeckCardRow {
@@ -139,6 +139,7 @@ const debouncedSourceSearch = ref('')
 const sourceType = ref('')
 const sourceAttribute = ref('')
 const includeCatalog = ref(false)
+const sourceInText = ref(false)
 
 let debounceTimer: ReturnType<typeof setTimeout> | undefined
 watch(sourceSearch, (value) => {
@@ -152,6 +153,8 @@ watch(sourceSearch, (value) => {
 // the following pages client-side (`loadMoreSourceCards`).
 const sourceQuery = computed(() => ({
   q: debouncedSourceSearch.value || undefined,
+  // Also match the card text (#148); only meaningful with a search term.
+  inText: sourceInText.value && debouncedSourceSearch.value ? 1 : undefined,
   type: sourceType.value || undefined,
   attribute: sourceAttribute.value || undefined,
   sort: 'name',
@@ -441,8 +444,91 @@ function sectionName(section: DeckSection): string {
   return t(`decks.section.${section}`)
 }
 
-const sections = computed(() => deck.value?.sections ?? { main: [], extra: [], side: [] })
-const counts = computed(() => deck.value?.counts ?? { main: 0, extra: 0, side: 0, total: 0 })
+// --- Queued writes with optimistic quantities --------------------------------
+
+// Deck writes send the *absolute* quantity the user asked for. They are
+// queued (`useQueuedWrites`), so they reach the server one after another in
+// click order; the steppers show the asked-for value at once and stay
+// enabled (a disabled, focused button would drop keyboard focus), and only
+// the last answer is rendered. `useFetch` data is a shallow ref: nested rows
+// are never mutated, `deck.value` is always replaced.
+const writes = useQueuedWrites()
+/** The quantities asked for but not yet confirmed, by `${catalogCardId}:${section}`. */
+const pendingQuantities = ref<Record<string, number>>({})
+/** A format change not yet confirmed; `null` removes the format. */
+const pendingFormatId = ref<string | null | undefined>(undefined)
+
+function quantityKey(catalogCardId: number, section: DeckSection): string {
+  return `${catalogCardId}:${section}`
+}
+
+function clearOptimistic() {
+  pendingQuantities.value = {}
+  pendingFormatId.value = undefined
+}
+
+async function writeDeck(request: () => Promise<DeckDetail>) {
+  errorMessage.value = ''
+  const result = await writes.enqueue(request)
+  if (!result.ok) {
+    errorMessage.value = apiError(result.error, 'decks.editor.errors.saveFailed')
+  }
+  if (!result.latest) {
+    // A later write settles the view.
+    return
+  }
+  if (result.ok) {
+    deck.value = result.value
+    clearOptimistic()
+    return
+  }
+  // The last write failed: roll back to the server's deck. Queued too, so
+  // it can't overtake a write made in the meantime.
+  const reload = await writes.enqueue(() => $fetch<DeckDetail>(`/api/decks/${deckId.value}`))
+  if (!reload.latest) {
+    return
+  }
+  if (reload.ok) {
+    deck.value = reload.value
+  }
+  // A failed reload keeps the write's error, not its own, and still drops
+  // the optimistic values.
+  clearOptimistic()
+}
+
+const EMPTY_SECTIONS: Record<DeckSection, DeckCardRow[]> = { main: [], extra: [], side: [] }
+const serverSections = computed(() => deck.value?.sections ?? EMPTY_SECTIONS)
+
+function serverQuantity(catalogCardId: number, section: DeckSection): number {
+  return serverSections.value[section].find(row => row.catalogCardId === catalogCardId)?.quantity ?? 0
+}
+
+// The server rows with the asked-for quantities. A row at 0 stays until the
+// queue drains, so its focused stepper isn't removed; a card new to a section
+// gets its row with the answer (the counts and steppers show it at once).
+const sections = computed<Record<DeckSection, DeckCardRow[]>>(() => {
+  const pending = pendingQuantities.value
+  const shown = { ...serverSections.value }
+  for (const section of DECK_SECTIONS) {
+    shown[section] = serverSections.value[section].map((row) => {
+      const quantity = pending[quantityKey(row.catalogCardId, section)]
+      return quantity === undefined || quantity === row.quantity ? row : { ...row, quantity }
+    })
+  }
+  return shown
+})
+
+const counts = computed(() => {
+  const server = deck.value?.counts ?? { main: 0, extra: 0, side: 0, total: 0 }
+  const shown = { ...server }
+  for (const [key, quantity] of Object.entries(pendingQuantities.value)) {
+    const [id, section] = key.split(':') as [string, DeckSection]
+    const delta = quantity - serverQuantity(Number(id), section)
+    shown[section] += delta
+    shown.total += delta
+  }
+  return shown
+})
 const limits = computed(() => deck.value?.limits ?? { mainMin: 40, mainMax: 60, extraMax: 15, sideMax: 15, maxCopies: 3 })
 const warnings = computed(() => deck.value?.warnings ?? [])
 // A format's validation replaces the "usual size" hints; a retired card
@@ -451,6 +537,7 @@ const shownWarnings = computed(() => deck.value?.format
   ? warnings.value.filter(warning => warning.code === 'card_retired')
   : warnings.value)
 
+// Copies per card over all sections, optimistic like the rows.
 const usedByCard = computed(() => {
   const used = new Map<number, number>()
   for (const section of DECK_SECTIONS) {
@@ -458,17 +545,29 @@ const usedByCard = computed(() => {
       used.set(row.catalogCardId, (used.get(row.catalogCardId) ?? 0) + row.quantity)
     }
   }
+  // Pending quantities of cards not yet in that section have no row.
+  for (const [key, quantity] of Object.entries(pendingQuantities.value)) {
+    const [id, section] = key.split(':') as [string, DeckSection]
+    const catalogCardId = Number(id)
+    if (!serverSections.value[section].some(row => row.catalogCardId === catalogCardId)) {
+      used.set(catalogCardId, (used.get(catalogCardId) ?? 0) + quantity)
+    }
+  }
   return used
 })
 
 function quantityInSection(catalogCardId: number, section: DeckSection): number {
-  return sections.value[section].find(row => row.catalogCardId === catalogCardId)?.quantity ?? 0
+  return pendingQuantities.value[quantityKey(catalogCardId, section)] ?? serverQuantity(catalogCardId, section)
 }
 
-// The header's card-kind chips (owner feedback in #148), live from the rendered deck.
-const breakdown = computed(() => (['main', 'extra'] as const)
-  .map(section => ({ section, kinds: deckKindBreakdown(sections.value[section]) }))
-  .filter(group => group.kinds.length > 0))
+/** The deck row's "used/owned" indicator, from the optimistic copies. */
+function rowUsage(row: DeckCardRow) {
+  const used = usedByCard.value.get(row.catalogCardId) ?? 0
+  return { used, shortfall: Math.max(0, used - row.owned) }
+}
+
+// The header's card-kind chips (owner feedback in #148), live from the shown deck.
+const breakdown = computed(() => deckBreakdownGroups(sections.value))
 
 function sectionLimitLabel(section: DeckSection): string {
   if (section === 'main') {
@@ -497,50 +596,28 @@ function sectionCountClass(section: DeckSection): string {
   return SECTION_COUNT_CLASS[sectionCountState(section)]
 }
 
-// --- Mutations -------------------------------------------------------------
-
-// Deck writes send an *absolute* quantity derived from the rendered deck, so
-// two overlapping writes would compute from the same stale state. Controls are
-// disabled while a write is in flight, and a sequence token drops the answer of
-// any request that was superseded before it came back.
-const inFlightMutations = ref(0)
-const isMutating = computed(() => inFlightMutations.value > 0)
-let mutationSequence = 0
-
-async function applyDeck(request: Promise<DeckDetail>) {
-  const token = ++mutationSequence
-  inFlightMutations.value += 1
-  errorMessage.value = ''
-
-  try {
-    const detail = await request
-    if (token === mutationSequence) {
-      deck.value = detail
-    }
-  }
-  catch (requestError) {
-    if (token === mutationSequence) {
-      errorMessage.value = apiError(requestError, 'decks.editor.errors.saveFailed')
-    }
-  }
-  finally {
-    inFlightMutations.value -= 1
-  }
-}
+// --- Mutations (queued, see `writeDeck`) -------------------------------------
 
 async function setQuantity(catalogCardId: number, section: DeckSection, quantity: number) {
-  if (quantity < 0 || isMutating.value) {
+  if (quantity < 0 || quantity > MAX_DECK_CARD_QUANTITY) {
     return
   }
 
-  await applyDeck($fetch<DeckDetail>(`/api/decks/${deckId.value}/cards`, {
+  pendingQuantities.value = { ...pendingQuantities.value, [quantityKey(catalogCardId, section)]: quantity }
+  await writeDeck(() => $fetch<DeckDetail>(`/api/decks/${deckId.value}/cards`, {
     method: 'PUT',
     body: { catalogCardId, section, quantity },
   }))
 }
 
+// The shown selection: a pending change first, then the server's format.
 const formatSelection = computed({
-  get: () => deck.value?.format?.id ?? NO_FORMAT,
+  get: () => {
+    if (pendingFormatId.value !== undefined) {
+      return pendingFormatId.value ?? NO_FORMAT
+    }
+    return deck.value?.format?.id ?? NO_FORMAT
+  },
   set: (value: string) => {
     changeFormat(value === NO_FORMAT ? null : value)
   },
@@ -549,11 +626,12 @@ const formatSelection = computed({
 // The PATCH answers with the recomputed deck detail, so assigning a format
 // renders its validation without a reload.
 async function changeFormat(formatId: string | null) {
-  if (isMutating.value || (deck.value?.format?.id ?? null) === formatId) {
+  if ((formatSelection.value === NO_FORMAT ? null : formatSelection.value) === formatId) {
     return
   }
 
-  await applyDeck($fetch<DeckDetail>(`/api/decks/${deckId.value}`, {
+  pendingFormatId.value = formatId
+  await writeDeck(() => $fetch<DeckDetail>(`/api/decks/${deckId.value}`, {
     method: 'PATCH',
     body: { formatId },
   }))
@@ -575,24 +653,20 @@ function allSectionsDisallowedReason(card: SourceCard): string | null {
 }
 
 async function removeCard(row: DeckCardRow) {
-  if (isMutating.value) {
-    return
-  }
-
-  await applyDeck($fetch<DeckDetail>(`/api/decks/${deckId.value}/cards`, {
+  const { catalogCardId, section } = row
+  pendingQuantities.value = { ...pendingQuantities.value, [quantityKey(catalogCardId, section)]: 0 }
+  await writeDeck(() => $fetch<DeckDetail>(`/api/decks/${deckId.value}/cards`, {
     method: 'DELETE',
-    query: { catalogCardId: row.catalogCardId, section: row.section },
+    query: { catalogCardId, section },
   }))
 }
 
+// No optimistic value: the server merges the copies into the target section.
 async function moveCard(row: DeckCardRow, to: DeckSection) {
-  if (isMutating.value) {
-    return
-  }
-
-  await applyDeck($fetch<DeckDetail>(`/api/decks/${deckId.value}/cards/move`, {
+  const { catalogCardId, section: from } = row
+  await writeDeck(() => $fetch<DeckDetail>(`/api/decks/${deckId.value}/cards/move`, {
     method: 'POST',
-    body: { catalogCardId: row.catalogCardId, from: row.section, to },
+    body: { catalogCardId, from, to },
   }))
 }
 
@@ -602,8 +676,8 @@ async function moveCard(row: DeckCardRow, to: DeckSection) {
 const overlayCard = ref<{ id: number, preview: CardDetailPreview, owned: number } | null>(null)
 const isOverlayOpen = ref(false)
 
-// From the rendered deck, so the overlay, the rows and the counts update
-// from the same write response.
+// From the shown (optimistic) deck, so the overlay, the rows and the counts
+// always agree.
 const overlayQuantities = computed<Record<DeckSection, number>>(() => {
   const id = overlayCard.value?.id
   return {
@@ -654,11 +728,7 @@ function isCoverRow(row: DeckCardRow): boolean {
 
 // `null` goes back to the automatic (rule) pick.
 async function setCover(coverCardId: number | null) {
-  if (isMutating.value) {
-    return
-  }
-
-  await applyDeck($fetch<DeckDetail>(`/api/decks/${deckId.value}`, {
+  await writeDeck(() => $fetch<DeckDetail>(`/api/decks/${deckId.value}`, {
     method: 'PATCH',
     body: { coverCardId },
   }))
@@ -671,7 +741,6 @@ const inactiveCoverActions = computed(() => [{
   color: 'neutral' as const,
   variant: 'outline' as const,
   size: 'xs' as const,
-  disabled: isMutating.value,
   onClick: () => setCover(null),
 }])
 
@@ -698,8 +767,9 @@ function rowMenuItems(row: DeckCardRow) {
   return [moveItems, [coverItem]]
 }
 
+// Through the queue, so the reload can't overwrite a pending write's answer.
 async function onDeckSaved(saved: { id: string }) {
-  deck.value = await $fetch<DeckDetail>(`/api/decks/${saved.id}`)
+  await writeDeck(() => $fetch<DeckDetail>(`/api/decks/${saved.id}`))
 }
 
 const { confirm } = useConfirm()
@@ -776,45 +846,12 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
           {{ count('decks.editor.totalCards', counts.total) }}
         </p>
 
-        <!-- Copies per card kind in Main and Extra (owner feedback in #148);
-             kinds without copies are left out. Updates silently, like the
-             section counts. -->
-        <div
-          v-if="breakdown.length > 0"
-          class="mt-2 flex flex-col gap-1.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-5"
-          data-testid="deck-breakdown"
-        >
-          <div
-            v-for="group in breakdown"
-            :key="group.section"
-            class="flex min-w-0 flex-wrap items-center gap-1.5"
-            :data-section="group.section"
-          >
-            <span
-              class="eyebrow"
-              aria-hidden="true"
-            >{{ t(`decks.sectionShort.${group.section}`) }}</span>
-            <ul
-              class="flex min-w-0 flex-wrap gap-1.5"
-              :aria-label="t('decks.editor.breakdown.label', { section: sectionName(group.section) })"
-            >
-              <li
-                v-for="entry in group.kinds"
-                :key="entry.kind"
-                class="inline-flex items-center gap-1.5 rounded-full bg-elevated/60 px-2 py-0.5 text-xs text-default ring-1 ring-default ring-inset"
-                :data-kind="entry.kind"
-                :data-frame="entry.kind === 'other' ? undefined : entry.kind"
-              >
-                <span
-                  v-if="entry.kind !== 'other'"
-                  class="frame-dot"
-                  aria-hidden="true"
-                />
-                <span class="tabular-nums">{{ count(`decks.editor.breakdown.kind.${entry.kind}`, entry.count) }}</span>
-              </li>
-            </ul>
-          </div>
-        </div>
+        <!-- Copies per card kind in Main and Extra (owner feedback in #148).
+             Updates silently, like the section counts. -->
+        <DecksDeckKindBreakdown
+          :groups="breakdown"
+          class="mt-2"
+        />
 
         <div class="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
           <div class="flex flex-wrap items-center gap-2">
@@ -849,7 +886,6 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
             <USelect
               v-model="formatSelection"
               :items="formatItems"
-              :disabled="isMutating"
               class="min-w-0 flex-1 sm:w-56 sm:flex-none"
               :aria-label="t('decks.editor.formatLabel')"
             />
@@ -1048,11 +1084,11 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
 
                 <span
                   class="relative z-10 self-start text-xs tabular-nums @lg:self-center"
-                  :class="row.shortfall > 0 ? 'font-semibold text-error' : 'text-muted'"
-                  :data-shortfall="row.shortfall > 0 ? '' : undefined"
-                  :title="row.shortfall > 0 ? t('decks.editor.row.ownedOnly', { owned: row.owned }) : undefined"
+                  :class="rowUsage(row).shortfall > 0 ? 'font-semibold text-error' : 'text-muted'"
+                  :data-shortfall="rowUsage(row).shortfall > 0 ? '' : undefined"
+                  :title="rowUsage(row).shortfall > 0 ? t('decks.editor.row.ownedOnly', { owned: row.owned }) : undefined"
                 >
-                  {{ row.usedInDeck }}/{{ row.owned }}
+                  {{ rowUsage(row).used }}/{{ row.owned }}
                 </span>
 
                 <div class="relative z-10 col-span-2 flex items-center justify-end gap-1 @lg:col-span-1">
@@ -1061,7 +1097,6 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
                     :min="0"
                     :max="MAX_DECK_CARD_QUANTITY"
                     size="xs"
-                    :disabled="isMutating"
                     :input-label="t('decks.editor.row.quantity', { name: cardName(row), section: sectionName(section) })"
                     :decrease-label="t('decks.editor.row.removeOne', { name: cardName(row), section: sectionName(section) })"
                     :increase-label="t('decks.editor.row.addOne', { name: cardName(row), section: sectionName(section) })"
@@ -1074,7 +1109,6 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
                       variant="ghost"
                       size="xs"
                       class="tap-target"
-                      :disabled="isMutating"
                       :aria-label="t('decks.editor.row.options', { name: cardName(row) })"
                     />
                   </UDropdownMenu>
@@ -1084,7 +1118,6 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
                     variant="ghost"
                     size="xs"
                     class="tap-target"
-                    :disabled="isMutating"
                     :aria-label="t('decks.editor.row.remove', { name: cardName(row), section: sectionName(section) })"
                     @click="removeCard(row)"
                   />
@@ -1150,6 +1183,10 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
                     class="flex-1"
                   />
                 </div>
+                <UCheckbox
+                  v-model="sourceInText"
+                  :label="t('decks.editor.addPanel.inText')"
+                />
                 <UCheckbox
                   v-model="includeCatalog"
                   :label="t('decks.editor.addPanel.includeCatalog')"
@@ -1261,7 +1298,7 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
                           class="tap-target"
                           :color="section === defaultSectionForCard(card) ? 'primary' : 'neutral'"
                           :variant="section === defaultSectionForCard(card) ? 'solid' : 'outline'"
-                          :disabled="!isSectionAllowedForCard(card, section) || isMutating"
+                          :disabled="!isSectionAllowedForCard(card, section)"
                           :title="isSectionAllowedForCard(card, section)
                             ? undefined
                             : t('decks.editor.addPanel.cannotAdd', { name: cardName(card), section: sectionName(section) })"
@@ -1333,7 +1370,6 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
             :card="overlayCard.preview"
             :quantities="overlayQuantities"
             :owned="overlayOwned"
-            :disabled="isMutating"
             :error="errorMessage || undefined"
             @set="setOverlayQuantity"
           />

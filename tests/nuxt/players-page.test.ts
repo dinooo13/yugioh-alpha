@@ -81,6 +81,7 @@ describe('public profile page', () => {
           imageSmall: 'https://images.example/cards_small/89631139.jpg',
           imageLarge: 'https://images.example/cards/89631139.jpg',
         },
+        breakdown: [{ section: 'main', kinds: [{ kind: 'normal', count: 30 }, { kind: 'spell', count: 10 }] }],
       }],
       collections: [{ id: 'col-1', name: 'Binder', description: null, cardCount: 10, visibility: 'public' }],
       inventory: { visible: true, cardCount: 120 },
@@ -101,12 +102,17 @@ describe('public profile page', () => {
 
     // Whole tiles are click targets (#134): one stretched link per tile, the
     // decorative cover outside any link.
-    const [deckTile, collectionTile] = component.findAll('li')
+    const [deckTile, collectionTile] = component.findAll('ul.grid > li')
     const deckLinks = deckTile!.findAll('a')
     expect(deckLinks).toHaveLength(1)
     expect(deckLinks[0]!.attributes('href')).toBe('/players/fabian/decks/deck-1')
     expect(deckLinks[0]!.classes()).toContain('stretched-link')
     expect(deckTile!.find('img').element.closest('a')).toBeNull()
+
+    // The compact card-kind chips (#148): short text, the full one for screen readers.
+    const kinds = deckTile!.find('ul[aria-label="Kartenarten im Main und Extra Deck"]')
+    expect(kinds.findAll('li').map(li => li.find('[aria-hidden="true"]:not(.frame-dot)').text())).toEqual(['30 Normal', '10 Zauber'])
+    expect(kinds.findAll('li .sr-only').map(span => span.text())).toEqual(['30 Normale Monster', '10 Zauberkarten'])
 
     const collectionLinks = collectionTile!.findAll('a')
     expect(collectionLinks).toHaveLength(1)
@@ -295,6 +301,10 @@ describe('public deck page', () => {
     expect(text).toContain('Geteilt von Fabian')
     expect(component.find('[data-slot="fallback"]').text()).toBe('F')
     expect(component.find('[data-testid="card-retired-badge"]').exists()).toBe(false)
+    // The card-kind chips (#148), from the shared rows.
+    const breakdown = component.find('[data-testid="deck-breakdown"]')
+    expect(breakdown.find('[data-section="main"] ul').attributes('aria-label')).toBe('Kartenarten im Main Deck')
+    expect(breakdown.findAll('li').map(li => li.text())).toEqual(['3 Normale Monster'])
   })
 
   it('marks a retired card in the shared deck (ADR 0019, #108)', async () => {

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { DeckBreakdownGroup } from '~~/shared/deck-breakdown'
 import type { DeckCover } from '~~/shared/deck-cover'
 import { DECK_NAME_MAX_LENGTH, DECK_SECTIONS } from '~~/shared/deck-sections'
 import type { DeckSection } from '~~/shared/deck-sections'
@@ -21,6 +22,8 @@ interface DeckListItem {
   legal: boolean | null
   visibility: Visibility
   cover: DeckCover | null
+  /** Copies per card kind in Main and Extra (#148); older fixtures lack it. */
+  breakdown?: DeckBreakdownGroup[]
   createdAt: string
   updatedAt: string
 }
@@ -423,6 +426,14 @@ function statusColor(deck: DeckListItem) {
               </dd>
             </div>
           </dl>
+
+          <!-- Card kinds in Main and Extra (#148). -->
+          <DecksDeckKindBreakdown
+            v-if="deck.breakdown?.length"
+            :groups="deck.breakdown"
+            compact
+            class="mt-2"
+          />
 
           <div class="mt-4 flex flex-wrap items-center gap-2">
             <!-- Besitz-Status (links) -->

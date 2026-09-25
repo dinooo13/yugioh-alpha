@@ -4,6 +4,7 @@ import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
 import { DecksDeckFormModal, USelect } from '#components'
 import DecksPage from '~/pages/decks/index.vue'
 import { optionLabels, selectWithOption } from './fixtures/select-wrapper'
+import type { DeckBreakdownGroup } from '~~/shared/deck-breakdown'
 import type { DeckCover } from '~~/shared/deck-cover'
 import { setTestLocale } from './fixtures/locale'
 import { mountAtRoute } from './fixtures/route'
@@ -27,6 +28,7 @@ interface DeckListItem {
   formatName: string | null
   legal: boolean | null
   cover: DeckCover | null
+  breakdown?: DeckBreakdownGroup[]
   createdAt: string
   updatedAt: string
 }
@@ -210,6 +212,35 @@ describe('decks page', () => {
       expect(options.classes()).toContain('z-10')
       expect(links[0]!.element.contains(options.element)).toBe(false)
     }
+  })
+
+  it('shows the compact card-kind chips on a tile that has them (#148)', async () => {
+    state.decks = {
+      items: [
+        deck({
+          breakdown: [
+            { section: 'main', kinds: [{ kind: 'normal', count: 3 }, { kind: 'effect', count: 12 }] },
+            { section: 'extra', kinds: [{ kind: 'synchro', count: 1 }] },
+          ],
+        }),
+        deck({ id: 'deck-2', name: 'Ohne Aufschlüsselung' }),
+      ],
+      total: 2,
+      page: 1,
+      pageSize: 20,
+    }
+
+    const component = await mountSuspended(DecksPage)
+    const [withKinds, withoutKinds] = component.findAll('ul > li').filter(li => li.find('a.stretched-link').exists())
+
+    const chips = withKinds!.find('ul[aria-label="Kartenarten im Main und Extra Deck"]')
+    expect(chips.exists()).toBe(true)
+    // Seen: "3 Normal"; read aloud: "3 Normale Monster". Main kinds first, then Extra.
+    expect(chips.findAll('li').map(li => li.find('span.tabular-nums').text())).toEqual(['3 Normal', '12 Effekt', '1 Synchro'])
+    expect(chips.findAll('li .sr-only').map(span => span.text())).toEqual(['3 Normale Monster', '12 Effektmonster', '1 Synchro'])
+    expect(chips.find('li[data-kind="synchro"]').attributes('data-frame')).toBe('synchro')
+
+    expect(withoutKinds!.find('[data-testid="deck-breakdown"]').exists()).toBe(false)
   })
 
   it('shows the empty state when the user has no decks', async () => {

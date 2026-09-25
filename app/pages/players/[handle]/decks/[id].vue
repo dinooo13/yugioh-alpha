@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { deckBreakdownGroups } from '~~/shared/deck-breakdown'
 import type { SharedDeckView } from '~~/shared/sharing'
 
 definePageMeta({ layout: 'public' })
@@ -16,6 +17,9 @@ const { data, error } = await useFetch<SharedDeckView>(
     headers: import.meta.server ? useRequestHeaders(['cookie']) : undefined,
   },
 )
+
+// The card-kind chips (#148), from the rows the view already has.
+const breakdown = computed(() => (data.value ? deckBreakdownGroups(data.value.sections) : []))
 
 usePageTitle(() => data.value?.deck.name ?? t('players.deck.fallbackTitle'))
 useHead({
@@ -61,6 +65,10 @@ useHead({
         <p class="mt-1 text-sm text-muted">
           {{ count('players.deck.summary', data.counts.total) }}
         </p>
+        <DecksDeckKindBreakdown
+          :groups="breakdown"
+          class="mt-2"
+        />
 
         <template
           v-if="data.isOwner"

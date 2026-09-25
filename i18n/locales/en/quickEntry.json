@@ -73,6 +73,8 @@
       "useDefault": "Default",
       "conflict": "The set code and the name point to different cards — please pick one.",
       "quantityFor": "Quantity for {line}",
+      "decreaseFor": "One copy fewer for {line}",
+      "increaseFor": "One more copy for {line}",
       "remove": "Remove {line}",
       "pickCandidate": "Pick a match...",
       "candidateFor": "Match for {line}",

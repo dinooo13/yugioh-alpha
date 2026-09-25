@@ -1168,9 +1168,8 @@ describe('applyAction', () => {
     const row = insertPendingAction('user-a', action.kind, action.payload, action.summary)
 
     // The format is removed after the action was proposed but before it's applied —
-    // `createDeck` would still succeed on its own; the format assignment that
-    // follows fails, and the whole transaction (including the deck row) must
-    // roll back rather than leaving an orphan, unassigned deck behind.
+    // `createDeck` re-checks the format and fails, leaving no orphan,
+    // unassigned deck behind.
     deleteRuleFormat(db, 'user-a', format.id)
 
     const updated = await applyAction(db, 'user-a', row.id)
@@ -1178,6 +1177,25 @@ describe('applyAction', () => {
 
     const decks = listDecks(db, 'user-a', {}).items
     expect(decks.some(deckItem => deckItem.name === 'Rollback Deck')).toBe(false)
+  })
+
+  it('creates a create_deck deck with its format in one write (#148)', async () => {
+    const format = createRuleFormat(db, 'user-a', validateRuleFormatInput({ name: 'Format', rules: { rules: [] } }))
+    const outcome = await tool('create_deck').run({ db, userId: 'user-a', cardLocale: 'en' }, {
+      name: 'Format Deck',
+      formatId: format.id,
+      cards: [{ catalogCardId: CARD.darkMagician, section: 'main', quantity: 1 }],
+    })
+    const action = (outcome as Extract<ToolOutcome, { action: unknown }>).action
+    const row = insertPendingAction('user-a', action.kind, action.payload, action.summary)
+
+    const applied = await applyAction(db, 'user-a', row.id)
+    expect(applied.status).toBe('applied')
+    const detail = getDeckDetail(db, 'user-a', (applied.result as { id: string }).id)
+    expect(detail.format?.id).toBe(format.id)
+    expect(detail.validation).not.toBeNull()
+    // No follow-up update: the deck was never touched after its creation.
+    expect(detail.updatedAt.getTime()).toBe(detail.createdAt.getTime())
   })
 
   it('re-validates a create_deck payload at apply time and creates nothing for an out-of-bounds quantity', async () => {

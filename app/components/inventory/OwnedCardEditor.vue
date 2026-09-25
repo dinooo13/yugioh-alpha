@@ -147,24 +147,26 @@ watch(() => props.catalogCardId, async () => {
   }
 }, { immediate: true })
 
-// One write after another; `chain` never rejects.
-let chain: Promise<unknown> = Promise.resolve()
+// One write after another (`useQueuedWrites`). `afterWrite` and the reload
+// after a failure run inside the queued task, so the next write waits for
+// them, as before.
+const writes = useQueuedWrites()
 
-function enqueue(task: () => Promise<void>): Promise<boolean> {
+async function enqueue(task: () => Promise<void>): Promise<boolean> {
   errorMessage.value = ''
-  const run = chain.then(task).then(
-    () => {
-      props.afterWrite?.()
-      return true
-    },
-    async (error: unknown) => {
+  const result = await writes.enqueue(async () => {
+    try {
+      await task()
+    }
+    catch (error) {
       errorMessage.value = apiError(error, 'inventory.editor.saveFailed')
       await loadRows()
       return false
-    },
-  )
-  chain = run
-  return run
+    }
+    props.afterWrite?.()
+    return true
+  })
+  return result.ok && result.value
 }
 
 function setQuantity(row: OwnedRow, value: number) {

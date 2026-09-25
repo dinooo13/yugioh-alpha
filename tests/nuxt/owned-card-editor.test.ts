@@ -344,6 +344,32 @@ describe('InventoryOwnedCardEditor', () => {
     expect(component.find<HTMLInputElement>('input[aria-label="Anzahl in Binder"]').element.value).toBe('3')
   })
 
+  // The queue is the shared `useQueuedWrites` (#148): a failed write reloads
+  // before the next one starts, doesn't block it, and skips `afterWrite`.
+  it('runs the write queued behind a failed one after the reload', async () => {
+    const { server, afterWrite } = await mountEditor(threeRows)
+    server.state.hold = true
+    server.state.fail = new Error('offline')
+    const requests = () => server.fetch.mock.calls.map(([url, options]) => `${options?.method ?? 'GET'} ${url}`)
+
+    await typeQuantity('Anzahl in Binder', '7')
+    await typeQuantity('Anzahl in Box 1', '4')
+    await flushPromises()
+    expect(server.calls).toHaveLength(1)
+
+    server.release()
+    await flushPromises()
+    // The failed PATCH, then the reload, then the queued PATCH.
+    expect(requests().slice(1)).toEqual(['PATCH /api/inventory/r-binder', 'GET /api/inventory', 'PATCH /api/inventory/r-box'])
+    expect(body().find('p[role="alert"]').text()).toBe('Die Änderung konnte nicht gespeichert werden.')
+
+    server.release()
+    await flushPromises()
+    expect(server.rows().find(row => row.id === 'r-box')!.quantity).toBe(4)
+    expect(server.rows().find(row => row.id === 'r-binder')!.quantity).toBe(3)
+    expect(afterWrite).toHaveBeenCalledTimes(1)
+  })
+
   it('highlights the row it was opened from', async () => {
     const { component } = await mountEditor(threeRows, { focusRowId: 'r-binder' })
 
