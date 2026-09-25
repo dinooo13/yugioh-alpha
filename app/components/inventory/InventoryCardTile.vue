@@ -22,8 +22,8 @@ const frame = computed(() => cardFrame(props.item))
 <template>
   <!-- The card name is the tile's button; `stretched-link` makes the whole
        tile open the detail panel (#135, like the catalog tiles). The
-       breakdown and the retired badge sit above it, so their own popover and
-       tooltip stay usable. -->
+       breakdown sits above it, and so does the retired badge (a click/tap
+       popover that raises itself), so their own popovers stay usable. -->
   <article class="group panel relative flex min-w-0 flex-col transition-[translate,box-shadow,border-color] duration-200 ease-out-expo hover:border-primary/40 hover:shadow-lift motion-safe:hover:-translate-y-0.5">
     <!-- Plain thumbnail, not `enlargeable`: the tile already opens the card. -->
     <CardThumb
@@ -51,7 +51,7 @@ const frame = computed(() => cardFrame(props.item))
       </h2>
       <div
         v-if="item.retired"
-        class="relative z-10 w-fit"
+        class="w-fit"
       >
         <CardRetiredBadge />
       </div>
