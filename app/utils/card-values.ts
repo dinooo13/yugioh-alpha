@@ -9,6 +9,9 @@
 // for Spell/Trap subtypes) and as the official German card texts name the
 // monster card types ("Effektmonster", "Empfänger-Monster", "Spielmarke", …);
 // composite types ("Pendulum Effect Monster") are compounds of those words.
+// "Skill-Karte" follows Konami EU's German Speed Duel material; "Creator God"
+// (Holactie only, OCG/promo) has no official German print, so "Schöpfergott"
+// is a literal translation (#102).
 // English labels are the stored values themselves.
 
 export type CardValueKind = 'type' | 'attribute' | 'race'

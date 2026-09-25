@@ -28,12 +28,13 @@ describe('CardFacetFilters', () => {
   it('renders the four menus with German labels and German card values', async () => {
     const component = await mountFilters()
 
-    for (const label of ['Typ', 'Attribut', 'Monsterart', 'Level']) {
+    for (const label of ['Typ', 'Attribut', 'Monsterart', 'Stufe/Rang']) {
       expect(component.find(`[aria-label="${label}"]`).exists()).toBe(true)
     }
     expect(component.find('[aria-label="Typ"]').text()).toContain('Normales Monster')
     expect(component.find('[aria-label="Attribut"]').text()).toContain('LICHT')
-    expect(component.find('[aria-label="Level"]').text()).toContain('Level 8')
+    // Konami's filter label: the level menu also matches Xyz ranks (#101).
+    expect(component.find('[aria-label="Stufe/Rang"]').text()).toContain('Stufe/Rang 8')
     // Nothing picked: the menu shows its placeholder.
     expect(component.find('[aria-label="Monsterart"]').text()).toContain('Monsterart')
   })
@@ -42,7 +43,7 @@ describe('CardFacetFilters', () => {
     await setTestLocale('en')
     const component = await mountFilters()
 
-    for (const label of ['Type', 'Attribute', 'Monster type', 'Level']) {
+    for (const label of ['Type', 'Attribute', 'Monster type', 'Level/Rank']) {
       expect(component.find(`[aria-label="${label}"]`).exists()).toBe(true)
     }
     expect(component.find('[aria-label="Type"]').text()).toContain('Normal Monster')

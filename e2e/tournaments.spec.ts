@@ -217,6 +217,20 @@ test.describe('tournaments', () => {
     const organizer = await registerAndLogin(page)
     await page.goto('/tournaments/new')
     await waitForHydration(page)
+    // The planned-rounds field is wide enough for its placeholder, on desktop
+    // and on a phone (#96).
+    const plannedRoundsFits = () => page.getByLabel('Geplante Runden').evaluate((input: HTMLInputElement) => {
+      const style = getComputedStyle(input)
+      const context = document.createElement('canvas').getContext('2d')!
+      context.font = style.font
+      const inner = input.clientWidth - Number.parseFloat(style.paddingLeft) - Number.parseFloat(style.paddingRight)
+      return context.measureText(input.placeholder).width <= inner - 20 // room for the number spinner
+    })
+    expect(await plannedRoundsFits()).toBe(true)
+    const viewport = page.viewportSize()!
+    await page.setViewportSize({ width: 390, height: 844 })
+    expect(await plannedRoundsFits()).toBe(true)
+    await page.setViewportSize(viewport)
     await page.getByLabel('Turniername').fill('Einladungsturnier')
     await page.getByRole('button', { name: 'Turnier anlegen' }).click()
     await expect(page).toHaveURL(/\/tournaments\/[0-9a-f-]{36}$/)

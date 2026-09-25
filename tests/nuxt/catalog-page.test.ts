@@ -159,12 +159,14 @@ describe('catalog page', () => {
     expect(component.find('input[aria-label="Karten suchen"]').exists()).toBe(true)
     // The inventory's filter menus, no native selects left (#63).
     expect(component.find('select').exists()).toBe(false)
-    for (const label of ['Typ', 'Attribut', 'Monsterart', 'Level', 'Sortierung']) {
+    for (const label of ['Typ', 'Attribut', 'Monsterart', 'Stufe/Rang', 'Sortierung']) {
       expect(component.find(`[aria-label="${label}"]`).exists()).toBe(true)
     }
     // German card names by default: the card language follows the interface (ADR 0015).
     expect(component.text()).toContain('Blauäugiger w. Drache')
     expect(component.text()).not.toContain('Blue-Eyes White Dragon')
+    // Konami's word on the tile (#101).
+    expect(component.text()).toContain('Stufe 8')
 
     // The set filter used to be a native `<select>` with 1000+ unsearchable
     // options (UX review #5) — now a searchable `USelectMenu`.
@@ -178,7 +180,7 @@ describe('catalog page', () => {
     expect(lastQuery('/api/catalog/cards')).toMatchObject({ attribute: 'LIGHT', level: '8' })
     // The triggers show the selection in the card language; the value stays English.
     expect(component.find('[aria-label="Attribut"]').text()).toContain('LICHT')
-    expect(component.find('[aria-label="Level"]').text()).toContain('Level 8')
+    expect(component.find('[aria-label="Stufe/Rang"]').text()).toContain('Stufe/Rang 8')
   })
 
   it('writes a multi-selection as a comma list; reset clears it (#63)', async () => {
@@ -271,7 +273,7 @@ describe('catalog page', () => {
     expect(text).toContain('13,000 cards')
     expect(text).toContain('Add to inventory')
     expect(text).toContain('Add to wishlist')
-    expect(text).toContain('Lv 8')
+    expect(text).toContain('Level 8')
     expect(text).toContain('Blue-Eyes White Dragon')
     expect(text).not.toContain('Blauäugiger')
     expect(component.find('input[aria-label="Search cards"]').exists()).toBe(true)

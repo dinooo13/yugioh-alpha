@@ -60,7 +60,7 @@ function copiesLabel(i18n: RuleDescriptionI18n, maxCopies: number): string {
   return i18n.t('formats.rule.filter.copies.allowed', { max: maxCopies })
 }
 
-/** A one-liner for a card filter, e.g. "Attribut FINSTERNIS, Stufe ab 5". */
+/** A one-liner for a card filter, e.g. "Attribut FINSTERNIS, Stufe/Rang ab 5". */
 export function describeCardFilter(i18n: RuleDescriptionI18n, filter: CardFilter, options?: DescribeOptions): string {
   const { t } = i18n
   const parts: string[] = []

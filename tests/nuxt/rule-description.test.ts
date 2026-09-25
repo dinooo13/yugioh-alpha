@@ -60,19 +60,19 @@ describe('rule describer', () => {
 
   it('labels card types, attributes and races in the card language (ADR 0015)', async () => {
     const { describeCardFilter } = await composables()
-    const filter = { types: ['Spell Card'], attributes: ['dark'], races: ['Spellcaster', 'Creator God'] }
+    const filter = { types: ['Spell Card'], attributes: ['dark'], races: ['Spellcaster', 'Yami Yugi'] }
 
     // German interface, German cards; stored in any case, unknown values as they are.
-    expect(describeCardFilter(filter)).toBe('Typ Zauberkarte, Attribut FINSTERNIS, Art Hexer oder Creator God')
+    expect(describeCardFilter(filter)).toBe('Typ Zauberkarte, Attribut FINSTERNIS, Art Hexer oder Yami Yugi')
 
     // German interface, English cards.
     useState('card-locale-choice').value = 'en'
-    expect(describeCardFilter(filter)).toBe('Typ Spell Card, Attribut dark, Art Spellcaster oder Creator God')
+    expect(describeCardFilter(filter)).toBe('Typ Spell Card, Attribut dark, Art Spellcaster oder Yami Yugi')
 
     // English interface, German cards.
     await setTestLocale('en')
     useState('card-locale-choice').value = 'de'
-    expect(describeCardFilter(filter)).toBe('card type Zauberkarte, attribute FINSTERNIS, monster type Hexer or Creator God')
+    expect(describeCardFilter(filter)).toBe('card type Zauberkarte, attribute FINSTERNIS, monster type Hexer or Yami Yugi')
     useState('card-locale-choice').value = null
   })
 

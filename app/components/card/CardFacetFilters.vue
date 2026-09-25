@@ -37,7 +37,7 @@ const { cardValueOptions } = useCardText()
 const typeItems = computed(() => cardValueOptions('type', props.facets.types))
 const attributeItems = computed(() => cardValueOptions('attribute', props.facets.attributes))
 const raceItems = computed(() => cardValueOptions('race', props.facets.races))
-const levelItems = computed(() => props.facets.levels.map(value => ({ label: t('card.level', { level: value }), value })))
+const levelItems = computed(() => props.facets.levels.map(value => ({ label: t('card.levelFilterOption', { value }), value })))
 </script>
 
 <template>

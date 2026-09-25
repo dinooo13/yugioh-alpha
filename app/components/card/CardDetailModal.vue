@@ -3,7 +3,7 @@
  * The one card detail overlay (#88), for the catalog and the inventory.
  *
  * - Both variants: the card name as the dialog title, the type / attribute /
- *   race / level chips, the floating tilt/foil card (`CardFloatingImage`,
+ *   race / level / rank / link chips, the floating tilt/foil card (`CardFloatingImage`,
  *   ADR 0016), ATK/DEF and the card text in the card language, with a hint
  *   when a card has no German text (ADR 0015).
  * - `variant="catalog"` adds the English-name subtitle, the printings and
@@ -24,6 +24,7 @@
  * - No source credit for the German texts in the UI (#87, ADR 0017).
  */
 import { cardFrame } from '~/utils/card-frame'
+import { CARD_LEVEL_ICON, cardLevel } from '~/utils/card-level'
 import type { CardDetailPreview, CardDetailSummary, CardDetailVariant } from '~/utils/card-detail'
 import { formatCardStat } from '~~/shared/card-stats'
 
@@ -46,7 +47,7 @@ const emit = defineEmits<{ resolved: [id: number] }>()
 const open = defineModel<boolean>('open', { default: false })
 
 const { t } = useI18n()
-const { cardLocale, cardName, cardDesc, englishName, hasGermanText, cardValue } = useCardText()
+const { cardLocale, cardName, cardDesc, englishName, hasGermanText, cardValue, cardLevelLabel } = useCardText()
 
 // Nothing loads while the overlay is closed.
 const activeId = computed(() => open.value ? props.cardId : null)
@@ -54,6 +55,7 @@ const { detail, pending, error } = useCatalogCardDetail(activeId)
 
 const shown = computed<CardDetailPreview | null>(() => detail.value?.card ?? props.preview ?? null)
 const frame = computed(() => shown.value ? cardFrame(shown.value) : null)
+const level = computed(() => shown.value ? cardLevel(shown.value) : null)
 
 const imageSrc = computed(() => detail.value?.images[0]?.imageUrl
   ?? props.preview?.imageLarge
@@ -139,15 +141,15 @@ const hasDates = computed(() => Boolean(detail.value?.card.tcgDate || detail.val
           class="text-xs font-medium text-toned"
         >{{ cardValue('race', shown.race) }}</span>
         <span
-          v-if="shown.level"
+          v-if="level"
           class="inline-flex items-center gap-1 text-xs font-medium text-toned"
         >
           <UIcon
-            name="i-lucide-star"
+            :name="CARD_LEVEL_ICON[level.kind]"
             class="size-3.5 text-secondary"
             aria-hidden="true"
           />
-          {{ t('card.level', { level: shown.level }) }}
+          {{ cardLevelLabel(shown) }}
         </span>
       </span>
     </template>

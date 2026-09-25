@@ -105,7 +105,7 @@ describe('CardDetailModal', () => {
     expect(text).toContain('Normales Monster')
     expect(text).toContain('LICHT')
     expect(text).toContain('Drache')
-    expect(text).toContain('Level 8')
+    expect(text).toContain('Stufe 8')
     expect(text).toContain('ATK')
     expect(text).toContain('3000')
     expect(text).toContain('2500')
@@ -152,6 +152,18 @@ describe('CardDetailModal', () => {
       expect(stat('ATK')).toBe('2300')
     })
     expect(stat('DEF')).toBe('–')
+    // The Link rating, not a level (#101).
+    expect(dialog().text()).toContain('Link 3')
+    expect(dialog().text()).not.toContain('Stufe')
+  })
+
+  it('shows an Xyz monster\'s rank (#101)', async () => {
+    await mountModal({ detail: cardDetail({ type: 'XYZ Monster', frameType: 'xyz', level: 4 }) })
+
+    await vi.waitFor(() => {
+      expect(dialog().text()).toContain('Rang 4')
+    })
+    expect(dialog().text()).not.toContain('Stufe')
   })
 
   it('falls back to the English text with a hint when a card has no German data', async () => {

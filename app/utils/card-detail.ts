@@ -55,6 +55,8 @@ export interface CardDetailPreview {
   attribute: string | null
   race?: string | null
   level: number | null
+  /** Only the full detail has it (a Link monster's rating). */
+  linkval?: number | null
   atk: number | null
   def: number | null
   imageSmall?: string | null
