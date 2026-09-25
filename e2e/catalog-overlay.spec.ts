@@ -83,7 +83,7 @@ test.describe('catalog card overlay', () => {
       expect((await saved).ok()).toBe(true)
 
       await expect(page.getByText('Zu „Katalog-Deck“ hinzugefügt').first()).toBeVisible()
-      await expect(page.getByText(`${CARD.darkMagician}: jetzt ${expected}× im Main Deck.`)).toBeVisible()
+      await expect(page.getByText(`${CARD.darkMagician}: jetzt ${expected}× im Main Deck.`, { exact: true })).toBeVisible()
       expect(await deckQuantity(page, deckId)).toBe(expected)
     }
 
