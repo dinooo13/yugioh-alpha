@@ -3,9 +3,12 @@
     "noImage": "No image",
     "noImageFor": "{name}: {label}",
     "enlarge": "Enlarge {name}",
-    "level": "Level {level}",
-    "levelShort": "Lv {level}",
-    "stars": "Level {level}",
+    "levelLabel": {
+      "level": "Level {value}",
+      "rank": "Rank {value}",
+      "link": "Link {value}"
+    },
+    "levelFilterOption": "Level/Rank {value}",
     "englishName": "English: {name}",
     "germanTextMissing": "There is no German text for this card.",
     "totalQuantity": "×{count} total",
@@ -31,7 +34,7 @@
       "type": "Type",
       "attribute": "Attribute",
       "race": "Monster type",
-      "level": "Level"
+      "level": "Level/Rank"
     },
     "value": {
       "type": {
@@ -51,6 +54,7 @@
         "pendulum_tuner_effect_monster": "Pendulum Tuner Effect Monster",
         "ritual_effect_monster": "Ritual Effect Monster",
         "ritual_monster": "Ritual Monster",
+        "skill_card": "Skill Card",
         "spell_card": "Spell Card",
         "spirit_monster": "Spirit Monster",
         "synchro_monster": "Synchro Monster",
@@ -77,6 +81,7 @@
         "aqua": "Aqua",
         "beast": "Beast",
         "beast_warrior": "Beast-Warrior",
+        "creator_god": "Creator God",
         "cyberse": "Cyberse",
         "dinosaur": "Dinosaur",
         "divine_beast": "Divine-Beast",

@@ -44,8 +44,8 @@ test.describe('catalog seed', () => {
     await expect(page.getByRole('heading', { name: CARD.potOfGreed })).toHaveCount(0)
 
     // DARK or WIND, and level 8: only Stardust Dragon (Dark Magician is level 7).
-    await page.getByRole('button', { name: 'Level', exact: true }).click()
-    await page.getByRole('option', { name: 'Level 8', exact: true }).click()
+    await page.getByRole('button', { name: 'Stufe/Rang', exact: true }).click()
+    await page.getByRole('option', { name: 'Stufe/Rang 8', exact: true }).click()
     await page.keyboard.press('Escape')
     await expect(page).toHaveURL(/level=8/)
     await expect(page.getByRole('heading', { name: CARD.stardustDragon })).toBeVisible()

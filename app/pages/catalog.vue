@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { LocationQueryValue } from 'vue-router'
 import { cardFrame } from '~/utils/card-frame'
+import { CARD_LEVEL_ICON, cardLevel } from '~/utils/card-level'
 import type { CardDetailSummary } from '~/utils/card-detail'
 
 interface CatalogFacets {
@@ -37,7 +38,7 @@ const PAGE_SIZE = 24
 usePageTitle('catalog.title')
 
 const { t } = useI18n()
-const { cardName } = useCardText()
+const { cardName, cardLevelLabel } = useCardText()
 const count = useCount()
 
 const route = useRoute()
@@ -364,15 +365,15 @@ async function onAddedToInventory() {
               size="xs"
             />
             <span
-              v-if="card.level"
+              v-if="cardLevel(card)"
               class="inline-flex items-center gap-1 font-numeric text-[0.6875rem] font-semibold tracking-[0.04em] text-toned tabular-nums"
             >
               <UIcon
-                name="i-lucide-star"
+                :name="CARD_LEVEL_ICON[cardLevel(card)!.kind]"
                 class="size-3 text-secondary"
                 aria-hidden="true"
               />
-              {{ t('card.levelShort', { level: card.level }) }}
+              {{ cardLevelLabel(card) }}
             </span>
           </div>
           <div class="relative z-10 mt-auto flex flex-wrap gap-1 pt-1">

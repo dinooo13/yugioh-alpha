@@ -2,11 +2,15 @@ import { pickCardDesc, pickCardName } from '~~/shared/card-text'
 import type { CardDescFields, CardNameFields } from '~~/shared/card-text'
 import { cardValueKey } from '~/utils/card-values'
 import type { CardValueKind } from '~/utils/card-values'
+import { cardLevel } from '~/utils/card-level'
+import type { CardLevelFields } from '~/utils/card-level'
 
-/** The fields `cardMetaLine` reads; deck rows, search results and shared rows all have them. */
-export interface CardMetaFields {
-  type: string
-  level: number | null
+/**
+ * The fields `cardMetaLine` reads; deck rows, search results and shared rows
+ * all have them. Only the card detail has `linkval`, so list rows leave a
+ * Link monster's rating out.
+ */
+export interface CardMetaFields extends CardLevelFields {
   attribute: string | null
 }
 
@@ -66,12 +70,25 @@ export function useCardText() {
       .sort((a, b) => a.label.localeCompare(b.label, cardLocale.value))
   }
 
-  /** "Effektmonster · Stufe 7 · FINSTERNIS": type and attribute in the card language, the level in the interface language; missing parts are left out. */
+  /**
+   * "Stufe 7", "Rang 4" or "Link 3" (Konami's words, #101) in the interface
+   * language; null when the card has none (`cardLevel`).
+   */
+  function cardLevelLabel(card: CardLevelFields): string | null {
+    const level = cardLevel(card)
+    return level ? t(`card.levelLabel.${level.kind}`, { value: level.value }) : null
+  }
+
+  /**
+   * "Effektmonster · Stufe 7 · FINSTERNIS", "Xyz-Monster · Rang 4 · LICHT":
+   * type and attribute in the card language, the level / rank / link rating
+   * in the interface language; missing parts are left out.
+   */
   function cardMetaLine(card: CardMetaFields): string {
-    return [cardValue('type', card.type), card.level !== null ? t('card.stars', { level: card.level }) : null, card.attribute ? cardValue('attribute', card.attribute) : null]
+    return [cardValue('type', card.type), cardLevelLabel(card), card.attribute ? cardValue('attribute', card.attribute) : null]
       .filter(Boolean)
       .join(' · ')
   }
 
-  return { cardLocale, cardName, cardDesc, englishName, hasGermanText, cardValue, cardValueOptions, cardMetaLine }
+  return { cardLocale, cardName, cardDesc, englishName, hasGermanText, cardValue, cardValueOptions, cardLevelLabel, cardMetaLine }
 }

@@ -1,7 +1,7 @@
 {
   "catalog": {
     "title": "Catalog",
-    "description": "Search the global card catalog by name, type, attribute, monster type, level and set.",
+    "description": "Search the global card catalog by name, type, attribute, monster type, level/rank and set.",
     "resultCount": "{count} card | {count} cards",
     "search": {
       "placeholder": "Card name (English or German)...",

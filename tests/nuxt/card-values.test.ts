@@ -50,15 +50,17 @@ describe('useCardText().cardValue', () => {
     expect(cardValue('type', 'Normal Monster')).toBe('Normales Monster')
     expect(cardValue('type', 'Spell Card')).toBe('Zauberkarte')
     expect(cardValue('type', 'XYZ Monster')).toBe('Xyz-Monster')
+    // Konami EU's Speed Duel wording, and a literal translation for the
+    // OCG-only Creator God (#102).
+    expect(cardValue('type', 'Skill Card')).toBe('Skill-Karte')
+    expect(cardValue('race', 'Creator God')).toBe('Schöpfergott')
   })
 
   it('shows unknown values as they are stored and matches values in any case', async () => {
     const { cardValue } = await cardText()
 
-    // A Skill card's "race" is a character name; Creator God has no German source.
+    // A Skill card's "race" is a character name.
     expect(cardValue('race', 'Yami Yugi')).toBe('Yami Yugi')
-    expect(cardValue('race', 'Creator God')).toBe('Creator God')
-    expect(cardValue('type', 'Skill Card')).toBe('Skill Card')
     // Rule format filters compare ignoring case.
     expect(cardValue('attribute', 'dark')).toBe('FINSTERNIS')
   })

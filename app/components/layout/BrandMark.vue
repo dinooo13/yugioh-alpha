@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { RouteLocationRaw } from 'vue-router'
+import { NuxtLink } from '#components'
 
 /**
  * The app's mark (ADR 0016): an original tilted card with a gold edge and a
@@ -34,7 +35,7 @@ const size = computed(() => SIZES[props.size])
 
 <template>
   <component
-    :is="to ? resolveComponent('NuxtLink') : 'span'"
+    :is="to ? NuxtLink : 'span'"
     :to="to"
     class="group/brand inline-flex min-w-0 items-center gap-2.5 rounded-md"
   >

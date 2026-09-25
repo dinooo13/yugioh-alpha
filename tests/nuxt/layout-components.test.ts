@@ -1,5 +1,6 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { h } from 'vue'
+import { enableAutoUnmount } from '@vue/test-utils'
 import { mountSuspended } from '@nuxt/test-utils/runtime'
 import PageHeader from '~/components/layout/PageHeader.vue'
 import BackLink from '~/components/layout/BackLink.vue'
@@ -7,6 +8,9 @@ import EmptyState from '~/components/layout/EmptyState.vue'
 import SkipLink from '~/components/layout/SkipLink.vue'
 import BrandMark from '~/components/layout/BrandMark.vue'
 import { setTestLocale } from './fixtures/locale'
+
+// mountSuspended never unmounts; a later locale switch would re-render every earlier mount (#104).
+enableAutoUnmount(afterEach)
 
 afterEach(() => setTestLocale('de'))
 
@@ -146,5 +150,20 @@ describe('LayoutBrandMark', () => {
     expect(component.text()).toBe('YGO Alpha')
     expect(component.find('svg').attributes('aria-hidden')).toBe('true')
     expect(component.text()).not.toMatch(/yugioh/i)
+  })
+
+  it('renders a real link with `to` and no "Failed to resolve component" warning (#103)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const component = await mountSuspended(BrandMark, { props: { to: '/' } })
+
+      expect(component.find('a').attributes('href')).toBe('/')
+      expect(component.find('nuxtlink').exists()).toBe(false)
+      const messages = warn.mock.calls.map(call => call.map(String).join(' '))
+      expect(messages.filter(message => message.includes('Failed to resolve component'))).toEqual([])
+    }
+    finally {
+      warn.mockRestore()
+    }
   })
 })

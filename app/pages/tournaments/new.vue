@@ -117,6 +117,7 @@ async function submit() {
       >
         <UInput
           v-model="form.name"
+          class="w-full"
           :placeholder="t('tournaments.new.namePlaceholder')"
           :maxlength="TOURNAMENT_NAME_MAX_LENGTH"
           :aria-label="t('tournaments.new.name')"
@@ -129,6 +130,7 @@ async function submit() {
           :rows="3"
           :maxlength="TOURNAMENT_DESCRIPTION_MAX_LENGTH"
           :aria-label="t('tournaments.new.descriptionAriaLabel')"
+          class="w-full"
         />
       </UFormField>
 
@@ -162,6 +164,7 @@ async function submit() {
           :placeholder="t('tournaments.new.plannedRoundsPlaceholder')"
           :aria-label="t('tournaments.new.plannedRounds')"
           :disabled="form.pairingSystem === 'round_robin'"
+          class="w-full sm:w-48"
         />
         <p class="mt-1 text-xs text-muted">
           {{ plannedRoundsHint }}

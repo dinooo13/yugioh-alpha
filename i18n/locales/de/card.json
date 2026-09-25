@@ -3,9 +3,12 @@
     "noImage": "Kein Bild",
     "noImageFor": "{name}: {label}",
     "enlarge": "{name} vergrößern",
-    "level": "Level {level}",
-    "levelShort": "Lv {level}",
-    "stars": "Stufe {level}",
+    "levelLabel": {
+      "level": "Stufe {value}",
+      "rank": "Rang {value}",
+      "link": "Link {value}"
+    },
+    "levelFilterOption": "Stufe/Rang {value}",
     "englishName": "Englisch: {name}",
     "germanTextMissing": "Für diese Karte gibt es keinen deutschen Kartentext.",
     "totalQuantity": "×{count} ges.",
@@ -31,7 +34,7 @@
       "type": "Typ",
       "attribute": "Attribut",
       "race": "Monsterart",
-      "level": "Level"
+      "level": "Stufe/Rang"
     },
     "value": {
       "type": {
@@ -51,6 +54,7 @@
         "pendulum_tuner_effect_monster": "Pendel-Empfänger-Effektmonster",
         "ritual_effect_monster": "Ritual-Effektmonster",
         "ritual_monster": "Ritualmonster",
+        "skill_card": "Skill-Karte",
         "spell_card": "Zauberkarte",
         "spirit_monster": "Spirit-Monster",
         "synchro_monster": "Synchromonster",
@@ -77,6 +81,7 @@
         "aqua": "Aqua",
         "beast": "Ungeheuer",
         "beast_warrior": "Ungeheuer-Krieger",
+        "creator_god": "Schöpfergott",
         "cyberse": "Cyberse",
         "dinosaur": "Dinosaurier",
         "divine_beast": "Göttliches Ungeheuer",
