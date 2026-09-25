@@ -114,7 +114,7 @@ export const CARD_TERMS_INSTRUCTION: Record<AppLocale, string> = {
  * name — the model never makes one up, not even from memory (#148).
  */
 export const CARD_NAME_INSTRUCTION: Record<AppLocale, string> = {
-  de: 'Name cards by their official German name, exactly as nameDe in a tool result spells it. A card without nameDe in the tool results has no German name you know: call it by its English name (name), unchanged — never translate a card name or make up a German one, not even from memory (e.g. without nameDe, "Dark Magician Girl" stays "Dark Magician Girl"). For a card you haven\'t looked up, look it up with search_catalog or use its English name. Where it helps, add the English name in parentheses after a German one. Tool arguments accept either name.',
+  de: 'Name cards by their official German name, exactly as nameDe in a tool result spells it. A card without nameDe in the tool results has no German name you know: call it by its English name (name), unchanged — never translate a card name or make up a German one, not even from memory, and not part of one either (e.g. without nameDe, "Dark Magician Girl" stays "Dark Magician Girl" and "Cyber Dragon Nova" stays "Cyber Dragon Nova", never "Cyber-Drache Nova"). For a card you haven\'t looked up, look it up with search_catalog or use its English name. Where it helps, add the English name in parentheses after a German one. Tool arguments accept either name.',
   en: 'Keep card names in English, exactly as the catalog spells them — also in a German reply; never translate them.',
 }
 

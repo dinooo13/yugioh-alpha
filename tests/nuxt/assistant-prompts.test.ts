@@ -109,6 +109,7 @@ describe('buildSystemPrompt', () => {
     expect(CARD_NAME_INSTRUCTION.de).toContain('never translate a card name or make up a German one')
     expect(CARD_NAME_INSTRUCTION.de).toContain('A card without nameDe in the tool results has no German name you know')
     expect(CARD_NAME_INSTRUCTION.de).toContain('"Dark Magician Girl" stays "Dark Magician Girl"')
+    expect(CARD_NAME_INSTRUCTION.de).toContain('"Cyber Dragon Nova" stays "Cyber Dragon Nova", never "Cyber-Drache Nova"')
     expect(CARD_NAME_INSTRUCTION.de).not.toMatch(/[äöüÄÖÜß]/)
   })
 

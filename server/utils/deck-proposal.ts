@@ -13,9 +13,8 @@
 // guarantee before its "Übernehmen" (ADR 0006): legality is the rule
 // engine's verdict (`evaluateDeck` via `validateDeckCards`), never the
 // model's claim, and cards the user doesn't own (enough of) are listed
-// separately from the deck itself. On top of that it has the deck's
-// format-independent warnings (`buildWarnings`, #148): counts, legality,
-// warnings and missing cards.
+// separately from the deck itself. It also carries the format-independent
+// deck warnings (`buildWarnings`, #148), the ones a saved deck shows.
 
 import { and, inArray, isNotNull } from 'drizzle-orm'
 import type { useDb } from '../db'
@@ -53,8 +52,8 @@ function keyOf(catalogCardId: number, section: DeckSection): string {
 
 /**
  * Builds the resulting card list (deck + changes, or the planned cards) and
- * reports counts, legality, warnings and missing cards for it. Throws the same 404s as
- * the rest of the server for a foreign/unknown deck or format.
+ * reports counts, legality, warnings and missing cards for it. Throws the
+ * same 404s as the rest of the server for a foreign/unknown deck or format.
  */
 export function previewDeckProposal(db: Db, userId: string, input: DeckProposalInput): AssistantDeckPreview {
   const quantities = new Map<string, { catalogCardId: number, section: DeckSection, quantity: number }>()
