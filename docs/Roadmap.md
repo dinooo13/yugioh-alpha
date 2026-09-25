@@ -514,6 +514,10 @@ editor's card overlay has no printings and edits the card's quantity per
 section; the deck header counts Normal, Effect and Ritual monsters, Spells
 and Traps, and the Extra Deck's Fusion/Synchro/Xyz/Link.
 
+Round 6 (#148, card data): lists show a card's own artwork (ADR 0025), Link
+ratings in all lists, no empty sets in the set filter, the Pendulum scale in
+the overlay, a `?` ATK/DEF card in the E2E catalog.
+
 ## Recommended Build Order
 
 1. Card catalog and personal inventory

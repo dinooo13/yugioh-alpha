@@ -31,4 +31,5 @@ mark the old as superseded.
 | [0021](0021-no-deck-link-in-assistant-conversations.md) | No deck link in assistant conversations | Accepted (`deck_id` dropped by migration 0017, #137) |
 | [0022](0022-classic-plus-format.md) | Classic Plus as a built-in format with its own banlist | Accepted |
 | [0023](0023-markdown-in-assistant-answers.md) | Markdown in assistant answers | Accepted |
-| [0024](0024-passcode-aliases-and-catalog-cleanup.md) | Passcode aliases and catalog cleanup | Accepted |
+| [0024](0024-passcode-aliases-and-catalog-cleanup.md) | Passcode aliases and catalog cleanup | Accepted (extended by [0025](0025-primary-artwork-and-set-facet.md)) |
+| [0025](0025-primary-artwork-and-set-facet.md) | Primary artwork and the set facet | Accepted |
