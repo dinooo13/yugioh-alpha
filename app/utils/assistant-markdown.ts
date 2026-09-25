@@ -5,7 +5,9 @@
 // `:inline{}` syntax, no `{attributes}`, no frontmatter, no alerts or task
 // lists. What's left is CommonMark plus GFM tables and strikethrough. The
 // security plugin then keeps only the tags below, protocol-checks links and
-// drops images (their alt text stays).
+// drops images (their alt text stays). The parser lives in
+// `assistant-markdown-parser.ts` and loads lazily, in its own chunk, on the
+// first parse (#148): this module only imports Comark's types.
 //
 // Rendering: our own small render function over the sanitized tree — every
 // allowed tag maps to a plain element with Duel Arena semantic classes, only
@@ -13,11 +15,7 @@
 // children. It never uses `v-html` and never resolves a tag to a registered
 // app component.
 
-import { createSerializedMarkdownParser } from 'comark'
 import type { ComarkParseFn, ElementNode, MarkdownDocument, Node } from 'comark'
-import breaks from 'comark/plugins/breaks'
-import security from 'comark/plugins/security'
-import { textContent } from 'comark/utils'
 import { defineComponent, Fragment, h } from 'vue'
 import type { PropType, VNodeChild } from 'vue'
 import { NuxtLink } from '#components'
@@ -37,38 +35,23 @@ type AssistantMarkdownTag = typeof ASSISTANT_MARKDOWN_TAGS[number]
 
 const ALLOWED_TAGS = new Set<string>(ASSISTANT_MARKDOWN_TAGS)
 
-/** A tag outside the allow-list keeps its text; an image keeps its alt text. */
-function tagFallback(element: ElementNode): false | Node {
-  if (element[0].toLowerCase() === 'img') {
-    const alt = element[1].alt
-    return typeof alt === 'string' && alt.trim() !== '' ? alt : false
-  }
-  return textContent(element)
-}
+const loadComarkParser = () => import('./assistant-markdown-parser').then(module => module.createComarkAssistantParser)
 
 /**
- * One parser per text part: the serialized parser runs parses in order and
- * keeps the incremental state of a streaming part (`{ streaming: true }`
- * closes a half-written `**bold` or table while tokens arrive).
+ * One parser per text part (see assistant-markdown-parser.ts). The first call loads the
+ * parser chunk; calls stay in order because they all chain on the same promise. A failed
+ * load (e.g. offline) rejects that parse — MessageText then shows plain text — and the
+ * next call tries again.
  */
-export function createAssistantMarkdownParser(): AssistantMarkdownParser {
-  return createSerializedMarkdownParser({
-    registerDefaultPlugins: false,
-    // Headings get no `id`s: they would repeat across messages and could
-    // clobber DOM globals.
-    headingIds: false,
-    autoClose: true,
-    linkify: true,
-    plugins: [
-      breaks(),
-      security({
-        allowedTags: [...ASSISTANT_MARKDOWN_TAGS],
-        allowedProtocols: ['http', 'https', 'mailto'],
-        allowDataImages: false,
-        tagFallback,
-      }),
-    ],
-  })
+export function createAssistantMarkdownParser(load: () => Promise<() => AssistantMarkdownParser> = loadComarkParser): AssistantMarkdownParser {
+  let parser: Promise<AssistantMarkdownParser> | undefined
+  return (markdown, options) => {
+    const current = parser ??= load().then(create => create())
+    current.catch(() => {
+      if (parser === current) parser = undefined
+    })
+    return current.then(parse => parse(markdown, options))
+  }
 }
 
 // --- Rendering ------------------------------------------------------------------

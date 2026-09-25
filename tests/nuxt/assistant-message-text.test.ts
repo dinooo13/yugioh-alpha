@@ -3,7 +3,8 @@
 // no raw HTML, no Comark components, protocol-checked links, no images —
 // and the user's own text stays plain. Never `v-html`.
 
-import { describe, expect, it, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
 import type { DOMWrapper } from '@vue/test-utils'
 import { mountSuspended } from '@nuxt/test-utils/runtime'
@@ -11,6 +12,12 @@ import MessageText from '~/components/assistant/MessageText.vue'
 import { createAssistantMarkdownParser } from '~/utils/assistant-markdown'
 
 type Component = Awaited<ReturnType<typeof mountSuspended>>
+
+// The parser loads lazily (#148); warm its chunk once so the first
+// `vi.waitFor` below doesn't race a cold transform.
+beforeAll(async () => {
+  await import('~/utils/assistant-markdown-parser')
+})
 
 async function rendered(component: Component) {
   await flushPromises()
@@ -189,5 +196,46 @@ describe('createAssistantMarkdownParser', () => {
     doc.nodes.forEach(walk)
 
     expect([...tags].filter(tag => !['p'].includes(tag))).toEqual([])
+  })
+})
+
+describe('createAssistantMarkdownParser (lazy)', () => {
+  const realFactory = () => import('~/utils/assistant-markdown-parser').then(module => module.createComarkAssistantParser)
+
+  it('rejects a parse when the parser chunk fails to load, and loads it again on the next parse', async () => {
+    const load = vi.fn()
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockImplementation(realFactory)
+    const parse = createAssistantMarkdownParser(load)
+
+    await expect(parse('Hallo')).rejects.toThrow('offline')
+    const doc = await parse('Hallo')
+
+    expect(load).toHaveBeenCalledTimes(2)
+    expect(doc.nodes[0]).toEqual(['p', {}, 'Hallo'])
+  })
+
+  it('loads the parser once and answers parses in call order', async () => {
+    const load = vi.fn(realFactory)
+    const parse = createAssistantMarkdownParser(load)
+
+    const [first, second] = await Promise.all([parse('eins'), parse('**zwei**')])
+
+    expect(load).toHaveBeenCalledTimes(1)
+    expect(JSON.stringify(first.nodes)).toContain('eins')
+    expect(JSON.stringify(first.nodes)).not.toContain('zwei')
+    expect(JSON.stringify(second.nodes)).toContain('"strong"')
+    expect(JSON.stringify(second.nodes)).toContain('zwei')
+  })
+
+  it('keeps Comark out of the static imports of the route code', () => {
+    const staticComarkImport = /^import\s+(?!type\b).*from\s+'comark/m
+    const markdownModule = readFileSync('app/utils/assistant-markdown.ts', 'utf8')
+    const messageText = readFileSync('app/components/assistant/MessageText.vue', 'utf8')
+
+    expect(markdownModule).not.toMatch(staticComarkImport)
+    expect(messageText).not.toMatch(staticComarkImport)
+    expect(markdownModule).toContain('import(\'./assistant-markdown-parser\')')
+    expect(messageText).not.toContain('createComarkAssistantParser')
   })
 })

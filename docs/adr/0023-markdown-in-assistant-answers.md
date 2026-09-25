@@ -4,6 +4,11 @@
 
 Accepted (#123).
 
+Note (round 6, #148): the parser now loads on demand from its own chunk
+(`app/utils/assistant-markdown-parser.ts`); the assistant route chunk is
+63.0 kB gzipped again and the parser chunk (102.1 kB) loads with the first
+answer. Plain text shows until then, as described in decision 5.
+
 ## Context
 
 The assistant's models (MiMo V2.6 Pro and others, [ADR 0020](0020-assistant-on-the-ai-sdk.md))
