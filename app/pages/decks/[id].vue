@@ -23,6 +23,7 @@ interface DeckCardRow {
   attribute: string | null
   race: string | null
   level: number | null
+  linkval: number | null
   atk: number | null
   def: number | null
   imageSmall: string | null
@@ -69,6 +70,7 @@ interface SourceCard {
   attribute: string | null
   race: string | null
   level: number | null
+  linkval: number | null
   imageSmall: string | null
   owned: number
 }
@@ -81,6 +83,7 @@ interface InventorySearchItem {
   attribute: string | null
   race: string | null
   level: number | null
+  linkval?: number | null
   imageSmall: string | null
   totalQuantity: number
 }
@@ -94,6 +97,7 @@ interface CatalogSearchItem {
   attribute: string | null
   race: string | null
   level: number | null
+  linkval: number | null
   imageSmall: string | null
 }
 
@@ -358,6 +362,7 @@ const sourceCards = computed<SourceCard[]>(() => sourceItems.value.map((item) =>
     attribute: item.attribute ?? null,
     race: item.race ?? null,
     level: item.level ?? null,
+    linkval: item.linkval ?? null,
     imageSmall: item.imageSmall ?? null,
     owned: inventoryItem.totalQuantity
       ?? ownedQuantities.value?.[String(catalogCardId)]
@@ -633,6 +638,7 @@ function openCardOverlay(card: DeckCardRow | SourceCard) {
       attribute: card.attribute,
       race: card.race,
       level: card.level,
+      linkval: card.linkval,
       atk: 'atk' in card ? card.atk : null,
       def: 'def' in card ? card.def : null,
       imageSmall: card.imageSmall,

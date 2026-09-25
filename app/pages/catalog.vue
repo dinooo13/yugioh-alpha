@@ -21,6 +21,7 @@ interface CatalogCardSummary {
   attribute: string | null
   race: string | null
   level: number | null
+  linkval: number | null
   atk: number | null
   def: number | null
   imageSmall: string | null

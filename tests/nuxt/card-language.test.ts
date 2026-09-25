@@ -130,6 +130,7 @@ describe('catalog payloads with German names (fixture)', () => {
       'Blauäugiger w. Drache',
       'Buntäugiger Pendeldrache',
       'Sternenstaubdrache',
+      'Zehntausend-Drache',
     ])
   })
 

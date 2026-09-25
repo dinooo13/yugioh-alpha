@@ -25,7 +25,8 @@
       "notFound": "Card not found",
       "notFoundDescription": "Couldn't load the card details.",
       "cardText": "Card text",
-      "printings": "Printings"
+      "printings": "Printings",
+      "pendulumScale": "Pendulum Scale"
     },
     "field": {
       "quantity": "Quantity",

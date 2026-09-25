@@ -113,6 +113,7 @@ export default defineEventHandler(async (event) => {
       attribute: display?.attribute ?? null,
       race: display?.race ?? null,
       level: display?.level ?? null,
+      linkval: display?.linkval ?? null,
       atk: display?.atk ?? null,
       def: display?.def ?? null,
       imageSmall: display?.imageSmall ?? null,

@@ -25,7 +25,8 @@
       "notFound": "Karte nicht gefunden",
       "notFoundDescription": "Der Detaildatensatz konnte nicht geladen werden.",
       "cardText": "Kartentext",
-      "printings": "Printings"
+      "printings": "Printings",
+      "pendulumScale": "Pendelbereich"
     },
     "field": {
       "quantity": "Anzahl",

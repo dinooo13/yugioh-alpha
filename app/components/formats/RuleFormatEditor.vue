@@ -300,13 +300,23 @@ const { data: facets } = await useFetch<{
   races: string[]
   levels: number[]
   sets: Array<{ id: string, name: string }>
+  setsWithoutCards: Array<{ id: string, name: string }>
 }>('/api/catalog/facets', {
   headers: import.meta.server ? useRequestHeaders(['cookie']) : undefined,
-  default: () => ({ types: [], attributes: [], races: [], levels: [], sets: [] }),
+  default: () => ({ types: [], attributes: [], races: [], levels: [], sets: [], setsWithoutCards: [] }),
 })
 
-const setItems = computed(() => (facets.value?.sets ?? []).map(set => ({ label: set.name, value: set.id })))
-const setNames = computed(() => Object.fromEntries((facets.value?.sets ?? []).map(set => [set.id, set.name])))
+// The facet leaves out sets without a printing of an active card (ADR 0025):
+// they aren't offered for new rules, but a set a rule already names stays
+// selectable and keeps its name in the summary and the chip.
+const referencedSetIds = computed(() => new Set(rules.value.flatMap(rule => rule.kind === 'filter' ? rule.filter.setIds : [])))
+const setItems = computed(() => [
+  ...(facets.value?.sets ?? []),
+  ...(facets.value?.setsWithoutCards ?? []).filter(set => referencedSetIds.value.has(set.id)),
+].map(set => ({ label: set.name, value: set.id })))
+const setNames = computed(() => Object.fromEntries(
+  [...(facets.value?.sets ?? []), ...(facets.value?.setsWithoutCards ?? [])].map(set => [set.id, set.name]),
+))
 
 // --- Rule list -------------------------------------------------------------
 
