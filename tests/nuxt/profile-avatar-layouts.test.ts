@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { h } from 'vue'
-import { flushPromises } from '@vue/test-utils'
+import { enableAutoUnmount, flushPromises } from '@vue/test-utils'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
 import { LayoutSidebarContent } from '#components'
 import PublicLayout from '~/layouts/public.vue'
@@ -63,6 +63,9 @@ afterEach(async () => {
   state.profileOptions = []
   await setTestLocale('de')
 })
+
+// mountSuspended never unmounts; a later locale switch would re-render every earlier mount (#104).
+enableAutoUnmount(afterEach)
 
 describe('sidebar navigation', () => {
   const navLabels = (component: { findAll: (selector: string) => { text: () => string }[] }) =>

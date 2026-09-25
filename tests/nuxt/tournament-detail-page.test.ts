@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { flushPromises } from '@vue/test-utils'
+import { enableAutoUnmount, flushPromises } from '@vue/test-utils'
 import { defineComponent, h } from 'vue'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
 import TournamentDetailPage from '~/pages/tournaments/[id].vue'
@@ -140,6 +140,9 @@ afterEach(async () => {
   state.getCallCount = 0
   await setTestLocale('de')
 })
+
+// mountSuspended never unmounts; a later locale switch would re-render every earlier mount (#104).
+enableAutoUnmount(afterEach)
 
 
 describe('tournament detail page — organizer, registration', () => {

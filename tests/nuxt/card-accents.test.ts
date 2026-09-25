@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
+import { enableAutoUnmount } from '@vue/test-utils'
 import { mountSuspended } from '@nuxt/test-utils/runtime'
 import CardThumb from '~/components/card/CardThumb.vue'
 import CardTypeChip from '~/components/card/CardTypeChip.vue'
@@ -10,6 +11,9 @@ import { setTestLocale } from './fixtures/locale'
 // next to text that always says the same thing.
 
 afterEach(() => setTestLocale('de'))
+
+// mountSuspended never unmounts; a later locale switch would re-render every earlier mount (#104).
+enableAutoUnmount(afterEach)
 
 describe('CardTypeChip', () => {
   it('writes the type in the card language next to a decorative frame dot', async () => {
