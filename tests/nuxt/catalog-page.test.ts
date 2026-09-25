@@ -5,6 +5,7 @@ import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
 import { CardFacetFilters, USelect } from '#components'
 import CatalogPage from '~/pages/catalog.vue'
 import { setTestLocale } from './fixtures/locale'
+import { expectRouteKept } from './fixtures/route'
 import { selectWithOption } from './fixtures/select-wrapper'
 
 // The global auth middleware would bounce `route: '/catalog?…'` to /login
@@ -40,6 +41,7 @@ const mounted: Array<{ unmount: () => void }> = []
 async function mountPage(options: { route?: string } = {}) {
   const component = await mountSuspended(CatalogPage, options)
   mounted.push(component)
+  if (options.route) expectRouteKept(options.route)
   return component
 }
 
