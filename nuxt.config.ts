@@ -22,6 +22,12 @@ export default defineNuxtConfig({
   typescript: {
     strict: true,
   },
+  // Dev only: pre-bundle the auth client so Vite doesn't discover it at runtime and reload the first page.
+  vite: {
+    optimizeDeps: {
+      include: ['better-auth/vue'],
+    },
+  },
   nitro: {
     // Enables server/tasks/** (used by the catalog:sync task).
     // https://nitro.build/guide/tasks
