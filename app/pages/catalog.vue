@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { cardFrame } from '~/utils/card-frame'
+import { cardFrame } from '~~/shared/card-frame'
 import { isPreviousHistoryEntry } from '~/utils/history-entry'
 import { csvQueryValue as csv, queryList } from '~/utils/query-list'
 import { CARD_LEVEL_ICON, cardLevel } from '~/utils/card-level'
