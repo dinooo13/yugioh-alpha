@@ -161,6 +161,20 @@ describe('search_catalog', () => {
     })
   })
 
+  it('shows each card\'s primary artwork: the image whose id is the card\'s, else the lowest id (ADR 0025)', async () => {
+    db.insert(schema.catalogCardImage).values([
+      { id: 36996508, cardId: CARD.darkMagician, imageUrl: 'alt.jpg', imageUrlSmall: 'alt-small.jpg' },
+      { id: CARD.darkMagician, cardId: CARD.darkMagician, imageUrl: 'main.jpg', imageUrlSmall: 'main-small.jpg' },
+      { id: 1, cardId: CARD.potOfGreed, imageUrl: 'pot-low.jpg', imageUrlSmall: 'pot-low-small.jpg' },
+      { id: 2, cardId: CARD.potOfGreed, imageUrl: 'pot-high.jpg', imageUrlSmall: 'pot-high-small.jpg' },
+    ]).run()
+
+    const magician = await tool('search_catalog').run({ db, userId: 'user-a', cardLocale: 'en' }, { query: 'Dark Magician' })
+    expect(magician.result).toMatchObject({ items: [{ id: CARD.darkMagician, imageSmall: 'main-small.jpg' }] })
+    const pot = await tool('search_catalog').run({ db, userId: 'user-a', cardLocale: 'en' }, { query: 'Pot of Greed' })
+    expect(pot.result).toMatchObject({ items: [{ id: CARD.potOfGreed, imageSmall: 'pot-low-small.jpg' }] })
+  })
+
   it('finds cards by their German name, with wildcards literal (ADR 0015)', async () => {
     seedGermanNames(db, { [CARD.darkMagician]: 'Dunkler Magier' })
 

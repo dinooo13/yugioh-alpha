@@ -55,6 +55,7 @@ import { AssistantToolError } from './assistant-model'
 import { resolveCardNames } from './assistant-chat'
 import type { DeckValidation } from '../../shared/rule-formats'
 import type { AppLocale } from '../../shared/locale'
+import { primaryImageFirst } from './card-image-sql'
 import { cardNameDeSql } from './card-translation-sql'
 
 type Db = ReturnType<typeof useDb>
@@ -247,7 +248,8 @@ function toolSearchCatalog(db: Db, cardLocale: AppLocale, args: unknown) {
     .select({ cardId: catalogCardImage.cardId, imageSmall: catalogCardImage.imageUrlSmall })
     .from(catalogCardImage)
     .where(inArray(catalogCardImage.cardId, ids))
-    .orderBy(asc(catalogCardImage.cardId), asc(catalogCardImage.id))
+    // The card's primary artwork first (ADR 0025), like every list.
+    .orderBy(asc(catalogCardImage.cardId), ...primaryImageFirst())
     .all()
 
   const imageByCard = new Map<number, string | null>()
