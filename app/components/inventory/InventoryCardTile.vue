@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { breakdownKey, breakdownLabel } from '~/utils/inventory-search-result'
-import { cardFrame } from '~/utils/card-frame'
+import { cardFrame } from '~~/shared/card-frame'
 import type { InventorySearchResultItem } from '~/utils/inventory-search-result'
 
 const props = defineProps<{

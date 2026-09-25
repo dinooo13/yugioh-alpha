@@ -25,7 +25,7 @@
  *   its id so the caller can put it into its URL.
  * - No source credit for the German texts in the UI (#87, ADR 0017).
  */
-import { cardFrame } from '~/utils/card-frame'
+import { cardFrame } from '~~/shared/card-frame'
 import { CARD_LEVEL_ICON, cardLevel } from '~/utils/card-level'
 import type { CardDetailPreview, CardDetailSummary, CardDetailVariant } from '~/utils/card-detail'
 import { formatCardStat } from '~~/shared/card-stats'

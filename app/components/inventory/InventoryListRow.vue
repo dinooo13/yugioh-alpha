@@ -12,7 +12,7 @@
  * the card; it is focusable and must never be inside the button.
  */
 import { CARD_TEXT_EXCERPT_LENGTH } from '~~/shared/inventory'
-import { cardFrame } from '~/utils/card-frame'
+import { cardFrame } from '~~/shared/card-frame'
 
 interface InventoryListItem {
   id: string
