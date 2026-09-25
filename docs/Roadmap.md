@@ -216,9 +216,14 @@ Product outcome:
 
 Users can build decks for specific rule environments and immediately see whether a deck is legal.
 
-Implemented: built-in formats (TCG Advanced, OCG, GOAT, Ohne Banliste) plus custom formats under
+Implemented: built-in formats (TCG Advanced, OCG, GOAT, Classic Plus, Ohne Banliste) plus custom formats under
 `/formats`, with live validation in the deckbuilder. See
 [`docs/adr/0005-rule-format-model.md`](adr/0005-rule-format-model.md).
+
+Classic Plus, a house format whose rules describe what cards do (floodgates, hand traps,
+draw, burn, revival, mass removal, protection, negation), is a built-in with its own banlist,
+generated from the card texts by a classifier subagent and reviewed; see
+[`docs/adr/0022-classic-plus-format.md`](adr/0022-classic-plus-format.md).
 
 ### Phase 5: AI Deck Assistance
 

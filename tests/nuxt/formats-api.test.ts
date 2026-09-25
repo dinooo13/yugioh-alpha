@@ -28,6 +28,8 @@ import {
   validateDeckWithRules,
 } from '../../server/utils/decks'
 import { loadCardDataForValidation } from '../../server/utils/deck-validation'
+import { evaluateDeck } from '../../shared/rule-formats'
+import type { ValidationCardData } from '../../shared/rule-formats'
 
 const CARD = {
   darkMagician: 46986414,
@@ -179,6 +181,52 @@ describe('built-in formats', () => {
       // Canonical English; the UI shows formats.builtin.goat.cutoffLabel.
       label: 'Only cards up to June 2005',
     })
+  })
+
+  it('models Classic Plus as deck sizes, its own banlist, and a rule 1 card-type filter', () => {
+    const classicPlus = getRuleFormat(db, 'user-a', 'classic-plus')
+
+    expect(classicPlus.rules.rules).toEqual([
+      { kind: 'deck_size', section: 'main', min: 40, max: 50 },
+      { kind: 'deck_size', section: 'extra', max: 10 },
+      { kind: 'deck_size', section: 'side', max: 0 },
+      { kind: 'copies', maxCopies: 3 },
+      { kind: 'banlist', source: 'classic-plus' },
+      expect.objectContaining({
+        kind: 'filter',
+        match: 'matching',
+        filter: { types: expect.arrayContaining(['Synchro Monster', 'XYZ Monster', 'Link Monster', 'Pendulum Effect Monster']) },
+        maxCopies: 0,
+        label: 'Rule 1: Synchro, Xyz, Pendulum and Link monsters',
+      }),
+    ])
+    // Small enough to pass the validator, so it can be cloned and edited like any format.
+    expect(validateRuleFormatInput({ name: 'Copy', rules: classicPlus.rules }).rules).toEqual(classicPlus.rules)
+  })
+
+  it('reads the Classic Plus banlist status next to the official ones, and rule 1 by card type', () => {
+    const rules = getRuleFormat(db, 'user-a', 'classic-plus').rules
+    const cards = new Map<number, ValidationCardData>([
+      [1, { id: 1, name: 'Card 1', type: 'Effect Monster', banlistInfo: { ban_tcg: 'Forbidden', ban_classic_plus: 'Semi-Limited' } }],
+      [2, { id: 2, name: 'Card 2', type: 'Spell Card', banlistInfo: { ban_classic_plus: 'Limited' } }],
+      [3, { id: 3, name: 'Card 3', type: 'Synchro Monster' }],
+      [4, { id: 4, name: 'Card 4', type: 'Effect Monster', banlistInfo: { ban_goat: 'Forbidden' } }],
+    ])
+
+    const result = evaluateDeck(rules, [1, 2, 3, 4].map(id => ({ catalogCardId: id, section: 'main' as const, quantity: 1 })), cards)
+
+    expect(result.cards[1]!.maxCopies).toBe(2)
+    expect(result.cards[1]!.reasons).toEqual([{ kind: 'banlist', source: 'classic-plus', raw: 'Semi-Limited' }])
+    expect(result.cards[2]!.maxCopies).toBe(1)
+    expect(result.cards[3]!.maxCopies).toBe(0)
+    expect(result.cards[4]!.maxCopies).toBe(3)
+  })
+
+  it('clones Classic Plus into an editable format', () => {
+    const copy = cloneRuleFormat(db, 'user-a', 'classic-plus', validateRuleFormatUpdateInput({ rules: getRuleFormat(db, 'user-a', 'classic-plus').rules }))
+
+    expect(copy.isBuiltin).toBe(false)
+    expect(copy.rules).toEqual(getRuleFormat(db, 'user-a', 'classic-plus').rules)
   })
 
   it('refuses edits and deletes of a built-in with 403', () => {
@@ -411,7 +459,9 @@ describe('deck ↔ format integration', () => {
       tcgDate: '2002-03-08',
       setIds: ['starter-deck-yugi'],
     })
-    expect(data.get(CARD.potOfGreed)!.banlistInfo).toEqual({
+    // The official lists as stored; the Classic Plus status comes from the
+    // generated list (tests/nuxt/classic-plus-banlist.test.ts).
+    expect(data.get(CARD.potOfGreed)!.banlistInfo).toMatchObject({
       ban_tcg: 'Forbidden',
       ban_ocg: 'Forbidden',
       ban_goat: 'Limited',

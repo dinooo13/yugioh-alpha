@@ -29,3 +29,4 @@ mark the old as superseded.
 | [0019](0019-retired-catalog-cards.md) | Retired catalog cards | Accepted |
 | [0020](0020-assistant-on-the-ai-sdk.md) | The chat assistant on the Vercel AI SDK | Accepted, implemented (84a–84c); per-turn deck context removed by [0021](0021-no-deck-link-in-assistant-conversations.md) |
 | [0021](0021-no-deck-link-in-assistant-conversations.md) | No deck link in assistant conversations | Accepted |
+| [0022](0022-classic-plus-format.md) | Classic Plus as a built-in format with its own banlist | Accepted |

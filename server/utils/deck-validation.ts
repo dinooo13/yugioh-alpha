@@ -10,6 +10,7 @@ import type { useDb } from '../db'
 import { catalogCard, catalogPrinting } from '../db/schema'
 import { cardNameDeSql } from './card-translation-sql'
 import { defaultSectionForCard } from '../../shared/deck-sections'
+import type { ClassicPlusBanlist } from '../../shared/classic-plus'
 import { DEFAULT_MAX_COPIES, evaluateDeck } from '../../shared/rule-formats'
 import type {
   DeckCardEntry,
@@ -17,13 +18,23 @@ import type {
   RuleSet,
   ValidationCardData,
 } from '../../shared/rule-formats'
+import classicPlusBanlistJson from './classic-plus-banlist.json'
 
 type Db = ReturnType<typeof useDb>
+
+/** Classic Plus banlist status by card id, in YGOPRODeck's wording (ADR 0022). */
+const classicPlusBanlist: ClassicPlusBanlist = classicPlusBanlistJson
+const classicPlusStatus = new Map<number, string>([
+  ...classicPlusBanlist.forbidden.map(id => [id, 'Forbidden'] as const),
+  ...classicPlusBanlist.limited.map(id => [id, 'Limited'] as const),
+  ...classicPlusBanlist.semiLimited.map(id => [id, 'Semi-Limited'] as const),
+])
 
 /**
  * Loads the catalog data the rule engine needs for `cardIds`: card fields plus
  * the ids of the sets the card has a printing in (one extra query, not one per
- * card).
+ * card). The Classic Plus status isn't catalog data; it is added to
+ * `banlistInfo` here, so the engine reads every banlist the same way.
  */
 export function loadCardDataForValidation(db: Db, cardIds: number[]): Map<number, ValidationCardData> {
   const uniqueIds = [...new Set(cardIds)]
@@ -54,7 +65,9 @@ export function loadCardDataForValidation(db: Db, cardIds: number[]): Map<number
     .all()
 
   for (const row of rows) {
-    byId.set(row.id, { ...row, setIds: [] })
+    const classicPlus = classicPlusStatus.get(row.id)
+    const banlistInfo = classicPlus ? { ...row.banlistInfo, ban_classic_plus: classicPlus } : row.banlistInfo
+    byId.set(row.id, { ...row, banlistInfo, setIds: [] })
   }
 
   const printings = db

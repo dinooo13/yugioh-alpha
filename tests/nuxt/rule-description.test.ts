@@ -34,6 +34,7 @@ describe('rule describer', () => {
     expect(describeRule({ kind: 'copies', maxCopies: 3 })).toBe('Höchstens 3 Kopien pro Karte')
     expect(describeRule({ kind: 'copies', maxCopies: 1 })).toBe('Höchstens 1 Kopie pro Karte')
     expect(describeRule({ kind: 'banlist', source: 'goat' })).toBe('Offizielle Banliste (GOAT)')
+    expect(describeRule({ kind: 'banlist', source: 'classic-plus' })).toBe('Banliste (Classic Plus)')
     expect(describeRule(
       { kind: 'card_status', status: 'forbidden', cardIds: [POT_OF_GREED] },
       { cardNames: { [POT_OF_GREED]: 'Pot of Greed' } },
@@ -84,6 +85,7 @@ describe('rule describer', () => {
     expect(describeRule({ kind: 'deck_size', section: 'side', min: 1 })).toBe('Side Deck: at least 1 card')
     expect(describeRule({ kind: 'copies', maxCopies: 3 })).toBe('At most 3 copies per card')
     expect(describeRule({ kind: 'banlist', source: 'tcg' })).toBe('Official banlist (TCG)')
+    expect(describeRule({ kind: 'banlist', source: 'classic-plus' })).toBe('Banlist (Classic Plus)')
     expect(describeRule(
       { kind: 'card_status', status: 'semi_limited', cardIds: [POT_OF_GREED] },
       { cardNames: { [POT_OF_GREED]: 'Pot of Greed' } },
@@ -118,6 +120,7 @@ describe('rule describer', () => {
 
     await setTestLocale('en')
     expect(describeCapReason({ kind: 'banlist', source: 'goat', raw: 'Limited' })).toBe('GOAT banlist: Limited')
+    expect(describeCapReason({ kind: 'banlist', source: 'classic-plus', raw: 'Limited' })).toBe('Classic Plus banlist: Limited')
     expect(describeCapReason({ kind: 'format_rule', status: 'forbidden' })).toBe('Format rule: forbidden')
   })
 })

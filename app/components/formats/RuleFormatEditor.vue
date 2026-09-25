@@ -8,6 +8,7 @@
 
 import {
   BANLIST_SOURCES,
+  banlistSourceLabel,
   CARD_STATUSES,
   RULE_FORMAT_DESCRIPTION_MAX_LENGTH,
   RULE_FORMAT_NAME_MAX_LENGTH,
@@ -346,7 +347,7 @@ function onCardsResolved(cards: Array<{ id: number, name: string }>) {
 const sectionItems = computed(() => DECK_SECTIONS.map(section => ({ label: t(`decks.section.${section}`), value: section })))
 const statusItems = computed(() => CARD_STATUSES.map(status => ({ label: t(`formats.cardStatus.${status}`), value: status })))
 // Banlist names are game terms (TCG, OCG, GOAT) in every language.
-const sourceItems = BANLIST_SOURCES.map(source => ({ label: source.toUpperCase(), value: source }))
+const sourceItems = BANLIST_SOURCES.map(source => ({ label: banlistSourceLabel(source), value: source }))
 const matchItems = computed(() => [
   { label: t('formats.editor.match.matching'), value: 'matching' },
   { label: t('formats.editor.match.not_matching'), value: 'not_matching' },
