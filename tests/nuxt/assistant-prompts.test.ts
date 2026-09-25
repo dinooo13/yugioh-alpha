@@ -44,7 +44,7 @@ describe('SYSTEM_PROMPT', () => {
     })
   })
 
-  it('ends the answer with a proposal: explain first, nothing after it, several proposals in one step (#148, ADR 0025)', () => {
+  it('ends the answer with a proposal: explain first, nothing after it, several proposals in one step (#148, ADR 0026)', () => {
     const rule = '- A proposal ends your answer: write your short explanation first, in the same message as the write tool call, then make the call. After it, write nothing more (at most one short sentence)'
     expect(SYSTEM_PROMPT).toContain(rule)
     expect(SYSTEM_PROMPT).toContain('so don\'t ask for confirmation in text or repeat its contents. When one request needs several proposals, make all of them together in one step.')

@@ -1,4 +1,4 @@
-# 0025: A proposal ends the assistant turn
+# 0026: A proposal ends the assistant turn
 
 ## Status
 

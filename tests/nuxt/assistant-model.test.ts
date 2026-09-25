@@ -337,7 +337,7 @@ describe('the fake language model (NUXT_ASSISTANT_PROVIDER=fake)', () => {
     expect(fakeTurn({ prompt: [{ role: 'system', content: 'Deck ID: d1' }, user('Was ist in meinem Deck?')] }).text).toBe('Testantwort: Was ist in meinem Deck?')
   })
 
-  it('adds the first card of an earlier search (German or English add), with its text before the call (ADR 0025)', () => {
+  it('adds the first card of an earlier search (German or English add), with its text before the call (ADR 0026)', () => {
     const searched = [
       user('suche Dark Magician'),
       { role: 'assistant' as const, content: [{ type: 'tool-call' as const, toolCallId: '1', toolName: 'search_catalog', input: {} }] },

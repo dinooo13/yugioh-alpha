@@ -5,7 +5,7 @@
 // storage (user message, title, the assistant placeholder a proposal's FK
 // needs), the history window, the fallback texts saved into the answer
 // (cut off, no answer, too many steps, cancelled, timeout), the #54 guards
-// against looping tool calls, a proposal ends the turn (ADR 0025), and the
+// against looping tool calls, a proposal ends the turn (ADR 0026), and the
 // error codes the UI translates.
 
 import { randomUUID } from 'node:crypto'
@@ -108,7 +108,7 @@ export function repeatedToolFailure(limit: number): StopCondition<AssistantToolS
   return ({ steps }) => maxToolFailureCount(steps) >= limit
 }
 
-// --- A proposal ends the turn (ADR 0025) ---------------------------------------------
+// --- A proposal ends the turn (ADR 0026) ---------------------------------------------
 
 interface StepProposal { toolName: string, output: AssistantToolOutput }
 
@@ -243,7 +243,7 @@ function stepHadToolCalls(step: Steps[number]): boolean {
  * didn't end in a proper answer: cut off by a length limit, stopped on a
  * repeated tool failure or the step cap while still calling tools, or no
  * text at all (also a content filter). null = the answer stands as is —
- * also a turn that ended on a proposal (ADR 0025), even without any text:
+ * also a turn that ended on a proposal (ADR 0026), even without any text:
  * the action card is the answer.
  */
 export function fallbackText(steps: Steps, turnText: TurnText): string | null {

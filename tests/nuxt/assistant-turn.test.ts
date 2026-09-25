@@ -2,7 +2,7 @@
 // streamText's tool loop driven by scripted `MockLanguageModelV4`s, the UI
 // message stream it produces, what gets persisted, the fallback texts, the
 // #54 guards against looping tool calls, and the proposal that ends the turn
-// (ADR 0025).
+// (ADR 0026).
 
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
 import { drizzle } from 'drizzle-orm/better-sqlite3'
@@ -218,7 +218,7 @@ describe('startAssistantTurn: the tool loop', () => {
     expect(result).toMatchObject({ type: 'tool-result', toolName: 'search_catalog', output: { type: 'json', value: { items: [{ id: CARD.darkMagician }] } } })
   })
 
-  it('stores a write tool\'s proposal as a pending action of the answer, streams it as a data-action part after its chip, and ends the turn there (ADR 0025)', async () => {
+  it('stores a write tool\'s proposal as a pending action of the answer, streams it as a data-action part after its chip, and ends the turn there (ADR 0026)', async () => {
     const conversationId = newConversation()
     const { model, calls } = scriptedModel([
       call('add_to_inventory', { items: [{ catalogCardId: CARD.darkMagician, quantity: 2 }] }, { text: 'Hier ist mein Vorschlag.' }),
@@ -243,7 +243,7 @@ describe('startAssistantTurn: the tool loop', () => {
     expect(answer.content).toBe('Hier ist mein Vorschlag.')
   })
 
-  it('ends the turn on a proposal without any text, and adds no fallback text (ADR 0025)', async () => {
+  it('ends the turn on a proposal without any text, and adds no fallback text (ADR 0026)', async () => {
     const conversationId = newConversation()
     const { model, calls } = scriptedModel([
       call('add_to_inventory', { items: [{ catalogCardId: CARD.darkMagician, quantity: 1 }] }),
@@ -263,7 +263,7 @@ describe('startAssistantTurn: the tool loop', () => {
     }
   })
 
-  it('goes on after a failed write call, so the model can fix it (ADR 0025)', async () => {
+  it('goes on after a failed write call, so the model can fix it (ADR 0026)', async () => {
     const conversationId = newConversation()
     const { model, calls } = scriptedModel([
       call('add_to_inventory', { items: [{ catalogCardId: 12345, quantity: 1 }] }),
@@ -278,7 +278,7 @@ describe('startAssistantTurn: the tool loop', () => {
     expect(storedMessages(conversationId).at(-1)!.content).toBe('Diese Karte kenne ich nicht.')
   })
 
-  it('stores and streams every proposal of one step, each card after its chip, then ends the turn (ADR 0025)', async () => {
+  it('stores and streams every proposal of one step, each card after its chip, then ends the turn (ADR 0026)', async () => {
     const conversationId = newConversation()
     const { model, calls } = scriptedModel([
       callsInOneStep([
@@ -493,7 +493,7 @@ describe('startAssistantTurn: the tool loop', () => {
   })
 })
 
-describe('startAssistantTurn: a proposal ends the turn (ADR 0025)', () => {
+describe('startAssistantTurn: a proposal ends the turn (ADR 0026)', () => {
   /** A user format allowing one copy per card, and a deck with 2x Dark Magician that isn't legal in it. */
   function illegalFormatSetup() {
     const format = createRuleFormat(db, 'user-a', validateRuleFormatInput({ name: 'Highlander', rules: { rules: [{ kind: 'copies', maxCopies: 1 }] } }))
@@ -567,7 +567,7 @@ describe('startAssistantTurn: a proposal ends the turn (ADR 0025)', () => {
   })
 })
 
-describe('the proposal stop condition\'s helpers (ADR 0025)', () => {
+describe('the proposal stop condition\'s helpers (ADR 0026)', () => {
   const proposal = (toolName: string, legal?: boolean) => ({
     type: 'tool-result',
     toolName,
@@ -807,7 +807,7 @@ describe('startAssistantTurn: history, images and regenerate', () => {
       text('Ist erledigt.'),
     ])
     await runTurn(conversationId, model, { body: userText('füge Dark Magician hinzu') })
-    // The proposal ended the first turn (ADR 0025).
+    // The proposal ended the first turn (ADR 0026).
     expect(calls).toHaveLength(1)
     const actionId = db.select().from(schema.assistantAction).get()!.id
 
