@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
+import { enableAutoUnmount } from '@vue/test-utils'
 import { mountSuspended } from '@nuxt/test-utils/runtime'
 import ActionCard from '~/components/assistant/ActionCard.vue'
 import type { AssistantActionView } from '~~/shared/assistant-chat'
@@ -32,6 +33,9 @@ function deckAction(overrides: Partial<AssistantActionView> = {}): AssistantActi
     ...overrides,
   }
 }
+
+// mountSuspended never unmounts; a later locale switch would re-render every earlier mount (#104).
+enableAutoUnmount(afterEach)
 
 describe('AssistantActionCard', () => {
   it('shows the proposal preview: legality badge, counts, at most 5 issues, and the missing cards', async () => {

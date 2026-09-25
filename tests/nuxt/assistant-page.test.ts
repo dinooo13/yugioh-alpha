@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { flushPromises } from '@vue/test-utils'
+import { enableAutoUnmount, flushPromises } from '@vue/test-utils'
 import type { DOMWrapper } from '@vue/test-utils'
 import { mockNuxtImport, mountSuspended } from '@nuxt/test-utils/runtime'
 import AssistantConversationPage from '~/pages/assistant/[id].vue'
@@ -72,6 +72,9 @@ afterEach(async () => {
   navigateToMock.mockClear()
   vi.restoreAllMocks()
 })
+
+// mountSuspended never unmounts; a later locale switch would re-render every earlier mount (#104).
+enableAutoUnmount(afterEach)
 
 /** Spies on the router's `replace` (dropping `?prompt=`) without navigating. */
 function spyOnReplace() {
