@@ -11,6 +11,7 @@ import type { DeckValidation, DeckWarning } from '~~/shared/rule-formats'
 import type { Visibility } from '~~/shared/sharing'
 import { cardFrame } from '~~/shared/card-frame'
 import { deckBreakdownGroups } from '~~/shared/deck-breakdown'
+import { compareDeckRows } from '~~/shared/deck-order'
 import type { CardDetailPreview } from '~/utils/card-detail'
 import { deckCountState, deckMeterFill } from '~/utils/deck-meter'
 
@@ -112,7 +113,7 @@ const route = useRoute()
 const deckId = computed(() => String(route.params.id ?? ''))
 
 const { t, n } = useI18n()
-const { cardName, cardMetaLine, cardValueOptions } = useCardText()
+const { cardLocale, cardName, cardMetaLine, cardValueOptions } = useCardText()
 const count = useCount()
 const apiError = useApiError()
 const validationText = useValidationText()
@@ -457,6 +458,13 @@ const writes = useQueuedWrites()
 const pendingQuantities = ref<Record<string, number>>({})
 /** A format change not yet confirmed; `null` removes the format. */
 const pendingFormatId = ref<string | null | undefined>(undefined)
+/**
+ * Rows for cards not yet in a section, built from the card data the caller
+ * has (the add panel's card, the overlay's preview), by the same key. Shown
+ * until the last answer replaces them with the server's rows (or a rollback
+ * drops them).
+ */
+const pendingRows = ref<Record<string, DeckCardRow>>({})
 
 function quantityKey(catalogCardId: number, section: DeckSection): string {
   return `${catalogCardId}:${section}`
@@ -465,6 +473,7 @@ function quantityKey(catalogCardId: number, section: DeckSection): string {
 function clearOptimistic() {
   pendingQuantities.value = {}
   pendingFormatId.value = undefined
+  pendingRows.value = {}
 }
 
 async function writeDeck(request: () => Promise<DeckDetail>) {
@@ -503,17 +512,57 @@ function serverQuantity(catalogCardId: number, section: DeckSection): number {
   return serverSections.value[section].find(row => row.catalogCardId === catalogCardId)?.quantity ?? 0
 }
 
-// The server rows with the asked-for quantities. A row at 0 stays until the
-// queue drains, so its focused stepper isn't removed; a card new to a section
-// gets its row with the answer (the counts and steppers show it at once).
+/** Card data for an optimistic row: an add-panel card or the overlay's card. */
+type OptimisticCard = Pick<DeckCardRow, 'catalogCardId' | 'name' | 'type'> & Partial<DeckCardRow>
+
+// A row for a card new to `section`, as the server would send it; what the
+// caller doesn't know gets a safe default. The owned total of a row the card
+// already has in another section is the freshest.
+function optimisticRow(card: OptimisticCard, section: DeckSection, quantity: number): DeckCardRow {
+  const known = DECK_SECTIONS.flatMap(other => serverSections.value[other]).find(row => row.catalogCardId === card.catalogCardId)
+  return {
+    catalogCardId: card.catalogCardId,
+    name: card.name,
+    nameDe: card.nameDe ?? null,
+    type: card.type,
+    frameType: card.frameType ?? null,
+    attribute: card.attribute ?? null,
+    race: card.race ?? null,
+    level: card.level ?? null,
+    linkval: card.linkval ?? null,
+    atk: card.atk ?? null,
+    def: card.def ?? null,
+    imageSmall: card.imageSmall ?? null,
+    section,
+    quantity,
+    owned: known?.owned ?? card.owned ?? 0,
+    // The indicator is computed from the shown deck (`rowUsage`).
+    usedInDeck: quantity,
+    shortfall: 0,
+    retired: known?.retired ?? card.retired ?? false,
+  }
+}
+
+// The server rows with the asked-for quantities, plus the optimistic rows of
+// cards new to a section, slotted in where the server sorts them. A row at 0
+// stays until the queue drains, so its focused stepper isn't removed.
 const sections = computed<Record<DeckSection, DeckCardRow[]>>(() => {
   const pending = pendingQuantities.value
   const shown = { ...serverSections.value }
   for (const section of DECK_SECTIONS) {
-    shown[section] = serverSections.value[section].map((row) => {
+    const rows = serverSections.value[section].map((row) => {
       const quantity = pending[quantityKey(row.catalogCardId, section)]
       return quantity === undefined || quantity === row.quantity ? row : { ...row, quantity }
     })
+    for (const row of Object.values(pendingRows.value)) {
+      if (row.section !== section || rows.some(existing => existing.catalogCardId === row.catalogCardId)) {
+        continue
+      }
+      const shownRow = { ...row, quantity: pending[quantityKey(row.catalogCardId, section)] ?? row.quantity }
+      const index = rows.findIndex(existing => compareDeckRows(section, shownRow, existing, cardLocale.value) < 0)
+      rows.splice(index === -1 ? rows.length : index, 0, shownRow)
+    }
+    shown[section] = rows
   }
   return shown
 })
@@ -545,11 +594,11 @@ const usedByCard = computed(() => {
       used.set(row.catalogCardId, (used.get(row.catalogCardId) ?? 0) + row.quantity)
     }
   }
-  // Pending quantities of cards not yet in that section have no row.
+  // Pending quantities without a shown row (no card data to build one from).
   for (const [key, quantity] of Object.entries(pendingQuantities.value)) {
     const [id, section] = key.split(':') as [string, DeckSection]
     const catalogCardId = Number(id)
-    if (!serverSections.value[section].some(row => row.catalogCardId === catalogCardId)) {
+    if (!sections.value[section].some(row => row.catalogCardId === catalogCardId)) {
       used.set(catalogCardId, (used.get(catalogCardId) ?? 0) + quantity)
     }
   }
@@ -598,12 +647,18 @@ function sectionCountClass(section: DeckSection): string {
 
 // --- Mutations (queued, see `writeDeck`) -------------------------------------
 
-async function setQuantity(catalogCardId: number, section: DeckSection, quantity: number) {
+// `card` builds the row of a card new to the section, so it shows at once.
+async function setQuantity(catalogCardId: number, section: DeckSection, quantity: number, card?: OptimisticCard) {
   if (quantity < 0 || quantity > MAX_DECK_CARD_QUANTITY) {
     return
   }
 
-  pendingQuantities.value = { ...pendingQuantities.value, [quantityKey(catalogCardId, section)]: quantity }
+  const key = quantityKey(catalogCardId, section)
+  const hasRow = serverSections.value[section].some(row => row.catalogCardId === catalogCardId) || key in pendingRows.value
+  if (card && quantity > 0 && !hasRow) {
+    pendingRows.value = { ...pendingRows.value, [key]: optimisticRow(card, section, quantity) }
+  }
+  pendingQuantities.value = { ...pendingQuantities.value, [key]: quantity }
   await writeDeck(() => $fetch<DeckDetail>(`/api/decks/${deckId.value}/cards`, {
     method: 'PUT',
     body: { catalogCardId, section, quantity },
@@ -638,7 +693,7 @@ async function changeFormat(formatId: string | null) {
 }
 
 async function addCard(card: SourceCard, section: DeckSection) {
-  await setQuantity(card.catalogCardId, section, quantityInSection(card.catalogCardId, section) + 1)
+  await setQuantity(card.catalogCardId, section, quantityInSection(card.catalogCardId, section) + 1, card)
 }
 
 /**
@@ -695,8 +750,9 @@ const overlayOwned = computed(() => {
 })
 
 function setOverlayQuantity(section: DeckSection, quantity: number) {
-  if (overlayCard.value) {
-    setQuantity(overlayCard.value.id, section, quantity)
+  const card = overlayCard.value
+  if (card) {
+    setQuantity(card.id, section, quantity, { ...card.preview, catalogCardId: card.id, owned: card.owned })
   }
 }
 

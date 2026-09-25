@@ -135,6 +135,31 @@ test.describe('deck editor card overlay and card-kind breakdown', () => {
 
     await page.getByRole('checkbox', { name: 'Auch im Kartentext suchen' }).check()
     await expect(page.getByRole('button', { name: `${CARD.darkMagician} zum Main Deck hinzufügen`, exact: true })).toBeVisible()
+
+    // A card new to a section gets its row at once, before the write answers:
+    // hold the PUT until the row is checked.
+    let releaseWrite: () => void = () => {}
+    const held = new Promise<void>((resolve) => {
+      releaseWrite = resolve
+    })
+    await page.route(`**/api/decks/${deckId}/cards`, async (route) => {
+      await held
+      await route.continue()
+    })
+    const sideQuantity = page.getByRole('spinbutton', { name: `Anzahl von ${CARD.darkMagician} im Side Deck` })
+    await expect(sideQuantity).toHaveCount(0)
+    await page.getByRole('button', { name: `${CARD.darkMagician} zum Side Deck hinzufügen`, exact: true }).click()
+    await expect(sideQuantity).toHaveValue('1')
+    await expect(page.getByLabel('Anzahl im Side Deck')).toHaveText('1/15')
+
+    // The server's row takes over; it is stored.
+    const answered = page.waitForResponse(response => response.url().endsWith(`/api/decks/${deckId}/cards`) && response.request().method() === 'PUT')
+    releaseWrite()
+    expect((await answered).ok()).toBe(true)
+    await expect(sideQuantity).toHaveValue('1')
+    await page.reload()
+    await waitForHydration(page)
+    await expect(sideQuantity).toHaveValue('1')
   })
 
   test('the deck tiles show the compact card kinds (#148)', async ({ page }) => {

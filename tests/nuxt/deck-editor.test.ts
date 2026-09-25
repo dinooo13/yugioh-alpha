@@ -399,6 +399,10 @@ describe('deck editor mutations', () => {
     return component.find<HTMLInputElement>(quantityLabel).element.value
   }
 
+  function shownQuantityOf(component: { find: <T extends Element>(selector: string) => DOMWrapper<T> }, name: string) {
+    return component.find<HTMLInputElement>(`input[aria-label="Anzahl von ${name} im Main Deck"]`).element.value
+  }
+
   // A write that waits for the test, so the queue can be observed.
   function deferredWrites() {
     const resolvers: Array<(detail: unknown) => void> = []
@@ -524,6 +528,122 @@ describe('deck editor mutations', () => {
     expect(shownQuantity(component)).toBe('1')
     expect(component.find(mainCount).text()).toBe('1/40–60')
     expect(component.find(plusLabel).attributes('disabled')).toBeUndefined()
+  })
+
+  // A card new to a section gets its row at once (#148), built from the add
+  // panel's card and sorted like the server sorts.
+  describe('optimistic rows', () => {
+    const POT_OF_GREED = 55144522
+    const MIRROR_FORCE = 44095762
+    const potOfGreedSource = {
+      catalogCardId: POT_OF_GREED,
+      name: 'Pot of Greed',
+      type: 'Spell Card',
+      frameType: 'spell',
+      attribute: 'SPELL',
+      race: 'Normal',
+      level: null,
+      imageSmall: 'https://images.example/cards_small/55144522.jpg',
+      totalQuantity: 2,
+    }
+
+    function mainRowNames(component: { findAll: (selector: string) => Array<DOMWrapper<Element>> }) {
+      return component.findAll('input[aria-label^="Anzahl von "][aria-label$=" im Main Deck"]')
+        .map(input => input.attributes('aria-label')!.replace('Anzahl von ', '').replace(' im Main Deck', ''))
+    }
+
+    function deckWith(potQuantity: number) {
+      return deckDetail({
+        main: [
+          row({ name: 'Dark Magician', section: 'main', quantity: 1, owned: 3, usedInDeck: 1 }),
+          ...(potQuantity > 0
+            ? [row({ name: 'Pot of Greed', section: 'main', catalogCardId: POT_OF_GREED, type: 'Spell Card', frameType: 'spell', quantity: potQuantity, owned: 2, usedInDeck: potQuantity })]
+            : []),
+          row({ name: 'Mirror Force', section: 'main', catalogCardId: MIRROR_FORCE, type: 'Trap Card', frameType: 'trap', quantity: 1, owned: 1, usedInDeck: 1 }),
+        ],
+      })
+    }
+
+    it('shows the row right after "+ Main", before the write answers, where the server sorts it', async () => {
+      state.source = { items: [potOfGreedSource], total: 1 }
+      state.deck = deckWith(0)
+      const { mock: fetchMock, resolvers } = deferredWrites()
+
+      const component = await mountSuspended(DeckEditorPage)
+      expect(mainRowNames(component)).toEqual(['Dark Magician', 'Mirror Force'])
+
+      await component.find('[aria-label="Pot of Greed zum Main Deck hinzufügen"]').trigger('click')
+      await flushPromises()
+      expect(deckCalls(fetchMock)).toHaveLength(1)
+
+      // Monsters, spells, traps — the new spell sits between them.
+      expect(mainRowNames(component)).toEqual(['Dark Magician', 'Pot of Greed', 'Mirror Force'])
+      const potRow = component.find('input[aria-label="Anzahl von Pot of Greed im Main Deck"]').element.closest('li')!
+      expect(potRow.textContent).toContain('1/2')
+      expect(potRow.getAttribute('data-frame')).toBe('spell')
+      expect(potRow.querySelector('img')?.getAttribute('src')).toBe('https://images.example/cards_small/55144522.jpg')
+
+      // A second click counts on the new row; no duplicate row.
+      await component.find('[aria-label="Pot of Greed zum Main Deck hinzufügen"]').trigger('click')
+      await flushPromises()
+      expect(shownQuantityOf(component, 'Pot of Greed')).toBe('2')
+      expect(mainRowNames(component)).toEqual(['Dark Magician', 'Pot of Greed', 'Mirror Force'])
+
+      // The server's row takes over once the last answer is in.
+      resolvers[0]!(deckWith(1))
+      await flushPromises()
+      resolvers[1]!(deckWith(2))
+      await flushPromises()
+      expect(mainRowNames(component)).toEqual(['Dark Magician', 'Pot of Greed', 'Mirror Force'])
+      expect(shownQuantityOf(component, 'Pot of Greed')).toBe('2')
+      expect(component.find(mainCount).text()).toBe('4/40–60')
+    })
+
+    it('drops the row again when the write fails', async () => {
+      state.source = { items: [potOfGreedSource], total: 1 }
+      state.deck = deckWith(0)
+      let rejectWrite: ((error: unknown) => void) | undefined
+      stubDeckFetch((_url, options) => (options?.method === 'PUT'
+        ? new Promise((_resolve, reject) => {
+            rejectWrite = reject
+          })
+        : Promise.resolve(deckWith(0))))
+
+      const component = await mountSuspended(DeckEditorPage)
+      await component.find('[aria-label="Pot of Greed zum Main Deck hinzufügen"]').trigger('click')
+      await flushPromises()
+      expect(mainRowNames(component)).toEqual(['Dark Magician', 'Pot of Greed', 'Mirror Force'])
+
+      rejectWrite!(new Error('[PUT] "/api/decks/deck-1/cards": 500'))
+      await flushPromises()
+
+      expect(mainRowNames(component)).toEqual(['Dark Magician', 'Mirror Force'])
+      expect(component.find(mainCount).text()).toBe('2/40–60')
+      expect(component.text()).toContain('Die Änderung konnte nicht gespeichert werden.')
+    })
+
+    it('shows a new Side Deck row for a card already in the Main Deck, with its owned total', async () => {
+      state.source = { items: [], total: 0 }
+      state.deck = deckWith(1)
+      deferredWrites()
+
+      const component = await mountSuspended(DeckEditorPage)
+      // The row's "…" menu has no quick add to Side; the overlay does.
+      await component.findAll('button[aria-haspopup="dialog"]').find(button => button.text() === 'Pot of Greed')!.trigger('click')
+      await flushPromises()
+      await vi.waitFor(() => {
+        expect(document.body.querySelector('[aria-label="Eine Kopie mehr im Side Deck"]')).not.toBeNull()
+      })
+      await new BodyWrapper(document.body).find('button[aria-label="Eine Kopie mehr im Side Deck"]').trigger('click')
+      await flushPromises()
+
+      const sideInput = component.find('input[aria-label="Anzahl von Pot of Greed im Side Deck"]')
+      expect(sideInput.exists()).toBe(true)
+      expect((sideInput.element as HTMLInputElement).value).toBe('1')
+      // 1 in Main + 1 in Side of 2 owned, on both rows.
+      expect(sideInput.element.closest('li')!.textContent).toContain('2/2')
+      expect(component.find('[aria-label="Anzahl im Side Deck"]').text()).toBe('1/15')
+    })
   })
 
   it('drops the asked-for value even when the rollback reload fails too', async () => {
