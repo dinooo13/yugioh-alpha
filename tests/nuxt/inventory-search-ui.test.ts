@@ -197,7 +197,9 @@ describe('inventory search panel (Galerie)', () => {
 
     // Aggregated result: name, total quantity, and per-collection breakdown.
     expect(text).toContain('Blue-Eyes White Dragon')
-    expect(text).toContain('1 Karte')
+    // No count line above the tiles (owner feedback, #148): the header has the total.
+    expect(text).toContain('5 Karten')
+    expect(text).not.toContain('1 Karte')
     expect(text).toContain('×5 ges.')
     expect(text).toContain('Box 1 ×3')
     expect(text).toContain('(keine Sammlung) ×2')
