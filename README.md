@@ -60,7 +60,7 @@ pnpm db:generate   # generate a new migration from server/db/schema.ts
 pnpm db:migrate    # apply migrations manually
 ```
 
-Check what `db:generate` wrote before committing it: for a dropped or changed foreign key, drizzle-kit may generate a table rebuild (`PRAGMA foreign_keys=OFF`, `CREATE TABLE __new_…`, `DROP TABLE`). The migrator runs every migration inside one transaction, where that pragma has no effect, so the rebuild's `DROP TABLE` cascade-deletes the child rows. Hand-write such migrations instead: drop the column's indexes, then `ALTER TABLE … DROP COLUMN` (see migration 0017). A test fails on any later migration that rebuilds a table.
+Check what `db:generate` wrote before committing it: for a dropped or changed foreign key, drizzle-kit may generate a table rebuild (`PRAGMA foreign_keys=OFF`, `CREATE TABLE __new_…`, `DROP TABLE`). The migrator runs every migration inside one transaction, where that pragma has no effect, so the rebuild's `DROP TABLE` cascade-deletes the child rows. Hand-write such migrations instead: drop the column's indexes, then `ALTER TABLE … DROP COLUMN` (see migration 0017). That works when the foreign key is a column constraint (`… REFERENCES …` on the column itself, as `ALTER TABLE … ADD` writes it). A column named in a table-level `FOREIGN KEY (…)` clause of a `CREATE TABLE` (e.g. `owned_card.printing_id`, ADR 0017) can't be dropped that way: SQLite fails with "unknown column … in foreign key definition", and only a table rebuild, which the migrator can't run safely, removes it. A test fails on any later migration that rebuilds a table.
 
 ## Card Catalog
 
@@ -69,11 +69,11 @@ The global card catalog (`catalog_card`, `catalog_set`, `catalog_printing`, `cat
 After running migrations, populate (or refresh) the catalog with a full sync — this is **not** run automatically on startup, since it fetches the entire card database:
 
 ```bash
-# Run the Nitro task directly
-pnpm nuxt task run catalog:sync
+# Dev server only (nitro's dev task runner, no session needed)
+curl -X POST http://localhost:3000/_nitro/tasks/catalog:sync
 ```
 
-or trigger it from a running server as an authenticated user:
+On a production server (the `/_nitro/tasks` runner exists only in dev, and nuxi has no `task` command), trigger it as an authenticated user:
 
 ```bash
 curl -X POST http://localhost:3000/api/admin/catalog/sync \
@@ -94,8 +94,8 @@ included. See [`docs/adr/0015-german-card-data.md`](./docs/adr/0015-german-card-
 - `catalog:sync` (and `POST /api/admin/catalog/sync`) runs the German sync right
   after the card sync. That part is best effort: if it fails, the card result
   still stands and the response reports the error under `translations`.
-- The German sync on its own: `pnpm nuxt task run catalog:sync-translations` or
-  `POST /api/admin/catalog/translations/sync` (same session check). It asks GitHub
+- The German sync on its own: `POST /_nitro/tasks/catalog:sync-translations` on
+  the dev server, or `POST /api/admin/catalog/translations/sync` (same session check). It asks GitHub
   for the head commit once and is `skipped` when nothing changed since the last
   successful run; otherwise it streams the repo tarball (~15 MB) and reads only `de/`.
 - **After deploying this change, run `catalog:sync` once.** Until then no card has

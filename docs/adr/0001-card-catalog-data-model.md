@@ -21,7 +21,7 @@ by hand.
 
 This is the first domain schema and the first external data dependency in
 the app, so the decisions below are recorded per
-[`docs/WORKFLOW.md` §7](../WORKFLOW.md).
+[`docs/WORKFLOW.md` §5](../WORKFLOW.md#5-when-to-write-an-adr).
 
 ## Decision
 
