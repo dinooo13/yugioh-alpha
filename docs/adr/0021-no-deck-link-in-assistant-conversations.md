@@ -7,6 +7,11 @@ context injection, never persisted" and "Entry points" sections of
 [0011](0011-deck-assistance-in-chat.md), and the `/decks/assistent` target in
 the mapping table of [0013](0013-english-url-scheme.md).
 
+Note: `deck_id` and `idx_assistant_conversation_deck` were dropped by
+migration 0017 (#137) with `ALTER TABLE … DROP COLUMN` after dropping the
+index. No table rebuild was needed, because the deck FK is a column
+constraint of `deck_id`.
+
 ## Context
 
 [ADR 0011](0011-deck-assistance-in-chat.md) linked a conversation to one of

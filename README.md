@@ -55,6 +55,8 @@ pnpm db:generate   # generate a new migration from server/db/schema.ts
 pnpm db:migrate    # apply migrations manually
 ```
 
+Check what `db:generate` wrote before committing it: for a dropped or changed foreign key, drizzle-kit may generate a table rebuild (`PRAGMA foreign_keys=OFF`, `CREATE TABLE __new_…`, `DROP TABLE`). The migrator runs every migration inside one transaction, where that pragma has no effect, so the rebuild's `DROP TABLE` cascade-deletes the child rows. Hand-write such migrations instead: drop the column's indexes, then `ALTER TABLE … DROP COLUMN` (see migration 0017). A test fails on any later migration that rebuilds a table.
+
 ## Card Catalog
 
 The global card catalog (`catalog_card`, `catalog_set`, `catalog_printing`, `catalog_card_image`) is populated from the [YGOPRODeck API](https://ygoprodeck.com/api-guide/) rather than entered by hand. See [`docs/adr/0001-card-catalog-data-model.md`](./docs/adr/0001-card-catalog-data-model.md) for the schema/import design.

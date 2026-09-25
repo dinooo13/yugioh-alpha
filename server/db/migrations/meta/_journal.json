@@ -120,6 +120,13 @@
       "when": 1790252138290,
       "tag": "0016_assistant_message_ui_parts",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1790330887506,
+      "tag": "0017_assistant_conversation_drop_deck_id",
+      "breakpoints": true
     }
   ]
 }

@@ -16,8 +16,8 @@ import {
   requireOwnConversation,
 } from '../../server/utils/assistant-chat'
 import { applyAction, rejectAction } from '../../server/utils/assistant-tools'
-import { loadUiMessages, persistUserMessage } from '../../server/utils/assistant-ui-messages'
-import { createDeck, deleteDeck, upsertDeckCard } from '../../server/utils/decks'
+import { loadUiMessages } from '../../server/utils/assistant-ui-messages'
+import { createDeck } from '../../server/utils/decks'
 import { readFileSync } from 'node:fs'
 import { ASSISTANT_ERROR_CODES } from '../../shared/assistant-chat'
 
@@ -57,10 +57,6 @@ function statusOf(run: () => unknown): number | undefined {
     return (error as { statusCode?: number }).statusCode
   }
   return undefined
-}
-
-function addUserMessage(conversationId: string, text: string) {
-  return persistUserMessage(db, { conversationId, id: crypto.randomUUID(), text, imageCount: 0 })
 }
 
 let db: TestDb
@@ -112,25 +108,8 @@ describe('no deck link (ADR 0021)', () => {
     expect(second.id).not.toBe(first.id)
     expect([first.title, second.title]).toEqual(['Neue Unterhaltung', 'Neue Unterhaltung'])
     expect(Object.keys(first).sort()).toEqual(['createdAt', 'id', 'title', 'updatedAt'])
-    expect(requireOwnConversation(db, 'user-a', first.id).deckId).toBeNull()
-  })
-
-  it('keeps a legacy deck-linked conversation, its messages and its title when the deck is deleted (deck_id → null)', () => {
-    const deck = createDeck(db, 'user-a', { name: 'Magier-Deck', description: null })
-    upsertDeckCard(db, 'user-a', deck.id, { catalogCardId: CARD.darkMagician, section: 'main', quantity: 2 })
-    const conversation = createConversation(db, 'user-a')
-    db.update(schema.assistantConversation)
-      .set({ deckId: deck.id, title: 'Deck: Magier-Deck' })
-      .where(eq(schema.assistantConversation.id, conversation.id))
-      .run()
-    addUserMessage(conversation.id, 'Hallo')
-
-    deleteDeck(db, 'user-a', deck.id)
-
-    const row = requireOwnConversation(db, 'user-a', conversation.id)
-    expect(row.deckId).toBeNull()
-    expect(row.title).toBe('Deck: Magier-Deck')
-    expect(loadUiMessages(db, 'user-a', conversation.id).map(message => message.role)).toEqual(['user'])
+    // The deck_id column is gone (#137; the migration is covered in assistant-conversation-deck-id-migration.test.ts).
+    expect(Object.keys(requireOwnConversation(db, 'user-a', first.id)).sort()).toEqual(['createdAt', 'id', 'title', 'updatedAt', 'userId'])
   })
 })
 
