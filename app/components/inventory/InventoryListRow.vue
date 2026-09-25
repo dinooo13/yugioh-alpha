@@ -7,8 +7,9 @@
  *
  * The card name is the row's button; `stretched-link` makes the whole row
  * clickable (square, and its focus ring inset: the list clips anything
- * outside a row). The retired badge sits above it so its tooltip stays
- * reachable (it is focusable and must never be inside the button).
+ * outside a row). The retired badge is a click/tap popover that raises
+ * itself above it (`CardRetiredBadge`), so a tap opens its hint instead of
+ * the card; it is focusable and must never be inside the button.
  */
 import { CARD_TEXT_EXCERPT_LENGTH } from '~~/shared/inventory'
 import { cardFrame } from '~/utils/card-frame'
@@ -115,7 +116,7 @@ const excerpt = computed(() => {
         </p>
         <div
           v-if="item.cardRetired"
-          class="relative z-10 w-fit"
+          class="w-fit"
         >
           <CardRetiredBadge />
         </div>
