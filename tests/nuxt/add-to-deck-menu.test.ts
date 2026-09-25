@@ -5,6 +5,12 @@ import { mockNuxtImport, mountSuspended } from '@nuxt/test-utils/runtime'
 import { CardAddToDeckMenu, UDropdownMenu } from '#components'
 import { setTestLocale } from './fixtures/locale'
 
+// Typed by hand: the generic UDropdownMenu's wrapper types its props as `never`.
+interface MenuWrapper {
+  props: (key: string) => unknown
+  vm: { $emit: (event: string, ...args: unknown[]) => void }
+}
+
 const { toastAdd } = vi.hoisted(() => ({ toastAdd: vi.fn() }))
 
 mockNuxtImport('useToast', () => {
@@ -49,7 +55,7 @@ function decksResponse(names: string[]) {
 
 async function mountMenu(card: typeof BLUE_EYES | typeof FUSION | null = BLUE_EYES) {
   const component = await mountSuspended(CardAddToDeckMenu, { props: { card } })
-  const menu = component.findComponent(UDropdownMenu)
+  const menu = component.findComponent(UDropdownMenu) as unknown as MenuWrapper
   // The menu teleports its content, so open it and drive its items directly.
   menu.vm.$emit('update:open', true)
   await flushPromises()

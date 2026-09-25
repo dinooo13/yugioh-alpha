@@ -292,7 +292,7 @@ describe('the search in the URL (#148)', () => {
     const component = await mountSuspended(InventoryPage, { route: '/inventory?view=gallery' })
     const route = useRouter().currentRoute
     const panel = component.findComponent(InventorySearchPanel)
-    const filters = panel.props('filters') as Record<string, unknown>
+    const filters = panel.props('filters') as unknown as Record<string, unknown>
 
     panel.vm.$emit('update:filters', { ...filters, type: ['Spell Card', 'Normal Monster'], sort: 'quantity' })
     await vi.waitFor(() => {
