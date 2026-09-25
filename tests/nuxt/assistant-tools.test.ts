@@ -232,6 +232,52 @@ describe('get_card', () => {
   })
 })
 
+describe('"?" ATK/DEF in tool results (#139)', () => {
+  const QUESTION_MARKS = 90000001
+  const LINK = 90000002
+
+  beforeEach(() => {
+    const now = new Date()
+    db.insert(schema.catalogCard).values([
+      { id: QUESTION_MARKS, name: 'Qmark Golem', type: 'Effect Monster', frameType: 'effect', desc: '?', race: 'Rock', attribute: 'EARTH', atk: -1, def: -1, level: 4, syncedAt: now },
+      { id: LINK, name: 'Qmark Link', type: 'Link Monster', frameType: 'link', desc: 'Link.', race: 'Cyberse', attribute: 'DARK', atk: 2300, def: null, linkval: 2, syncedAt: now },
+    ]).run()
+  })
+
+  const stats = (item: unknown) => {
+    const { atk, def } = item as { atk: unknown, def: unknown }
+    return { atk, def }
+  }
+
+  it('search_catalog: "?" for a ? stat, null for none, numbers stay numbers', async () => {
+    const result = (await tool('search_catalog').run({ db, userId: 'user-a', cardLocale: 'en' }, { query: 'Qmark' })).result as { items: Array<{ id: number }> }
+    expect(result.items.map(item => [item.id, stats(item)])).toEqual([
+      [QUESTION_MARKS, { atk: '?', def: '?' }],
+      [LINK, { atk: 2300, def: null }],
+    ])
+    const darkMagician = (await tool('search_catalog').run({ db, userId: 'user-a', cardLocale: 'en' }, { query: 'Dark Magician' })).result as { items: unknown[] }
+    expect(stats(darkMagician.items[0])).toEqual({ atk: 2500, def: 2100 })
+  })
+
+  it('get_card: the same', async () => {
+    expect(stats((await tool('get_card').run({ db, userId: 'user-a', cardLocale: 'en' }, { id: QUESTION_MARKS })).result)).toEqual({ atk: '?', def: '?' })
+    expect(stats((await tool('get_card').run({ db, userId: 'user-a', cardLocale: 'en' }, { id: LINK })).result)).toEqual({ atk: 2300, def: null })
+    expect(stats((await tool('get_card').run({ db, userId: 'user-a', cardLocale: 'en' }, { id: CARD.darkMagician })).result)).toEqual({ atk: 2500, def: 2100 })
+  })
+
+  it('search_inventory: the same', async () => {
+    await own(db, 'user-a', QUESTION_MARKS, 1)
+    await own(db, 'user-a', LINK, 1)
+    await own(db, 'user-a', CARD.darkMagician, 1)
+    const result = (await tool('search_inventory').run({ db, userId: 'user-a', cardLocale: 'en' }, {})).result as { items: Array<{ catalogCardId: number }> }
+    expect(result.items.map(item => [item.catalogCardId, stats(item)])).toEqual([
+      [CARD.darkMagician, { atk: 2500, def: 2100 }],
+      [QUESTION_MARKS, { atk: '?', def: '?' }],
+      [LINK, { atk: 2300, def: null }],
+    ])
+  })
+})
+
 describe('search_inventory', () => {
   it('aggregates owned quantities per card across collections', async () => {
     const collectionA = await createCollection(db, 'user-a', { name: 'Box 1', description: null })
@@ -1243,5 +1289,25 @@ describe('buildAssistantToolSet (the AI SDK engine, ADR 0020)', () => {
     const row = db.select().from(schema.assistantAction).get()!
     expect(row).toMatchObject({ messageId: 'msg-1', userId: 'user-a', status: 'pending', kind: 'add_to_inventory' })
     expect(actions).toEqual([{ toolCallId: 'call-7', view: toActionView(row) }])
+    // The proposal's id goes with the part (#116), never to the model.
+    expect(output.actionId).toBe(row.id)
+    const modelOutput = await tools.add_to_inventory.toModelOutput!({ toolCallId: 'call-7', input: {}, output })
+    expect(JSON.stringify(modelOutput)).not.toContain(row.id)
+  })
+
+  it('names the card of a get_card call in both languages, whatever the card language (#132)', async () => {
+    seedGermanNames(db, { [CARD.darkMagician]: 'Dunkler Magier' })
+    const conversationId = seedConversation()
+    for (const cardLocale of ['en', 'de'] as const) {
+      const { tools } = buildSet({ cardLocale, conversationId })
+      const output = await execute(tools, 'get_card', { id: CARD.darkMagician })
+      expect(output.card, cardLocale).toEqual({ name: 'Dark Magician', nameDe: 'Dunkler Magier' })
+      expect(await tools.get_card.toModelOutput!({ toolCallId: 'call-1', input: {}, output })).toEqual({ type: 'json', value: output.result })
+    }
+    // A card without a German name; other tools get no card.
+    const { tools } = buildSet({ conversationId })
+    expect((await execute(tools, 'get_card', { id: CARD.raigeki })).card).toEqual({ name: 'Raigeki' })
+    expect(await execute(tools, 'search_catalog', { query: 'Raigeki' })).not.toHaveProperty('card')
+    expect(await execute(tools, 'list_formats', {})).not.toHaveProperty('actionId')
   })
 })

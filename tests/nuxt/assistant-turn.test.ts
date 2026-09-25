@@ -25,7 +25,7 @@ import {
 } from '../../server/utils/assistant-turn'
 import type { AssistantTurnOptions } from '../../server/utils/assistant-turn'
 import { loadUiMessages, validateAssistantTurnRequest } from '../../server/utils/assistant-ui-messages'
-import { CARD_NAME_INSTRUCTION, REPLY_LANGUAGE_INSTRUCTION, TOOL_TEXT, TURN_TEXT } from '../../server/utils/assistant-prompts'
+import { CARD_NAME_INSTRUCTION, CARD_TERMS_INSTRUCTION, REPLY_LANGUAGE_INSTRUCTION, TOOL_TEXT, TURN_TEXT } from '../../server/utils/assistant-prompts'
 import { createDeck, upsertDeckCard } from '../../server/utils/decks'
 import type { AssistantUIMessage } from '../../shared/assistant-ui'
 import { seedGermanNames } from './fixtures/german-names'
@@ -610,6 +610,29 @@ describe('startAssistantTurn: history, images and regenerate', () => {
     expect(storedMessages(conversationId)).toHaveLength(2)
   })
 
+  it('shows the model an applied proposal as applied in the next turn, while the stored part stays as it was (#116)', async () => {
+    const conversationId = newConversation()
+    const { model, calls } = scriptedModel([
+      call('add_to_inventory', { items: [{ catalogCardId: CARD.darkMagician, quantity: 1 }] }),
+      text('Vorschlag angelegt.'),
+      text('Ist erledigt.'),
+    ])
+    await runTurn(conversationId, model, { body: userText('füge Dark Magician hinzu') })
+    const actionId = db.select().from(schema.assistantAction).get()!.id
+    // The first turn's second call read the proposal as pending.
+    expect(toolResultsOf(calls[1]!)).toEqual([expect.objectContaining({ output: { type: 'json', value: expect.objectContaining({ status: 'pending_confirmation' }) } })])
+
+    await applyAction(db, 'user-a', actionId)
+    await runTurn(conversationId, model, { body: userText('Ist das schon passiert?') })
+
+    const results = toolResultsOf(calls.at(-1)!)
+    expect(results).toHaveLength(1)
+    expect(results[0]).toMatchObject({ output: { type: 'json', value: { status: 'applied', message: TOOL_TEXT.proposalStatus.applied } } })
+    expect(JSON.stringify(calls.at(-1)!.prompt)).not.toContain(actionId)
+    const toolPart = loadUiMessages(db, 'user-a', conversationId).flatMap(message => message.parts).find(part => part.type === 'tool-add_to_inventory')
+    expect(toolPart).toMatchObject({ output: { result: { status: 'pending_confirmation' }, actionId } })
+  })
+
   it('retries a failed turn with regenerate (nothing to delete after the last user message)', async () => {
     const conversationId = newConversation()
     const failing = new MockLanguageModelV4({
@@ -625,12 +648,12 @@ describe('startAssistantTurn: history, images and regenerate', () => {
     expect(storedMessages(conversationId).map(row => row.content)).toEqual(['Hallo?', 'Jetzt klappt es.'])
   })
 
-  it('passes the locale instructions as instructions — no deck block, even for a legacy deck-linked conversation', async () => {
+  it('passes the locale instructions as instructions — no deck block, even for a legacy deck-titled conversation', async () => {
     const deck = createDeck(db, 'user-a', { name: 'Magier-Deck', description: null })
     upsertDeckCard(db, 'user-a', deck.id, { catalogCardId: CARD.darkMagician, section: 'main', quantity: 2 })
     const conversationId = newConversation()
     db.update(schema.assistantConversation)
-      .set({ deckId: deck.id, title: 'Deck: Magier-Deck' })
+      .set({ title: 'Deck: Magier-Deck' })
       .where(eq(schema.assistantConversation.id, conversationId))
       .run()
     const { model, calls } = scriptedModel([text('ok')])
@@ -641,7 +664,7 @@ describe('startAssistantTurn: history, images and regenerate', () => {
     expect(system).toContain('Deck building:')
     expect(system).not.toContain('Deck ID:')
     expect(system).not.toContain('Context: this conversation')
-    expect(system.endsWith(`${REPLY_LANGUAGE_INSTRUCTION.en}\n\n${CARD_NAME_INSTRUCTION.en}`)).toBe(true)
+    expect(system.endsWith(`${REPLY_LANGUAGE_INSTRUCTION.en}\n\n${CARD_TERMS_INSTRUCTION.en}\n\n${CARD_NAME_INSTRUCTION.en}`)).toBe(true)
     expect(calls[0]!.headers?.['x-opencode-session']).toBe(conversationId)
     // A legacy "Deck: <name>" title of an empty conversation is named after its first message like any other.
     expect(db.select().from(schema.assistantConversation).get()!.title).toBe('Hallo')

@@ -317,17 +317,37 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
+/** The error itself, or the last attempt's error of a retried call. */
+function unwrapRetryError(error: unknown): unknown {
+  return RetryError.isInstance(error) ? error.lastError : error
+}
+
+/**
+ * Wording of a provider that rejects the picked model for the account's
+ * setup rather than failing (#124) — e.g. OpenCode Go's HTTP 400 "Upstream
+ * request failed: This Go model requires Global regions. Select Global in
+ * your workspace's Privacy settings to use it." Kept narrow on purpose: a
+ * plain 400/500 stays `assistant_unreachable`.
+ */
+const PROVIDER_SETUP_ERROR_PATTERN = /\bregions?\b|privacy settings|\bworkspace\b|model\b[^.]{0,60}\b(?:not found|does not exist|not available|unavailable|not supported|not enabled)|no access to (?:this )?model/i
+
+/** Whether the provider refused the model because of the account's setup (#124): a 404, or setup wording in its message or response body. */
+export function isProviderSetupError(cause: APICallError): boolean {
+  return cause.statusCode === 404
+    || PROVIDER_SETUP_ERROR_PATTERN.test(cause.message)
+    || (typeof cause.responseBody === 'string' && PROVIDER_SETUP_ERROR_PATTERN.test(cause.responseBody))
+}
+
 /**
  * The error code (ADR 0014, `errors.api.<code>`) the UI shows for an error
  * that ended a turn: the provider's HTTP status (401/403 → misconfigured,
- * 429 → busy, anything else → unreachable), a network failure or step
- * timeout (unreachable), an h3 error's `data.code`, else `unexpected`.
+ * 429 → busy), a provider setup problem with the picked model (404, or setup
+ * wording such as "requires Global regions" → model unavailable, #124),
+ * any other provider error, a network failure or step timeout
+ * (unreachable), an h3 error's `data.code`, else `unexpected`.
  */
 export function assistantErrorCode(error: unknown): string {
-  let cause = error
-  if (RetryError.isInstance(cause)) {
-    cause = cause.lastError
-  }
+  const cause = unwrapRetryError(error)
   if (APICallError.isInstance(cause)) {
     const status = cause.statusCode
     if (status === 401 || status === 403) {
@@ -335,6 +355,9 @@ export function assistantErrorCode(error: unknown): string {
     }
     if (status === 429) {
       return 'assistant_busy'
+    }
+    if (isProviderSetupError(cause)) {
+      return 'assistant_model_unavailable'
     }
     return 'assistant_unreachable'
   }
@@ -350,6 +373,35 @@ export function assistantErrorCode(error: unknown): string {
     return 'assistant_unreachable'
   }
   return 'unexpected'
+}
+
+/** Characters of the provider's own message the UI may show (#124). */
+export const PROVIDER_ERROR_HINT_MAX = 300
+
+/** The provider's own message of a failed call (whitespace collapsed, at most `PROVIDER_ERROR_HINT_MAX` characters), or null when the error isn't the provider's. */
+export function providerErrorHint(error: unknown): string | null {
+  const cause = unwrapRetryError(error)
+  if (!APICallError.isInstance(cause)) {
+    return null
+  }
+  const message = cause.message.replace(/\s+/g, ' ').trim()
+  if (message === '') {
+    return null
+  }
+  return message.length > PROVIDER_ERROR_HINT_MAX ? `${message.slice(0, PROVIDER_ERROR_HINT_MAX - 1)}…` : message
+}
+
+/**
+ * The text of the stream's `error` chunk for an error that ended a turn: its
+ * code (`assistantErrorCode`), or — for `assistant_model_unavailable` — the
+ * JSON body `{ data: { code, params: { hint } } }` with the provider's own
+ * message, so the user learns what to change at the provider (#124). The UI
+ * reads either shape (app/utils/assistant-chat-error.ts).
+ */
+export function assistantErrorText(error: unknown): string {
+  const code = assistantErrorCode(error)
+  const hint = code === 'assistant_model_unavailable' ? providerErrorHint(error) : null
+  return hint ? JSON.stringify({ data: { code, params: { hint } } }) : code
 }
 
 /**
@@ -452,10 +504,10 @@ export function toolErrorText(error: unknown): string {
 /**
  * `onError` of the UI message stream: a failed tool call's part gets its
  * English error text (`errorText`, shown in the chip's detail), a turn-ending
- * error chunk gets the error code the UI translates.
+ * error chunk gets the error code the UI translates (`assistantErrorText`).
  */
 export function assistantStreamErrorText(error: unknown): string {
-  return isToolCallError(error) ? toolErrorText(error) : assistantErrorCode(error)
+  return isToolCallError(error) ? toolErrorText(error) : assistantErrorText(error)
 }
 
 // --- Fake model (deterministic, no network) -------------------------------------

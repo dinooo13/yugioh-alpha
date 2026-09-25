@@ -3,7 +3,7 @@ import { DefaultChatTransport } from 'ai'
 import { ASSISTANT_TITLE_MAX_USER_MESSAGES } from '~~/shared/assistant-chat'
 import type { AssistantActionView, AssistantConversationSummary, AssistantConversationTitleResult } from '~~/shared/assistant-chat'
 import type { AssistantUIConversation, AssistantUIMessage, AssistantUIMessagePart } from '~~/shared/assistant-ui'
-import { assistantChatErrorCode, isAssistantConnectionError, isAssistantHttpError } from '~/utils/assistant-chat-error'
+import { assistantChatErrorCode, assistantChatErrorParams, isAssistantConnectionError, isAssistantHttpError } from '~/utils/assistant-chat-error'
 
 export interface UseAssistantChatOptions {
   /** The model the next turn should use (the picker's choice), read when a message is sent; undefined = the server's default. */
@@ -285,7 +285,13 @@ export function useAssistantChat(conversationId: string, options: UseAssistantCh
     if (isAssistantConnectionError(error)) {
       return t('assistant.thread.errors.connectionLost')
     }
-    return apiErrorCode(assistantChatErrorCode(error), undefined, 'assistant.thread.errors.unexpected')
+    const text = apiErrorCode(assistantChatErrorCode(error), undefined, 'assistant.thread.errors.unexpected')
+    // A provider setup problem carries the provider's own message (#124),
+    // passed as a named param: vue-i18n doesn't parse it as a message.
+    const hint = assistantChatErrorParams(error)?.hint
+    return typeof hint === 'string' && hint.trim() !== ''
+      ? `${text} ${t('assistant.thread.errors.providerHint', { hint })}`
+      : text
   })
 
   return {

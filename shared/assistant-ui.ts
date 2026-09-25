@@ -32,13 +32,21 @@ export type AssistantDataParts = {
 
 /**
  * What a tool part's `output` holds: the tool `result` exactly as the model
- * read it, and — display only, never sent to the model — the current name of
- * the caller's deck the call refers to (#53), refreshed when read and missing
- * when the deck is gone.
+ * read it, plus fields the model never reads (`toModelOutput` sends only
+ * `result`).
  */
 export interface AssistantToolOutput {
   result: unknown
+  /** Display only: the current name of the caller's deck the call refers to (#53), refreshed when read and missing when the deck is gone. */
   deckName?: string
+  /**
+   * Display only: the card a `get_card` call read, in both languages (#132),
+   * so its chip follows the current card language. Refreshed when read,
+   * missing when the card is unknown.
+   */
+  card?: { name: string, nameDe?: string }
+  /** The proposal this write call created (#116), so the model's history can report its current status; never sent to the model. */
+  actionId?: string
 }
 
 export type AssistantUITools = {

@@ -1,13 +1,15 @@
 // The chat assistant's model layer (server/utils/assistant-model.ts, ADR
 // 0020): provider/status resolution, the model picker, the OpenAI-compatible
 // provider on the AI SDK, the deterministic fakes used by tests and E2E, the
-// title model (#129), and the error codes and tool error texts.
+// title model (#129), and the error codes (with the provider's hint for a
+// model setup problem, #124) and tool error texts.
 
 import { describe, expect, it } from 'vitest'
-import { generateText, jsonSchema, streamText, tool } from 'ai'
+import { APICallError, generateText, jsonSchema, RetryError, streamText, tool } from 'ai'
 import {
   AssistantToolError,
   assistantErrorCode,
+  assistantErrorText,
   assistantStreamErrorText,
   createFakeTitleModel,
   createOpenAiCompatibleLanguageModel,
@@ -16,6 +18,9 @@ import {
   fakeTitle,
   fakeTurn,
   getAssistantStatus,
+  isProviderSetupError,
+  PROVIDER_ERROR_HINT_MAX,
+  providerErrorHint,
   resolveModelChoice,
   resolveTitleModelId,
   toolErrorText,
@@ -274,6 +279,16 @@ describe('createOpenAiCompatibleLanguageModel (@ai-sdk/openai-compatible)', () =
     expect(assistantErrorCode((error as { error: unknown }).error)).toBe(code)
   })
 
+  it('maps OpenCode\'s region error (a 400) to assistant_model_unavailable, with the provider\'s message as the hint (#124)', async () => {
+    const message = 'Upstream request failed: This Go model requires Global regions. Select Global in your workspace\'s Privacy settings to use it.'
+    const { fetch: fetchImpl } = fetchReturning(JSON.stringify({ error: { type: 'server_error', message } }), 400)
+    const parts = await run(createOpenAiCompatibleLanguageModel({ baseUrl: 'https://g.test/v1', model: 'deepseek-v4.1-flash', fetch: fetchImpl }))
+
+    const error = (parts.find(part => part.type === 'error') as { error: unknown }).error
+    expect(assistantErrorCode(error)).toBe('assistant_model_unavailable')
+    expect(JSON.parse(assistantErrorText(error))).toEqual({ data: { code: 'assistant_model_unavailable', params: { hint: message } } })
+  })
+
   it('maps a network failure to assistant_unreachable', async () => {
     // Nothing listens on port 1: a real connection error from Node's fetch.
     const parts = await run(createOpenAiCompatibleLanguageModel({ baseUrl: 'http://127.0.0.1:1/v1', model: 'm' }))
@@ -465,5 +480,66 @@ describe('tool error texts', () => {
   it('gives a tool part its error text and a turn-ending error its code', () => {
     expect(assistantStreamErrorText(new AssistantToolError('Deck not found'))).toBe('Deck not found')
     expect(assistantStreamErrorText(new Error('boom'))).toBe('unexpected')
+  })
+})
+
+describe('provider setup errors (#124)', () => {
+  const REGION = 'Upstream request failed: This Go model requires Global regions. Select Global in your workspace\'s Privacy settings to use it.'
+
+  function apiError(statusCode: number, message: string, responseBody?: string) {
+    return new APICallError({ message, url: 'https://g.test/v1/chat/completions', requestBodyValues: {}, statusCode, responseBody, isRetryable: false })
+  }
+
+  function retried(error: APICallError) {
+    return new RetryError({ message: 'Failed after 3 attempts', reason: 'maxRetriesExceeded', errors: [error, error, error] })
+  }
+
+  it.each([
+    ['the region error as a 400', apiError(400, REGION)],
+    ['the region error as a 500', apiError(500, REGION)],
+    ['the region error only in the response body', apiError(400, 'Bad Request', JSON.stringify({ error: { message: REGION } }))],
+    ['a 404', apiError(404, 'Not Found')],
+    ['a model that does not exist', apiError(400, 'The model `gpt-9` does not exist or you do not have access to it.')],
+    ['no access to the model', apiError(400, 'No access to this model on your plan.')],
+  ])('maps %s to assistant_model_unavailable, also after retries', (_label, error) => {
+    expect(isProviderSetupError(error)).toBe(true)
+    expect(assistantErrorCode(error)).toBe('assistant_model_unavailable')
+    expect(assistantErrorCode(retried(error))).toBe('assistant_model_unavailable')
+  })
+
+  it.each([
+    ['a plain 400', apiError(400, 'Bad Request')],
+    ['a plain 500', apiError(500, 'Internal Server Error')],
+    ['a 502 of an upstream', apiError(502, 'Upstream request failed: connection reset')],
+  ])('keeps %s assistant_unreachable', (_label, error) => {
+    expect(isProviderSetupError(error)).toBe(false)
+    expect(assistantErrorCode(error)).toBe('assistant_unreachable')
+    expect(assistantErrorCode(retried(error))).toBe('assistant_unreachable')
+    expect(assistantErrorText(error)).toBe('assistant_unreachable')
+  })
+
+  it('still maps 401/403 and 429 by status, even with setup wording', () => {
+    expect(assistantErrorCode(apiError(403, 'Your workspace has no access'))).toBe('assistant_misconfigured')
+    expect(assistantErrorCode(apiError(429, 'Rate limit for this region'))).toBe('assistant_busy')
+  })
+
+  it('sends the provider\'s message along as the hint, whitespace collapsed and capped at 300 characters', () => {
+    expect(JSON.parse(assistantErrorText(retried(apiError(400, REGION))))).toEqual({ data: { code: 'assistant_model_unavailable', params: { hint: REGION } } })
+    expect(providerErrorHint(apiError(404, '  Model\n\n  not   found  '))).toBe('Model not found')
+
+    const long = `This model is not available in your region. ${'x'.repeat(400)}`
+    const hint = providerErrorHint(apiError(400, long))!
+    expect(hint).toHaveLength(PROVIDER_ERROR_HINT_MAX)
+    expect(hint.endsWith('…')).toBe(true)
+    expect(JSON.parse(assistantErrorText(apiError(400, long))).data.params.hint).toBe(hint)
+  })
+
+  it('keeps every other code a plain string, and a tool error its text', () => {
+    expect(providerErrorHint(new Error('boom'))).toBeNull()
+    expect(assistantErrorText(new Error('boom'))).toBe('unexpected')
+    expect(assistantErrorText(apiError(401, 'Unauthorized'))).toBe('assistant_misconfigured')
+    expect(assistantErrorText({ data: { code: 'turn_in_progress' } })).toBe('turn_in_progress')
+    expect(assistantStreamErrorText(new AssistantToolError('Deck not found'))).toBe('Deck not found')
+    expect(JSON.parse(assistantStreamErrorText(apiError(404, 'Not Found')))).toEqual({ data: { code: 'assistant_model_unavailable', params: { hint: 'Not Found' } } })
   })
 })

@@ -58,6 +58,19 @@ describe('toolPartCall / toolCallLabel: get_card (#128)', () => {
   })
 })
 
+describe('toolPartCall: get_card follows the current card language (#132)', () => {
+  it('prefers output.card, so a chip from an English-card-language turn shows the German name', () => {
+    const output = { result: { id: 46986414, name: 'Dark Magician' }, card: { name: 'Dark Magician', nameDe: 'Dunkler Magier' } }
+    expect(toolPartCall(getCard('output-available', output), inGerman).cardName).toBe('Dunkler Magier')
+    expect(toolPartCall(getCard('output-available', output), inEnglish).cardName).toBe('Dark Magician')
+  })
+
+  it('falls back to the result when output.card is missing or holds no name', () => {
+    expect(toolPartCall(getCard('output-available', DARK_MAGICIAN), inGerman).cardName).toBe('Dunkler Magier')
+    expect(toolPartCall(getCard('output-available', { ...DARK_MAGICIAN, card: { name: '' } }), inGerman).cardName).toBe('Dunkler Magier')
+  })
+})
+
 describe('toolPartCall / toolCallLabel: other tools stay as they were', () => {
   it('names a search by its query', () => {
     const part: AssistantToolPartLike = { type: 'tool-search_catalog', state: 'output-available', input: { query: 'Dark Magician' }, output: { result: [{ id: 1, name: 'Dark Magician', nameDe: 'Dunkler Magier' }] } }
