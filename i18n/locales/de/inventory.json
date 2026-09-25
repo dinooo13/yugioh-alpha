@@ -20,7 +20,6 @@
       "placeholder": "Im Inventar suchen...",
       "label": "Inventar durchsuchen",
       "inText": "Auch im Kartentext suchen",
-      "facetsGalleryOnly": "Diese Filter wirken nur in \"Galerie\". \"Liste\" filtert nach Suchtext und Sammlung.",
       "reset": "Reset",
       "sortLabel": "Sortierung",
       "sort": {

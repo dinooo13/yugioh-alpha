@@ -498,6 +498,15 @@ reading (type, attribute, the start of the card text, quantity, collection,
 note); the edit dialog, the row controls and "In Liste bearbeiten" are gone.
 Moving copies into a collection that already holds the card keeps both notes.
 
+Round 5 (#110, #114, #144, #145, #146): the inventory's detail panel is in
+the URL (`?card=<id>` deep links it; Back closes it, Forward reopens it), and
+"Liste" takes the search panel's filters too (type, attribute, race, level,
+card text). The deck editor and the wishlist rows use the shared quantity
+stepper. The card overlay also opens from deck rows, the deck editor's add
+panel, wishlist rows and the selected card in quick entry. A retired
+passcode typed into the inventory's card picker finds its replacement.
+Adding copies to a row that already has a note keeps both notes.
+
 ## Recommended Build Order
 
 1. Card catalog and personal inventory

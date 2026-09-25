@@ -81,9 +81,12 @@ const selectedCard = ref<CatalogCard | null>(null)
 // - `?view=gallery` — "Galerie"; absent = "Liste" (`list`). The former
 //   `view=overview` ("Übersicht", before #135) is still accepted and
 //   rewritten on load.
+// - `?card=<catalogCardId>` — the card's detail panel is open (#145), as
+//   in the catalog. Opening it from a tile or row pushes a history entry, so
+//   Back closes it and Forward opens it again; closing it goes back to that
+//   entry, or (deep link, reload) drops the param. An invalid value is
+//   dropped on load.
 // Defaults are never written, so the plain page stays at `/inventory`.
-// (The former `?card=` list filter is gone with #135: the detail panel
-// edits a card's rows. A leftover one is dropped on load.)
 // Patches build on the one still being navigated to, so two in a row (e.g.
 // on load: a stale collection and the old view value) don't undo each other.
 let pendingQuery: LocationQueryRaw | null = null
@@ -114,10 +117,23 @@ const mode = computed<'list' | 'gallery'>({
   },
 })
 
-// Old links: `view=overview` → `view=gallery`, and no `card` any more.
+// A positive integer `?card=`, else `null`.
+function parseCardParam(value: unknown): number | null {
+  if (typeof value !== 'string' || !/^\d+$/.test(value)) {
+    return null
+  }
+  const id = Number(value)
+  return Number.isSafeInteger(id) && id > 0 ? id : null
+}
+
+// Old links: `view=overview` → `view=gallery`; an invalid `card` is dropped.
 onMounted(() => {
-  if (route.query.view === 'overview' || route.query.card !== undefined) {
-    setQuery({ view: route.query.view === 'overview' ? 'gallery' : route.query.view ?? undefined, card: undefined })
+  const invalidCard = route.query.card !== undefined && parseCardParam(route.query.card) === null
+  if (route.query.view === 'overview' || invalidCard) {
+    setQuery({
+      view: route.query.view === 'overview' ? 'gallery' : route.query.view ?? undefined,
+      ...(invalidCard ? { card: undefined } : {}),
+    })
   }
 })
 
@@ -145,8 +161,15 @@ watch(() => filters.value.q, (value) => {
   }, 300)
 })
 
+// "Liste" takes the same text and facet filters as "Galerie" (#145), but
+// keeps its own order (recently changed first).
 const listQuery = computed(() => ({
   q: debouncedQ.value || undefined,
+  inText: filters.value.inText ? 1 : undefined,
+  type: filters.value.type.length ? filters.value.type.join(',') : undefined,
+  attribute: filters.value.attribute.length ? filters.value.attribute.join(',') : undefined,
+  race: filters.value.race.length ? filters.value.race.join(',') : undefined,
+  level: filters.value.level.length ? filters.value.level.join(',') : undefined,
   page: page.value,
   pageSize,
   collectionId: collectionId.value || undefined,
@@ -236,12 +259,13 @@ watch(
     filters.value.sort,
   ],
   () => {
+    page.value = 1
     filters.value.page = 1
   },
   { deep: true },
 )
 
-// Whether any of the panel's facets is set — they only affect "Galerie".
+// Whether any of the panel's facets is set.
 const hasActiveFacets = computed(() => Boolean(
   filters.value.type.length
   || filters.value.attribute.length
@@ -253,17 +277,9 @@ const hasActiveFacets = computed(() => Boolean(
 const hasActiveSearchFilters = computed(() => Boolean(filters.value.q) || hasActiveFacets.value)
 
 // Same, but including the collection scope — used for the Galerie empty
-// state ("leer" vs. "keine Treffer").
+// state ("leer" vs. "keine Treffer"). Both views filter, so a filter never
+// switches the view (#145).
 const hasAnyFilter = computed(() => hasActiveSearchFilters.value || Boolean(collectionId.value))
-
-// The moment the user actually starts searching/filtering, default to the
-// aggregated "Galerie" view (the toggle still lets them switch back).
-// Selecting a collection never switches the view.
-watch(hasActiveSearchFilters, (active, wasActive) => {
-  if (active && !wasActive && mode.value === 'list') {
-    mode.value = 'gallery'
-  }
-})
 
 const searchPageSize = 24
 // Note: in "Galerie" a collection keeps every card with at least one copy
@@ -335,31 +351,100 @@ onBeforeUnmount(() => {
 
 // The card detail panel (#88, #135): the same overlay with the same editor
 // from a "Galerie" tile and from a "Liste" row. It always shows all the
-// card's rows; from a row, that row is highlighted.
-const detail = ref<{ cardId: number, preview: CardDetailPreview, focusRowId: string | null } | null>(null)
-const isDetailOpen = ref(false)
+// card's rows; from a row, that row is highlighted. `?card=` drives it
+// (#145): see the URL comment above.
+interface DetailContext {
+  cardId: number
+  preview: CardDetailPreview | null
+  focusRowId: string | null
+}
+
+const detailCardId = computed(() => parseCardParam(route.query.card))
+// What the page knew when it opened the panel itself (a tile or a row).
+const detailContext = ref<DetailContext | null>(null)
+// What the panel shows. Not cleared on close: the overlay keeps its content
+// during the close animation.
+const shownDetail = ref<DetailContext | null>(null)
+
+function previewFromListItem(item: InventoryItem): CardDetailPreview {
+  return {
+    name: item.cardName,
+    nameDe: item.cardNameDe,
+    type: item.cardType,
+    attribute: item.cardAttribute,
+    level: null,
+    atk: null,
+    def: null,
+    imageSmall: item.imageUrlSmall,
+  }
+}
+
+// A deep link or Back/Forward: a preview from what the page already shows,
+// if the card is on it (the overlay loads the rest itself).
+function loadedPreview(cardId: number): CardDetailPreview | null {
+  const tile = searchItems.value.find(item => item.catalogCardId === cardId)
+  if (tile) {
+    return tile
+  }
+  const row = items.value.find(item => item.catalogCardId === cardId)
+  return row ? previewFromListItem(row) : null
+}
+
+// Only an entry this page pushed is "gone back" from on close; a deep link
+// or a reload replaces the URL instead, so closing never leaves the site.
+let pushedDetail = false
+
+watch(detailCardId, (id) => {
+  if (id === null) {
+    pushedDetail = false
+    return
+  }
+  const context = detailContext.value?.cardId === id ? detailContext.value : null
+  shownDetail.value = {
+    cardId: id,
+    preview: context?.preview ?? loadedPreview(id),
+    focusRowId: context?.focusRowId ?? null,
+  }
+}, { immediate: true })
+
+function openDetail(context: DetailContext) {
+  detailContext.value = context
+  pushedDetail = true
+  // Push, not replace: Back closes the panel.
+  router.push({ query: { ...(pendingQuery ?? route.query), card: String(context.cardId) } })
+}
+
+function closeDetail() {
+  if (pushedDetail && import.meta.client && window.history.state?.back) {
+    pushedDetail = false
+    router.back()
+  }
+  else {
+    setQuery({ card: undefined })
+  }
+}
+
+const isDetailOpen = computed({
+  get: () => detailCardId.value !== null,
+  set: (value: boolean) => {
+    if (!value) {
+      closeDetail()
+    }
+  },
+})
+
+// The removal question names the card; without a preview (a card not on
+// this page) it falls back to the overlay's generic title.
+const detailCardLabel = computed(() => shownDetail.value?.preview
+  ? cardName(shownDetail.value.preview)
+  : t('card.detail.fallbackTitle'))
 
 function openFromGallery(item: SearchResultItem) {
-  detail.value = { cardId: item.catalogCardId, preview: item, focusRowId: null }
-  isDetailOpen.value = true
+  openDetail({ cardId: item.catalogCardId, preview: item, focusRowId: null })
 }
 
 function openFromList(item: InventoryItem) {
-  detail.value = {
-    cardId: item.catalogCardId,
-    preview: {
-      name: item.cardName,
-      nameDe: item.cardNameDe,
-      type: item.cardType,
-      attribute: item.cardAttribute,
-      level: null,
-      atk: null,
-      def: null,
-      imageSmall: item.imageUrlSmall,
-    },
-    focusRowId: item.id,
-  }
-  isDetailOpen.value = true
+  openDetail({ cardId: item.catalogCardId, preview: previewFromListItem(item), focusRowId: item.id })
 }
 </script>
 
@@ -445,13 +530,8 @@ function openFromList(item: InventoryItem) {
     <InventorySearchPanel
       v-model:filters="filters"
       :facets="facets"
+      :show-sort="mode === 'gallery'"
     />
-    <p
-      v-if="mode === 'list' && hasActiveFacets"
-      class="text-xs text-muted"
-    >
-      {{ t('inventory.search.facetsGalleryOnly') }}
-    </p>
 
     <!-- Galerie: aggregated, faceted inventory-wide search -->
     <div
@@ -577,7 +657,7 @@ function openFromList(item: InventoryItem) {
         </ul>
 
         <LayoutEmptyState
-          v-else-if="items.length === 0 && debouncedQ"
+          v-else-if="items.length === 0 && (debouncedQ || hasActiveFacets)"
           icon="i-lucide-search-x"
           :title="t('inventory.list.noMatches')"
           :description="t('inventory.list.noMatchesDescription')"
@@ -656,25 +736,25 @@ function openFromList(item: InventoryItem) {
 
     <CardDetailModal
       v-model:open="isDetailOpen"
-      :card-id="detail?.cardId ?? null"
-      :preview="detail?.preview ?? null"
+      :card-id="shownDetail?.cardId ?? null"
+      :preview="shownDetail?.preview ?? null"
       variant="inventory"
     >
       <template #context>
         <InventoryOwnedCardEditor
-          v-if="detail"
-          :key="detail.cardId"
-          :catalog-card-id="detail.cardId"
-          :card-label="cardName(detail.preview)"
+          v-if="shownDetail"
+          :key="shownDetail.cardId"
+          :catalog-card-id="shownDetail.cardId"
+          :card-label="detailCardLabel"
           :collections="collectionOptions"
-          :focus-row-id="detail.focusRowId"
+          :focus-row-id="shownDetail.focusRowId"
           :after-write="scheduleRefresh"
         />
       </template>
       <template #actions>
         <UButton
-          v-if="detail"
-          :to="`/catalog?card=${detail.cardId}`"
+          v-if="shownDetail"
+          :to="`/catalog?card=${shownDetail.cardId}`"
           icon="i-lucide-book-open"
           :label="t('inventory.preview.openInCatalog')"
           color="neutral"

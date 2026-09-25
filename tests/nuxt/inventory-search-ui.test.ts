@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DOMWrapper, enableAutoUnmount } from '@vue/test-utils'
-import { nextTick, toValue } from 'vue'
+import { nextTick } from 'vue'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
 import InventoryPage from '~/pages/inventory/index.vue'
 
@@ -126,11 +126,6 @@ mockNuxtImport('useFetch', () => {
     return { data: ref(state.inventory), pending: ref(false), refresh: vi.fn() }
   }
 })
-
-function lastQuery(url: string): Record<string, unknown> {
-  const call = state.calls.filter(c => c.url === url).at(-1)
-  return toValue(call?.opts?.query as Record<string, unknown>)
-}
 
 async function openGalerie(component: Awaited<ReturnType<typeof mountSuspended>>) {
   const toggle = component.findAll('button').find((btn: { text: () => string }) => btn.text().includes('Galerie'))
@@ -346,20 +341,5 @@ describe('view in the URL', () => {
     await vi.waitFor(() => {
       expect(route.value.query).toEqual({})
     })
-  })
-
-  it('drops a stale ?card= (the former list filter) and lists every card', async () => {
-    state.inventory = { items: [], total: 0 }
-    state.facets = { ...emptyFacets }
-    state.search = { items: [blueEyes], total: 1, page: 1, pageSize: 24 }
-    state.calls = []
-
-    await mountSuspended(InventoryPage, { route: '/inventory?card=89631139' })
-    const route = useRouter().currentRoute
-
-    await vi.waitFor(() => {
-      expect(route.value.query).toEqual({})
-    })
-    expect(lastQuery('/api/inventory')).not.toHaveProperty('catalogCardId')
   })
 })

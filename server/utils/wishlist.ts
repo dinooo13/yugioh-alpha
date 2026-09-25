@@ -8,12 +8,13 @@ import { ownedQuantitiesByCard } from './inventory'
 import { cardNameMatches } from './card-name-search'
 import { cardNameDeSql, cardSortKey } from './card-translation-sql'
 import type { AppLocale } from '../../shared/locale'
+import { MAX_WISHLIST_QUANTITY } from '../../shared/sharing'
 import type { WishlistItemView, WishlistResponse, WishlistVisibility } from '../../shared/sharing'
 
 type Db = ReturnType<typeof useDb>
 
 export const WISHLIST_NOTE_MAX_LENGTH = 200
-export const MAX_WISHLIST_QUANTITY = 99
+export { MAX_WISHLIST_QUANTITY }
 
 const DEFAULT_PAGE_SIZE = 24
 const MAX_PAGE_SIZE = 100

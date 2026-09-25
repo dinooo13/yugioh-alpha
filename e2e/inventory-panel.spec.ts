@@ -6,6 +6,7 @@ import { acceptConfirm, cancelConfirm } from './helpers/confirm'
 
 // The inventory's detail panel (#135): the same editable overlay from a
 // "Galerie" tile and from a "Liste" row. Every change is saved at once.
+// `?card=` opens it, Back closes it (#145).
 
 // Passcode from the seeded E2E catalog fixture (server/db/fixtures/catalog-fixture.ts).
 const DARK_MAGICIAN = 46986414
@@ -71,9 +72,9 @@ test.describe('inventory detail panel', () => {
     expect((await saved).ok()).toBe(true)
     await expect(panel.getByRole('spinbutton', { name: 'Anzahl in Box 1' })).toHaveValue('5')
 
+    // The panel is in the URL (#145): a reload opens it again.
     await page.reload()
     await waitForHydration(page)
-    await cardButton(page).click()
     const reopened = page.getByRole('dialog', { name: CARD.darkMagician })
     await expect(reopened.getByRole('combobox', { name: 'Sammlung ändern (jetzt: Box 1)' })).toBeVisible()
     await expect(reopened.getByRole('spinbutton', { name: 'Anzahl in Box 1' })).toHaveValue('5')
@@ -112,8 +113,12 @@ test.describe('inventory detail panel', () => {
     await expect(panel.getByRole('spinbutton')).toHaveCount(1)
     await expect(panel.getByRole('spinbutton', { name: 'Anzahl in (keine Sammlung)' })).toHaveValue('3')
 
+    // A reload keeps the panel open (#145); closing it shows the list.
     await page.reload()
     await waitForHydration(page)
+    await expect(panel.getByRole('spinbutton', { name: 'Anzahl in (keine Sammlung)' })).toHaveValue('3')
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('dialog')).toHaveCount(0)
     await expect(cardButton(page)).toHaveCount(1)
     const merged = page.locator('main li').filter({ has: cardButton(page) })
     await expect(merged).toContainText('×3')
@@ -177,5 +182,55 @@ test.describe('inventory detail panel', () => {
     await page.keyboard.press('Escape')
     await expect(page.getByRole('dialog')).toHaveCount(0)
     await expect(rowButton).toBeFocused()
+  })
+
+  test('deep link and Back (#145)', async ({ page }) => {
+    await registerAndLogin(page)
+    await addCopies(page, { quantity: 1 })
+
+    await page.goto('/inventory')
+    await waitForHydration(page)
+    await cardButton(page).click()
+    const panel = page.getByRole('dialog', { name: CARD.darkMagician })
+    await expect(panel.getByRole('spinbutton', { name: 'Anzahl in (keine Sammlung)' })).toBeVisible()
+    await expect(page).toHaveURL(new RegExp(`/inventory\\?card=${DARK_MAGICIAN}$`))
+
+    // Back closes the panel, Forward opens it again.
+    await page.goBack()
+    await expect(page.getByRole('dialog')).toHaveCount(0)
+    await expect(page).toHaveURL(/\/inventory$/)
+    await page.goForward()
+    await expect(panel.getByRole('spinbutton', { name: 'Anzahl in (keine Sammlung)' })).toBeVisible()
+
+    // A deep link opens it; closing it drops the param without leaving the page.
+    await page.goto(`/inventory?card=${DARK_MAGICIAN}`)
+    await waitForHydration(page)
+    await expect(panel.getByRole('spinbutton', { name: 'Anzahl in (keine Sammlung)' })).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('dialog')).toHaveCount(0)
+    await expect(page).toHaveURL(/\/inventory$/)
+  })
+
+  test('the list filters by type, and stays the list (#145)', async ({ page }) => {
+    await registerAndLogin(page)
+    await addCopies(page, { quantity: 1 })
+    const potOfGreed = await page.request.post('/api/inventory', { data: { catalog_card_id: 55144522, quantity: 1 } })
+    expect(potOfGreed.ok()).toBe(true)
+
+    await page.goto('/inventory')
+    await waitForHydration(page)
+    await expect(cardButton(page)).toHaveCount(1)
+    await expect(page.getByRole('button', { name: CARD.potOfGreed, exact: true })).toHaveCount(1)
+
+    const listed = page.waitForResponse(response => response.url().includes('/api/inventory?') && response.url().includes('type='))
+    await page.getByRole('button', { name: 'Typ', exact: true }).click()
+    await page.getByRole('option', { name: 'Zauberkarte', exact: true }).click()
+    await listed
+    await page.keyboard.press('Escape')
+
+    await expect(page.getByRole('button', { name: CARD.potOfGreed, exact: true })).toHaveCount(1)
+    await expect(cardButton(page)).toHaveCount(0)
+    await expect(page).not.toHaveURL(/view=gallery/)
+    await expect(page.getByRole('button', { name: 'Liste', exact: true })).toHaveAttribute('aria-pressed', 'true')
   })
 })

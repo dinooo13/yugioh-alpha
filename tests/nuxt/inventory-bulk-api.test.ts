@@ -193,6 +193,22 @@ describe('bulk inventory writes', () => {
     expect(db.select().from(schema.ownedCard).all()[0]?.quantity).toBe(5)
   })
 
+  it('joins the notes when an item merges into an existing row (#146)', async () => {
+    await addOwnedCardsBulk(db, 'user-a', validateInventoryBulkInput(db, 'user-a', {
+      items: [item({ quantity: 1, note: 'Binder' })],
+    }))
+
+    // Quick entry and the assistant's `add_to_inventory` both land here.
+    const result = await addOwnedCardsBulk(db, 'user-a', validateInventoryBulkInput(db, 'user-a', {
+      items: [item({ quantity: 2, note: 'From the trade' }), item({ quantity: 1 })],
+    }))
+
+    expect(result).toMatchObject({ created: 0, merged: 2 })
+    const rows = db.select().from(schema.ownedCard).all()
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({ quantity: 4, note: 'Binder\nFrom the trade' })
+  })
+
   it('keeps collections apart; items that only differed by printing/language merge', async () => {
     const inputs = validateInventoryBulkInput(db, 'user-a', {
       items: [

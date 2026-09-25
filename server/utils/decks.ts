@@ -23,6 +23,7 @@ import {
   isSectionAllowedForCard,
   DECK_DESCRIPTION_MAX_LENGTH,
   DECK_NAME_MAX_LENGTH,
+  MAX_DECK_CARD_QUANTITY,
 } from '../../shared/deck-sections'
 import type { DeckSection, DeckSectionCard } from '../../shared/deck-sections'
 import type { Visibility } from '../../shared/sharing'
@@ -40,12 +41,7 @@ export {
 }
 export type { DeckCover, DeckSection, DeckSectionCard }
 
-export { DECK_DESCRIPTION_MAX_LENGTH, DECK_NAME_MAX_LENGTH }
-
-// Sanity cap on a single deck_card row, not a format rule: nobody plays 100
-// copies of a card, and it keeps a typo/scripted call from bloating a deck.
-// The *format* copy limit (DECK_LIMITS.maxCopies) stays a warning.
-export const MAX_DECK_CARD_QUANTITY = 99
+export { DECK_DESCRIPTION_MAX_LENGTH, DECK_NAME_MAX_LENGTH, MAX_DECK_CARD_QUANTITY }
 
 const DEFAULT_PAGE_SIZE = 20
 const MAX_PAGE_SIZE = 60

@@ -136,11 +136,30 @@ describe('inventory validation', () => {
       pageSize: 10,
       collectionId: '__none__',
       catalogCardId: 46986414,
+      inText: false,
+      type: [],
+      attribute: [],
+      race: [],
+      level: [],
     })
     for (const catalogCardId of ['abc', '0', '-3', '1.5', '']) {
       expect(parseInventoryListQuery({ catalogCardId }).catalogCardId).toBeUndefined()
     }
     expect(parseInventoryListQuery({ collectionId: '' }).collectionId).toBeUndefined()
+  })
+
+  it('parses the list\'s card filters like the search (CSV or repeated, #145)', () => {
+    expect(parseInventoryListQuery({ type: 'Normal Monster,Spell Card', level: '4,7', inText: '1' })).toMatchObject({
+      type: ['Normal Monster', 'Spell Card'],
+      level: [4, 7],
+      inText: true,
+    })
+    expect(parseInventoryListQuery({ attribute: ['DARK', 'LIGHT'], race: 'Spellcaster', level: 'x' })).toMatchObject({
+      attribute: ['DARK', 'LIGHT'],
+      race: ['Spellcaster'],
+      level: [],
+      inText: false,
+    })
   })
 })
 
@@ -288,20 +307,72 @@ describe('inventory persistence helpers', () => {
       expect(Object.keys(card!).sort()).toEqual(['id', 'imageUrlSmall', 'name', 'nameDe', 'type'])
     })
 
-    it('leaves retired cards out of the picker (ADR 0019)', () => {
+    it('leaves retired cards out of the picker, but a retired passcode finds its replacement (ADR 0019, #110)', () => {
+      db.insert(schema.catalogCard).values([
+        {
+          id: 101402024,
+          name: 'Dark Magician',
+          type: 'Normal Monster',
+          desc: 'Placeholder.',
+          syncedAt: new Date(),
+          retiredAt: new Date(),
+          replacedById: 46986414,
+        },
+        {
+          id: 99999901,
+          name: 'Gone Card',
+          type: 'Spell Card',
+          desc: 'Placeholder.',
+          syncedAt: new Date(),
+          retiredAt: new Date(),
+        },
+      ]).run()
+
+      expect(searchCatalogCards(db, 'Dark Magician').map(card => card.id)).toEqual([46986414])
+      expect(searchCatalogCards(db, '101402024').map(card => card.id)).toEqual([46986414])
+      // Without a replacement, a retired passcode finds nothing.
+      expect(searchCatalogCards(db, '99999901')).toEqual([])
+      expect(searchCatalogCards(db, 'Gone Card')).toEqual([])
+      expect(searchCatalogCards(db).map(card => card.id)).not.toContain(101402024)
+    })
+
+    it('sorts an exact passcode before cards whose passcode only contains it (#110)', () => {
+      // Sorts before "Dark Magician" by name, and its id contains 46986414.
       db.insert(schema.catalogCard).values({
-        id: 101402024,
-        name: 'Dark Magician',
+        id: 146986414,
+        name: 'Axe Raider',
         type: 'Normal Monster',
         desc: 'Placeholder.',
         syncedAt: new Date(),
-        retiredAt: new Date(),
-        replacedById: 46986414,
       }).run()
 
-      expect(searchCatalogCards(db, 'Dark Magician').map(card => card.id)).toEqual([46986414])
-      expect(searchCatalogCards(db, '101402024')).toEqual([])
-      expect(searchCatalogCards(db).map(card => card.id)).not.toContain(101402024)
+      expect(searchCatalogCards(db, '46986414').map(card => card.id)).toEqual([46986414, 146986414])
+      expect(searchCatalogCards(db, '4698641').map(card => card.id)).toEqual([146986414, 46986414])
+    })
+
+    it('filters rows by type, attribute, race and level (#145)', () => {
+      db.update(schema.catalogCard).set({ race: 'Spellcaster', level: 7 }).where(eq(schema.catalogCard.id, 46986414)).run()
+      db.update(schema.catalogCard).set({ race: 'Normal' }).where(eq(schema.catalogCard.id, 55144522)).run()
+
+      expect(rows(listOwnedCards(db, 'user-a', { type: ['Spell Card'] }))).toEqual(['Pot of Greed/col-1'])
+      expect(rows(listOwnedCards(db, 'user-a', { type: ['Normal Monster', 'Spell Card'] }))).toHaveLength(3)
+      expect(rows(listOwnedCards(db, 'user-a', { attribute: ['DARK'] }))).toEqual(['Dark Magician/-', 'Dark Magician/col-1'])
+      expect(rows(listOwnedCards(db, 'user-a', { race: ['Normal'] }))).toEqual(['Pot of Greed/col-1'])
+      expect(rows(listOwnedCards(db, 'user-a', { level: [4, 7] }))).toEqual(['Dark Magician/-', 'Dark Magician/col-1'])
+      expect(listOwnedCards(db, 'user-a', { level: [4] }).total).toBe(0)
+      // The total counts the filtered rows too.
+      expect(listOwnedCards(db, 'user-a', { attribute: ['DARK'] }).total).toBe(2)
+    })
+
+    it('searches the card text with inText (#145)', () => {
+      expect(listOwnedCards(db, 'user-a', { q: 'wizard' }).total).toBe(0)
+      expect(rows(listOwnedCards(db, 'user-a', { q: 'wizard', inText: true }))).toEqual(['Dark Magician/-', 'Dark Magician/col-1'])
+    })
+
+    it('combines the card filters with a collection (#145)', () => {
+      expect(rows(listOwnedCards(db, 'user-a', { attribute: ['DARK'], collectionId: 'col-1' }))).toEqual(['Dark Magician/col-1'])
+      expect(rows(listOwnedCards(db, 'user-a', { attribute: ['DARK'], collectionId: '__none__' }))).toEqual(['Dark Magician/-'])
+      expect(listOwnedCards(db, 'user-a', { type: ['Spell Card'], collectionId: '__none__' }).total).toBe(0)
     })
 
     it('lists only unassigned rows for "__none__"', () => {
@@ -345,6 +416,36 @@ describe('inventory persistence helpers', () => {
     expect(merged.id).toBe(second.id)
     expect(merged.quantity).toBe(3)
     expect(db.select().from(schema.ownedCard).where(eq(schema.ownedCard.userId, 'user-a')).all()).toHaveLength(1)
+  })
+
+  describe('joining notes when adding to an existing row (#146)', () => {
+    async function addTwice(firstNote: string | null, secondNote: string | null) {
+      const first = await addOwnedCard(db, 'user-a', validateInventoryInput({ catalog_card_id: 46986414, quantity: 1, note: firstNote }))
+      const second = await addOwnedCard(db, 'user-a', validateInventoryInput({ catalog_card_id: 46986414, quantity: 2, note: secondNote }))
+      expect(second.id).toBe(first.id)
+      return second
+    }
+
+    it('keeps both notes, the existing one first', async () => {
+      expect((await addTwice('A', 'B')).note).toBe('A\nB')
+    })
+
+    it('does not repeat an equal note', async () => {
+      expect((await addTwice('Binder', ' Binder ')).note).toBe('Binder')
+    })
+
+    it('keeps the existing note when the new copies have none', async () => {
+      expect((await addTwice('A', null)).note).toBe('A')
+    })
+
+    it('takes the new note when the row had none', async () => {
+      expect((await addTwice(null, 'B')).note).toBe('B')
+    })
+
+    it('sums the quantity', async () => {
+      expect((await addTwice('A', 'B')).quantity).toBe(3)
+      expect(db.select().from(schema.ownedCard).all()).toHaveLength(1)
+    })
   })
 
   describe('merging notes when a move collides (#135, like migration 0014)', () => {
