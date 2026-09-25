@@ -8,7 +8,7 @@ import { ownedQuantitiesByCard } from './inventory'
 import { cardNameMatches, escapedLike, escapeLikeTerm } from './card-name-search'
 import { primaryImageUrlSql } from './card-image-sql'
 import { cardNameDeSql } from './card-translation-sql'
-import { compareCardNames } from '../../shared/card-text'
+import { cardCategoryRank, compareDeckRows } from '../../shared/deck-order'
 import type { AppLocale } from '../../shared/locale'
 import { evaluateDeck, germanName } from '../../shared/rule-formats'
 import type { DeckValidation, DeckWarning, RuleSet } from '../../shared/rule-formats'
@@ -36,6 +36,7 @@ type Db = ReturnType<typeof useDb>
 
 export {
   allowedSectionsForCard,
+  cardCategoryRank,
   DECK_LIMITS,
   DECK_SECTIONS,
   defaultSectionForCard,
@@ -446,22 +447,10 @@ function assertSectionAllowed(card: DeckSectionCard, section: DeckSection) {
   }
 }
 
-// Monsters first, then spells, then traps — the conventional deck-list order.
-// Exported for reuse by server/utils/shared-views.ts (the shared deck view
-// sorts sections identically to buildDeckDetail).
-export function cardCategoryRank(type: string): number {
-  if (type.toLowerCase().includes('spell')) {
-    return 1
-  }
-  if (type.toLowerCase().includes('trap')) {
-    return 2
-  }
-  return 0
-}
-
 /**
- * Sorts deck sections in place, the conventional deck-list order: the Main
- * Deck by monsters / spells / traps, then by name; Extra and Side by name.
+ * Sorts deck sections in place, the conventional deck-list order
+ * (`compareDeckRows`, shared with the deck editor's optimistic rows): the
+ * Main Deck by monsters / spells / traps, then by name; Extra and Side by name.
  * Names are compared in the card language (ADR 0015) — `en` (the default,
  * which the assistant and snapshots use) by the English name, `de` by the
  * German name where there is one. Endpoints re-sort their response in the
@@ -471,10 +460,9 @@ export function sortDeckSections<T extends { type: string, name: string, nameDe?
   sections: Record<DeckSection, T[]>,
   cardLocale: AppLocale = 'en',
 ): Record<DeckSection, T[]> {
-  const byName = (a: T, b: T) => compareCardNames(a, b, cardLocale)
-  sections.main.sort((a, b) => cardCategoryRank(a.type) - cardCategoryRank(b.type) || byName(a, b))
-  sections.extra.sort(byName)
-  sections.side.sort(byName)
+  for (const section of DECK_SECTIONS) {
+    sections[section].sort((a, b) => compareDeckRows(section, a, b, cardLocale))
+  }
   return sections
 }
 
