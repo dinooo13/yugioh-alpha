@@ -7,9 +7,10 @@ import type { AssistantMarkdownDocument, AssistantMarkdownParser } from '~/utils
 // HTML, no components, protocol-checked links, no images. The user's own
 // text stays plain, exactly as typed. Never `v-html`.
 //
-// Parsing is async, so the plain text shows until the first parse is done
-// (also on the server), and while a newer parse runs the previous document
-// stays visible. A failed parse falls back to the plain text.
+// Parsing is async and the parser loads on the first answer (its own chunk),
+// so the plain text shows until the first parse is done (also on the server),
+// and while a newer parse runs the previous document stays visible. A failed
+// parse (or a failed parser load) falls back to the plain text.
 const props = withDefaults(defineProps<{
   text: string
   markdown?: boolean
