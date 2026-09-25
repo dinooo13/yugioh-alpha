@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 import { registerAndLogin, waitForHydration } from './helpers/auth'
 import { acceptConfirm } from './helpers/confirm'
 import { CARD } from './helpers/cards'
@@ -8,6 +9,14 @@ import { CARD } from './helpers/cards'
 const DARK_MAGICIAN = 46986414 // TCG 2002-03-08
 const STARDUST_DRAGON = 44508094 // TCG 2008-09-02
 const POT_OF_GREED = 55144522 // TCG 2002-03-08, Forbidden on the TCG banlist
+
+// Clicks the middle of an element with the real mouse, so whatever is on top
+// there (e.g. a stretched link's ::after) receives the click.
+async function clickCenterOf(page: Page, locator: Locator) {
+  const box = await locator.boundingBox()
+  expect(box).not.toBeNull()
+  await page.mouse.click(box!.x + box!.width / 2, box!.y + box!.height / 2)
+}
 
 test.describe('rule formats', () => {
   test('validates a deck live against a custom and a built-in format', async ({ page }) => {
@@ -155,5 +164,24 @@ test.describe('rule formats', () => {
 
     await expect(page).toHaveURL('/formats')
     await expect(page.getByRole('heading', { name: 'Mein GOAT' })).toBeVisible()
+  })
+
+  test('format tiles open on a click anywhere (#141)', async ({ page }) => {
+    await registerAndLogin(page)
+
+    await page.goto('/formats')
+    await waitForHydration(page)
+
+    const tile = page.locator('main li').filter({ has: page.getByRole('heading', { name: 'GOAT Format' }) })
+    // The rule count is plain text, not a link: the stretched title link covers it.
+    await clickCenterOf(page, tile.getByText(/\d+ Regeln/))
+    await expect(page).toHaveURL('/formats/goat')
+
+    await page.goto('/formats')
+    await waitForHydration(page)
+
+    // The clone button sits above the stretched link and keeps its own action.
+    await tile.getByRole('button', { name: 'GOAT Format klonen' }).click()
+    await expect(page).toHaveURL(/\/formats\/[0-9a-f-]{36}$/)
   })
 })
