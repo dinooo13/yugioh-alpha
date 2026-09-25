@@ -80,7 +80,7 @@ curl -X POST http://localhost:3000/api/admin/catalog/sync \
   -H "Cookie: <your better-auth session cookie>"
 ```
 
-The sync is idempotent (upsert-based) and safe to re-run at any time to pick up new or updated cards. Cards YGOPRODeck no longer lists (renumbered pre-release placeholders, changed passcodes) are marked retired and hidden from search; inventory, decks and wishlists that use them move to the renumbered card (see [ADR 0019](docs/adr/0019-retired-catalog-cards.md)). Card images are currently stored as remote YGOPRODeck URLs; a local image proxy/cache is planned as follow-up work (see the ADR).
+The sync is idempotent (upsert-based) and safe to re-run at any time to pick up new or updated cards. Cards YGOPRODeck no longer lists (renumbered pre-release placeholders, changed passcodes) are marked retired and hidden from search; inventory, decks and wishlists that use them move to the renumbered card (see [ADR 0019](docs/adr/0019-retired-catalog-cards.md)). Printings and images the response no longer lists are removed ([ADR 0024](docs/adr/0024-passcode-aliases-and-catalog-cleanup.md)). Card images are currently stored as remote YGOPRODeck URLs; a local image proxy/cache is planned as follow-up work (see the ADR).
 
 ### German card data
 
@@ -140,7 +140,8 @@ nothing is written before it has been confirmed:
 - **Liste** – one card per line. Quantities (`3x Dark Magician`,
   `Dark Magician x3`, `3 Dark Magician`), set codes (`Dark Magician (SDY-006)`
   or a bare `SDY-006`), and 8-digit passcodes (`46986414`) are recognized
-  automatically.
+  automatically. The passcode printed on a card also works when YGOPRODeck
+  lists it as an alternate artwork of the card (ADR 0024).
 
 The review table preselects certain matches (passcode, set code, exact name)
 and anything scoring at least 0.85, marks weaker hits as "Unsicher" with a

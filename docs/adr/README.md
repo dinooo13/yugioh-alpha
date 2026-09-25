@@ -26,8 +26,9 @@ mark the old as superseded.
 | [0016](0016-visual-design-system.md) | Visual design system and theming (Duel Arena) | Accepted |
 | [0017](0017-inventory-without-collector-details.md) | Inventory without collector details | Accepted |
 | [0018](0018-product-name-ygo-alpha.md) | Product name "YGO Alpha" | Accepted |
-| [0019](0019-retired-catalog-cards.md) | Retired catalog cards | Accepted |
+| [0019](0019-retired-catalog-cards.md) | Retired catalog cards | Accepted (extended by [0024](0024-passcode-aliases-and-catalog-cleanup.md)) |
 | [0020](0020-assistant-on-the-ai-sdk.md) | The chat assistant on the Vercel AI SDK | Accepted, implemented (84a–84c); per-turn deck context removed by [0021](0021-no-deck-link-in-assistant-conversations.md) |
 | [0021](0021-no-deck-link-in-assistant-conversations.md) | No deck link in assistant conversations | Accepted (`deck_id` dropped by migration 0017, #137) |
 | [0022](0022-classic-plus-format.md) | Classic Plus as a built-in format with its own banlist | Accepted |
 | [0023](0023-markdown-in-assistant-answers.md) | Markdown in assistant answers | Accepted |
+| [0024](0024-passcode-aliases-and-catalog-cleanup.md) | Passcode aliases and catalog cleanup | Accepted |
