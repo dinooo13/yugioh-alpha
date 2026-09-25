@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test'
 import { expect, test } from '@playwright/test'
-import { registerAndLogin, trackHydrationWarnings } from './helpers/auth'
+import { registerAndLogin, trackHydrationWarnings, waitForHydration } from './helpers/auth'
 import { CARD, CARD_EN } from './helpers/cards'
 
 // Card language (#34 F3c, ADR 0015): card names and texts follow the
@@ -10,7 +10,7 @@ import { CARD, CARD_EN } from './helpers/cards'
 
 async function searchCatalog(page: Page, query: string) {
   await page.goto('/catalog')
-  await page.waitForLoadState('networkidle')
+  await waitForHydration(page)
   await page.getByLabel(/Karten suchen|Search cards/).fill(query)
 }
 
@@ -36,7 +36,7 @@ test.describe('card language', () => {
     expect(html).toContain(CARD.darkMagician)
 
     await page.goto('/profile')
-    await page.waitForLoadState('networkidle')
+    await waitForHydration(page)
     await expect(page.getByRole('combobox', { name: 'Kartensprache' })).toContainText('Wie Anzeigesprache (Deutsch)')
     await pickCardLanguage(page, 'Kartensprache', 'Englisch')
     await expect(page.getByRole('combobox', { name: 'Kartensprache' })).toContainText('Englisch')
@@ -46,7 +46,7 @@ test.describe('card language', () => {
     await expect(page.getByRole('heading', { name: CARD_EN.darkMagician })).toBeVisible()
     await expect(page.getByRole('heading', { name: CARD.darkMagician })).toHaveCount(0)
     await page.reload()
-    await page.waitForLoadState('networkidle')
+    await waitForHydration(page)
     await expect(page.getByRole('heading', { name: CARD_EN.darkMagician })).toBeVisible()
     await expect(page.getByText('Katalog', { exact: true }).first()).toBeVisible()
 
@@ -63,7 +63,7 @@ test.describe('card language', () => {
     await expect(page.getByRole('heading', { name: CARD.darkMagician })).toHaveCount(0)
 
     await page.goto('/profile')
-    await page.waitForLoadState('networkidle')
+    await waitForHydration(page)
     await expect(page.getByRole('combobox', { name: 'Card language' })).toContainText('Same as interface (English)')
 
     // German card names in an English interface.
@@ -103,7 +103,7 @@ test.describe('card language', () => {
     // German: the attribute menu offers "FINSTERNIS" and filters by DARK
     // (a multi-select USelectMenu since #63: it stays open after a pick).
     await page.goto('/catalog')
-    await page.waitForLoadState('networkidle')
+    await waitForHydration(page)
     const attribute = page.getByRole('button', { name: 'Attribut', exact: true })
     await attribute.click()
     await expect(page.getByRole('option', { name: 'FINSTERNIS', exact: true })).toBeVisible()
@@ -119,14 +119,14 @@ test.describe('card language', () => {
     // English interface, German cards: still German labels (also in the first server render).
     await page.request.patch('/api/profile', { data: { locale: 'en', cardLocale: 'de' } })
     await page.goto('/catalog?attribute=DARK')
-    await page.waitForLoadState('networkidle')
+    await waitForHydration(page)
     await expect(page.getByRole('button', { name: 'Attribute', exact: true })).toHaveText('FINSTERNIS')
     await expect(page.getByRole('article', { name: CARD.darkMagician, exact: true }).getByText('FINSTERNIS', { exact: true })).toBeVisible()
 
     // English cards: the stored values.
     await page.request.patch('/api/profile', { data: { cardLocale: 'en' } })
     await page.goto('/catalog?attribute=DARK')
-    await page.waitForLoadState('networkidle')
+    await waitForHydration(page)
     await expect(page.getByRole('button', { name: 'Attribute', exact: true })).toHaveText('DARK')
     const englishTile = page.getByRole('article', { name: CARD_EN.darkMagician, exact: true })
     await expect(englishTile.getByText('DARK', { exact: true })).toBeVisible()

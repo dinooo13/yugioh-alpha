@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
-import { registerAndLogin } from './helpers/auth'
+import { registerAndLogin, waitForHydration } from './helpers/auth'
 import { acceptConfirm } from './helpers/confirm'
 import { CARD } from './helpers/cards'
 
@@ -33,7 +33,7 @@ test.describe('collections on the inventory page', () => {
     }
 
     await page.goto('/inventory')
-    await page.waitForLoadState('networkidle')
+    await waitForHydration(page)
 
     // The sidebar is plain navigation now (#41).
     await expect(page.locator('aside')).not.toContainText('Neue Sammlung')

@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
-import { registerAndLogin, trackHydrationWarnings } from './helpers/auth'
+import { registerAndLogin, trackHydrationWarnings, waitForHydration } from './helpers/auth'
 
 // Dark-first color mode stored in a cookie, so the server renders the right
 // `<html class>` and `theme-color` (docs/adr/0016-visual-design-system.md).
@@ -30,7 +30,7 @@ test.describe('color mode', () => {
   test('the toggle switches to light, persists in a cookie, and the server renders it after a reload', async ({ page }) => {
     const warnings = trackHydrationWarnings(page)
     await page.goto('/login')
-    await page.waitForLoadState('networkidle')
+    await waitForHydration(page)
 
     await page.getByRole('button', { name: 'Zum hellen Modus wechseln' }).click()
     await expect(page.locator('html')).toHaveClass(/\blight\b/)
@@ -44,7 +44,7 @@ test.describe('color mode', () => {
     expect(html).toContain(`<meta name="theme-color" content="${LIGHT_THEME_COLOR}">`)
 
     await page.reload()
-    await page.waitForLoadState('networkidle')
+    await waitForHydration(page)
     await expect(page.locator('html')).toHaveClass(/\blight\b/)
     // The toggle's label and icon hydrate for light mode, too.
     await expect(page.getByRole('button', { name: 'Zum dunklen Modus wechseln' })).toBeVisible()
@@ -63,7 +63,7 @@ test.describe('color mode', () => {
 
     for (const path of ['/decks', '/inventory', '/']) {
       await page.goto(path)
-      await page.waitForLoadState('networkidle')
+      await waitForHydration(page)
       await expect(page.locator('html')).toHaveClass(/\blight\b/)
     }
 

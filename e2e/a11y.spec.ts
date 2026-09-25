@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
-import { registerAndLogin } from './helpers/auth'
+import { registerAndLogin, waitForHydration } from './helpers/auth'
 import { CARD } from './helpers/cards'
 
 // Passcode from the seeded E2E catalog fixture (server/db/fixtures/catalog-fixture.ts).
@@ -8,7 +8,7 @@ const DARK_MAGICIAN = 46986414
 
 async function expectSkipLinkWorks(page: Page, path: string) {
   await page.goto(path)
-  await page.waitForLoadState('networkidle')
+  await waitForHydration(page)
 
   // The skip link is the very first stop in the tab order and only shows up
   // once it has focus.
@@ -40,7 +40,7 @@ test.describe('accessibility basics', () => {
     expect(deckResponse.ok()).toBe(true)
 
     await page.goto('/decks')
-    await page.waitForLoadState('networkidle')
+    await waitForHydration(page)
 
     for (const name of ['Optionen für Test Deck', 'Menü öffnen']) {
       const box = await page.getByRole('button', { name }).boundingBox()
@@ -65,7 +65,7 @@ test.describe('accessibility basics', () => {
     const deck = await deckResponse.json() as { id: string }
 
     await page.goto(`/decks/${deck.id}`)
-    await page.waitForLoadState('networkidle')
+    await waitForHydration(page)
 
     const expectTapTarget = async (name: string) => {
       const box = await page.getByRole('button', { name, exact: true }).boundingBox()

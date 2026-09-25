@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { registerAndLogin } from './helpers/auth'
+import { registerAndLogin, waitForHydration } from './helpers/auth'
 import { CARD } from './helpers/cards'
 
 // Passcode from the seeded E2E catalog fixture (server/db/fixtures/catalog-fixture.ts).
@@ -83,7 +83,7 @@ test.describe('responsive layout at 390px', () => {
 
     for (const { path: route, appShell } of routes) {
       await page.goto(route)
-      await page.waitForLoadState('networkidle')
+      await waitForHydration(page)
 
       if (appShell) {
         // The desktop sidebar is `hidden` below `lg`; the hamburger takes its place.
@@ -111,7 +111,7 @@ test.describe('responsive layout at 390px', () => {
     expect(inventoryResponse.ok()).toBe(true)
 
     await page.goto('/inventory')
-    await page.waitForLoadState('networkidle')
+    await waitForHydration(page)
 
     // Liste (default view): the name is the row's button (#135).
     const name = page.getByRole('button', { name: CARD.darkMagician, exact: true })
@@ -173,7 +173,7 @@ test.describe('responsive layout at 390px', () => {
     await page.setViewportSize({ width: 390, height: 844 })
     await registerAndLogin(page)
     await page.goto('/inventory')
-    await page.waitForLoadState('networkidle')
+    await waitForHydration(page)
 
     await page.getByRole('button', { name: 'Menü öffnen' }).click()
     const drawer = page.getByRole('dialog', { name: 'Menü' })

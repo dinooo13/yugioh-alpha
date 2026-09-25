@@ -40,13 +40,13 @@ test.describe('first page after login', () => {
 
     expect(response.fromServiceWorker()).toBe(false)
     await expect(page).toHaveURL('/')
-    await page.waitForLoadState('networkidle')
+    await waitForHydration(page)
     await expectAppShell(page)
 
     for (const path of ['/', '/inventory', '/decks']) {
       const navigation = await page.goto(path)
       expect(navigation?.fromServiceWorker()).toBe(false)
-      await page.waitForLoadState('networkidle')
+      await waitForHydration(page)
       await expect(page).toHaveURL(path)
       await expectAppShell(page)
     }
@@ -65,7 +65,7 @@ test.describe('first page after login', () => {
     await loginViaForm(page, user)
 
     await expect(page).toHaveURL('/inventory')
-    await page.waitForLoadState('networkidle')
+    await waitForHydration(page)
     await expectAppShell(page)
     expect(warnings).toEqual([])
   })
