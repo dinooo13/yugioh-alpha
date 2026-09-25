@@ -13,6 +13,7 @@ import {
   applyAction,
   ASSISTANT_TOOLS,
   buildAssistantToolSet,
+  refreshPackagePreviews,
   rejectAction,
 } from '../../server/utils/assistant-tools'
 import type { AssistantToolSet, ToolOutcome } from '../../server/utils/assistant-tools'
@@ -1378,7 +1379,19 @@ describe('buildAssistantToolSet (the AI SDK engine, ADR 0020)', () => {
 
     function storedPreview(actionId: string) {
       const row = db.select().from(schema.assistantAction).where(eq(schema.assistantAction.id, actionId)).get()!
-      return (row.payload as { preview: { validation: { legal: boolean } | null, counts: { main: number }, formatName: string | null } }).preview
+      return (row.payload as { preview: { validation: { legal: boolean } | null, counts: { main: number }, formatName: string | null, combined?: boolean } }).preview
+    }
+
+    function actionRow(actionId: string) {
+      return db.select().from(schema.assistantAction).where(eq(schema.assistantAction.id, actionId)).get()!
+    }
+
+    /** set_deck_format, then update_deck_cards for the same deck: one package. */
+    async function proposePackage(tools: AssistantToolSet = buildSet().tools) {
+      const { formatId, deckId } = setup()
+      const format = await execute(tools, 'set_deck_format', { deckId, formatId }, 'call-1')
+      const cards = await execute(tools, 'update_deck_cards', { deckId, changes: [{ catalogCardId: CARD.darkMagician, section: 'main', quantity: 1 }] }, 'call-2')
+      return { formatId, deckId, formatActionId: format.actionId!, cardsActionId: cards.actionId! }
     }
 
     it('previews set_deck_format with the card changes proposed after it, and updates the earlier card', async () => {
@@ -1392,10 +1405,12 @@ describe('buildAssistantToolSet (the AI SDK engine, ADR 0020)', () => {
       const cards = await execute(tools, 'update_deck_cards', { deckId, changes: [{ catalogCardId: CARD.darkMagician, section: 'main', quantity: 1 }] }, 'call-2')
 
       // The later proposal previews the deck with both applied: new format, new cards.
-      expect(cards.result).toMatchObject({ preview: { formatName: 'Highlander', counts: { main: 1 }, validation: { legal: true } } })
-      expect(storedPreview(cards.actionId!)).toMatchObject({ formatName: 'Highlander', validation: { legal: true } })
+      expect(cards.result).toMatchObject({ preview: { formatName: 'Highlander', counts: { main: 1 }, validation: { legal: true }, combined: true } })
+      expect(storedPreview(cards.actionId!)).toMatchObject({ formatName: 'Highlander', validation: { legal: true }, combined: true })
+      // The first call's own result previewed it alone.
+      expect(format.result).not.toHaveProperty('preview.combined')
       // The earlier format change now previews the same package, stored and handed on as an update.
-      expect(storedPreview(format.actionId!)).toMatchObject({ formatName: 'Highlander', counts: { main: 1 }, validation: { legal: true } })
+      expect(storedPreview(format.actionId!)).toMatchObject({ formatName: 'Highlander', counts: { main: 1 }, validation: { legal: true }, combined: true })
       expect(updates).toEqual([{ toolCallId: 'call-2', view: expect.objectContaining({ id: format.actionId, payload: expect.objectContaining({ preview: expect.objectContaining({ validation: expect.objectContaining({ legal: true }) }) }) }) }])
       expect(actions.map(action => action.view.id)).toEqual([format.actionId, cards.actionId])
       // The deck itself is untouched.
@@ -1429,6 +1444,58 @@ describe('buildAssistantToolSet (the AI SDK engine, ADR 0020)', () => {
       expect(updates).toEqual([])
       expect(storedPreview(format.actionId!)).toMatchObject({ validation: { legal: false } })
       expect(storedPreview(otherFormat.actionId!)).toMatchObject({ counts: { main: 2 }, validation: { legal: false } })
+      expect(storedPreview(otherFormat.actionId!)).not.toHaveProperty('combined')
+    })
+
+    it('after applying one proposal of a package, previews the rest alone on the deck as it is now', async () => {
+      const { deckId, formatActionId, cardsActionId } = await proposePackage()
+
+      const applied = await applyAction(db, 'user-a', formatActionId)
+      expect(applied.status).toBe('applied')
+      const related = refreshPackagePreviews(db, 'user-a', applied)
+
+      // The deck now has the format; the card changes alone make it legal in it.
+      expect(related.map(row => row.id)).toEqual([cardsActionId])
+      expect(storedPreview(cardsActionId)).toMatchObject({ formatName: 'Highlander', counts: { main: 1 }, validation: { legal: true } })
+      expect(storedPreview(cardsActionId)).not.toHaveProperty('combined')
+      expect(getDeckDetail(db, 'user-a', deckId).counts.main).toBe(2)
+    })
+
+    it('after rejecting the format change, previews the card changes without the format', async () => {
+      const { formatActionId, cardsActionId } = await proposePackage()
+
+      const related = refreshPackagePreviews(db, 'user-a', rejectAction(db, 'user-a', formatActionId))
+
+      expect(related.map(row => row.id)).toEqual([cardsActionId])
+      expect(storedPreview(cardsActionId)).toMatchObject({ formatId: null, formatName: null, validation: null, counts: { main: 1 } })
+      expect(storedPreview(cardsActionId)).not.toHaveProperty('combined')
+    })
+
+    it('after applying the card changes, previews the format change on the changed deck (still one package of the rest)', async () => {
+      const { formatId, deckId } = setup()
+      const { tools } = buildSet()
+      const cards = await execute(tools, 'update_deck_cards', { deckId, changes: [{ catalogCardId: CARD.darkMagician, section: 'main', quantity: 1 }] }, 'call-1')
+      const format = await execute(tools, 'set_deck_format', { deckId, formatId }, 'call-2')
+      const more = await execute(tools, 'update_deck_cards', { deckId, changes: [{ catalogCardId: CARD.potOfGreed, section: 'main', quantity: 1 }] }, 'call-3')
+
+      const related = refreshPackagePreviews(db, 'user-a', await applyAction(db, 'user-a', cards.actionId!))
+
+      // The two left are still a package, in the order they were made.
+      expect(related.map(row => row.id)).toEqual([format.actionId, more.actionId])
+      for (const id of [format.actionId!, more.actionId!]) {
+        expect(storedPreview(id)).toMatchObject({ formatName: 'Highlander', counts: { main: 2 }, validation: { legal: true }, combined: true })
+      }
+      expect(actionRow(cards.actionId!).status).toBe('applied')
+    })
+
+    it('leaves everything alone for an action outside a package or a resolved package', async () => {
+      const { tools } = buildSet()
+      const add = await execute(tools, 'add_to_inventory', { items: [{ catalogCardId: CARD.darkMagician, quantity: 1 }] })
+      expect(refreshPackagePreviews(db, 'user-a', await applyAction(db, 'user-a', add.actionId!))).toEqual([])
+
+      const { formatActionId, cardsActionId } = await proposePackage(tools)
+      rejectAction(db, 'user-a', cardsActionId)
+      expect(refreshPackagePreviews(db, 'user-a', rejectAction(db, 'user-a', formatActionId))).toEqual([])
     })
   })
 

@@ -126,6 +126,13 @@ export interface AssistantDeckPreview {
    */
   warnings?: string[]
   warningDetails?: DeckWarning[]
+  /**
+   * The preview includes other pending proposals of the same answer for the
+   * same deck (a package, ADR 0026): computed with all of them applied. It
+   * is recomputed when one of them is applied or rejected; missing when the
+   * preview shows this proposal alone.
+   */
+  combined?: boolean
 }
 
 // --- Limits, shared by client-side validation and the server ------------------

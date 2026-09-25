@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it } from 'vitest'
-import { enableAutoUnmount } from '@vue/test-utils'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { enableAutoUnmount, flushPromises } from '@vue/test-utils'
 import { mountSuspended } from '@nuxt/test-utils/runtime'
 import ActionCard from '~/components/assistant/ActionCard.vue'
 import type { AssistantActionView } from '~~/shared/assistant-chat'
@@ -180,6 +180,50 @@ describe('AssistantActionCard', () => {
         await setTestLocale('de')
       }
     })
+  })
+
+  describe('a package of proposals (ADR 0026)', () => {
+    it('marks a preview computed with the other proposals of the answer, in German and English', async () => {
+      const action = deckAction()
+      action.payload = { ...action.payload, preview: { ...(action.payload.preview as object), combined: true } }
+      const component = await mountSuspended(ActionCard, { props: { action } })
+      expect(component.find('[data-testid="action-preview-combined"]').text()).toBe('Vorschau mit den anderen Vorschlägen dieser Antwort')
+
+      await setTestLocale('en')
+      try {
+        const english = await mountSuspended(ActionCard, { props: { action } })
+        expect(english.find('[data-testid="action-preview-combined"]').text()).toBe('Preview includes the other proposals in this answer')
+      }
+      finally {
+        await setTestLocale('de')
+      }
+
+      const alone = await mountSuspended(ActionCard, { props: { action: deckAction() } })
+      expect(alone.find('[data-testid="action-preview-combined"]').exists()).toBe(false)
+    })
+
+    it('hands on the recomputed views of the package\'s other proposals after apply or reject', async () => {
+      const other = deckAction({ id: 'action-2', kind: 'set_deck_format' })
+      for (const kind of ['apply', 'reject'] as const) {
+        vi.stubGlobal('$fetch', vi.fn((url: string) => Promise.resolve(url === `/api/assistant/chat/actions/action-1/${kind}`
+          ? { action: deckAction({ status: kind === 'apply' ? 'applied' : 'rejected' }), related: [other] }
+          : null)))
+        const component = await mountSuspended(ActionCard, { props: { action: deckAction() } })
+        const button = component.findAll('button').find(candidate => candidate.text() === (kind === 'apply' ? 'Übernehmen' : 'Verwerfen'))
+        await button!.trigger('click')
+        await flushPromises()
+        expect(component.emitted('updated')!.map(([view]) => (view as AssistantActionView).id)).toEqual(['action-1', 'action-2'])
+      }
+      vi.unstubAllGlobals()
+    })
+  })
+
+  it('keeps the title readable: the status badge wraps under it instead of cutting it off', async () => {
+    const component = await mountSuspended(ActionCard, { props: { action: deckAction({ kind: 'set_deck_format' }) } })
+    const title = component.find('[data-testid="action-title"]')
+    expect(title.text()).toBe('Deck-Format ändern')
+    expect(title.element.parentElement!.className).toContain('flex-wrap')
+    expect(title.html()).not.toContain('truncate')
   })
 
   it('renders an older action without preview or names as before', async () => {

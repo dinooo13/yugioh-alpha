@@ -128,6 +128,7 @@
         "moreIssues": "… und {count} weitere",
         "missingTitle": "Fehlende Karten (nicht oder nicht genug im Inventar)",
         "missingCard": "{name}: {needed} benötigt, {owned} im Besitz",
+        "combined": "Vorschau mit den anderen Vorschlägen dieser Antwort",
         "snapshot": "Stand beim Vorschlag"
       },
       "showDetails": "Details anzeigen",

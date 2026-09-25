@@ -15,7 +15,7 @@
 // else is reported as missing (404), never as forbidden.
 
 import { randomUUID } from 'node:crypto'
-import { and, asc, eq, inArray } from 'drizzle-orm'
+import { and, asc, eq, inArray, sql } from 'drizzle-orm'
 import { createError } from 'h3'
 import { jsonSchema, tool } from 'ai'
 import type { JSONSchema7, JSONValue, Tool } from 'ai'
@@ -1092,7 +1092,7 @@ interface TurnDeckProposal {
 }
 
 /** The deck-affecting part of an update_deck_cards / set_deck_format proposal's payload, or null for any other proposal. */
-function turnDeckProposalOf(action: AssistantProposedAction): Omit<TurnDeckProposal, 'actionId'> | null {
+function turnDeckProposalOf(action: Pick<AssistantProposedAction, 'kind' | 'payload'>): Omit<TurnDeckProposal, 'actionId'> | null {
   const { kind, payload } = action
   if (typeof payload.deckId !== 'string') {
     return null
@@ -1115,11 +1115,52 @@ function turnDeckProposalOf(action: AssistantProposedAction): Omit<TurnDeckPropo
  */
 function combinedDeckPreview(db: Db, userId: string, deckId: string, proposals: Array<Omit<TurnDeckProposal, 'actionId'>>): AssistantDeckPreview {
   const formatProposals = proposals.filter(proposal => proposal.formatId !== undefined)
-  return previewDeckProposal(db, userId, {
+  const preview = previewDeckProposal(db, userId, {
     deckId,
     changes: proposals.flatMap(proposal => proposal.changes),
     ...(formatProposals.length > 0 ? { formatId: formatProposals.at(-1)!.formatId } : {}),
   })
+  return proposals.length > 1 ? { ...preview, combined: true } : preview
+}
+
+/**
+ * After one proposal of a package was applied, rejected or failed (ADR 0026):
+ * recomputes the previews of the package's remaining pending proposals — the
+ * same answer's pending update_deck_cards / set_deck_format proposals for
+ * the same deck — on the deck as it is now, together (in the order they were
+ * made) or, for the last one, alone. Returns the updated rows; none when the
+ * action wasn't part of a package or its deck is gone.
+ */
+export function refreshPackagePreviews(db: Db, userId: string, resolved: AssistantActionRow): AssistantActionRow[] {
+  const resolvedProposal = turnDeckProposalOf(resolved)
+  if (!resolvedProposal) {
+    return []
+  }
+  const remaining = db.select().from(assistantAction)
+    .where(and(
+      eq(assistantAction.messageId, resolved.messageId),
+      eq(assistantAction.userId, userId),
+      eq(assistantAction.status, 'pending'),
+    ))
+    // Insertion order (the order the model made the calls): `created_at` has whole seconds only.
+    .orderBy(sql`rowid`)
+    .all()
+    .flatMap((row) => {
+      const proposal = turnDeckProposalOf(row)
+      return proposal && proposal.deckId === resolvedProposal.deckId ? [{ ...proposal, actionId: row.id }] : []
+    })
+  if (remaining.length === 0) {
+    return []
+  }
+  let preview: AssistantDeckPreview
+  try {
+    preview = combinedDeckPreview(db, userId, resolvedProposal.deckId, remaining)
+  }
+  catch {
+    // The deck (or a format) is gone: applying the rest fails anyway, with its own message.
+    return []
+  }
+  return remaining.flatMap(proposal => updatePendingActionPreview(db, proposal.actionId, preview) ?? [])
 }
 
 /** The proposals of `proposals` the user hasn't applied or rejected yet (they can while the turn still runs). */

@@ -128,6 +128,7 @@
         "moreIssues": "… and {count} more",
         "missingTitle": "Missing cards (not or not enough in the inventory)",
         "missingCard": "{name}: {needed} needed, {owned} owned",
+        "combined": "Preview includes the other proposals in this answer",
         "snapshot": "As of the proposal"
       },
       "showDetails": "Show details",
