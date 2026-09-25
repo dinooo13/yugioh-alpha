@@ -439,6 +439,11 @@ const sections = computed(() => deck.value?.sections ?? { main: [], extra: [], s
 const counts = computed(() => deck.value?.counts ?? { main: 0, extra: 0, side: 0, total: 0 })
 const limits = computed(() => deck.value?.limits ?? { mainMin: 40, mainMax: 60, extraMax: 15, sideMax: 15, maxCopies: 3 })
 const warnings = computed(() => deck.value?.warnings ?? [])
+// A format's validation replaces the "usual size" hints; a retired card
+// (ADR 0019) is not a format question, so its warning always shows.
+const shownWarnings = computed(() => deck.value?.format
+  ? warnings.value.filter(warning => warning.code === 'card_retired')
+  : warnings.value)
 
 const usedByCard = computed(() => {
   const used = new Map<number, number>()
@@ -816,7 +821,7 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
       </section>
 
       <UAlert
-        v-if="warnings.length > 0 && !deck.format && counts.total > 0"
+        v-if="shownWarnings.length > 0 && counts.total > 0"
         color="warning"
         variant="subtle"
         icon="i-lucide-triangle-alert"
@@ -825,7 +830,7 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
         <template #description>
           <ul class="list-inside list-disc space-y-0.5">
             <li
-              v-for="warning in warnings"
+              v-for="warning in shownWarnings"
               :key="`${warning.code}-${warning.cardId ?? ''}`"
             >
               {{ validationText(warning) }}

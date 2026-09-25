@@ -10,6 +10,7 @@
     "extra_above_max": "Das {section} hat {count} Karte, höchstens {max} sind üblich. | Das {section} hat {count} Karten, höchstens {max} sind üblich.",
     "side_above_max": "Das {section} hat {count} Karte, höchstens {max} sind üblich. | Das {section} hat {count} Karten, höchstens {max} sind üblich.",
     "copies_above_max": "{cardName}: {copies} Kopien im Deck, höchstens {maxCopies} sind üblich.",
+    "card_retired": "{cardName} ist nicht mehr im Katalog; Banlist-Status und Kartendaten werden nicht mehr aktualisiert.",
     "badge": {
       "legal": "Legal",
       "notLegal": "Nicht legal",

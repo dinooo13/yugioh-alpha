@@ -88,7 +88,7 @@ mockNuxtImport('useRoute', () => {
 
 function deckDetail(
   sections: Partial<Record<DeckSection, DeckCardRow[]>>,
-  warnings: Array<{ code: string, message: string }> = [],
+  warnings: Array<{ code: string, message: string, params?: Record<string, unknown> }> = [],
   format: { id: string, name: string, isBuiltin: boolean } | null = null,
   validation: DeckValidation | null = null,
 ) {
@@ -191,6 +191,26 @@ describe('deck editor', () => {
     expect(extraCount.attributes('data-state')).toBe('over')
   })
 
+  it('keeps the retired-card warning when a format validates the deck, and only that one (#109)', async () => {
+    state.source = { items: [], total: 0 }
+    state.deck = deckDetail(
+      { main: [row({ name: 'Old Placeholder', section: 'main', catalogCardId: 101402013, retired: true })] },
+      [
+        { code: 'main_below_min', message: 'x', params: { section: 'main', count: 3, min: 40 } },
+        { code: 'card_retired', message: 'x', params: { cardId: 101402013, cardName: 'Old Placeholder' } },
+      ],
+      { id: 'tcg-advanced', name: 'TCG Advanced', isBuiltin: true },
+      { legal: true, issues: [], cards: {} },
+    )
+
+    const component = await mountSuspended(DeckEditorPage)
+    const text = component.text()
+
+    expect(text).toContain('Hinweise zum Deckaufbau')
+    expect(text).toContain('Old Placeholder ist nicht mehr im Katalog; Banlist-Status und Kartendaten werden nicht mehr aktualisiert.')
+    expect(text).not.toContain('mindestens 40 sind üblich')
+  })
+
   it('marks a card YGOPRODeck no longer lists, and only that one (ADR 0019)', async () => {
     state.source = { items: [], total: 0 }
     state.deck = deckDetail({
@@ -200,7 +220,7 @@ describe('deck editor', () => {
       ],
     })
 
-    // The badge's tooltip needs the provider UApp gives the real app.
+    // Inside UApp, like in the real app.
     const component = await mountSuspended(defineComponent({
       setup: () => () => h(UApp, null, { default: () => h(DeckEditorPage) }),
     }))

@@ -48,6 +48,8 @@ function cardDetail(overrides: Partial<CatalogCardDetail['card']> = {}, rest: Pa
       tcgDate: '2002-03-08',
       ocgDate: null,
       ygoprodeckUrl: null,
+      retired: false,
+      replacedById: null,
       ...overrides,
     },
     printings: [{ setCode: 'LOB-001', setName: 'Legend of Blue Eyes White Dragon', rarity: 'Ultra Rare', price: null }],
@@ -278,6 +280,65 @@ describe('CardDetailModal', () => {
       const card = hover()
       await new Promise(resolve => setTimeout(resolve, 50))
       expect(card.style.transform).toBe('')
+    })
+  })
+
+  describe('retired cards (ADR 0019, #108)', () => {
+    it('shows the retired alert with a link to the current card', async () => {
+      await mountModal({ detail: cardDetail({ retired: true, replacedById: 16178683 }) })
+
+      const alert = await vi.waitFor(() => {
+        const found = dialog().find('[data-testid="card-retired-alert"]')
+        expect(found.exists()).toBe(true)
+        return found
+      })
+      expect(alert.text()).toContain('Nicht mehr im Katalog')
+      expect(alert.text()).toContain('YGOPRODeck führt diese Karte inzwischen unter einer neuen Nummer.')
+      const link = alert.find('a')
+      expect(link.text()).toBe('Aktuelle Karte anzeigen')
+      expect(link.attributes('href')).toBe('/catalog?card=16178683')
+    })
+
+    it('shows the alert without an action when there is no replacement', async () => {
+      await mountModal({ detail: cardDetail({ retired: true, replacedById: null }) })
+
+      const alert = await vi.waitFor(() => {
+        const found = dialog().find('[data-testid="card-retired-alert"]')
+        expect(found.exists()).toBe(true)
+        return found
+      })
+      expect(alert.text()).toContain('Kartendaten und Banlist-Status werden nicht mehr aktualisiert.')
+      expect(alert.find('a').exists()).toBe(false)
+      expect(alert.find('button').exists()).toBe(false)
+    })
+
+    it('shows no alert for an active card', async () => {
+      await mountModal()
+      await vi.waitFor(() => {
+        expect(dialog().text()).toContain('Dieser legendäre Drache')
+      })
+      expect(dialog().find('[data-testid="card-retired-alert"]').exists()).toBe(false)
+    })
+  })
+
+  describe('artwork passcodes (ADR 0023)', () => {
+    it('emits `resolved` when the detail is another card than the requested id', async () => {
+      const { component } = await mountModal({
+        detail: cardDetail({ id: 46986420, name: 'Dark Magician' }),
+        props: { cardId: 46986414 },
+      })
+
+      await vi.waitFor(() => {
+        expect(component.emitted('resolved')).toEqual([[46986420]])
+      })
+    })
+
+    it('emits nothing for the canonical id', async () => {
+      const { component } = await mountModal()
+      await vi.waitFor(() => {
+        expect(dialog().text()).toContain('Dieser legendäre Drache')
+      })
+      expect(component.emitted('resolved')).toBeUndefined()
     })
   })
 

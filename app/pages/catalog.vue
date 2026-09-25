@@ -428,6 +428,7 @@ async function onAddedToInventory() {
       :preview="selectedSummary"
       variant="catalog"
       @update:open="value => { if (!value) closeCard() }"
+      @resolved="openCard"
     >
       <template #actions="{ card }">
         <UButton

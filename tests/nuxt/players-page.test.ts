@@ -1,13 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { DOMWrapper, enableAutoUnmount } from '@vue/test-utils'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
 import PlayerIndexPage from '~/pages/players/[handle]/index.vue'
 import PlayerDeckPage from '~/pages/players/[handle]/decks/[id].vue'
-import type { PublicProfileResponse, SharedDeckView } from '~~/shared/sharing'
+import type { PublicProfileResponse, SharedDeckView, SharedWishlistResponse } from '~~/shared/sharing'
 import { setTestLocale } from './fixtures/locale'
 
 const state = vi.hoisted(() => ({
   profile: null as PublicProfileResponse | null,
   deck: null as SharedDeckView | null,
+  wishlist: null as SharedWishlistResponse | null,
   error: null as Error | null,
   // Consumed by `SharingNotFoundNotice` (mocked module below) to decide
   // whether the "melde dich an" hint should render on the not-found box.
@@ -24,6 +26,9 @@ mockNuxtImport('useFetch', () => {
     if (resolvedUrl.includes('/decks/')) {
       return { data: ref(state.deck), error: ref(state.error), pending: ref(false), refresh: vi.fn() }
     }
+    if (resolvedUrl.endsWith('/wishlist')) {
+      return { data: ref(state.wishlist), error: ref(null), pending: ref(false), refresh: vi.fn() }
+    }
     return { data: ref(state.profile), error: ref(state.error), pending: ref(false), refresh: vi.fn() }
   }
 })
@@ -32,8 +37,12 @@ mockNuxtImport('useRoute', () => {
   return () => ({ params: { handle: 'fabian', id: 'deck-1' }, query: {}, fullPath: '/players/fabian' })
 })
 
+// mountSuspended never unmounts; a later locale switch would re-render every earlier mount (#104).
+enableAutoUnmount(afterEach)
+
 afterEach(async () => {
   state.session = null
+  state.wishlist = null
   await setTestLocale('de')
 })
 
@@ -155,6 +164,44 @@ describe('public profile page', () => {
     expect(component.text()).not.toContain('Sichtbarkeit verwalten')
   })
 
+  it('marks a retired card in the wishlist teaser, with the public hint (ADR 0019, #108)', async () => {
+    state.error = null
+    state.profile = profileResponse({ wishlist: { visible: true, itemCount: 2 } })
+    const item = (id: number, name: string, retired: boolean) => ({
+      id: `wish-${id}`,
+      catalogCardId: id,
+      name,
+      nameDe: null,
+      type: 'Effect Monster',
+      imageSmall: null,
+      retired,
+      quantity: 1,
+      note: null,
+      createdAt: '2025-01-01T00:00:00.000Z',
+      updatedAt: '2025-01-01T00:00:00.000Z',
+    })
+    state.wishlist = {
+      owner: { handle: 'fabian', displayName: 'Fabian', bio: null },
+      items: [item(101402013, 'Leviathan of Atlantis - Daedalus', true), item(40640057, 'Kuriboh', false)],
+      total: 2,
+      page: 1,
+      pageSize: 5,
+    }
+
+    const component = await mountSuspended(PlayerIndexPage)
+
+    const rows = component.findAll('li')
+    const retiredRow = rows.find(row => row.text().includes('Leviathan'))!
+    expect(retiredRow.text()).toContain('Nicht mehr im Katalog')
+    expect(rows.find(row => row.text().includes('Kuriboh'))!.text()).not.toContain('Nicht mehr im Katalog')
+
+    await retiredRow.find('[data-testid="card-retired-badge"]').trigger('click')
+    await vi.waitFor(() => {
+      expect(new DOMWrapper(document.body).find('[data-testid="card-retired-hint"]').text())
+        .toBe('YGOPRODeck führt diese Karte nicht mehr, deshalb taucht sie in der Suche nicht mehr auf.')
+    })
+  })
+
   it('shows the owner a preview notice and an owner-specific empty state', async () => {
     state.error = null
     state.profile = profileResponse({ viewer: { isAuthenticated: true, isOwner: true } })
@@ -222,6 +269,7 @@ describe('public deck page', () => {
           imageLarge: null,
           section: 'main',
           quantity: 3,
+          retired: false,
         }],
         extra: [],
         side: [],
@@ -245,6 +293,39 @@ describe('public deck page', () => {
     expect(text).not.toContain('Bearbeiten')
     expect(text).toContain('Geteilt von Fabian')
     expect(component.find('[data-slot="fallback"]').text()).toBe('F')
+    expect(component.find('[data-testid="card-retired-badge"]').exists()).toBe(false)
+  })
+
+  it('marks a retired card in the shared deck (ADR 0019, #108)', async () => {
+    state.error = null
+    state.deck = baseDeck({
+      sections: {
+        main: [{
+          catalogCardId: 101402013,
+          name: 'Leviathan of Atlantis - Daedalus',
+          nameDe: null,
+          type: 'Effect Monster',
+          frameType: 'effect',
+          attribute: 'WATER',
+          race: 'Sea Serpent',
+          level: 7,
+          atk: 2600,
+          def: 1500,
+          imageSmall: null,
+          imageLarge: null,
+          section: 'main',
+          quantity: 1,
+          retired: true,
+        }],
+        extra: [],
+        side: [],
+      },
+    })
+
+    const component = await mountSuspended(PlayerDeckPage)
+
+    const row = component.findAll('li').find(item => item.text().includes('Leviathan'))!
+    expect(row.find('[data-testid="card-retired-badge"]').text()).toBe('Nicht mehr im Katalog')
   })
 
   function baseDeck(overrides: Partial<SharedDeckView> = {}): SharedDeckView {

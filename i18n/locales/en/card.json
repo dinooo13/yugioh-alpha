@@ -11,7 +11,11 @@
     "totalQuantity": "×{count} total",
     "retired": {
       "badge": "No longer in the catalog",
-      "hint": "YGOPRODeck no longer lists this card. Your entries stay, but it no longer shows up in search."
+      "hint": "YGOPRODeck no longer lists this card. Your entries stay, but it no longer shows up in search.",
+      "hintPublic": "YGOPRODeck no longer lists this card, so it no longer shows up in search.",
+      "detailHint": "YGOPRODeck no longer lists this card. Its card data and banlist status are no longer updated.",
+      "detailHintReplaced": "YGOPRODeck now lists this card under a new passcode.",
+      "showReplacement": "Show the current card"
     },
     "detail": {
       "fallbackTitle": "Card",

@@ -108,6 +108,12 @@ function nextPage() {
             <CardFrameDot :type="card.type" />
             <span class="truncate">{{ cardMetaLine(card) }}</span>
           </p>
+          <div
+            v-if="card.retired"
+            class="mt-0.5"
+          >
+            <CardRetiredBadge audience="public" />
+          </div>
         </div>
 
         <span class="shrink-0 font-numeric text-sm font-semibold tracking-[0.04em] text-default tabular-nums">

@@ -537,6 +537,32 @@ describe('listSharedInventory', () => {
     expect(clamped.pageSize).toBe(100)
   })
 
+  it('flags retired cards in the shared inventory, collection and deck (ADR 0019, #108)', async () => {
+    const db = createTestDb()
+    seedUsersAndCatalog(db)
+    db.update(schema.catalogCard).set({ retiredAt: new Date() }).where(eq(schema.catalogCard.id, CARD.potOfGreed)).run()
+    const box = await createCollection(db, 'user-a', { name: 'Box', description: null })
+    await addOwnedCard(db, 'user-a', validateInventoryInput({ catalog_card_id: CARD.darkMagician, collection_id: box.id }))
+    await addOwnedCard(db, 'user-a', validateInventoryInput({ catalog_card_id: CARD.potOfGreed, collection_id: box.id }))
+    const deckId = createDeck(db, 'user-a', { name: 'Deck', description: null }).id
+    upsertDeckCard(db, 'user-a', deckId, { catalogCardId: CARD.darkMagician, section: 'main', quantity: 1 })
+    upsertDeckCard(db, 'user-a', deckId, { catalogCardId: CARD.potOfGreed, section: 'main', quantity: 1 })
+
+    const flags = (items: Array<{ catalogCardId: number, retired: boolean }>) =>
+      Object.fromEntries(items.map(item => [item.catalogCardId, item.retired]))
+    const expected = { [CARD.darkMagician]: false, [CARD.potOfGreed]: true }
+    expect(flags(listSharedInventory(db, 'user-a', {}).items)).toEqual(expected)
+    expect(flags(listSharedCollection(db, 'user-a', box.id, {}).items)).toEqual(expected)
+
+    const deckRow = db.select().from(schema.deck).where(eq(schema.deck.id, deckId)).get()!
+    const view = buildSharedDeckView(db, deckRow, toPublicProfile(ensureProfile(db, 'user-a')))
+    expect(flags(view.sections.main)).toEqual(expected)
+    // Only the flag is shared, not the date.
+    expect(view.sections.main[0]).not.toHaveProperty('retiredAt')
+    expect(view.warnings.filter(warning => warning.code === 'card_retired').map(warning => warning.cardId))
+      .toEqual([CARD.potOfGreed])
+  })
+
   it('filters by German name too, in the inventory and in a collection (ADR 0015)', async () => {
     const db = createTestDb()
     seedUsersAndCatalog(db)

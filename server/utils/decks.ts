@@ -460,11 +460,11 @@ export function inCardLocale<T extends { sections: Record<DeckSection, Array<{ t
 }
 
 // Exported for reuse by server/utils/shared-views.ts: warnings are computed
-// from counts/quantities only (no ownership data), so they are safe to reuse
-// verbatim in the shared (read-only) deck view.
+// from counts, quantities and the retired flag (no ownership data), so they
+// are safe to reuse verbatim in the shared (read-only) deck view.
 export function buildWarnings(
   counts: { main: number, extra: number, side: number },
-  rows: Array<{ catalogCardId: number, name: string, nameDe?: string | null, quantity: number }>,
+  rows: Array<{ catalogCardId: number, name: string, nameDe?: string | null, quantity: number, retired?: boolean }>,
 ): DeckWarning[] {
   const warnings: DeckWarning[] = []
 
@@ -503,9 +503,10 @@ export function buildWarnings(
 
   // The standard copy limit counts every copy in the deck — main, extra, and
   // side combined.
-  const copiesByCard = new Map<number, { name: string, nameDe: string | null, copies: number }>()
+  const copiesByCard = new Map<number, { name: string, nameDe: string | null, copies: number, retired: boolean }>()
   for (const row of rows) {
-    const entry = copiesByCard.get(row.catalogCardId) ?? { name: row.name, nameDe: row.nameDe ?? null, copies: 0 }
+    const entry = copiesByCard.get(row.catalogCardId)
+      ?? { name: row.name, nameDe: row.nameDe ?? null, copies: 0, retired: row.retired ?? false }
     entry.copies += row.quantity
     copiesByCard.set(row.catalogCardId, entry)
   }
@@ -517,6 +518,20 @@ export function buildWarnings(
         cardId,
         params: { cardId, cardName: entry.name, ...germanName(entry.nameDe), copies: entry.copies, maxCopies: DECK_LIMITS.maxCopies },
         message: `${entry.name}: ${entry.copies} copies in the deck; the usual maximum is ${DECK_LIMITS.maxCopies}.`,
+      })
+    }
+  }
+
+  // A retired card (ADR 0019) keeps its frozen banlist status and card data.
+  // A warning, not a validation issue: format legality stays unchanged
+  // (ADR 0023).
+  for (const [cardId, entry] of copiesByCard) {
+    if (entry.retired) {
+      warnings.push({
+        code: 'card_retired',
+        cardId,
+        params: { cardId, cardName: entry.name, ...germanName(entry.nameDe) },
+        message: `${entry.name} is no longer in the catalog; its banlist status and card data are no longer updated.`,
       })
     }
   }
