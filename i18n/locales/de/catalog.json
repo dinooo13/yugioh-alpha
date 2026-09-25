@@ -5,7 +5,8 @@
     "resultCount": "{count} Karte | {count} Karten",
     "search": {
       "placeholder": "Kartenname (deutsch oder englisch)...",
-      "label": "Karten suchen"
+      "label": "Karten suchen",
+      "inText": "Auch im Kartentext suchen"
     },
     "filters": {
       "set": "Set",

@@ -63,6 +63,8 @@ const race = ref<string[]>(queryList(route.query.race))
 const level = ref<number[]>(queryList(route.query.level).map(value => Number.parseInt(value, 10)).filter(Number.isFinite))
 const setId = ref(typeof route.query.setId === 'string' ? route.query.setId : '')
 const sort = ref(typeof route.query.sort === 'string' ? route.query.sort : 'name')
+// "Auch im Kartentext suchen" (owner feedback in #148); kept in the URL even without a search text.
+const inText = ref(route.query.inText === '1')
 const page = ref(Number.parseInt(typeof route.query.page === 'string' ? route.query.page : '1', 10) || 1)
 const selectedCardId = computed(() => Number.parseInt(typeof route.query.card === 'string' ? route.query.card : '', 10))
 const isDetailOpen = computed(() => Number.isFinite(selectedCardId.value))
@@ -81,6 +83,8 @@ const filtersActive = computed(() =>
 
 const cardQuery = computed(() => ({
   q: debouncedSearch.value.trim() || undefined,
+  // Only with a search text: ticking the box on an empty search changes nothing, so it doesn't refetch.
+  inText: inText.value && debouncedSearch.value.trim() ? 1 : undefined,
   type: csv(type.value),
   attribute: csv(attribute.value),
   race: csv(race.value),
@@ -137,15 +141,16 @@ const {
   default: () => ({ items: [], total: 0, page: 1, pageSize: PAGE_SIZE }),
 })
 
-watch([type, attribute, race, level, setId, sort, debouncedSearch], () => {
+watch([type, attribute, race, level, setId, sort, debouncedSearch, inText], () => {
   page.value = 1
 }, { deep: true })
 
-watch([debouncedSearch, type, attribute, race, level, setId, sort, page], async () => {
+watch([debouncedSearch, inText, type, attribute, race, level, setId, sort, page], async () => {
   await router.replace({
     query: {
       ...route.query,
       q: debouncedSearch.value.trim() || undefined,
+      inText: inText.value ? '1' : undefined,
       type: csv(type.value),
       attribute: csv(attribute.value),
       race: csv(race.value),
@@ -178,6 +183,7 @@ function closeCard() {
 function resetFilters() {
   searchInput.value = ''
   debouncedSearch.value = ''
+  inText.value = false
   type.value = []
   attribute.value = []
   race.value = []
@@ -233,6 +239,10 @@ async function onAddedToInventory() {
           :placeholder="t('catalog.search.placeholder')"
           :aria-label="t('catalog.search.label')"
           class="w-full"
+        />
+        <UCheckbox
+          v-model="inText"
+          :label="t('catalog.search.inText')"
         />
 
         <div class="grid grid-cols-2 gap-3 lg:grid-cols-[repeat(5,minmax(0,1fr))_auto]">

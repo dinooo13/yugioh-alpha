@@ -5,7 +5,8 @@
     "resultCount": "{count} card | {count} cards",
     "search": {
       "placeholder": "Card name (English or German)...",
-      "label": "Search cards"
+      "label": "Search cards",
+      "inText": "Also search card text"
     },
     "filters": {
       "set": "Set",
