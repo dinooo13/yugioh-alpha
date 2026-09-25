@@ -43,6 +43,8 @@ test.describe('wishlist', () => {
     await addOne.click()
     await addOne.click()
     await expect(page.getByLabel(`Anzahl von ${CARD.kuriboh}`)).toHaveValue('3')
+    // The writes are queued, nothing is disabled: the focus stays (#148).
+    await expect(addOne).toBeFocused()
 
     const noteInput = page.getByLabel(`Notiz für ${CARD.kuriboh}`)
     await noteInput.fill('1st Edition bitte')

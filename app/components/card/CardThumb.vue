@@ -22,7 +22,7 @@
  * placeholder — with a stripe in the card's `frame` color when known. `foil`
  * adds a sheen that sweeps across on hover of the surrounding `.group`.
  */
-import type { CardFrame } from '~/utils/card-frame'
+import type { CardFrame } from '~~/shared/card-frame'
 
 type CardThumbSize = 'xs' | 'sm' | 'md' | 'lg' | 'full'
 

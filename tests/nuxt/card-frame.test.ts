@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { attributeKey, cardFrame } from '~/utils/card-frame'
+import { attributeKey, cardFrame } from '~~/shared/card-frame'
 
 describe('cardFrame', () => {
   it('prefers YGOPRODeck\'s frameType and splits off the pendulum half', () => {

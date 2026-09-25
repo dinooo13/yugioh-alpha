@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { cardFrame } from '~/utils/card-frame'
+import { cardFrame } from '~~/shared/card-frame'
 
 /**
  * A dot in the card's frame color (ADR 0016), for the start of a card's
