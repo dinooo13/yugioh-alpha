@@ -92,11 +92,70 @@ test.describe('deck editor card overlay and card-kind breakdown', () => {
     await plus.focus()
     await page.keyboard.press('Enter')
     await expect(dialog.getByRole('spinbutton', { name: 'Kopien im Main Deck' })).toHaveValue('2')
-    // The button is disabled during the write; it gets focus back afterwards.
+    // Nothing is disabled while the write is queued (#148), so the focus stays.
     await expect(plus).toBeEnabled()
     await expect(plus).toBeFocused()
     await page.keyboard.press('Enter')
     await expect(dialog.getByRole('spinbutton', { name: 'Kopien im Main Deck' })).toHaveValue('3')
+  })
+
+  test('a row stepper queues fast keyboard steps and keeps the focus (#148)', async ({ page }) => {
+    await registerAndLogin(page)
+    const deckId = await createDeck(page)
+
+    await page.goto(`/decks/${deckId}`)
+    await waitForHydration(page)
+
+    const plus = page.getByRole('button', { name: `Eine Kopie von ${CARD.darkMagician} zum Main Deck hinzufügen` })
+    await plus.focus()
+    // Three steps without waiting for any answer: 2, 3, 4 go out in order.
+    await page.keyboard.press('Enter')
+    await page.keyboard.press('Enter')
+    await page.keyboard.press('Enter')
+    await expect(page.getByRole('spinbutton', { name: `Anzahl von ${CARD.darkMagician} im Main Deck` })).toHaveValue('4')
+    await expect(plus).toBeFocused()
+    await expect(page.getByLabel('Anzahl im Main Deck')).toHaveText('8/40–60')
+
+    await page.reload()
+    await waitForHydration(page)
+    await expect(page.getByRole('spinbutton', { name: `Anzahl von ${CARD.darkMagician} im Main Deck` })).toHaveValue('4')
+  })
+
+  test('the add panel searches the card text on request (#148)', async ({ page }) => {
+    await registerAndLogin(page)
+    const deckId = await createDeck(page)
+
+    await page.goto(`/decks/${deckId}`)
+    await waitForHydration(page)
+
+    await page.getByRole('checkbox', { name: 'Auch Katalogkarten anzeigen' }).check()
+    // "Hexer" is only in Dark Magician's German card text, not in a name.
+    await page.getByLabel('Karten für das Deck suchen').fill('Hexer')
+    await expect(page.getByText('Keine Karten gefunden.')).toBeVisible()
+
+    await page.getByRole('checkbox', { name: 'Auch im Kartentext suchen' }).check()
+    await expect(page.getByRole('button', { name: `${CARD.darkMagician} zum Main Deck hinzufügen` })).toBeVisible()
+  })
+
+  test('the deck tiles show the compact card kinds (#148)', async ({ page }) => {
+    await registerAndLogin(page)
+    await createDeck(page)
+
+    await page.goto('/decks')
+    await waitForHydration(page)
+
+    const kinds = page.getByRole('list', { name: 'Kartenarten im Main und Extra Deck' })
+    for (const chip of ['1 Normal', '1 Effekt', '2 Zauber', '1 Falle', '1 Synchro', '1 Xyz']) {
+      await expect(kinds).toContainText(chip)
+    }
+
+    await page.setViewportSize({ width: 390, height: 844 })
+    await expect(kinds).toBeVisible()
+    const overflow = await page.evaluate(() => ({
+      scrollWidth: document.documentElement.scrollWidth,
+      clientWidth: document.documentElement.clientWidth,
+    }))
+    expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth)
   })
 
   test('the breakdown fits a 390px phone', async ({ page }) => {

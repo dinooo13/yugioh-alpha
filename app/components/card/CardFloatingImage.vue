@@ -9,7 +9,7 @@
  * keeps its 59:86 ratio. Without a scan, or when it fails to load, it shows
  * the arcane card back with the frame stripe, like `CardThumb`.
  */
-import type { CardFrame } from '~/utils/card-frame'
+import type { CardFrame } from '~~/shared/card-frame'
 
 const props = withDefaults(defineProps<{
   alt: string

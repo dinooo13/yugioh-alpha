@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { attributeKey } from '~/utils/card-frame'
+import { attributeKey } from '~~/shared/card-frame'
 
 /**
  * A card's attribute in the card language (ADR 0015) with a small orb in

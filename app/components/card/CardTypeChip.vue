@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { cardFrame } from '~/utils/card-frame'
+import { cardFrame } from '~~/shared/card-frame'
 
 /**
  * The card type in the card language (ADR 0015), with a dot in the card's

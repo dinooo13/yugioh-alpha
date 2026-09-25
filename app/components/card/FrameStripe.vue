@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { cardFrame } from '~/utils/card-frame'
+import { cardFrame } from '~~/shared/card-frame'
 
 /**
  * A 3px stripe in the card's frame color on the start edge of a card row

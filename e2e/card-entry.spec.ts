@@ -21,6 +21,12 @@ test.describe('Schnellerfassung', () => {
     await expect(page.getByText('0 ohne Treffer')).toBeVisible()
     await expect(page.getByText('Kein Treffer')).toHaveCount(0)
 
+    // The quantity is a stepper (#148); a line stands for at least one copy.
+    await expect(page.getByRole('button', { name: 'Eine Kopie weniger für Pot of Greed' })).toBeDisabled()
+    await page.getByRole('button', { name: 'Eine Kopie mehr für Pot of Greed' }).click()
+    await expect(page.getByRole('spinbutton', { name: 'Anzahl für Pot of Greed' })).toHaveValue('2')
+    await expect(page.getByRole('spinbutton', { name: 'Anzahl für 2x Dark Magician' })).toHaveValue('2')
+
     const saveAll = page.getByRole('button', { name: 'Alle speichern' })
     await expect(saveAll).toBeEnabled()
     await saveAll.click()
