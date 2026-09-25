@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import type { LocationQueryValue } from 'vue-router'
 import { cardFrame } from '~/utils/card-frame'
+import { isPreviousHistoryEntry } from '~/utils/history-entry'
+import { csvQueryValue as csv, queryList } from '~/utils/query-list'
 import { CARD_LEVEL_ICON, cardLevel } from '~/utils/card-level'
 import type { CardDetailSummary } from '~/utils/card-detail'
 
@@ -44,17 +45,6 @@ const count = useCount()
 
 const route = useRoute()
 const router = useRouter()
-
-// `?type=A,B` or repeated keys; old single-value links (`?attribute=DARK`) still work.
-function queryList(value: LocationQueryValue | LocationQueryValue[] | undefined): string[] {
-  return (Array.isArray(value) ? value : [value])
-    .flatMap(item => (item ?? '').split(','))
-    .map(item => item.trim())
-    .filter(Boolean)
-}
-
-// Multi-select facets go to the API and the URL as comma lists (#63).
-const csv = (values: Array<string | number>) => values.length ? values.join(',') : undefined
 
 const searchInput = ref(typeof route.query.q === 'string' ? route.query.q : '')
 const debouncedSearch = ref(searchInput.value)
@@ -171,14 +161,31 @@ const totalPages = computed(() => Math.max(1, Math.ceil((cards.value?.total ?? 0
 // the full catalog "13.000 Karten" (UX review #10).
 const cardsTotalLabel = computed(() => count('catalog.resultCount', cards.value.total))
 
+// `?card=` (#148, the inventory's pattern from #145): a tile pushes a
+// history entry, so Back closes the overlay and Forward opens it again.
 function openCard(cardId: number) {
+  router.push({ query: { ...route.query, card: String(cardId) } })
+}
+
+// An alias passcode shows its canonical card (ADR 0024, #154): same entry.
+function showCanonicalCard(cardId: number) {
   router.replace({ query: { ...route.query, card: String(cardId) } })
 }
 
+// Closing goes back only to the entry this page pushed: the previous history
+// entry must be this catalog view without `card`. A deep link, a reload of a
+// fresh tab, or the retired card's "Aktuelle Karte anzeigen" link (a push to
+// another card) drop the param with a replace instead, so closing never leaves
+// the catalog and never reopens a different card.
 function closeCard() {
   const query = { ...route.query }
   delete query.card
-  router.replace({ query })
+  if (isPreviousHistoryEntry(router, { path: route.path, query })) {
+    router.back()
+  }
+  else {
+    router.replace({ query })
+  }
 }
 
 function resetFilters() {

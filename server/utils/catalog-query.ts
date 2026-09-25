@@ -1,6 +1,7 @@
 import { and, eq, inArray, or, sql, type SQL } from 'drizzle-orm'
 import { catalogCard, catalogPrinting } from '../db/schema'
 import { activeCatalogCard, cardNameMatches, cardTextMatches } from './card-name-search'
+import { parseQueryFlag } from './query-flag'
 
 export type CatalogSort = 'name' | '-name' | 'newest'
 
@@ -49,7 +50,7 @@ export function parseCardListQuery(rawQuery: RawCardListQuery): CardListQuery {
 
   return {
     q: (getFirst(rawQuery.q) ?? '').trim(),
-    inText: getFirst(rawQuery.inText) === '1',
+    inText: parseQueryFlag(rawQuery.inText),
     types: getValues(rawQuery.type),
     attributes: getValues(rawQuery.attribute),
     races: getValues(rawQuery.race),

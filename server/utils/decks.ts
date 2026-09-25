@@ -984,6 +984,89 @@ export function upsertDeckCard(db: Db, userId: string, deckId: string, input: De
   return buildDeckDetail(db, userId, { ...deckRow, updatedAt: now })
 }
 
+export interface DeckCardIncrementInput {
+  catalogCardId: number
+  section: DeckSection
+  increment: number
+}
+
+/**
+ * The increment mode of `PUT /api/decks/:id/cards` (#148): `{ catalogCardId,
+ * section, increment }` adds copies to what the section already holds, so a
+ * caller outside the deck editor (the catalog's "Zum Deck") doesn't have to
+ * read the deck first. `increment` is a positive integer and can't be combined
+ * with `quantity` (the absolute mode, `validateDeckCardInput`).
+ */
+export function validateDeckCardIncrementInput(body: unknown): DeckCardIncrementInput {
+  if (!isRecord(body)) {
+    badRequest('Request body must be an object')
+  }
+  if (body.quantity !== undefined && body.quantity !== null) {
+    badRequest('quantity and increment are mutually exclusive')
+  }
+
+  const increment = typeof body.increment === 'number' ? body.increment : Number(body.increment)
+  if (!Number.isSafeInteger(increment) || increment < 1 || increment > MAX_DECK_CARD_QUANTITY) {
+    badRequest(`increment must be an integer from 1 to ${MAX_DECK_CARD_QUANTITY}`)
+  }
+
+  return {
+    catalogCardId: normalizeCatalogCardId(body.catalog_card_id ?? body.catalogCardId),
+    section: normalizeSection(body.section),
+    increment,
+  }
+}
+
+/**
+ * Adds `increment` copies of a card to one section, with `upsertDeckCard`'s
+ * checks (own deck, known card, allowed section) and its cap: a result above
+ * `MAX_DECK_CARD_QUANTITY` is rejected (`quantity_too_large`). Read and write
+ * run in one transaction, so two adds at once both count.
+ */
+export function incrementDeckCard(db: Db, userId: string, deckId: string, input: DeckCardIncrementInput): DeckDetail {
+  const now = new Date()
+
+  const deckRow = db.transaction((tx) => {
+    const txDb = tx as unknown as Db
+    const row = requireDeckRow(txDb, userId, deckId)
+    const card = requireCatalogCard(txDb, input.catalogCardId)
+    assertSectionAllowed(card, input.section)
+
+    const existing = findDeckCard(txDb, deckId, input.catalogCardId, input.section)
+    const quantity = (existing?.quantity ?? 0) + input.increment
+    if (quantity > MAX_DECK_CARD_QUANTITY) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: `quantity must be at most ${MAX_DECK_CARD_QUANTITY}`,
+        data: { code: 'quantity_too_large', params: { max: MAX_DECK_CARD_QUANTITY } },
+      })
+    }
+
+    if (existing) {
+      txDb.update(deckCard)
+        .set({ quantity, updatedAt: now })
+        .where(eq(deckCard.id, existing.id))
+        .run()
+    }
+    else {
+      txDb.insert(deckCard).values({
+        id: randomUUID(),
+        deckId,
+        catalogCardId: input.catalogCardId,
+        section: input.section,
+        quantity,
+        createdAt: now,
+        updatedAt: now,
+      }).run()
+    }
+
+    touchDeck(txDb, deckId, now)
+    return row
+  })
+
+  return buildDeckDetail(db, userId, { ...deckRow, updatedAt: now })
+}
+
 export function moveDeckCard(db: Db, userId: string, deckId: string, input: DeckCardMoveInput): DeckDetail {
   const deckRow = requireDeckRow(db, userId, deckId)
   const card = requireCatalogCard(db, input.catalogCardId)

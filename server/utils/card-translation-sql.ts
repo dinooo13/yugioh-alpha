@@ -8,26 +8,33 @@
 // Like `card-name-search.ts`, the default card-id column is
 // `catalog_card.id` by its table name, so a query that uses the defaults must
 // select from or join `catalog_card` unaliased.
+//
+// Each subquery is a nested `sql` chunk on purpose (as in card-image-sql.ts):
+// in a single-table select drizzle writes the selection's top-level column
+// chunks without their table name, so the card-id column would come out as a
+// bare `"id"` / `"card_id"` inside the subquery and bind to the translation
+// table's own column when it has one (`"card_id" = "card_id"` matches every
+// row). Nested one level deeper, every column keeps its table name.
 
 import { sql, type SQL } from 'drizzle-orm'
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core'
 import type { AppLocale } from '../../shared/locale'
 import { catalogCard, catalogCardTranslation } from '../db/schema'
 
+/** `select <column>` from the card's German row, on the primary key `(card_id, locale)`. */
+function germanColumnSubquery(column: AnySQLiteColumn, cardId: AnySQLiteColumn | SQL): SQL {
+  return sql`select ${column} from ${catalogCardTranslation}
+    where ${catalogCardTranslation.cardId} = ${cardId} and ${catalogCardTranslation.locale} = 'de'`
+}
+
 /** The German name of the card `cardId` points at, or `null` (a scalar subquery on the primary key). */
 export function cardNameDeSql(cardId: AnySQLiteColumn | SQL = catalogCard.id): SQL<string | null> {
-  return sql<string | null>`(
-    select ${catalogCardTranslation.name} from ${catalogCardTranslation}
-    where ${catalogCardTranslation.cardId} = ${cardId} and ${catalogCardTranslation.locale} = 'de'
-  )`
+  return sql<string | null>`(${germanColumnSubquery(catalogCardTranslation.name, cardId)})`
 }
 
 /** The German card text of the card `cardId` points at, or `null`. */
 export function cardDescDeSql(cardId: AnySQLiteColumn | SQL = catalogCard.id): SQL<string | null> {
-  return sql<string | null>`(
-    select ${catalogCardTranslation.desc} from ${catalogCardTranslation}
-    where ${catalogCardTranslation.cardId} = ${cardId} and ${catalogCardTranslation.locale} = 'de'
-  )`
+  return sql<string | null>`(${germanColumnSubquery(catalogCardTranslation.desc, cardId)})`
 }
 
 /**
@@ -42,10 +49,7 @@ export function cardSortKey(locale: AppLocale, cardId: AnySQLiteColumn | SQL = c
     return sql`${catalogCard.name}`
   }
   return sql`coalesce(
-    (
-      select ${catalogCardTranslation.nameSearch} from ${catalogCardTranslation}
-      where ${catalogCardTranslation.cardId} = ${cardId} and ${catalogCardTranslation.locale} = 'de'
-    ),
+    (${germanColumnSubquery(catalogCardTranslation.nameSearch, cardId)}),
     nullif(${catalogCard.nameSearch}, ''),
     lower(${catalogCard.name})
   )`
