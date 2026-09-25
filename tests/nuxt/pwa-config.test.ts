@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { pwaOptions } from '../../pwa.config'
 
 // Pages are per-user SSR HTML, so the service worker must never answer a
@@ -51,5 +51,28 @@ describe('PWA manifest', () => {
     const purposes = (manifest.icons ?? []).map(icon => icon.purpose)
     expect(purposes).toContain('any')
     expect(purposes).toContain('maskable')
+  })
+})
+
+// The dev service worker broke the dev server after every .nuxt wipe (#94);
+// it is opt-in with PWA_DEV_SW=1.
+describe('PWA dev service worker', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.resetModules()
+  })
+
+  it('is off in dev without PWA_DEV_SW', async () => {
+    vi.stubEnv('PWA_DEV_SW', undefined)
+    vi.resetModules()
+    const { pwaOptions: options } = await import('../../pwa.config')
+    expect(options.devOptions?.enabled).toBe(false)
+  })
+
+  it('is on with PWA_DEV_SW=1', async () => {
+    vi.stubEnv('PWA_DEV_SW', '1')
+    vi.resetModules()
+    const { pwaOptions: options } = await import('../../pwa.config')
+    expect(options.devOptions?.enabled).toBe(true)
   })
 })

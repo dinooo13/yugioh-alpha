@@ -53,7 +53,12 @@ export const pwaOptions: ModuleOptions = {
     navigateFallback: '',
   },
   devOptions: {
-    enabled: true,
+    // Off by default in dev (#94): vite-plugin-pwa remembers "dev SW generated" across Nuxt's
+    // in-process restarts, but .nuxt/dev-sw-dist is gone once `nuxt prepare`/`nuxt build` (also
+    // run by `pnpm install`) wiped .nuxt, so the next request for the dev SW failed with ENOENT
+    // and a Vite error overlay. The dev SW was also behind #38/#39. Set PWA_DEV_SW=1 to test PWA
+    // behaviour in dev (then restart the dev server by hand after such a wipe).
+    enabled: process.env.PWA_DEV_SW === '1',
     type: 'module',
     suppressWarnings: true,
   },
