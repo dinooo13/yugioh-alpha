@@ -5,11 +5,13 @@ import type { DeckSection } from '~~/shared/deck-sections'
 import type { DeckValidation, DeckWarning } from '~~/shared/rule-formats'
 import type { CardDetailSummary } from '~/utils/card-detail'
 
-// "Zum Deck" in the catalog's card detail (#148): the user's decks (recently
-// changed first), each with a submenu of the sections the card may go in.
-// Picking one adds a copy in one step (`PUT /api/decks/:id/cards` with
-// `increment`), and a toast confirms it with the card's copy-limit and
-// format warnings and a link to the deck.
+// "Zum Deck" in the catalog's card detail (#148): one flat menu, the
+// sections the card may go in at the top (Main or Extra preselected), then
+// the user's decks (recently changed first). No submenu: on a phone it
+// covered its parent. Picking a deck adds a copy to the chosen section in
+// one step (`PUT /api/decks/:id/cards` with `increment`), and a toast
+// confirms it with the card's copy-limit and format warnings and a link to
+// the deck.
 
 const props = defineProps<{
   card: CardDetailSummary | null
@@ -74,6 +76,7 @@ function onOpen(open: boolean) {
   if (open) {
     clearTimeout(searchTimer)
     search.value = ''
+    resetSection()
     load()
   }
 }
@@ -88,7 +91,16 @@ onBeforeUnmount(() => clearTimeout(searchTimer))
 
 const showFilter = computed(() => deckTotal.value >= FILTER_FROM_DECKS || search.value !== '')
 
-const items = computed<DropdownMenuItem[]>(() => {
+// The sections the card may go in (Main or Extra first, then Side); the
+// first is preselected on every open.
+const allowedSections = computed<DeckSection[]>(() => props.card ? allowedSectionsForCard(props.card) : [])
+const chosenSection = ref<DeckSection>('main')
+function resetSection() {
+  chosenSection.value = allowedSections.value[0] ?? 'main'
+}
+watch(allowedSections, resetSection, { immediate: true })
+
+const items = computed<DropdownMenuItem[] | DropdownMenuItem[][]>(() => {
   if (loadState.value === 'idle' || loadState.value === 'loading') {
     return [{ label: t('catalog.addToDeck.loading'), icon: 'i-lucide-loader-circle', disabled: true }]
   }
@@ -113,16 +125,29 @@ const items = computed<DropdownMenuItem[]>(() => {
           { label: t('catalog.addToDeck.createDeck'), icon: 'i-lucide-plus', to: '/decks' },
         ]
   }
-  const card = props.card
-  const sections = card ? allowedSectionsForCard(card) : []
-  return decks.value.map(deck => ({
-    label: deck.name,
-    icon: 'i-lucide-layers',
-    children: sections.map(section => ({
-      label: t(`decks.section.${section}`),
-      onSelect: () => addTo(deck, section),
-    })),
-  }))
+  return [
+    [
+      { type: 'label', label: t('catalog.addToDeck.sectionLabel') },
+      ...allowedSections.value.map(section => ({
+        type: 'checkbox' as const,
+        label: t(`decks.section.${section}`),
+        checked: section === chosenSection.value,
+        // Picks the section and keeps the menu open for the deck.
+        onSelect: (event: Event) => {
+          event.preventDefault()
+          chosenSection.value = section
+        },
+      })),
+    ],
+    [
+      { type: 'label', label: t('catalog.addToDeck.deckLabel') },
+      ...decks.value.map(deck => ({
+        label: deck.name,
+        icon: 'i-lucide-layers',
+        onSelect: () => addTo(deck, chosenSection.value),
+      })),
+    ],
+  ]
 })
 
 async function addTo(deck: DeckOption, section: DeckSection) {

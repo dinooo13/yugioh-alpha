@@ -35,6 +35,8 @@
       "loadFailed": "Couldn't load your decks",
       "noDecks": "No decks yet",
       "createDeck": "Create a deck",
+      "sectionLabel": "Section",
+      "deckLabel": "Choose a deck",
       "search": "Search decks …",
       "noMatches": "No deck found",
       "added": "Added to “{deck}”",

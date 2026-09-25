@@ -27,6 +27,8 @@ afterEach(async () => {
 
 interface MenuItem {
   label: string
+  type?: 'label' | 'checkbox'
+  checked?: boolean
   disabled?: boolean
   to?: string
   children?: MenuItem[]
@@ -59,27 +61,44 @@ async function mountMenu(card: typeof BLUE_EYES | typeof FUSION | null = BLUE_EY
   // The menu teleports its content, so open it and drive its items directly.
   menu.vm.$emit('update:open', true)
   await flushPromises()
-  return { component, items: () => menu.props('items') as MenuItem[], menu }
+  const items = () => menu.props('items') as MenuItem[] | MenuItem[][]
+  // Ready: two groups, the section choice and the decks (no submenus).
+  const groups = () => items() as MenuItem[][]
+  return {
+    component,
+    menu,
+    // A flat list (loading, error, no decks).
+    items: () => items() as MenuItem[],
+    groups,
+    sections: () => groups()[0]!.filter(item => item.type === 'checkbox'),
+    decks: () => groups()[1]!.filter(item => item.type === undefined),
+  }
 }
 
 describe('CardAddToDeckMenu', () => {
   it('loads the decks when it opens', async () => {
     const fetchMock = stubFetch(() => decksResponse(['Drachen', 'Magier']))
-    const { component, items } = await mountMenu()
+    const { component, groups, sections, decks } = await mountMenu()
 
     expect(component.text()).toContain('Zum Deck')
     expect(fetchMock).toHaveBeenCalledWith('/api/decks', { query: { pageSize: 60, q: undefined } })
-    expect(items().map(item => item.label)).toEqual(['Drachen', 'Magier'])
-    expect(items()[0]!.children!.map(item => item.label)).toEqual(['Main Deck', 'Side Deck'])
+    // One flat menu: the sections (Main Deck preselected), then the decks; no submenus.
+    expect(groups().map(group => group.map(item => item.label))).toEqual([
+      ['Bereich', 'Main Deck', 'Side Deck'],
+      ['Deck wählen', 'Drachen', 'Magier'],
+    ])
+    expect(sections().map(item => item.checked)).toEqual([true, false])
+    expect(groups().flat().some(item => item.children)).toBe(false)
+    expect(decks().map(item => item.label)).toEqual(['Drachen', 'Magier'])
   })
 
   it('adds one copy in one step and confirms it with a link to the deck', async () => {
     const fetchMock = stubFetch((url, options) => url === '/api/decks'
       ? decksResponse(['Drachen'])
       : options?.method === 'PUT' ? deckAfterAdd({ quantity: 3 }) : null)
-    const { items } = await mountMenu()
+    const { decks } = await mountMenu()
 
-    items()[0]!.children![0]!.onSelect!(new Event('select'))
+    decks()[0]!.onSelect!(new Event('select'))
     await flushPromises()
 
     expect(fetchMock).toHaveBeenCalledWith('/api/decks/d1/cards', {
@@ -108,9 +127,9 @@ describe('CardAddToDeckMenu', () => {
       : options?.method === 'PUT'
         ? deckAfterAdd({ quantity: 4, warnings: [warning(BLUE_EYES.id, BLUE_EYES.name), warning(1, 'Other Card')] })
         : null)
-    const { items } = await mountMenu()
+    const { decks } = await mountMenu()
 
-    items()[0]!.children![0]!.onSelect!(new Event('select'))
+    decks()[0]!.onSelect!(new Event('select'))
     await flushPromises()
 
     const toast = toastAdd.mock.calls[0]![0]
@@ -130,9 +149,9 @@ describe('CardAddToDeckMenu', () => {
       }
       return null
     })
-    const { items } = await mountMenu()
+    const { decks } = await mountMenu()
 
-    items()[0]!.children![0]!.onSelect!(new Event('select'))
+    decks()[0]!.onSelect!(new Event('select'))
     await flushPromises()
 
     expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({ title: 'Dieses Deck gibt es nicht mehr.', color: 'error' }))
@@ -142,14 +161,40 @@ describe('CardAddToDeckMenu', () => {
     const fetchMock = stubFetch((url, options) => url === '/api/decks'
       ? decksResponse(['Drachen'])
       : options?.method === 'PUT' ? deckAfterAdd({ quantity: 1, section: 'extra', cardId: FUSION.id }) : null)
-    const { items } = await mountMenu(FUSION)
+    const { sections, decks } = await mountMenu(FUSION)
 
-    expect(items()[0]!.children!.map(item => item.label)).toEqual(['Extra Deck', 'Side Deck'])
-    items()[0]!.children![0]!.onSelect!(new Event('select'))
+    expect(sections().map(item => [item.label, item.checked])).toEqual([['Extra Deck', true], ['Side Deck', false]])
+    decks()[0]!.onSelect!(new Event('select'))
     await flushPromises()
     expect(fetchMock).toHaveBeenCalledWith('/api/decks/d1/cards', expect.objectContaining({
       body: { catalogCardId: FUSION.id, section: 'extra', increment: 1 },
     }))
+  })
+
+  it('adds to the chosen section; choosing keeps the menu open and resets on the next open', async () => {
+    const fetchMock = stubFetch((url, options) => url === '/api/decks'
+      ? decksResponse(['Drachen'])
+      : options?.method === 'PUT' ? deckAfterAdd({ quantity: 1, section: 'side' }) : null)
+    const { menu, sections, decks } = await mountMenu()
+
+    const choose = new Event('select', { cancelable: true })
+    sections()[1]!.onSelect!(choose)
+    await flushPromises()
+    expect(choose.defaultPrevented).toBe(true)
+    expect(sections().map(item => item.checked)).toEqual([false, true])
+
+    decks()[0]!.onSelect!(new Event('select'))
+    await flushPromises()
+    expect(fetchMock).toHaveBeenCalledWith('/api/decks/d1/cards', expect.objectContaining({
+      body: { catalogCardId: BLUE_EYES.id, section: 'side', increment: 1 },
+    }))
+    expect(toastAdd).toHaveBeenCalledWith(expect.objectContaining({
+      description: 'Blauäugiger w. Drache: jetzt 1× im Side Deck.',
+    }))
+
+    menu.vm.$emit('update:open', true)
+    await flushPromises()
+    expect(sections().map(item => item.checked)).toEqual([true, false])
   })
 
   it('offers to create a deck when there is none', async () => {
@@ -168,7 +213,7 @@ describe('CardAddToDeckMenu', () => {
       }
       return decksResponse(['Drachen'])
     })
-    const { items } = await mountMenu()
+    const { items, decks } = await mountMenu()
 
     expect(items().map(item => item.label)).toEqual(['Decks konnten nicht geladen werden', 'Erneut versuchen'])
     fail = false
@@ -178,7 +223,7 @@ describe('CardAddToDeckMenu', () => {
 
     expect(event.defaultPrevented).toBe(true)
     expect(fetchMock).toHaveBeenCalledTimes(2)
-    expect(items().map(item => item.label)).toEqual(['Drachen'])
+    expect(decks().map(item => item.label)).toEqual(['Drachen'])
   })
 
   // More decks than one page (60): a search field reaches every deck.
@@ -188,11 +233,11 @@ describe('CardAddToDeckMenu', () => {
       const q = (options?.query as { q?: string } | undefined)?.q
       return q ? decksResponse(['Deck 75']) : { ...decksResponse(many), total: 80 }
     })
-    const { menu, items } = await mountMenu()
+    const { menu, decks } = await mountMenu()
 
     expect(menu.props('filter')).toBeTruthy()
     expect(menu.props('ignoreFilter')).toBe(true)
-    expect(items()).toHaveLength(60)
+    expect(decks()).toHaveLength(60)
 
     vi.useFakeTimers()
     try {
@@ -205,7 +250,7 @@ describe('CardAddToDeckMenu', () => {
     await flushPromises()
 
     expect(fetchMock).toHaveBeenLastCalledWith('/api/decks', { query: { pageSize: 60, q: 'Deck 75' } })
-    expect(items().map(item => item.label)).toEqual(['Deck 75'])
+    expect(decks().map(item => item.label)).toEqual(['Deck 75'])
   })
 
   it('shows no search field for a few decks', async () => {

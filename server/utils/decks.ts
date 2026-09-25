@@ -7,6 +7,7 @@ import { catalogCard, deck, deckCard, ruleFormat } from '../db/schema'
 import { ownedQuantitiesByCard } from './inventory'
 import { cardNameMatches, escapedLike, escapeLikeTerm } from './card-name-search'
 import { primaryImageUrlSql } from './card-image-sql'
+import { parseQueryTriState } from './query-flag'
 import { cardNameDeSql } from './card-translation-sql'
 import { cardCategoryRank, compareDeckRows } from '../../shared/deck-order'
 import type { AppLocale } from '../../shared/locale'
@@ -398,11 +399,7 @@ export function parseDeckListQuery(rawQuery: Record<string, unknown>): DeckListO
     page: Number.isInteger(page) && page > 0 ? page : undefined,
     pageSize: Number.isInteger(pageSize) && pageSize > 0 ? pageSize : undefined,
     formatId: typeof rawFormatId === 'string' && rawFormatId.trim() !== '' ? rawFormatId.trim() : undefined,
-    legal: rawLegal === '1' || rawLegal === 'true' || rawLegal === true
-      ? true
-      : rawLegal === '0' || rawLegal === 'false' || rawLegal === false
-        ? false
-        : undefined,
+    legal: parseQueryTriState(rawLegal),
   }
 }
 
