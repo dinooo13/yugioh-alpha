@@ -508,6 +508,12 @@ panel, wishlist rows and the selected card in quick entry. A retired
 passcode typed into the inventory's card picker finds its replacement.
 Adding copies to a row that already has a note keeps both notes.
 
+Owner feedback (#148): the gallery's count line is gone (the header has the
+total); the catalog can also search the card text (`?inText=1`); the deck
+editor's card overlay has no printings and edits the card's quantity per
+section; the deck header counts Normal, Effect and Ritual monsters, Spells
+and Traps, and the Extra Deck's Fusion/Synchro/Xyz/Link.
+
 ## Recommended Build Order
 
 1. Card catalog and personal inventory

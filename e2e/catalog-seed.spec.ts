@@ -67,4 +67,24 @@ test.describe('catalog seed', () => {
     await expect(page).not.toHaveURL(/attribute=|level=|sort=/)
     await expect(attribute).toHaveText('Attribut')
   })
+
+  test('"Auch im Kartentext suchen" finds a card by its text and survives a reload (#148)', async ({ page }) => {
+    await registerAndLogin(page)
+
+    await page.goto('/catalog')
+    await waitForHydration(page)
+    // "Hexer" is only in Dark Magician's German card text, not in a name.
+    await page.getByLabel('Karten suchen').fill('Hexer')
+    await expect(page.getByText('Keine Karten gefunden')).toBeVisible()
+
+    const inText = page.getByRole('checkbox', { name: 'Auch im Kartentext suchen' })
+    await inText.check()
+    await expect(page.getByRole('heading', { name: CARD.darkMagician })).toBeVisible()
+    await expect(page).toHaveURL(/inText=1/)
+
+    await page.reload()
+    await waitForHydration(page)
+    await expect(inText).toBeChecked()
+    await expect(page.getByRole('heading', { name: CARD.darkMagician })).toBeVisible()
+  })
 })
