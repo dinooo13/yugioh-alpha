@@ -5,6 +5,7 @@ import { catalogCard, ownedCard } from '../db/schema'
 import { cardNameMatches, cardTextMatches } from './card-name-search'
 import { primaryImageUrlSql } from './card-image-sql'
 import { cardNameDeSql } from './card-translation-sql'
+import { parseQueryFlag } from './query-flag'
 import { UNASSIGNED_COLLECTION_ID } from '../../shared/inventory'
 
 export { UNASSIGNED_COLLECTION_ID }
@@ -72,11 +73,6 @@ function toTrimmedString(raw: unknown): string | undefined {
   return trimmed === '' ? undefined : trimmed
 }
 
-function toBooleanFlag(raw: unknown): boolean {
-  const value = Array.isArray(raw) ? raw[0] : raw
-  return value === '1' || value === 1 || value === true
-}
-
 function toSort(raw: unknown): InventorySearchSort {
   const value = Array.isArray(raw) ? raw[0] : raw
   return typeof value === 'string' && (SORT_VALUES as readonly string[]).includes(value)
@@ -109,7 +105,7 @@ export function parseInventorySearchQuery(rawQuery: Record<string, unknown>): In
 
   return {
     q: toTrimmedString(rawQuery.q),
-    inText: toBooleanFlag(rawQuery.inText),
+    inText: parseQueryFlag(rawQuery.inText),
     type: toStringArray(rawQuery.type),
     attribute: toStringArray(rawQuery.attribute),
     race: toStringArray(rawQuery.race),
