@@ -1,13 +1,15 @@
 <script setup lang="ts">
 /**
- * The one card detail overlay (#88), for the catalog and the inventory.
+ * The one card detail overlay (#88), for the catalog, the inventory and the deck editor.
  *
  * - Both variants: the card name as the dialog title, the type / attribute /
  *   race / level / rank / link chips, the floating tilt/foil card (`CardFloatingImage`,
  *   ADR 0016), ATK/DEF and the card text in the card language, with a hint
  *   when a card has no German text (ADR 0015).
  * - `variant="catalog"` adds the English-name subtitle, the printings and
- *   the TCG/OCG release dates; `variant="inventory"` shows only the card.
+ *   the TCG/OCG release dates; `variant="deck"` (the deck editor) is the
+ *   catalog view without the printings; `variant="inventory"` shows only
+ *   the card.
  * - The caller adds its own sections through the `context` slot (before the
  *   card text: the inventory's editor is the overlay's main job there, and
  *   on phones it shouldn't sit below the whole text) and its buttons through
@@ -76,7 +78,12 @@ const summary = computed<CardDetailSummary | null>(() => {
   return null
 })
 
-const subtitle = computed(() => props.variant === 'catalog' && shown.value ? englishName(shown.value) : null)
+// What each variant adds to the card (#88; `deck`: owner feedback in #148, printings don't matter for a deck).
+const showEnglishName = computed(() => props.variant !== 'inventory')
+const showPrintings = computed(() => props.variant === 'catalog')
+const showDates = computed(() => props.variant !== 'inventory')
+
+const subtitle = computed(() => showEnglishName.value && shown.value ? englishName(shown.value) : null)
 const showGermanHint = computed(() => cardLocale.value === 'de' && detail.value !== null && !hasGermanText(detail.value.card))
 // Wider than the default modal for the two columns. The header keeps its
 // full height (a tall title/chip block must not shrink under the scrolling
@@ -244,8 +251,8 @@ const hasDates = computed(() => Boolean(detail.value?.card.tcgDate || detail.val
             </div>
           </section>
 
-          <template v-if="variant === 'catalog' && detail">
-            <section v-if="detail.printings.length > 0">
+          <template v-if="detail">
+            <section v-if="showPrintings && detail.printings.length > 0">
               <h3 class="text-sm font-semibold text-highlighted">
                 {{ t('card.detail.printings') }}
               </h3>
@@ -269,7 +276,7 @@ const hasDates = computed(() => Boolean(detail.value?.card.tcgDate || detail.val
             </section>
 
             <section
-              v-if="hasDates"
+              v-if="showDates && hasDates"
               class="grid grid-cols-2 gap-3 text-sm text-toned"
             >
               <div v-if="detail.card.tcgDate">

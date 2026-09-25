@@ -217,6 +217,22 @@ describe('CardDetailModal', () => {
     expect(context.element.closest('[aria-busy]')).toBeNull()
   })
 
+  it('deck: the catalog view without the printings (owner feedback in #148)', async () => {
+    await mountModal({ props: { variant: 'deck' } })
+
+    await vi.waitFor(() => {
+      expect(dialog().text()).toContain('Dieser legendäre Drache')
+    })
+    const text = dialog().text()
+    expect(text).toContain('Englisch: Blue-Eyes White Dragon')
+    expect(text).toContain('2002-03-08')
+    expect(text).toContain('Kontextbereich')
+    expect(text).not.toContain('Printings')
+    expect(text).not.toContain('LOB-001')
+    // The deck editor's quantities (the context) come before the card text.
+    expect(text.indexOf('Kontextbereich')).toBeLessThan(text.indexOf('Kartentext'))
+  })
+
   it('shows the preview at once and the text once it has loaded', async () => {
     let resolve!: (detail: CatalogCardDetail) => void
     const fetch = vi.fn(() => new Promise<CatalogCardDetail>((done) => {

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { enableAutoUnmount, flushPromises } from '@vue/test-utils'
+import { DOMWrapper as BodyWrapper, enableAutoUnmount, flushPromises } from '@vue/test-utils'
 import type { DOMWrapper } from '@vue/test-utils'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
 import { DecksDeckFormModal, UApp, UDropdownMenu, USelect } from '#components'
@@ -529,6 +529,301 @@ describe('deck editor mutations', () => {
 
     expect(component.text()).toContain('Auch Katalogkarten anzeigen')
     expect(component.text()).toContain('Besitz: 4')
+  })
+})
+
+// The header's card-kind chips (owner feedback in #148): copies per kind in
+// Main and Extra, live from the rendered deck; the Side Deck isn't counted.
+describe('deck editor card-kind breakdown', () => {
+  function breakdownDeck(spells = 2) {
+    return deckDetail({
+      main: [
+        row({ name: 'Dark Magician', section: 'main', quantity: 3 }),
+        row({ name: 'Kuriboh', section: 'main', catalogCardId: 40640057, type: 'Effect Monster', frameType: 'effect', quantity: 2 }),
+        row({ name: 'Relinquished', section: 'main', catalogCardId: 64631466, type: 'Ritual Effect Monster', frameType: 'ritual', quantity: 1 }),
+        row({ name: 'Timegazer Magician', section: 'main', catalogCardId: 20409757, type: 'Pendulum Effect Monster', frameType: 'effect_pendulum', quantity: 1 }),
+        row({ name: 'Pot of Greed', section: 'main', catalogCardId: 55144522, type: 'Spell Card', frameType: 'spell', quantity: spells }),
+        row({ name: 'Mirror Force', section: 'main', catalogCardId: 44095762, type: 'Trap Card', frameType: 'trap', quantity: 1 }),
+      ],
+      extra: [
+        row({ name: 'Stardust Dragon', section: 'extra', catalogCardId: 44508094, type: 'Synchro Monster', frameType: 'synchro', quantity: 1 }),
+        row({ name: 'Number 39: Utopia', section: 'extra', catalogCardId: 84013237, type: 'XYZ Monster', frameType: 'xyz', quantity: 2 }),
+        row({ name: 'Decode Talker', section: 'extra', catalogCardId: 1861629, type: 'Link Monster', frameType: 'link', quantity: 1 }),
+      ],
+      side: [
+        row({ name: 'Mirror Force', section: 'side', catalogCardId: 44095762, type: 'Trap Card', frameType: 'trap', quantity: 2 }),
+      ],
+    })
+  }
+
+  function chips(component: { find: (selector: string) => DOMWrapper<Element> }, section: 'main' | 'extra') {
+    return component.find(`[data-testid="deck-breakdown"] [data-section="${section}"] ul`)
+  }
+
+  it('counts the copies per card kind in Main and Extra', async () => {
+    state.source = { items: [], total: 0 }
+    state.deck = breakdownDeck()
+
+    const component = await mountSuspended(DeckEditorPage)
+
+    const main = chips(component, 'main')
+    expect(main.attributes('aria-label')).toBe('Kartenarten im Main Deck')
+    expect(main.findAll('li').map(li => li.text())).toEqual([
+      '3 Normale Monster',
+      '3 Effektmonster',
+      '1 Ritualmonster',
+      '2 Zauberkarten',
+      '1 Fallenkarte',
+    ])
+    const extra = chips(component, 'extra')
+    expect(extra.attributes('aria-label')).toBe('Kartenarten im Extra Deck')
+    expect(extra.findAll('li').map(li => li.text())).toEqual(['1 Synchro', '2 Xyz', '1 Link'])
+    expect(component.find('[data-testid="deck-breakdown"]').text()).not.toContain('Fusion')
+    // The chips take their dot color from the frame.
+    expect(main.find('li[data-kind="spell"]').attributes('data-frame')).toBe('spell')
+    // The Side Deck's two traps are not counted.
+    expect(component.find('[data-testid="deck-breakdown"] [data-section="side"]').exists()).toBe(false)
+  })
+
+  it('shows no breakdown for an empty deck', async () => {
+    state.source = { items: [], total: 0 }
+    state.deck = deckDetail({})
+
+    const component = await mountSuspended(DeckEditorPage)
+
+    expect(component.find('[data-testid="deck-breakdown"]').exists()).toBe(false)
+  })
+
+  it('updates from the write response', async () => {
+    state.source = { items: [], total: 0 }
+    state.deck = breakdownDeck()
+    vi.stubGlobal('$fetch', vi.fn((url: string) => Promise.resolve(url.startsWith('/api/decks/') ? breakdownDeck(3) : null)))
+
+    const component = await mountSuspended(DeckEditorPage)
+    await component.find('[aria-label="Eine Kopie von Pot of Greed zum Main Deck hinzufügen"]').trigger('click')
+    await flushPromises()
+
+    expect(chips(component, 'main').find('li[data-kind="spell"]').text()).toBe('3 Zauberkarten')
+  })
+})
+
+// The card overlay in the deck editor (owner feedback in #148): no
+// printings, and the card's quantity per allowed section.
+describe('deck editor card overlay', () => {
+  const DARK_MAGICIAN = 46986414
+  const STARDUST = 44508094
+  const POT_OF_GREED = 55144522
+
+  // UModal teleports its content to <body>.
+  function body() {
+    return new BodyWrapper(document.body)
+  }
+
+  function dialog() {
+    return body().find('[role="dialog"]')
+  }
+
+  // Unmounted before the body is cleared: Vue can't remove a teleported
+  // dialog whose nodes are already gone.
+  const mounted: Array<{ unmount: () => void }> = []
+
+  async function mountPage() {
+    const component = await mountSuspended(DeckEditorPage)
+    mounted.push(component)
+    return component
+  }
+
+  afterEach(() => {
+    for (const component of mounted.splice(0)) {
+      component.unmount()
+    }
+    document.body.innerHTML = ''
+  })
+
+  function overlayDeck(mainQuantity: number) {
+    return deckDetail({
+      main: [row({ name: 'Dark Magician', section: 'main', quantity: mainQuantity, owned: 3, usedInDeck: mainQuantity })],
+      extra: [row({ name: 'Stardust Dragon', section: 'extra', catalogCardId: STARDUST, type: 'Synchro Monster', frameType: 'synchro', level: 8 })],
+    })
+  }
+
+  function catalogDetail(id: number) {
+    return {
+      card: {
+        id,
+        name: 'Dark Magician',
+        nameDe: 'Dunkler Magier',
+        type: 'Normal Monster',
+        frameType: 'normal',
+        desc: 'The ultimate wizard in terms of attack and defense.',
+        descDe: 'Der ultimative Zauberer.',
+        race: 'Spellcaster',
+        archetype: null,
+        attribute: 'DARK',
+        atk: 2500,
+        def: 2100,
+        level: 7,
+        linkval: null,
+        scale: null,
+        linkMarkers: null,
+        banlistInfo: null,
+        cardPrices: null,
+        tcgDate: '2002-03-08',
+        ocgDate: null,
+        ygoprodeckUrl: null,
+        retired: false,
+        replacedById: null,
+      },
+      printings: [{ setCode: 'LOB-005', setName: 'Legend of Blue Eyes White Dragon', rarity: 'Ultra Rare', price: null }],
+      images: [],
+    }
+  }
+
+  // Catalog details answer at once; deck writes wait for the test.
+  function stubOverlayFetch(deckAnswer: (url: string, options?: Record<string, unknown>) => Promise<unknown>) {
+    const mock = vi.fn((url: string, options?: Record<string, unknown>) => {
+      if (url.startsWith('/api/catalog/cards/')) {
+        return Promise.resolve(catalogDetail(Number(url.split('/').at(-1))))
+      }
+      return url.startsWith('/api/decks/') ? deckAnswer(url, options) : Promise.resolve(null)
+    })
+    vi.stubGlobal('$fetch', mock)
+    return mock
+  }
+
+  function deckCalls(mock: ReturnType<typeof stubOverlayFetch>) {
+    return mock.mock.calls.filter(([url]) => String(url).startsWith('/api/decks/'))
+  }
+
+  async function openOverlay(component: { findAll: (selector: string) => Array<DOMWrapper<Element>> }, name: string) {
+    const button = component.findAll('button[aria-haspopup="dialog"]').find(btn => btn.text() === name)
+    await button!.trigger('click')
+    await flushPromises()
+    await vi.waitFor(() => {
+      expect(dialog().text()).toContain('Im Deck')
+    })
+  }
+
+  function stepperInput(label: string) {
+    return dialog().find<HTMLInputElement>(`input[aria-label="${label}"]`)
+  }
+
+  it('shows the card without printings and a stepper per allowed section', async () => {
+    state.source = { items: [], total: 0 }
+    state.deck = overlayDeck(1)
+    stubOverlayFetch(() => Promise.resolve(null))
+
+    const component = await mountPage()
+    await openOverlay(component, 'Dark Magician')
+    await vi.waitFor(() => {
+      expect(dialog().text()).toContain('Der ultimative Zauberer.')
+    })
+
+    const text = dialog().text()
+    expect(text).toContain('Englisch: Dark Magician')
+    expect(text).toContain('2002-03-08')
+    expect(text).not.toContain('Printings')
+    expect(text).not.toContain('LOB-005')
+    expect(dialog().find('h3').text()).toBe('Im Deck')
+    expect(text).toContain('Besitz: 3 · im Deck: 1')
+
+    expect(stepperInput('Kopien im Main Deck').element.value).toBe('1')
+    expect(stepperInput('Kopien im Side Deck').element.value).toBe('0')
+    expect(stepperInput('Kopien im Extra Deck').exists()).toBe(false)
+  })
+
+  it('offers Extra and Side for an Extra Deck monster', async () => {
+    state.source = { items: [], total: 0 }
+    state.deck = overlayDeck(1)
+    stubOverlayFetch(() => Promise.resolve(null))
+
+    const component = await mountPage()
+    await openOverlay(component, 'Stardust Dragon')
+
+    expect(stepperInput('Kopien im Extra Deck').element.value).toBe('1')
+    expect(stepperInput('Kopien im Side Deck').element.value).toBe('0')
+    expect(stepperInput('Kopien im Main Deck').exists()).toBe(false)
+  })
+
+  it('writes the new quantity, locks the controls while it is in flight, and updates the overlay and the row', async () => {
+    state.source = { items: [], total: 0 }
+    state.deck = overlayDeck(1)
+    let resolveRequest: ((detail: unknown) => void) | undefined
+    const fetchMock = stubOverlayFetch(() => new Promise((resolve) => {
+      resolveRequest = resolve
+    }))
+
+    const component = await mountPage()
+    await openOverlay(component, 'Dark Magician')
+
+    const plus = () => dialog().find('button[aria-label="Eine Kopie mehr im Main Deck"]')
+    await plus().trigger('click')
+    expect(deckCalls(fetchMock)).toEqual([[
+      '/api/decks/deck-1/cards',
+      { method: 'PUT', body: { catalogCardId: DARK_MAGICIAN, section: 'main', quantity: 2 } },
+    ]])
+    await flushPromises()
+
+    // In flight: the overlay's and the row's controls are locked.
+    expect(plus().attributes('disabled')).toBeDefined()
+    expect(dialog().find('button[aria-label="Eine Kopie weniger im Main Deck"]').attributes('disabled')).toBeDefined()
+    expect(component.find('[aria-label="Eine Kopie von Dark Magician zum Main Deck hinzufügen"]').attributes('disabled')).toBeDefined()
+    await plus().trigger('click')
+    expect(deckCalls(fetchMock)).toHaveLength(1)
+
+    resolveRequest!(overlayDeck(2))
+    await flushPromises()
+
+    expect(stepperInput('Kopien im Main Deck').element.value).toBe('2')
+    expect(component.find<HTMLInputElement>('input[aria-label="Anzahl von Dark Magician im Main Deck"]').element.value).toBe('2')
+    expect(component.find('[aria-label="Anzahl im Main Deck"]').text()).toBe('2/40–60')
+    expect(plus().attributes('disabled')).toBeUndefined()
+  })
+
+  it('shows a rejected write inside the dialog', async () => {
+    state.source = { items: [], total: 0 }
+    state.deck = overlayDeck(1)
+    stubOverlayFetch(() => Promise.reject(new Error('[PUT] "/api/decks/deck-1/cards": 500')))
+
+    const component = await mountPage()
+    await openOverlay(component, 'Dark Magician')
+    await dialog().find('button[aria-label="Eine Kopie mehr im Side Deck"]').trigger('click')
+    await flushPromises()
+
+    const alert = dialog().find('[role="alert"]')
+    expect(alert.text()).toBe('Die Änderung konnte nicht gespeichert werden.')
+    expect(stepperInput('Kopien im Side Deck').element.value).toBe('0')
+  })
+
+  it('starts at zero for an add-panel card that is not in the deck, and "+" adds it', async () => {
+    state.source = {
+      items: [{
+        catalogCardId: POT_OF_GREED,
+        name: 'Pot of Greed',
+        type: 'Spell Card',
+        attribute: null,
+        race: 'Normal',
+        level: null,
+        imageSmall: null,
+        totalQuantity: 2,
+      }],
+      total: 1,
+    }
+    state.deck = overlayDeck(1)
+    const fetchMock = stubOverlayFetch(() => new Promise(() => {}))
+
+    const component = await mountPage()
+    await openOverlay(component, 'Pot of Greed')
+
+    expect(stepperInput('Kopien im Main Deck').element.value).toBe('0')
+    expect(stepperInput('Kopien im Side Deck').element.value).toBe('0')
+    expect(dialog().text()).toContain('Besitz: 2 · im Deck: 0')
+
+    await dialog().find('button[aria-label="Eine Kopie mehr im Main Deck"]').trigger('click')
+    expect(deckCalls(fetchMock)).toEqual([[
+      '/api/decks/deck-1/cards',
+      { method: 'PUT', body: { catalogCardId: POT_OF_GREED, section: 'main', quantity: 1 } },
+    ]])
   })
 })
 
@@ -1218,6 +1513,8 @@ describe('deck editor in English', () => {
     expect(text).toContain('The Main Deck has 3 cards; at least 40 are required.')
     expect(text).toContain('Raigeki is forbidden in this format.')
     expect(text).toContain('3 cards in total')
+    expect(component.find('[data-testid="deck-breakdown"]').findAll('li').map(li => li.text())).toEqual(['1 Normal Monster', '2 Spell Cards'])
+    expect(component.find('[data-testid="deck-breakdown"] ul').attributes('aria-label')).toBe('Card kinds in the Main Deck')
     expect(text).toContain('Cover card')
     expect(text).toContain('Add from inventory')
     expect(text).not.toMatch(/Karte|Regel|Titelkarte|Verboten|Limitiert|hinzufügen/)
