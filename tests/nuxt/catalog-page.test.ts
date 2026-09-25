@@ -21,6 +21,8 @@ const catalogState = vi.hoisted(() => ({
   searchPending: null as null | { value: boolean },
   // Every `useFetch(url, opts)` call, so tests can read the reactive query.
   calls: [] as Array<{ url: string, opts?: { query?: unknown } }>,
+  // Replaces the one Blue-Eyes result when set.
+  items: null as null | Array<Record<string, unknown>>,
 }))
 
 function lastQuery(url: string): Record<string, unknown> {
@@ -52,6 +54,7 @@ afterEach(async () => {
   document.body.innerHTML = ''
   catalogState.total = 1
   catalogState.calls = []
+  catalogState.items = null
   if (catalogState.searchPending) {
     catalogState.searchPending.value = false
   }
@@ -120,7 +123,7 @@ mockNuxtImport('useFetch', () => {
     if (resolvedUrl === '/api/catalog/cards') {
       return {
         data: ref({
-          items: [{
+          items: catalogState.items ?? [{
             id: 1,
             name: 'Blue-Eyes White Dragon',
             nameDe: 'Blauäugiger w. Drache',
@@ -129,6 +132,7 @@ mockNuxtImport('useFetch', () => {
             attribute: 'LIGHT',
             race: 'Dragon',
             level: 8,
+            linkval: null,
             atk: 3000,
             def: 2500,
             imageSmall: 'https://img/blue-small.jpg',
@@ -172,6 +176,27 @@ describe('catalog page', () => {
     // options (UX review #5) — now a searchable `USelectMenu`.
     expect(component.find('select[aria-label="Set"]').exists()).toBe(false)
     expect(component.find('[aria-label="Set"]').exists()).toBe(true)
+  })
+
+  it('shows a Link monster\'s rating on its tile', async () => {
+    catalogState.items = [{
+      id: 1861629,
+      name: 'Decode Talker',
+      nameDe: 'Dekodier-Sprecher',
+      type: 'Link Monster',
+      frameType: 'link',
+      attribute: 'DARK',
+      race: 'Cyberse',
+      level: null,
+      linkval: 3,
+      atk: 2300,
+      def: null,
+      imageSmall: null,
+    }]
+    const component = await mountPage()
+
+    expect(component.text()).toContain('Dekodier-Sprecher')
+    expect(component.text()).toContain('Link 3')
   })
 
   it('reads the facet filters from a deep link (#63)', async () => {

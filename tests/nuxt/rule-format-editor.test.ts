@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { enableAutoUnmount, flushPromises } from '@vue/test-utils'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
-import { CardFacetFilters, USelect } from '#components'
+import { CardFacetFilters, USelect, USelectMenu } from '#components'
 import RuleFormatEditor from '~/components/formats/RuleFormatEditor.vue'
 import { DEFAULT_MAX_COPIES, MAX_COPIES_RULE } from '~~/shared/rule-formats'
 import type { RuleSet } from '~~/shared/rule-formats'
@@ -15,6 +15,11 @@ const state = vi.hoisted(() => ({
     races: ['Spellcaster'],
     levels: [1, 7],
     sets: [{ id: 'metal-raiders', name: 'Metal Raiders' }],
+    // Sets without a printing of an active card (ADR 0025).
+    setsWithoutCards: [
+      { id: 'duel-terminal-5', name: 'Duel Terminal 5' },
+      { id: 'lost-art', name: 'The Lost Art Promotion' },
+    ],
   },
   decks: { items: [{ id: 'deck-1', name: 'Test Deck' }] },
 }))
@@ -295,6 +300,38 @@ describe('rule format editor', () => {
     expect(body.body.rules.rules).toEqual([
       { kind: 'filter', match: 'matching', filter: { attributes: ['DARK'] }, maxCopies: 0 },
     ])
+  })
+
+  it('keeps the name of an empty set a rule names and offers it there, but no other empty set (ADR 0025)', async () => {
+    const component = await mountSuspended(RuleFormatEditor, {
+      props: {
+        initialValues: {
+          id: 'own-1',
+          name: 'Duel Terminal',
+          description: null,
+          rules: { rules: [{ kind: 'filter', match: 'not_matching', filter: { setIds: ['duel-terminal-5'] }, maxCopies: 0 }] },
+          cardNames: {},
+        },
+      },
+    })
+
+    expect(component.text()).toContain('Set Duel Terminal 5')
+    expect(component.text()).not.toContain('duel-terminal-5')
+
+    const setMenu = selectWithOption(component.findAllComponents(USelectMenu), 'metal-raiders')
+    expect(setMenu).toBeDefined()
+    const values = (setMenu!.props('items') as Array<{ value: string }>).map(item => item.value)
+    expect(values).toEqual(['metal-raiders', 'duel-terminal-5'])
+    expect(values).not.toContain('lost-art')
+  })
+
+  it('offers no empty set to a new rule (ADR 0025)', async () => {
+    const component = await mountSuspended(RuleFormatEditor)
+    await addRule(component, 'Kartenfilter')
+
+    const setMenu = selectWithOption(component.findAllComponents(USelectMenu), 'metal-raiders')
+    const values = (setMenu!.props('items') as Array<{ value: string }>).map(item => item.value)
+    expect(values).toEqual(['metal-raiders'])
   })
 
   it('explains that a "?" ATK/DEF is inside no range once one is set (#140)', async () => {

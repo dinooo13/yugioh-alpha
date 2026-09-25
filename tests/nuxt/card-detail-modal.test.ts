@@ -157,6 +157,49 @@ describe('CardDetailModal', () => {
     expect(dialog().text()).not.toContain('Stufe')
   })
 
+  describe('Pendulum scale', () => {
+    function term(label: string) {
+      const dt = dialog().findAll('dt').find(item => item.text() === label)
+      return dt?.element.nextElementSibling?.textContent?.trim()
+    }
+    const pendulum = { type: 'Pendulum Effect Monster', frameType: 'effect_pendulum', level: 7 }
+
+    it('shows a Pendulum monster\'s scale next to ATK/DEF', async () => {
+      await mountModal({ detail: cardDetail({ ...pendulum, scale: 4 }) })
+
+      await vi.waitFor(() => {
+        expect(term('Pendelbereich')).toBe('4')
+      })
+      expect(term('ATK')).toBe('3000')
+    })
+
+    it('shows scale 0, a real value', async () => {
+      await mountModal({ detail: cardDetail({ ...pendulum, scale: 0 }) })
+
+      await vi.waitFor(() => {
+        expect(term('Pendelbereich')).toBe('0')
+      })
+    })
+
+    it('shows no scale for a non-Pendulum card', async () => {
+      await mountModal()
+
+      await vi.waitFor(() => {
+        expect(term('ATK')).toBe('3000')
+      })
+      expect(dialog().text()).not.toContain('Pendelbereich')
+    })
+
+    it('labels it in English', async () => {
+      await setTestLocale('en')
+      await mountModal({ detail: cardDetail({ ...pendulum, scale: 8 }) })
+
+      await vi.waitFor(() => {
+        expect(term('Pendulum Scale')).toBe('8')
+      })
+    })
+  })
+
   it('shows an Xyz monster\'s rank (#101)', async () => {
     await mountModal({ detail: cardDetail({ type: 'XYZ Monster', frameType: 'xyz', level: 4 }) })
 
