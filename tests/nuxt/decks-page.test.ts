@@ -5,6 +5,7 @@ import DecksPage from '~/pages/decks/index.vue'
 import { optionLabels, selectWithOption } from './fixtures/select-wrapper'
 import type { DeckCover } from '~~/shared/deck-cover'
 import { setTestLocale } from './fixtures/locale'
+import { mountAtRoute } from './fixtures/route'
 
 afterEach(() => setTestLocale('de'))
 
@@ -261,7 +262,7 @@ describe('decks page rule formats', () => {
   it('opens the create modal straight away for /decks?new=1', async () => {
     state.decks = { items: [deck()], total: 1, page: 1, pageSize: 20 }
 
-    const component = await mountSuspended(DecksPage, { route: '/decks?new=1' })
+    const component = await mountAtRoute(DecksPage, '/decks?new=1')
     await nextTick()
 
     const modal = component.findComponent(DecksDeckFormModal)

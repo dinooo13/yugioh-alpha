@@ -409,6 +409,10 @@ Unit/component tests (Vitest, `tests/nuxt/`):
 pnpm test
 ```
 
+Page tests that mount on a query route must stub `~/utils/session` (the global auth middleware
+otherwise sends them to `/login`) and mount with `mountAtRoute` from `tests/nuxt/fixtures/route.ts`,
+which fails when the page did not stay on its route.
+
 End-to-end tests (Playwright, Chromium, `e2e/`) build the app and start it against a separate test database in `e2e-data/`:
 
 ```bash
