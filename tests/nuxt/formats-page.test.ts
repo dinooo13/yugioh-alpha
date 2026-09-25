@@ -1,12 +1,15 @@
 import { defineComponent } from 'vue'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { DOMWrapper } from '@vue/test-utils'
+import { DOMWrapper, enableAutoUnmount } from '@vue/test-utils'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
 import FormatsPage from '~/pages/formats/index.vue'
 import ConfirmDialog from '~/components/layout/ConfirmDialog.vue'
 import { setTestLocale } from './fixtures/locale'
 
 afterEach(() => setTestLocale('de'))
+
+// mountSuspended never unmounts; a later locale switch would re-render every earlier mount (#104).
+enableAutoUnmount(afterEach)
 
 // `useConfirm()` is backed by a single shared `useState`, resolved by
 // `ConfirmDialog` (normally mounted once in `default.vue`) — mounting both
@@ -102,6 +105,31 @@ describe('formats page', () => {
 
     expect(component.find('[aria-label="Eigenes löschen"]').exists()).toBe(true)
     expect(component.find('[aria-label="Eigenes duplizieren"]').exists()).toBe(true)
+  })
+
+  it('stretches the format link over the whole tile, with the buttons above it (#141)', async () => {
+    state.formats = {
+      items: [
+        format(),
+        format({ id: 'goat', name: 'GOAT Format', ruleCount: 6 }),
+        format({ id: 'own-1', name: 'Eigenes', isBuiltin: false, ruleCount: 1 }),
+      ],
+    }
+
+    const component = await mountSuspended(FormatsPage)
+
+    for (const [id, name] of [['goat', 'GOAT Format'], ['own-1', 'Eigenes']]) {
+      const link = component.findAll(`a[href="/formats/${id}"]`).find(anchor => anchor.text() === name)
+      expect(link, id).toBeDefined()
+      expect(link!.classes()).toContain('stretched-link')
+      const tile = link!.element.closest('li')
+      expect(tile?.classList.contains('relative'), id).toBe(true)
+      expect(tile?.classList.contains('group'), id).toBe(true)
+    }
+
+    for (const label of ['TCG Advanced klonen', 'Eigenes duplizieren', 'Eigenes löschen']) {
+      expect(component.find(`[aria-label="${label}"]`).classes(), label).toContain('z-10')
+    }
   })
 
   it('clones a format and navigates into the copy', async () => {

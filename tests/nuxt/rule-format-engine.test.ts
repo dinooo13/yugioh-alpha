@@ -4,6 +4,7 @@ import {
   cardHasEffect,
   evaluateDeck,
   matchesCardFilter,
+  MAX_COPIES_RULE,
   RuleSetValidationError,
   validateRuleSet,
 } from '../../shared/rule-formats'
@@ -217,6 +218,54 @@ describe('card filter matching', () => {
     // ...but the OCG date is known.
     expect(matchesCardFilter({ releasedBefore: '2005-07-01', region: 'ocg' }, CARDS.ocgOnly)).toBe(true)
     expect(matchesCardFilter({ releasedBefore: '2001-01-01', region: 'ocg' }, CARDS.darkMagician)).toBe(true)
+  })
+})
+
+// A "?" ATK/DEF (YGOPRODeck stores it as -1). Kept out of ALL_CARDS so the
+// deck-level tests stay unchanged.
+const tenThousandDragon: ValidationCardData = {
+  id: 10000,
+  name: 'Ten Thousand Dragon',
+  type: 'Effect Monster',
+  frameType: 'effect',
+  attribute: 'LIGHT',
+  race: 'Dragon',
+  archetype: null,
+  level: 12,
+  atk: -1,
+  def: -1,
+  banlistInfo: null,
+  tcgDate: '2020-04-16',
+  ocgDate: '2020-02-01',
+  setIds: [],
+}
+
+describe('"?" ATK/DEF (#140)', () => {
+  it('never falls inside an ATK/DEF range', () => {
+    expect(matchesCardFilter({ atkMax: 1500 }, tenThousandDragon)).toBe(false)
+    expect(matchesCardFilter({ atkMin: 0 }, tenThousandDragon)).toBe(false)
+    expect(matchesCardFilter({ defMin: 0, defMax: 100_000 }, tenThousandDragon)).toBe(false)
+    // Without a range the stat is irrelevant.
+    expect(matchesCardFilter({ races: ['Dragon'] }, tenThousandDragon)).toBe(true)
+  })
+
+  it('still matches an ATK of 0', () => {
+    const zeroAtk: ValidationCardData = { ...tenThousandDragon, id: 10001, name: 'Null-ATK', atk: 0, def: 0 }
+    expect(matchesCardFilter({ atkMax: 1500 }, zeroAtk)).toBe(true)
+    expect(matchesCardFilter({ defMin: 0, defMax: 0 }, zeroAtk)).toBe(true)
+  })
+
+  it('is not forbidden by a "matching ATK ≤ 1500" rule, but by its not_matching variant', () => {
+    const entries: DeckCardEntry[] = [{ catalogCardId: tenThousandDragon.id, section: 'main', quantity: 1 }]
+    const cards = [...ALL_CARDS, tenThousandDragon]
+
+    const matching = evaluateDeck([{ kind: 'filter', match: 'matching', filter: { atkMax: 1500 }, maxCopies: 0 }], entries, cards)
+    expect(matching.cards[tenThousandDragon.id]!.status).toBe('unrestricted')
+    expect(codes(matching.issues)).not.toContain('card_forbidden')
+
+    const notMatching = evaluateDeck([{ kind: 'filter', match: 'not_matching', filter: { atkMax: 1500 }, maxCopies: 0 }], entries, cards)
+    expect(notMatching.cards[tenThousandDragon.id]!.status).toBe('forbidden')
+    expect(codes(notMatching.issues)).toContain('card_forbidden')
   })
 })
 
@@ -542,6 +591,13 @@ describe('validateRuleSet', () => {
     ])
   })
 
+  it('bounds a copies rule by MAX_COPIES_RULE (#95)', () => {
+    expect(validateRuleSet({ rules: [{ kind: 'copies', maxCopies: MAX_COPIES_RULE }] }).rules)
+      .toEqual([{ kind: 'copies', maxCopies: MAX_COPIES_RULE }])
+    expect(() => validateRuleSet({ rules: [{ kind: 'copies', maxCopies: MAX_COPIES_RULE + 1 }] }))
+      .toThrow(RuleSetValidationError)
+  })
+
   it('accepts an empty rule set', () => {
     expect(validateRuleSet({ rules: [] })).toEqual({ rules: [] })
   })
@@ -557,7 +613,7 @@ describe('validateRuleSet', () => {
       // neither min nor max
       { rules: [{ kind: 'deck_size', section: 'main' }] },
       { rules: [{ kind: 'copies', maxCopies: 0 }] },
-      { rules: [{ kind: 'copies', maxCopies: 11 }] },
+      { rules: [{ kind: 'copies', maxCopies: MAX_COPIES_RULE + 1 }] },
       { rules: [{ kind: 'card_status', status: 'banned', cardIds: [1] }] },
       { rules: [{ kind: 'card_status', status: 'forbidden', cardIds: [] }] },
       { rules: [{ kind: 'card_status', status: 'forbidden', cardIds: [-1] }] },

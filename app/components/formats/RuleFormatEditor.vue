@@ -10,6 +10,8 @@ import {
   BANLIST_SOURCES,
   banlistSourceLabel,
   CARD_STATUSES,
+  DEFAULT_MAX_COPIES,
+  MAX_COPIES_RULE,
   RULE_FORMAT_DESCRIPTION_MAX_LENGTH,
   RULE_FORMAT_NAME_MAX_LENGTH,
   RULE_KINDS,
@@ -46,7 +48,6 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const { cardValueOptions } = useCardText()
 const count = useCount()
 const apiError = useApiError()
 const validationText = useValidationText()
@@ -120,7 +121,7 @@ function emptyRule(kind: RuleKind): EditableRule {
     section: 'main',
     min: kind === 'deck_size' ? '40' : '',
     max: kind === 'deck_size' ? '60' : '',
-    copies: '3',
+    copies: String(DEFAULT_MAX_COPIES),
     status: 'forbidden',
     cardIds: [],
     source: 'tcg',
@@ -250,7 +251,7 @@ function toRule(draft: EditableRule): Rule {
       return rule
     }
     case 'copies':
-      return { kind: 'copies', maxCopies: numeric(draft.copies) ?? 3 }
+      return { kind: 'copies', maxCopies: numeric(draft.copies) ?? DEFAULT_MAX_COPIES }
     case 'card_status':
       return { kind: 'card_status', status: draft.status, cardIds: [...draft.cardIds] }
     case 'banlist':
@@ -305,10 +306,6 @@ const { data: facets } = await useFetch<{
 })
 
 const setItems = computed(() => (facets.value?.sets ?? []).map(set => ({ label: set.name, value: set.id })))
-// Filter values stay English (the rule engine matches them); labels follow the card language.
-const typeItems = computed(() => cardValueOptions('type', facets.value?.types ?? []))
-const attributeItems = computed(() => cardValueOptions('attribute', facets.value?.attributes ?? []))
-const raceItems = computed(() => cardValueOptions('race', facets.value?.races ?? []))
 const setNames = computed(() => Object.fromEntries((facets.value?.sets ?? []).map(set => [set.id, set.name])))
 
 // --- Rule list -------------------------------------------------------------
@@ -334,6 +331,11 @@ function summaryFor(draft: EditableRule): string {
   catch {
     return t('formats.rule.incomplete')
   }
+}
+
+/** An ATK/DEF range is set, so the "? never matches" hint (#140) applies. */
+function hasStatRange(filter: EditableFilter): boolean {
+  return [filter.atkMin, filter.atkMax, filter.defMin, filter.defMax].some(value => value !== '' && value !== null && value !== undefined)
 }
 
 function onCardsResolved(cards: Array<{ id: number, name: string }>) {
@@ -564,7 +566,7 @@ async function save() {
               v-model="rule.copies"
               type="number"
               min="1"
-              max="10"
+              :max="MAX_COPIES_RULE"
               class="w-28"
               :disabled="readonly"
               :aria-label="t('formats.editor.copiesLabel')"
@@ -634,36 +636,15 @@ async function save() {
               />
             </div>
 
+            <!-- The same type/attribute/race menus as catalog and inventory (#120);
+                 levels are a min/max range below, so no level menu. -->
             <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <USelectMenu
-                v-model="rule.filter.types"
-                multiple
-                value-key="value"
-                :items="typeItems"
+              <CardFacetFilters
+                v-model:type="rule.filter.types"
+                v-model:attribute="rule.filter.attributes"
+                v-model:race="rule.filter.races"
+                :facets="facets"
                 :disabled="readonly"
-                :placeholder="t('formats.editor.types')"
-                :aria-label="t('formats.editor.types')"
-                class="w-full min-w-0"
-              />
-              <USelectMenu
-                v-model="rule.filter.attributes"
-                multiple
-                value-key="value"
-                :items="attributeItems"
-                :disabled="readonly"
-                :placeholder="t('formats.editor.attributes')"
-                :aria-label="t('formats.editor.attributes')"
-                class="w-full min-w-0"
-              />
-              <USelectMenu
-                v-model="rule.filter.races"
-                multiple
-                value-key="value"
-                :items="raceItems"
-                :disabled="readonly"
-                :placeholder="t('formats.editor.races')"
-                :aria-label="t('formats.editor.races')"
-                class="w-full min-w-0"
               />
               <USelectMenu
                 v-model="rule.filter.setIds"
@@ -681,7 +662,8 @@ async function save() {
               <UInput
                 v-model="rule.filter.levelMin"
                 type="number"
-                class="w-28"
+                min="0"
+                class="w-36"
                 :disabled="readonly"
                 :placeholder="t('formats.editor.levelMin')"
                 :aria-label="t('formats.editor.levelMin')"
@@ -689,7 +671,8 @@ async function save() {
               <UInput
                 v-model="rule.filter.levelMax"
                 type="number"
-                class="w-28"
+                min="0"
+                class="w-36"
                 :disabled="readonly"
                 :placeholder="t('formats.editor.levelMax')"
                 :aria-label="t('formats.editor.levelMax')"
@@ -697,6 +680,7 @@ async function save() {
               <UInput
                 v-model="rule.filter.atkMin"
                 type="number"
+                min="0"
                 class="w-28"
                 :disabled="readonly"
                 :placeholder="t('formats.editor.atkMin')"
@@ -705,6 +689,7 @@ async function save() {
               <UInput
                 v-model="rule.filter.atkMax"
                 type="number"
+                min="0"
                 class="w-28"
                 :disabled="readonly"
                 :placeholder="t('formats.editor.atkMax')"
@@ -713,6 +698,7 @@ async function save() {
               <UInput
                 v-model="rule.filter.defMin"
                 type="number"
+                min="0"
                 class="w-28"
                 :disabled="readonly"
                 :placeholder="t('formats.editor.defMin')"
@@ -721,12 +707,19 @@ async function save() {
               <UInput
                 v-model="rule.filter.defMax"
                 type="number"
+                min="0"
                 class="w-28"
                 :disabled="readonly"
                 :placeholder="t('formats.editor.defMax')"
                 :aria-label="t('formats.editor.defMax')"
               />
             </div>
+            <p
+              v-if="hasStatRange(rule.filter)"
+              class="text-xs text-muted"
+            >
+              {{ t('formats.editor.unknownStatHint') }}
+            </p>
 
             <div class="flex flex-wrap gap-3">
               <USelect

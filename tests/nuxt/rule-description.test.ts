@@ -54,7 +54,7 @@ describe('rule describer', () => {
       match: 'matching',
       filter: { attributes: ['DARK', 'LIGHT'], levelMin: 5, atkMax: 2000, hasEffect: false, nameContains: 'Dragon' },
       maxCopies: 2,
-    })).toBe('Karten mit Attribut FINSTERNIS oder LICHT, Stufe ab 5, ATK bis 2000, ohne Effekt, Name enthält "Dragon": semi-limitiert (max. 2)')
+    })).toBe('Karten mit Attribut FINSTERNIS oder LICHT, Stufe/Rang ab 5, ATK bis 2000, ohne Effekt, Name enthält "Dragon": semi-limitiert (max. 2)')
     expect(describeRule({ kind: 'filter', match: 'matching', filter: {}, maxCopies: 3 })).toBe('Karten mit alle Karten: erlaubt (max. 3)')
   })
 

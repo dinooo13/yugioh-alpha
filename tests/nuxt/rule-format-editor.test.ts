@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { flushPromises } from '@vue/test-utils'
+import { enableAutoUnmount, flushPromises } from '@vue/test-utils'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
-import { USelect } from '#components'
+import { CardFacetFilters, USelect } from '#components'
 import RuleFormatEditor from '~/components/formats/RuleFormatEditor.vue'
+import { DEFAULT_MAX_COPIES, MAX_COPIES_RULE } from '~~/shared/rule-formats'
 import type { RuleSet } from '~~/shared/rule-formats'
 import { selectWithOption } from './fixtures/select-wrapper'
 import { setTestLocale } from './fixtures/locale'
@@ -53,6 +54,9 @@ afterEach(async () => {
   await setTestLocale('de')
   vi.unstubAllGlobals()
 })
+
+// mountSuspended never unmounts; a later locale switch would re-render every earlier mount (#104).
+enableAutoUnmount(afterEach)
 
 describe('rule format editor', () => {
   it('renders the rules of an existing format with German summaries', async () => {
@@ -255,6 +259,58 @@ describe('rule format editor', () => {
     expect(component.text()).toContain('Pot of Greed ist in diesem Format verboten.')
   })
 
+  it('bounds the copies input by the shared maximum (#95)', async () => {
+    const component = await mountSuspended(RuleFormatEditor)
+    await addRule(component, 'Kopien pro Karte')
+
+    const input = component.find<HTMLInputElement>('input[aria-label="Kopien pro Karte"]')
+    expect(input.attributes('max')).toBe(String(MAX_COPIES_RULE))
+    expect(input.element.value).toBe(String(DEFAULT_MAX_COPIES))
+  })
+
+  it('filters type, attribute and race with the shared facet menus, without a level menu (#120)', async () => {
+    const fetchMock = stubFetch(() => Promise.resolve({ id: 'new-1', name: 'Nur DARK' }))
+
+    const component = await mountSuspended(RuleFormatEditor)
+    await component.find('input[aria-label="Formatname"]').setValue('Nur DARK')
+    await addRule(component, 'Kartenfilter')
+
+    const facetFilters = component.findComponent(CardFacetFilters)
+    expect(facetFilters.exists()).toBe(true)
+    for (const label of ['Typ', 'Attribut', 'Monsterart']) {
+      expect(component.find(`[aria-label="${label}"]`).exists(), label).toBe(true)
+    }
+    // Levels are a min/max range in a format filter.
+    expect(component.find('[aria-label="Level"]').exists()).toBe(false)
+    expect(component.find('input[aria-label="Stufe/Rang ab"]').exists()).toBe(true)
+
+    facetFilters.vm.$emit('update:attribute', ['DARK'])
+    await component.vm.$nextTick()
+
+    const saveButton = component.findAll('button').find(button => button.text().includes('Format erstellen'))
+    await saveButton!.trigger('click')
+    await flushPromises()
+
+    const body = formatCalls(fetchMock)[0]![1] as { body: { rules: RuleSet } }
+    expect(body.body.rules.rules).toEqual([
+      { kind: 'filter', match: 'matching', filter: { attributes: ['DARK'] }, maxCopies: 0 },
+    ])
+  })
+
+  it('explains that a "?" ATK/DEF is inside no range once one is set (#140)', async () => {
+    const component = await mountSuspended(RuleFormatEditor)
+    await addRule(component, 'Kartenfilter')
+
+    const hint = 'Karten mit „?“ als ATK oder DEF liegen in keinem ATK-/DEF-Bereich.'
+    expect(component.text()).not.toContain(hint)
+
+    await component.find('input[aria-label="ATK bis"]').setValue('1500')
+    expect(component.text()).toContain(hint)
+
+    await component.find('input[aria-label="ATK bis"]').setValue('')
+    expect(component.text()).not.toContain(hint)
+  })
+
   it('hides every editing control for a read-only built-in format', async () => {
     const component = await mountSuspended(RuleFormatEditor, {
       props: {
@@ -274,5 +330,25 @@ describe('rule format editor', () => {
     expect(component.find('[aria-label="Regel 1 entfernen"]').exists()).toBe(false)
     expect(component.findAll('button').some(button => button.text().includes('Speichern'))).toBe(false)
     expect(component.find<HTMLInputElement>('input[aria-label="Formatname"]').element.disabled).toBe(true)
+  })
+
+  it('disables the facet menus of a read-only filter rule', async () => {
+    const component = await mountSuspended(RuleFormatEditor, {
+      props: {
+        readonly: true,
+        initialValues: {
+          id: 'goat',
+          name: 'GOAT Format',
+          description: null,
+          rules: { rules: [{ kind: 'filter', match: 'matching', filter: { attributes: ['DARK'] }, maxCopies: 1 }] },
+          isBuiltin: true,
+        },
+      },
+    })
+
+    expect(component.findComponent(CardFacetFilters).props('disabled')).toBe(true)
+    for (const label of ['Typ', 'Attribut', 'Monsterart']) {
+      expect(component.find(`[aria-label="${label}"]`).attributes('disabled'), label).toBeDefined()
+    }
   })
 })

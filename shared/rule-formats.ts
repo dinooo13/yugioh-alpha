@@ -19,6 +19,8 @@ export const MAX_RULES_PER_FORMAT = 50
 export const MAX_FILTER_ENTRIES = 200
 /** Copies of one catalog card across main + extra + side when no `copies` rule is set. */
 export const DEFAULT_MAX_COPIES = 3
+/** Highest per-card limit a `copies` rule may set (server check and editor input). */
+export const MAX_COPIES_RULE = 10
 
 // --- Model -----------------------------------------------------------------
 
@@ -279,6 +281,15 @@ function withinRange(value: number | null | undefined, min?: number, max?: numbe
 }
 
 /**
+ * An ATK/DEF as a number, or null when the card has none or a "?" stat
+ * (YGOPRODeck stores "?" as -1). A "?" is unknown, so it is inside no
+ * range (#140) — the same conservative choice as an unknown release date.
+ */
+function knownStat(value: number | null | undefined): number | null {
+  return value === null || value === undefined || value < 0 ? null : value
+}
+
+/**
  * Matches a card against a filter (AND across fields, OR inside array fields).
  *
  * A card *without* a release date for the selected region never matches
@@ -286,6 +297,10 @@ function withinRange(value: number | null | undefined, min?: number, max?: numbe
  * style "only cards up to June 2005" rule (`not_matching releasedBefore → 0`)
  * therefore disallows cards whose release date is unknown instead of quietly
  * letting them through.
+ *
+ * A `?` ATK/DEF (stored as -1) is like a missing value: it never matches an
+ * ATK/DEF range. So a `not_matching` rule on an ATK/DEF range applies to it
+ * (e.g. "cards not matching ATK ≤ 1500 → forbidden" forbids Ten Thousand Dragon).
  */
 export function matchesCardFilter(filter: CardFilter, card: ValidationCardData): boolean {
   if (!includesIgnoreCase(filter.types, card.type)) {
@@ -318,10 +333,10 @@ export function matchesCardFilter(filter: CardFilter, card: ValidationCardData):
   if (!withinRange(card.level, filter.levelMin, filter.levelMax)) {
     return false
   }
-  if (!withinRange(card.atk, filter.atkMin, filter.atkMax)) {
+  if (!withinRange(knownStat(card.atk), filter.atkMin, filter.atkMax)) {
     return false
   }
-  if (!withinRange(card.def, filter.defMin, filter.defMax)) {
+  if (!withinRange(knownStat(card.def), filter.defMin, filter.defMax)) {
     return false
   }
 
@@ -827,7 +842,7 @@ function validateRule(input: unknown, index: number): Rule {
       return rule
     }
     case 'copies': {
-      const maxCopies = optionalInteger(input.maxCopies ?? input.max_copies, `rules[${index}].maxCopies`, 1, 10)
+      const maxCopies = optionalInteger(input.maxCopies ?? input.max_copies, `rules[${index}].maxCopies`, 1, MAX_COPIES_RULE)
       if (maxCopies === undefined) {
         fail(`rules[${index}].maxCopies is required`)
       }

@@ -219,6 +219,8 @@ Users can build decks for specific rule environments and immediately see whether
 Implemented: built-in formats (TCG Advanced, OCG, GOAT, Classic Plus, Ohne Banliste) plus custom formats under
 `/formats`, with live validation in the deckbuilder. See
 [`docs/adr/0005-rule-format-model.md`](adr/0005-rule-format-model.md).
+Card-filter ATK/DEF ranges never match a `?` stat (#140); the editor uses the shared facet
+menus (#120) and format tiles open on a click anywhere (#141).
 
 Classic Plus, a house format whose rules describe what cards do (floodgates, hand traps,
 draw, burn, revival, mass removal, protection, negation), is a built-in with its own banlist,

@@ -1,11 +1,15 @@
 <script setup lang="ts">
 /**
  * The four card facet menus (type, attribute, race, level), shared by the
- * catalog and the inventory so both filter the same way (#63).
+ * catalog and the inventory so both filter the same way (#63), and by the
+ * format editor's card filter (#120).
  *
  * - Multi-select; an empty array means "no filter".
  * - Multi-root (no wrapper): the parent's grid or flex places the menus, and
  *   `menuClass` sets their width (a multi-root component doesn't inherit `class`).
+ * - Leave out `v-model:level` to hide the level menu (the format editor
+ *   filters levels by range).
+ * - `disabled` disables every menu (a read-only built-in format).
  */
 export interface CardFacetOptions {
   types: string[]
@@ -18,12 +22,13 @@ const props = withDefaults(defineProps<{
   facets: CardFacetOptions
   /** Width classes for each menu; the parent's grid/flex places them. */
   menuClass?: string
-}>(), { menuClass: 'w-full min-w-0' })
+  disabled?: boolean
+}>(), { menuClass: 'w-full min-w-0', disabled: false })
 
 const type = defineModel<string[]>('type', { required: true })
 const attribute = defineModel<string[]>('attribute', { required: true })
 const race = defineModel<string[]>('race', { required: true })
-const level = defineModel<number[]>('level', { required: true })
+const level = defineModel<number[]>('level')
 
 const { t } = useI18n()
 const { cardValueOptions } = useCardText()
@@ -41,6 +46,7 @@ const levelItems = computed(() => props.facets.levels.map(value => ({ label: t('
     multiple
     value-key="value"
     :items="typeItems"
+    :disabled="disabled"
     :placeholder="t('card.field.type')"
     :aria-label="t('card.field.type')"
     :class="menuClass"
@@ -50,6 +56,7 @@ const levelItems = computed(() => props.facets.levels.map(value => ({ label: t('
     multiple
     value-key="value"
     :items="attributeItems"
+    :disabled="disabled"
     :placeholder="t('card.field.attribute')"
     :aria-label="t('card.field.attribute')"
     :class="menuClass"
@@ -59,15 +66,18 @@ const levelItems = computed(() => props.facets.levels.map(value => ({ label: t('
     multiple
     value-key="value"
     :items="raceItems"
+    :disabled="disabled"
     :placeholder="t('card.field.race')"
     :aria-label="t('card.field.race')"
     :class="menuClass"
   />
   <USelectMenu
+    v-if="level !== undefined"
     v-model="level"
     multiple
     value-key="value"
     :items="levelItems"
+    :disabled="disabled"
     :placeholder="t('card.field.level')"
     :aria-label="t('card.field.level')"
     :class="menuClass"

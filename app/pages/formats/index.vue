@@ -108,14 +108,15 @@ function ruleCountLabel(format: RuleFormatListItem) {
           <li
             v-for="format in builtins"
             :key="format.id"
-            class="panel flex flex-col p-4 transition-[box-shadow,border-color] duration-200 hover:border-primary/40 hover:shadow-lift"
+            class="group panel relative flex flex-col p-4 transition-[box-shadow,border-color] duration-200 hover:border-primary/40 hover:shadow-lift"
           >
+            <!-- The stretched format link covers the tile (#141); the buttons sit above it. -->
             <div class="flex items-start justify-between gap-2">
               <NuxtLink
                 :to="`/formats/${format.id}`"
-                class="min-w-0 flex-1"
+                class="stretched-link block min-w-0 flex-1 rounded-sm"
               >
-                <h3 class="truncate text-base font-semibold text-highlighted hover:text-primary">
+                <h3 class="truncate text-base font-semibold text-highlighted transition-colors group-hover:text-primary">
                   {{ formatName(format) }}
                 </h3>
               </NuxtLink>
@@ -141,7 +142,7 @@ function ruleCountLabel(format: RuleFormatListItem) {
                 variant="outline"
                 :label="t('formats.list.view')"
                 :to="`/formats/${format.id}`"
-                class="tap-target"
+                class="tap-target relative z-10"
               />
               <UButton
                 size="xs"
@@ -150,7 +151,7 @@ function ruleCountLabel(format: RuleFormatListItem) {
                 icon="i-lucide-copy"
                 :label="t('formats.list.clone')"
                 :aria-label="t('formats.list.cloneLabel', { name: formatName(format) })"
-                class="tap-target"
+                class="tap-target relative z-10"
                 @click="cloneFormat(format)"
               />
             </div>
@@ -186,13 +187,14 @@ function ruleCountLabel(format: RuleFormatListItem) {
           <li
             v-for="format in ownFormats"
             :key="format.id"
-            class="panel flex flex-col p-4 transition-[box-shadow,border-color] duration-200 hover:border-primary/40 hover:shadow-lift"
+            class="group panel relative flex flex-col p-4 transition-[box-shadow,border-color] duration-200 hover:border-primary/40 hover:shadow-lift"
           >
+            <!-- The stretched format link covers the tile (#141); the buttons sit above it. -->
             <NuxtLink
               :to="`/formats/${format.id}`"
-              class="min-w-0"
+              class="stretched-link block min-w-0 rounded-sm"
             >
-              <h3 class="truncate text-base font-semibold text-highlighted hover:text-primary">
+              <h3 class="truncate text-base font-semibold text-highlighted transition-colors group-hover:text-primary">
                 {{ format.name }}
               </h3>
             </NuxtLink>
@@ -213,7 +215,7 @@ function ruleCountLabel(format: RuleFormatListItem) {
                 icon="i-lucide-pencil"
                 :label="t('formats.list.edit')"
                 :to="`/formats/${format.id}`"
-                class="tap-target"
+                class="tap-target relative z-10"
               />
               <UButton
                 size="xs"
@@ -222,7 +224,7 @@ function ruleCountLabel(format: RuleFormatListItem) {
                 icon="i-lucide-copy"
                 :label="t('formats.list.duplicate')"
                 :aria-label="t('formats.list.duplicateLabel', { name: format.name })"
-                class="tap-target"
+                class="tap-target relative z-10"
                 @click="cloneFormat(format)"
               />
               <UButton
@@ -232,7 +234,7 @@ function ruleCountLabel(format: RuleFormatListItem) {
                 icon="i-lucide-trash-2"
                 :label="t('common.delete')"
                 :aria-label="t('formats.list.deleteLabel', { name: format.name })"
-                class="tap-target"
+                class="tap-target relative z-10"
                 @click="deleteFormat(format)"
               />
             </div>
