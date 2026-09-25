@@ -1,4 +1,11 @@
 <script setup lang="ts">
+/**
+ * One row of the own wishlist: the card, the note, the quantity stepper and
+ * removal. The card name is the row's button (#114): `stretched-link` makes
+ * the whole row open the card overlay (`open`); the retired badge, the note
+ * field, the stepper and the remove button sit above it.
+ */
+import { MAX_WISHLIST_QUANTITY } from '~~/shared/sharing'
 import type { WishlistItemView } from '~~/shared/sharing'
 
 const props = defineProps<{
@@ -8,6 +15,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   updated: [item: WishlistItemView]
   removed: [id: string]
+  open: []
 }>()
 
 const { t } = useI18n()
@@ -41,7 +49,7 @@ async function patch(body: Record<string, unknown>) {
 }
 
 function setQuantity(quantity: number) {
-  if (quantity < 1 || quantity > 99 || isSaving.value) {
+  if (quantity < 1 || quantity > MAX_WISHLIST_QUANTITY || isSaving.value) {
     return
   }
   patch({ quantity })
@@ -68,7 +76,7 @@ async function remove() {
 </script>
 
 <template>
-  <li class="flex flex-col gap-2 px-4 py-3">
+  <li class="group relative flex flex-col gap-2 px-4 py-3">
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
       <CardThumb
         :src="item.imageSmall"
@@ -79,9 +87,21 @@ async function remove() {
       <div class="min-w-0 flex-1">
         <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
           <p class="min-w-0 truncate text-sm font-medium text-highlighted">
-            {{ cardName(item) }}
+            <button
+              type="button"
+              aria-haspopup="dialog"
+              class="stretched-link inline text-left transition-colors group-hover:text-primary after:rounded-none focus-visible:after:-outline-offset-2"
+              @click="emit('open')"
+            >
+              {{ cardName(item) }}
+            </button>
           </p>
-          <CardRetiredBadge v-if="item.retired" />
+          <div
+            v-if="item.retired"
+            class="relative z-10"
+          >
+            <CardRetiredBadge />
+          </div>
         </div>
         <p class="flex min-w-0 items-center gap-1.5 text-xs text-muted">
           <CardFrameDot :type="item.type" />
@@ -104,38 +124,23 @@ async function remove() {
           v-model="noteDraft"
           :placeholder="t('wishlist.row.notePlaceholder')"
           :aria-label="t('wishlist.row.noteFor', { name: cardName(item) })"
-          class="mt-1.5 max-w-xs"
+          class="relative z-10 mt-1.5 max-w-xs"
           maxlength="200"
           @blur="onNoteBlur"
         />
       </div>
 
-      <div class="flex shrink-0 items-center gap-1">
-        <UButton
-          icon="i-lucide-minus"
-          color="neutral"
-          variant="outline"
-          size="xs"
-          :disabled="isSaving || item.quantity <= 1"
-          :aria-label="t('wishlist.row.decrease', { name: cardName(item) })"
-          class="tap-target"
-          @click="setQuantity(item.quantity - 1)"
-        />
-        <span
-          class="w-8 text-center text-sm font-semibold tabular-nums"
-          :aria-label="t('wishlist.row.quantityOf', { name: cardName(item) })"
-        >
-          {{ item.quantity }}
-        </span>
-        <UButton
-          icon="i-lucide-plus"
-          color="neutral"
-          variant="outline"
+      <div class="relative z-10 shrink-0">
+        <CardQuantityStepper
+          :model-value="item.quantity"
+          :min="1"
+          :max="MAX_WISHLIST_QUANTITY"
           size="xs"
           :disabled="isSaving"
-          :aria-label="t('wishlist.row.increase', { name: cardName(item) })"
-          class="tap-target"
-          @click="setQuantity(item.quantity + 1)"
+          :input-label="t('wishlist.row.quantityOf', { name: cardName(item) })"
+          :decrease-label="t('wishlist.row.decrease', { name: cardName(item) })"
+          :increase-label="t('wishlist.row.increase', { name: cardName(item) })"
+          @update:model-value="setQuantity"
         />
       </div>
 
@@ -145,7 +150,7 @@ async function remove() {
         variant="ghost"
         size="xs"
         :label="t('common.remove')"
-        class="tap-target"
+        class="tap-target relative z-10"
         @click="remove"
       />
     </div>

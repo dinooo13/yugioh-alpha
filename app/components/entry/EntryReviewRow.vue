@@ -7,6 +7,7 @@ import {
   selectedCandidate,
 } from '~/utils/card-entry'
 import type { EntryCandidate, EntryRow } from '~/utils/card-entry'
+import type { CardDetailPreview } from '~/utils/card-detail'
 
 interface PickedCatalogCard {
   id: number
@@ -33,6 +34,22 @@ const isPickerOpen = ref(false)
 
 const status = computed(() => entryRowStatus(props.row))
 const selected = computed(() => selectedCandidate(props.row))
+
+// The selected card's overlay (#114); it loads the card only once opened.
+const isCardOpen = ref(false)
+const selectedPreview = computed<CardDetailPreview | null>(() => selected.value
+  ? {
+      name: selected.value.name,
+      nameDe: selected.value.nameDe,
+      type: selected.value.type,
+      frameType: selected.value.frameType,
+      imageSmall: selected.value.imageSmall,
+      attribute: null,
+      level: null,
+      atk: null,
+      def: null,
+    }
+  : null)
 
 const statusMeta = computed(() => {
   switch (status.value) {
@@ -137,7 +154,18 @@ function onPicked(card: PickedCatalogCard) {
           />
         </div>
         <p class="mt-1 truncate text-sm font-medium text-highlighted">
-          {{ selected ? cardName(selected) : t('quickEntry.status.ohne_treffer') }}
+          <button
+            v-if="selected"
+            type="button"
+            aria-haspopup="dialog"
+            class="block max-w-full truncate text-left transition-colors hover:text-primary"
+            @click="() => { isCardOpen = true }"
+          >
+            {{ cardName(selected) }}
+          </button>
+          <template v-else>
+            {{ t('quickEntry.status.ohne_treffer') }}
+          </template>
         </p>
         <p
           v-if="selected"
@@ -216,5 +244,12 @@ function onPicked(card: PickedCatalogCard) {
         <InventoryCatalogCardPicker @select="onPicked" />
       </template>
     </UModal>
+
+    <CardDetailModal
+      v-model:open="isCardOpen"
+      :card-id="selected?.cardId ?? null"
+      :preview="selectedPreview"
+      variant="catalog"
+    />
   </div>
 </template>

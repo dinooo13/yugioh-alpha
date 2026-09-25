@@ -148,4 +148,31 @@ test.describe('card detail overlay', () => {
     }))
     expect(documentOverflow.scrollWidth).toBeLessThanOrEqual(documentOverflow.clientWidth)
   })
+
+  test('the overlay from a deck row and a wishlist row (#114)', async ({ page }) => {
+    await registerAndLogin(page)
+    const deckResponse = await page.request.post('/api/decks', {
+      data: { name: 'Overlay-Deck', cards: [{ catalog_card_id: DARK_MAGICIAN, section: 'main', quantity: 1 }] },
+    })
+    expect(deckResponse.ok()).toBe(true)
+    const deck = await deckResponse.json()
+    expect((await page.request.post('/api/wishlist', { data: { catalog_card_id: KURIBOH } })).ok()).toBe(true)
+
+    await page.goto(`/decks/${deck.id}`)
+    await waitForHydration(page)
+    const deckRow = page.locator('main li').filter({ has: page.getByRole('spinbutton', { name: `Anzahl von ${CARD.darkMagician} im Main Deck` }) })
+    await deckRow.getByRole('button', { name: CARD.darkMagician, exact: true }).click()
+    const fromDeck = page.getByRole('dialog', { name: CARD.darkMagician })
+    await expect(fromDeck.getByRole('heading', { name: 'Kartentext', level: 3 })).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(fromDeck).toBeHidden()
+
+    await page.goto('/wishlist')
+    await waitForHydration(page)
+    await page.getByRole('button', { name: CARD.kuriboh, exact: true }).click()
+    const fromWishlist = page.getByRole('dialog', { name: CARD.kuriboh })
+    await expect(fromWishlist.getByRole('heading', { name: 'Kartentext', level: 3 })).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(fromWishlist).toBeHidden()
+  })
 })

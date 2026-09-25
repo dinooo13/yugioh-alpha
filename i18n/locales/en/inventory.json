@@ -20,7 +20,6 @@
       "placeholder": "Search your inventory...",
       "label": "Search inventory",
       "inText": "Also search card text",
-      "facetsGalleryOnly": "These filters only apply to \"Gallery\". \"List\" filters by search text and collection.",
       "reset": "Reset",
       "sortLabel": "Sort by",
       "sort": {

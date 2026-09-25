@@ -42,7 +42,7 @@ test.describe('wishlist', () => {
     const addOne = page.getByRole('button', { name: `Ein Exemplar von ${CARD.kuriboh} hinzufügen` })
     await addOne.click()
     await addOne.click()
-    await expect(page.getByLabel(`Anzahl von ${CARD.kuriboh}`)).toHaveText('3')
+    await expect(page.getByLabel(`Anzahl von ${CARD.kuriboh}`)).toHaveValue('3')
 
     const noteInput = page.getByLabel(`Notiz für ${CARD.kuriboh}`)
     await noteInput.fill('1st Edition bitte')
@@ -50,7 +50,7 @@ test.describe('wishlist', () => {
 
     // Both the quantity and the note persist across a reload.
     await page.reload()
-    await expect(page.getByLabel(`Anzahl von ${CARD.kuriboh}`)).toHaveText('3')
+    await expect(page.getByLabel(`Anzahl von ${CARD.kuriboh}`)).toHaveValue('3')
     await expect(page.getByLabel(`Notiz für ${CARD.kuriboh}`)).toHaveValue('1st Edition bitte')
 
     // Publish the wishlist and check it from an anonymous context.

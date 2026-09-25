@@ -1,17 +1,21 @@
 <script setup lang="ts">
 /**
  * The shared − / input / + control for a card quantity: the inventory's
- * detail panel (`InventoryOwnedCardEditor`) and the add dialog
- * (`InventoryAddToInventoryModal`). The deck editor and the wishlist rows
- * still have inline copies of the same markup (follow-up).
+ * detail panel (`InventoryOwnedCardEditor`), the add dialog
+ * (`InventoryAddToInventoryModal`), the deck editor rows and the wishlist
+ * rows (#144).
  *
- * - − and + emit the value ∓ 1 and are disabled only at `min` / `max`.
+ * - − and + emit the value ∓ 1 and are disabled only at `min` / `max`
+ *   (and with `disabled`).
  * - A typed value is emitted on `change` (Enter, Tab, blur) when it is a
  *   whole number within `min`…`max`; anything else snaps back to
  *   `modelValue`. So does a value the parent didn't take over (e.g. a
  *   cancelled removal at 0).
- * - Never disabled while the parent saves: disabling a focused button would
- *   drop keyboard focus to the page.
+ * - The inventory editor never disables it while it saves (disabling a
+ *   focused button would drop keyboard focus to the page): it queues its
+ *   writes instead. Callers whose writes send an absolute quantity (deck
+ *   editor, wishlist) pass `disabled` while a write is in flight, so two
+ *   writes never compute from the same stale value.
  */
 import { MAX_OWNED_QUANTITY } from '~~/shared/inventory'
 

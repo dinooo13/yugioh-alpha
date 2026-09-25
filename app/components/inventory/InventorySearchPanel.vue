@@ -9,9 +9,13 @@ export interface InventorySearchFilters {
   sort: 'name' | '-name' | 'quantity' | 'newest'
 }
 
-defineProps<{
+withDefaults(defineProps<{
   facets: CardFacetOptions
-}>()
+  /** The sort select; only "Galerie" sorts ("Liste" stays "recently changed first"). */
+  showSort?: boolean
+}>(), {
+  showSort: true,
+})
 
 const { t } = useI18n()
 
@@ -57,7 +61,10 @@ function resetFilters() {
       />
     </div>
 
-    <div class="flex justify-end">
+    <div
+      v-if="showSort"
+      class="flex justify-end"
+    >
       <UFormField
         :label="t('inventory.search.sortLabel')"
         class="flex items-center gap-2"

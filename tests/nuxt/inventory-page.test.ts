@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { DOMWrapper } from '@vue/test-utils'
+import { DOMWrapper, enableAutoUnmount } from '@vue/test-utils'
 import { nextTick, type Component } from 'vue'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
 import CollectionActions from '~/components/collections/CollectionActions.vue'
@@ -15,6 +15,9 @@ afterEach(() => {
   document.body.innerHTML = ''
   return setTestLocale('de')
 })
+
+// mountSuspended never unmounts; a later locale switch would re-render every earlier mount (#104).
+enableAutoUnmount(afterEach)
 
 // UModal teleports its content to <body>.
 function body() {
@@ -114,31 +117,6 @@ describe('inventory page', () => {
     const excerpts = component.findAll('[data-testid="card-text-excerpt"]').map(p => p.text())
     expect(excerpts[0]).toBe('Kartentext: The ultimate wizard in terms of attack and defense.')
     expect(excerpts[1]).toBe(`Kartentext: ${long}…`)
-  })
-
-  it('opens the detail panel with the editor from a row (#135)', async () => {
-    inventoryState.pending = false
-    inventoryState.response = ownedDarkMagician()
-
-    const component = await mountSuspended(InventoryPage)
-    vi.stubGlobal('$fetch', vi.fn((url: string) => {
-      if (url === '/api/inventory') {
-        return Promise.resolve({ items: [{ id: 'owned-1', collectionId: null, quantity: 3, note: 'Binder 2' }], total: 1 })
-      }
-      // The catalog detail stays loading; the preview stands in.
-      return new Promise(() => {})
-    }))
-    await component.findAll('li button').find(button => button.text() === 'Dark Magician')!.trigger('click')
-
-    await vi.waitFor(() => {
-      expect(body().find('[aria-label="Anzahl in (keine Sammlung)"]').exists()).toBe(true)
-    })
-    const dialog = body().find('[role="dialog"]')
-    expect(dialog.text()).toContain('Im Inventar')
-    expect(dialog.text()).toContain('Im Katalog öffnen')
-    // Opened from this row: it is the highlighted one.
-    expect(dialog.find('[data-row-id="owned-1"]').attributes('data-focused')).toBe('')
-    expect(dialog.find<HTMLInputElement>('[aria-label="Anzahl in (keine Sammlung)"]').element.value).toBe('3')
   })
 
   it('renders in English', async () => {

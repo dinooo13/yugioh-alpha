@@ -53,3 +53,9 @@ export function isSectionAllowedForCard(card: DeckSectionCard, section: DeckSect
 
 export const DECK_NAME_MAX_LENGTH = 80
 export const DECK_DESCRIPTION_MAX_LENGTH = 500
+
+// Sanity cap on a single deck_card row, not a format rule: nobody plays 100
+// copies of a card, and it keeps a typo/scripted call from bloating a deck.
+// The *format* copy limit (DECK_LIMITS.maxCopies) stays a warning. Shared with
+// the deck editor's quantity stepper.
+export const MAX_DECK_CARD_QUANTITY = 99

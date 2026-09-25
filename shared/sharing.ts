@@ -19,6 +19,9 @@ export type ShareResourceType = typeof SHARE_RESOURCE_TYPES[number]
 export const WISHLIST_VISIBILITIES = ['private', 'public'] as const
 export type WishlistVisibility = typeof WISHLIST_VISIBILITIES[number]
 
+/** Upper bound for one wishlist item's quantity (server check and the row's stepper). */
+export const MAX_WISHLIST_QUANTITY = 99
+
 export interface UserSearchItem { userId: string, handle: string, displayName: string }
 export interface ShareGrantItem { userId: string, handle: string, displayName: string, createdAt: string }
 

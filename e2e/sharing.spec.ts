@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { loginViaForm, logout, registerAndLogin, uniqueEmail, waitForHydration } from './helpers/auth'
 import { CARD } from './helpers/cards'
+import { acceptConfirm } from './helpers/confirm'
 
 // Passcodes from the seeded E2E catalog fixture
 // (server/db/fixtures/catalog-fixture.ts).
@@ -219,5 +220,43 @@ test.describe('sharing', () => {
     await expect(pageB.getByRole('heading', { name: 'Deck für B ohne Session' })).toBeVisible()
 
     await contextB.close()
+  })
+
+  test('regenerating the link asks in a dialog above the share dialog (#146)', async ({ page }) => {
+    await registerAndLogin(page)
+    const deckResponse = await page.request.post('/api/decks', { data: { name: 'Link-Deck' } })
+    expect(deckResponse.ok()).toBe(true)
+    const deck = await deckResponse.json()
+
+    await page.goto(`/decks/${deck.id}`)
+    await waitForHydration(page)
+    await page.getByRole('button', { name: 'Teilen' }).click()
+    await page.getByRole('radio', { name: 'Nur über Link' }).click()
+
+    const shareDialog = page.getByRole('dialog', { name: 'Deck teilen' })
+    const linkInput = shareDialog.getByLabel('Freigabe-Link')
+    await expect(linkInput).not.toHaveValue('')
+    const oldLink = await linkInput.inputValue()
+
+    const confirmDialog = page.getByRole('dialog', { name: 'Neuen Link erzeugen' })
+    await shareDialog.getByRole('button', { name: 'Neuen Link erzeugen' }).click()
+    await expect(confirmDialog).toBeVisible()
+    await expect(confirmDialog).toContainText('Alte Links werden dadurch ungültig. Fortfahren?')
+
+    // Escape closes only the confirm; the share dialog and its link stay.
+    await page.keyboard.press('Escape')
+    await expect(confirmDialog).toBeHidden()
+    await expect(shareDialog).toBeVisible()
+    await expect(linkInput).toHaveValue(oldLink)
+
+    await shareDialog.getByRole('button', { name: 'Neuen Link erzeugen' }).click()
+    await expect(confirmDialog).toBeVisible()
+    const regenerated = page.waitForResponse(response => response.request().method() === 'PUT' && response.url().includes(`/api/sharing/deck/${deck.id}`))
+    await acceptConfirm(page)
+    expect((await regenerated).ok()).toBe(true)
+    await expect(confirmDialog).toBeHidden()
+    await expect(shareDialog).toBeVisible()
+    await expect(linkInput).not.toHaveValue(oldLink)
+    await expect(linkInput).not.toHaveValue('')
   })
 })

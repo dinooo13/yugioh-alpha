@@ -1,10 +1,10 @@
-import { and, eq, inArray, isNotNull, or, sql } from 'drizzle-orm'
+import { and, eq, inArray, or, sql } from 'drizzle-orm'
 import type { SQL } from 'drizzle-orm'
 import { createError } from 'h3'
 import { foldCardName } from '../../shared/card-name-fold'
 import type { useDb } from '../db'
 import { catalogCard, catalogCardImage, catalogCardTranslation, catalogPrinting } from '../db/schema'
-import { activeCatalogCard, escapedLike, escapeLikeTerm } from './card-name-search'
+import { activeCatalogCard, escapedLike, escapeLikeTerm, retiredPasscodeReplacement } from './card-name-search'
 
 type Db = ReturnType<typeof useDb>
 
@@ -371,16 +371,6 @@ function normalizeLimit(limit: number | undefined): number {
   return Math.min(MAX_SUGGEST_LIMIT, Math.max(1, limit ?? DEFAULT_SUGGEST_LIMIT))
 }
 
-/** The replacement of a retired card with this id, if it has one. */
-function replacementForRetiredPasscode(db: Db, passcode: number): number | null {
-  const row = db
-    .select({ replacedById: catalogCard.replacedById })
-    .from(catalogCard)
-    .where(and(eq(catalogCard.id, passcode), isNotNull(catalogCard.retiredAt)))
-    .get()
-  return row?.replacedById ?? null
-}
-
 function collectScoredCandidates(db: Db, parsed: ParsedEntryLine, limit: number): Map<number, ScoredCandidate> {
   const byCardId = new Map<number, ScoredCandidate>()
 
@@ -392,7 +382,7 @@ function collectScoredCandidates(db: Db, parsed: ParsedEntryLine, limit: number)
   if (parsed.passcode !== undefined) {
     // A retired passcode printed on a real card (a renumbered card, ADR 0019)
     // resolves to its replacement.
-    const passcode = replacementForRetiredPasscode(db, parsed.passcode) ?? parsed.passcode
+    const passcode = retiredPasscodeReplacement(db, parsed.passcode) ?? parsed.passcode
     for (const row of selectCards(db, eq(catalogCard.id, passcode), 1)) {
       remember({ ...row, score: 1, matchedBy: 'passcode' })
     }

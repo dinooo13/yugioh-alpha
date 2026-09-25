@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { WishlistItemView, WishlistResponse } from '~~/shared/sharing'
+import type { CardDetailPreview } from '~/utils/card-detail'
 
 const PAGE_SIZE = 24
 
@@ -71,6 +72,27 @@ async function onRemoved(id: string) {
   }
 }
 
+// The card overlay (#114), opened from a row.
+const overlayCard = ref<{ id: number, preview: CardDetailPreview } | null>(null)
+const isOverlayOpen = ref(false)
+
+function openCardOverlay(item: WishlistItemView) {
+  overlayCard.value = {
+    id: item.catalogCardId,
+    preview: {
+      name: item.name,
+      nameDe: item.nameDe,
+      type: item.type,
+      imageSmall: item.imageSmall,
+      attribute: null,
+      level: null,
+      atk: null,
+      def: null,
+    },
+  }
+  isOverlayOpen.value = true
+}
+
 function previousPage() {
   page.value = Math.max(1, page.value - 1)
 }
@@ -140,8 +162,16 @@ function nextPage() {
         :item="item"
         @updated="onUpdated"
         @removed="onRemoved"
+        @open="openCardOverlay(item)"
       />
     </ul>
+
+    <CardDetailModal
+      v-model:open="isOverlayOpen"
+      :card-id="overlayCard?.id ?? null"
+      :preview="overlayCard?.preview ?? null"
+      variant="catalog"
+    />
 
     <div
       v-if="total > PAGE_SIZE"

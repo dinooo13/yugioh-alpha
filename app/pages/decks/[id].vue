@@ -3,12 +3,14 @@ import {
   DECK_SECTIONS,
   defaultSectionForCard,
   isSectionAllowedForCard,
+  MAX_DECK_CARD_QUANTITY,
 } from '~~/shared/deck-sections'
 import type { DeckCover } from '~~/shared/deck-cover'
 import type { DeckSection } from '~~/shared/deck-sections'
 import type { DeckValidation, DeckWarning } from '~~/shared/rule-formats'
 import type { Visibility } from '~~/shared/sharing'
 import { cardFrame } from '~/utils/card-frame'
+import type { CardDetailPreview } from '~/utils/card-detail'
 import { deckCountState, deckMeterFill } from '~/utils/deck-meter'
 
 interface DeckCardRow {
@@ -489,10 +491,6 @@ const inFlightMutations = ref(0)
 const isMutating = computed(() => inFlightMutations.value > 0)
 let mutationSequence = 0
 
-// Bumped after every write so uncontrolled quantity inputs re-render from the
-// server state (a rejected write must not leave a typed value behind).
-const inputEpoch = ref(0)
-
 async function applyDeck(request: Promise<DeckDetail>) {
   const token = ++mutationSequence
   inFlightMutations.value += 1
@@ -511,7 +509,6 @@ async function applyDeck(request: Promise<DeckDetail>) {
   }
   finally {
     inFlightMutations.value -= 1
-    inputEpoch.value += 1
   }
 }
 
@@ -583,18 +580,28 @@ async function moveCard(row: DeckCardRow, to: DeckSection) {
   }))
 }
 
-function onQuantityInput(row: DeckCardRow, value: string | number) {
-  const raw = String(value).trim()
-  const quantity = Number(raw)
+// The card overlay (#114), from a deck row or a card in the add panel:
+// the catalog variant, without actions.
+const overlayCard = ref<{ id: number, preview: CardDetailPreview } | null>(null)
+const isOverlayOpen = ref(false)
 
-  // An emptied or malformed field is not "remove this card" — snap the input
-  // back to the stored quantity instead.
-  if (raw === '' || !Number.isInteger(quantity) || quantity < 0) {
-    inputEpoch.value += 1
-    return
+function openCardOverlay(card: DeckCardRow | SourceCard) {
+  overlayCard.value = {
+    id: card.catalogCardId,
+    preview: {
+      name: card.name,
+      nameDe: card.nameDe,
+      type: card.type,
+      frameType: card.frameType,
+      attribute: card.attribute,
+      race: card.race,
+      level: card.level,
+      atk: 'atk' in card ? card.atk : null,
+      def: 'def' in card ? card.def : null,
+      imageSmall: card.imageSmall,
+    },
   }
-
-  setQuantity(row.catalogCardId, row.section, quantity)
+  isOverlayOpen.value = true
 }
 
 /** The row showing the deck's effective cover card (#49) — never a Side Deck row. */
@@ -891,10 +898,13 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
             >
               <!-- One line from a 32rem-wide column (`@lg`); narrower, the
                    controls drop to a second line under the name (#40). -->
+              <!-- The card name is the row's button (#114): `stretched-link`
+                   makes the whole row open the card overlay; the badges,
+                   the owned count and the controls sit above it. -->
               <li
                 v-for="row in sections[section]"
                 :key="`${section}-${row.catalogCardId}`"
-                class="relative grid grid-cols-[2.5rem_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 px-4 py-2 @lg:grid-cols-[2.5rem_minmax(0,1fr)_auto_auto]"
+                class="group relative grid grid-cols-[2.5rem_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 px-4 py-2 @lg:grid-cols-[2.5rem_minmax(0,1fr)_auto_auto]"
                 :class="issueCardIds.has(row.catalogCardId) ? 'bg-error/10' : undefined"
                 :data-issue="issueCardIds.has(row.catalogCardId) ? '' : undefined"
                 :data-frame="cardFrame(row)?.frame"
@@ -917,14 +927,21 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
                     class="line-clamp-2 text-sm font-medium break-words text-highlighted"
                     :title="cardName(row)"
                   >
-                    {{ cardName(row) }}
+                    <button
+                      type="button"
+                      aria-haspopup="dialog"
+                      class="stretched-link inline text-left transition-colors group-hover:text-primary after:rounded-none focus-visible:after:-outline-offset-2"
+                      @click="openCardOverlay(row)"
+                    >
+                      {{ cardName(row) }}
+                    </button>
                   </p>
                   <p class="truncate text-xs text-muted">
                     {{ cardMetaLine(row) }}
                   </p>
                   <div
                     v-if="statusLabelFor(row.catalogCardId) || isCoverRow(row) || row.retired"
-                    class="mt-0.5 flex flex-wrap gap-1"
+                    class="relative z-10 mt-0.5 flex w-fit flex-wrap gap-1"
                   >
                     <CardRetiredBadge v-if="row.retired" />
                     <UBadge
@@ -947,7 +964,7 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
                 </div>
 
                 <span
-                  class="self-start text-xs tabular-nums @lg:self-center"
+                  class="relative z-10 self-start text-xs tabular-nums @lg:self-center"
                   :class="row.shortfall > 0 ? 'font-semibold text-error' : 'text-muted'"
                   :data-shortfall="row.shortfall > 0 ? '' : undefined"
                   :title="row.shortfall > 0 ? t('decks.editor.row.ownedOnly', { owned: row.owned }) : undefined"
@@ -955,40 +972,17 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
                   {{ row.usedInDeck }}/{{ row.owned }}
                 </span>
 
-                <div class="col-span-2 flex items-center justify-end gap-1 @lg:col-span-1">
-                  <UButton
-                    icon="i-lucide-minus"
-                    color="neutral"
-                    variant="outline"
-                    size="xs"
-                    class="tap-target"
-                    :disabled="isMutating"
-                    :aria-label="t('decks.editor.row.removeOne', { name: cardName(row), section: sectionName(section) })"
-                    @click="setQuantity(row.catalogCardId, section, row.quantity - 1)"
-                  />
-                  <!-- Spin buttons hidden: − and + already step, and the
-                       arrows ate the narrow field's digits. -->
-                  <UInput
-                    :key="`${section}-${row.catalogCardId}-${inputEpoch}`"
+                <div class="relative z-10 col-span-2 flex items-center justify-end gap-1 @lg:col-span-1">
+                  <CardQuantityStepper
                     :model-value="row.quantity"
-                    type="number"
-                    min="0"
+                    :min="0"
+                    :max="MAX_DECK_CARD_QUANTITY"
                     size="xs"
-                    class="w-12"
-                    :ui="{ base: 'text-center tabular-nums max-lg:min-h-11 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none' }"
                     :disabled="isMutating"
-                    :aria-label="t('decks.editor.row.quantity', { name: cardName(row), section: sectionName(section) })"
-                    @change="(event: Event) => onQuantityInput(row, (event.target as HTMLInputElement).value)"
-                  />
-                  <UButton
-                    icon="i-lucide-plus"
-                    color="neutral"
-                    variant="outline"
-                    size="xs"
-                    class="tap-target"
-                    :disabled="isMutating"
-                    :aria-label="t('decks.editor.row.addOne', { name: cardName(row), section: sectionName(section) })"
-                    @click="setQuantity(row.catalogCardId, section, row.quantity + 1)"
+                    :input-label="t('decks.editor.row.quantity', { name: cardName(row), section: sectionName(section) })"
+                    :decrease-label="t('decks.editor.row.removeOne', { name: cardName(row), section: sectionName(section) })"
+                    :increase-label="t('decks.editor.row.addOne', { name: cardName(row), section: sectionName(section) })"
+                    @update:model-value="(value: number) => setQuantity(row.catalogCardId, section, value)"
                   />
                   <UDropdownMenu :items="rowMenuItems(row)">
                     <UButton
@@ -1135,8 +1129,15 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
                     />
 
                     <div class="min-w-0 flex-1">
-                      <p class="truncate text-sm font-medium text-highlighted">
-                        {{ cardName(card) }}
+                      <p class="text-sm font-medium text-highlighted">
+                        <button
+                          type="button"
+                          aria-haspopup="dialog"
+                          class="block max-w-full truncate text-left transition-colors hover:text-primary"
+                          @click="openCardOverlay(card)"
+                        >
+                          {{ cardName(card) }}
+                        </button>
                       </p>
                       <p class="flex min-w-0 items-center gap-1.5 text-xs text-muted">
                         <CardFrameDot
@@ -1234,6 +1235,13 @@ const loadErrorDescription = computed(() => (error.value ? apiError(error.value,
         :resource-name="deck.name"
         :share-path="sharePath"
         @updated="onShareUpdated"
+      />
+
+      <CardDetailModal
+        v-model:open="isOverlayOpen"
+        :card-id="overlayCard?.id ?? null"
+        :preview="overlayCard?.preview ?? null"
+        variant="catalog"
       />
     </template>
   </div>

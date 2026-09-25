@@ -120,18 +120,17 @@ export function parseInventorySearchQuery(rawQuery: Record<string, unknown>): In
   }
 }
 
+/** The per-card part of the inventory filters, shared by the search and the "Liste" (#145). */
+export type InventoryCardFilters = Pick<InventorySearchFilters, 'q' | 'inText' | 'type' | 'attribute' | 'race' | 'level'>
+
 /**
- * Builds the Drizzle WHERE condition for the aggregated inventory search,
- * scoped to `userId`. Pure and HTTP-free so it can be unit tested directly.
- *
- * `collectionId` (when not `UNASSIGNED_COLLECTION_ID`) is intentionally an
- * `EXISTS` check correlated only on `catalog_card_id` (not on the row being
- * evaluated) — it gates *which* cards qualify without restricting which of
- * that card's owned rows are summed/broken down, so a card's full
- * cross-collection picture is preserved even when filtering by collection.
+ * The WHERE clauses that filter by catalog card properties: the name (and,
+ * with `inText`, the card text) and the type/attribute/race/level facets.
+ * The outer query must join `catalog_card` unaliased. Used by the aggregated
+ * search below and by the inventory list (`listOwnedCards`).
  */
-export function buildInventorySearchWhere(userId: string, filters: InventorySearchFilters): SQL {
-  const clauses: SQL[] = [eq(ownedCard.userId, userId)]
+export function inventoryCardFilterClauses(filters: InventoryCardFilters): SQL[] {
+  const clauses: SQL[] = []
 
   if (filters.q) {
     // Bilingual: English and German names (and texts with `inText`), ADR 0015.
@@ -155,6 +154,22 @@ export function buildInventorySearchWhere(userId: string, filters: InventorySear
   if (filters.level.length > 0) {
     clauses.push(inArray(catalogCard.level, filters.level) as SQL)
   }
+
+  return clauses
+}
+
+/**
+ * Builds the Drizzle WHERE condition for the aggregated inventory search,
+ * scoped to `userId`. Pure and HTTP-free so it can be unit tested directly.
+ *
+ * `collectionId` (when not `UNASSIGNED_COLLECTION_ID`) is intentionally an
+ * `EXISTS` check correlated only on `catalog_card_id` (not on the row being
+ * evaluated) — it gates *which* cards qualify without restricting which of
+ * that card's owned rows are summed/broken down, so a card's full
+ * cross-collection picture is preserved even when filtering by collection.
+ */
+export function buildInventorySearchWhere(userId: string, filters: InventorySearchFilters): SQL {
+  const clauses: SQL[] = [eq(ownedCard.userId, userId), ...inventoryCardFilterClauses(filters)]
 
   if (filters.collectionId) {
     clauses.push(

@@ -5,9 +5,10 @@ import type { useDb } from '../db'
 import { catalogCard, catalogCardImage, ownedCard } from '../db/schema'
 import { CARD_TEXT_EXCERPT_LENGTH, MAX_OWNED_QUANTITY, UNASSIGNED_COLLECTION_ID } from '../../shared/inventory'
 import type { AppLocale } from '../../shared/locale'
-import { activeCatalogCard, cardNameMatches, escapedLike, escapeLikeTerm } from './card-name-search'
+import { activeCatalogCard, cardNameMatches, escapedLike, escapeLikeTerm, retiredPasscodeReplacement } from './card-name-search'
 import { cardDescDeSql, cardNameDeSql, cardSortKey } from './card-translation-sql'
 import { assertCollectionOwnedByUser } from './collections'
+import { inventoryCardFilterClauses, parseInventorySearchQuery } from './inventory-search'
 
 type Db = ReturnType<typeof useDb>
 
@@ -35,6 +36,12 @@ export interface InventoryListOptions {
   // Only the rows of this catalog card, for the inventory's detail panel
   // (`InventoryOwnedCardEditor`).
   catalogCardId?: number
+  // The search panel's card filters, as in the aggregated search (#145).
+  inText?: boolean
+  type?: string[]
+  attribute?: string[]
+  race?: string[]
+  level?: number[]
 }
 
 // `code` (+ `params`) is what the UI translates (`errors.api.<code>`, ADR
@@ -164,6 +171,23 @@ export function toOwnedCardView(row: OwnedCardRow): OwnedCardView {
 }
 
 /**
+ * The distinct, trimmed, non-blank notes in order, one per line; `null` when
+ * none is left. Used whenever two notes meet on one row (ADR 0017 §3): adding
+ * copies to an existing row (`addOwnedCard`, the bulk and assistant paths,
+ * #146) and an edit that moves a row into another row's tuple.
+ */
+export function joinNotes(...notes: Array<string | null | undefined>): string | null {
+  const distinct: string[] = []
+  for (const note of notes) {
+    const trimmed = note?.trim()
+    if (trimmed && !distinct.includes(trimmed)) {
+      distinct.push(trimmed)
+    }
+  }
+  return distinct.length > 0 ? distinct.join('\n') : null
+}
+
+/**
  * Writes one owned-card row, merging into an existing row with the same
  * ownership tuple instead of creating a duplicate. Assumes the input was
  * already validated (catalog card existence, collection ownership) —
@@ -183,7 +207,9 @@ function upsertOwnedCardRow(
       .update(ownedCard)
       .set({
         quantity: existing.quantity + input.quantity,
-        note: input.note ?? existing.note,
+        // The existing note first, then the new one (#146); the new note
+        // used to overwrite it.
+        note: joinNotes(existing.note, input.note),
         updatedAt: now,
       })
       .where(eq(ownedCard.id, existing.id))
@@ -361,21 +387,6 @@ export async function addOwnedCardsBulk(
   return db.transaction(tx => addOwnedCardsBulkSync(tx as unknown as Db, userId, inputs))
 }
 
-/**
- * The distinct, trimmed, non-blank notes in order, one per line; `null` when
- * none is left. Used when an edit moves a row into another row's tuple.
- */
-export function joinNotes(...notes: Array<string | null | undefined>): string | null {
-  const distinct: string[] = []
-  for (const note of notes) {
-    const trimmed = note?.trim()
-    if (trimmed && !distinct.includes(trimmed)) {
-      distinct.push(trimmed)
-    }
-  }
-  return distinct.length > 0 ? distinct.join('\n') : null
-}
-
 export async function updateOwnedCard(
   db: Db,
   userId: string,
@@ -463,12 +474,20 @@ export async function deleteOwnedCard(db: Db, userId: string, id: string) {
  */
 export function parseInventoryListQuery(query: Record<string, unknown>): InventoryListOptions {
   const catalogCardId = typeof query.catalogCardId === 'string' ? Number(query.catalogCardId) : Number.NaN
+  // The card filters parse like the aggregated search's (CSV and/or
+  // repeated params).
+  const { inText, type, attribute, race, level } = parseInventorySearchQuery(query)
   return {
     q: typeof query.q === 'string' ? query.q : undefined,
     page: typeof query.page === 'string' ? Number(query.page) : undefined,
     pageSize: typeof query.pageSize === 'string' ? Number(query.pageSize) : undefined,
     collectionId: typeof query.collectionId === 'string' && query.collectionId ? query.collectionId : undefined,
     catalogCardId: Number.isInteger(catalogCardId) && catalogCardId > 0 ? catalogCardId : undefined,
+    inText,
+    type,
+    attribute,
+    race,
+    level,
   }
 }
 
@@ -476,10 +495,17 @@ export function listOwnedCards(db: Db, userId: string, options: InventoryListOpt
   const page = Math.max(1, options.page ?? 1)
   const pageSize = Math.min(100, Math.max(1, options.pageSize ?? 20))
   const q = options.q?.trim()
-  const clauses = [eq(ownedCard.userId, userId)]
-  if (q) {
-    clauses.push(cardNameMatches(q))
-  }
+  const clauses = [
+    eq(ownedCard.userId, userId),
+    ...inventoryCardFilterClauses({
+      q,
+      inText: options.inText ?? false,
+      type: options.type ?? [],
+      attribute: options.attribute ?? [],
+      race: options.race ?? [],
+      level: options.level ?? [],
+    }),
+  ]
   // Row-level filters: unlike the aggregated search (inventory-search.ts),
   // which keeps every copy of a card that has at least one copy in the
   // collection, the list shows only the rows actually assigned to it.
@@ -567,10 +593,21 @@ export function ownedQuantitiesByCard(db: Db, userId: string, catalogCardIds: nu
  */
 export function searchCatalogCards(db: Db, q = '', cardLocale: AppLocale = 'en') {
   const term = q.trim()
+  // A typed passcode: a retired one resolves to its replacement (ADR 0019,
+  // #110), like in quick entry, and the exact card sorts first.
+  const passcode = /^\d+$/.test(term) && Number.isSafeInteger(Number(term)) ? Number(term) : null
+  const replacementId = passcode !== null ? retiredPasscodeReplacement(db, passcode) : null
+  const exactId = replacementId ?? passcode
   // Catalog-wide: retired cards are not offered (ADR 0019).
   const where = and(
     activeCatalogCard(),
-    term ? or(cardNameMatches(term), escapedLike(sql`${catalogCard.id}`, `%${escapeLikeTerm(term)}%`)) : undefined,
+    term
+      ? or(
+          cardNameMatches(term),
+          escapedLike(sql`${catalogCard.id}`, `%${escapeLikeTerm(term)}%`),
+          replacementId !== null ? eq(catalogCard.id, replacementId) : undefined,
+        )
+      : undefined,
   )
 
   return db
@@ -585,7 +622,7 @@ export function searchCatalogCards(db: Db, q = '', cardLocale: AppLocale = 'en')
     .leftJoin(catalogCardImage, eq(catalogCardImage.cardId, catalogCard.id))
     .where(where)
     .groupBy(catalogCard.id)
-    .orderBy(cardSortKey(cardLocale))
+    .orderBy(...(exactId !== null ? [sql`${catalogCard.id} = ${exactId} desc`] : []), cardSortKey(cardLocale))
     .limit(20)
     .all()
 }
