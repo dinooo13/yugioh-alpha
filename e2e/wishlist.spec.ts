@@ -9,9 +9,9 @@ test.describe('wishlist', () => {
 
     await page.goto('/catalog')
     await waitForHydration(page)
-    // Wait for the debounced search: while it loads, the card grid is
-    // replaced by skeletons, so the tile lookup below would hit a vanishing
-    // tile. (A toggle that finishes meanwhile is no longer lost, #98.)
+    // Wait for the debounced search: while it loads, the previous grid stays,
+    // dimmed, until the new results arrive (#148); wait so the lookup below
+    // hits the new grid. (A toggle that finishes meanwhile is no longer lost, #98.)
     const searched = page.waitForResponse(response => response.url().includes('/api/catalog/cards?q=Kuriboh'))
     await page.getByLabel('Karten suchen').fill('Kuriboh')
     await searched

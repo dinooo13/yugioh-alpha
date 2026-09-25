@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DOMWrapper, flushPromises } from '@vue/test-utils'
 import { nextTick, toValue } from 'vue'
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime'
-import { CardFacetFilters, USelect } from '#components'
+import { CardDetailModal, CardFacetFilters, USelect } from '#components'
 import CatalogPage from '~/pages/catalog.vue'
 import { setTestLocale } from './fixtures/locale'
 import { expectRouteKept } from './fixtures/route'
@@ -309,10 +309,14 @@ describe('catalog page', () => {
     const wishlistButton = component.findAll('button').find(btn => btn.text() === 'Zur Wunschliste')
     await wishlistButton!.trigger('click')
 
-    // A new search starts: the tiles make way for skeletons…
+    // A new search starts: the previous grid stays, dimmed (#148)…
     catalogState.searchPending!.value = true
     await nextTick()
-    expect(component.text()).not.toContain('Zur Wunschliste')
+    const results = component.find('[data-testid="catalog-results"]')
+    expect(results.attributes('aria-busy')).toBe('true')
+    expect(results.classes()).toContain('opacity-50')
+    expect(component.text()).toContain('Blauäugiger w. Drache')
+    expect(component.text()).toContain('Zur Wunschliste')
 
     // …the toggle finishes meanwhile, and the new grid shows it.
     finish()
@@ -320,6 +324,86 @@ describe('catalog page', () => {
     catalogState.searchPending!.value = false
     await nextTick()
     expect(component.text()).toContain('Auf der Wunschliste')
+    expect(component.find('[data-testid="catalog-results"]').attributes('aria-busy')).toBeUndefined()
+    expect(component.find('[data-testid="catalog-results"]').classes()).not.toContain('opacity-50')
+  })
+
+  it('shows skeletons only while the very first search loads (#148)', async () => {
+    catalogState.searchPending = ref(true)
+    const component = await mountPage()
+
+    expect(component.text()).not.toContain('Blauäugiger w. Drache')
+    expect(component.find('[data-testid="catalog-results"]').exists()).toBe(false)
+    expect(component.findAll('[data-slot="base"].animate-pulse, .animate-pulse').length).toBeGreaterThanOrEqual(12)
+  })
+
+  it('pushes a history entry when a tile opens the card (#148)', async () => {
+    const component = await mountPage()
+    const push = vi.spyOn(useRouter(), 'push')
+    try {
+      const tileButton = component.findAll('button').find(btn => btn.text() === 'Blauäugiger w. Drache')
+      await tileButton!.trigger('click')
+
+      expect(push).toHaveBeenCalledWith({ query: expect.objectContaining({ card: '1' }) })
+    }
+    finally {
+      push.mockRestore()
+    }
+  })
+
+  it('drops `?card=` with a replace when a deep-linked overlay closes (#148)', async () => {
+    const component = await openDetail(cardDetail())
+    const route = useRouter().currentRoute
+    const back = vi.spyOn(useRouter(), 'back')
+    try {
+      expect(route.value.query.card).toBe('1')
+
+      component.findComponent(CardDetailModal).vm.$emit('update:open', false)
+      await vi.waitFor(() => {
+        expect(route.value.query.card).toBeUndefined()
+      })
+      expect(route.value.path).toBe('/catalog')
+      // The previous entry isn't this catalog view without the card.
+      expect(back).not.toHaveBeenCalled()
+    }
+    finally {
+      back.mockRestore()
+    }
+  })
+
+  it('replaces the entry when an alias passcode resolves to its canonical card (ADR 0024)', async () => {
+    const component = await openDetail(cardDetail())
+    // Card 2 loads as itself (the stub above answers card 1 for every id).
+    const detail = cardDetail()
+    vi.stubGlobal('$fetch', vi.fn((url: string) => Promise.resolve({
+      ...detail,
+      card: { ...detail.card, id: Number(url.split('/').pop()) },
+    })))
+    const replace = vi.spyOn(useRouter(), 'replace')
+    const push = vi.spyOn(useRouter(), 'push')
+    try {
+      component.findComponent(CardDetailModal).vm.$emit('resolved', 2)
+      await vi.waitFor(() => {
+        expect(useRouter().currentRoute.value.query.card).toBe('2')
+      })
+      expect(replace).toHaveBeenCalledWith({ query: expect.objectContaining({ card: '2' }) })
+      expect(push).not.toHaveBeenCalled()
+    }
+    finally {
+      replace.mockRestore()
+      push.mockRestore()
+    }
+  })
+
+  it('offers "Zum Deck" in the card detail (#148)', async () => {
+    await openDetail(cardDetail())
+
+    const dialog = body().find('[role="dialog"]')
+    const buttons = dialog.findAll('button').map(button => button.text())
+    expect(buttons).toContain('Zum Deck')
+    // After "Zum Inventar", before the wishlist toggle.
+    expect(buttons.indexOf('Zum Deck')).toBeGreaterThan(buttons.indexOf('Zum Inventar'))
+    expect(buttons.indexOf('Zum Deck')).toBeLessThan(buttons.indexOf('Zur Wunschliste'))
   })
 
   it('shows the result count with a thousands separator and the right plural', async () => {

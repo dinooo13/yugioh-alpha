@@ -24,6 +24,8 @@ function body() {
 afterEach(() => {
   document.body.innerHTML = ''
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
+  state.searchTotal = 0
 })
 
 // All tests share one router — unmount each page so an earlier one doesn't
@@ -97,13 +99,15 @@ const state = vi.hoisted(() => ({
   inventory: { items: [] as Array<Record<string, unknown>>, total: 0 },
   // Every `useFetch(url, opts)` call, so tests can read the reactive query.
   calls: [] as Array<{ url: string, opts?: { query?: unknown } }>,
+  // "Galerie"'s total, for its pagination.
+  searchTotal: 0,
 }))
 
 mockNuxtImport('useFetch', () => {
   return (url: string, opts?: { query?: unknown }) => {
     state.calls.push({ url, opts })
     if (url === '/api/inventory/search') {
-      return { data: ref({ items: [], total: 0, page: 1, pageSize: 24 }), pending: ref(false), error: ref(null), refresh: vi.fn() }
+      return { data: ref({ items: [], total: state.searchTotal, page: 1, pageSize: 24 }), pending: ref(false), error: ref(null), refresh: vi.fn() }
     }
     if (url === '/api/inventory/search/facets') {
       return { data: ref(facets), pending: ref(false), refresh: vi.fn() }
@@ -208,5 +212,143 @@ describe('filters in "Liste" (#145)', () => {
 
     const gallery = await mountSuspended(InventoryPage, { route: '/inventory?view=gallery' })
     expect(gallery.text()).toContain('Sortierung')
+  })
+})
+
+describe('closing the detail panel (#148)', () => {
+  it('goes back when the previous entry is this view without the card', async () => {
+    state.inventory = { items: [listRow], total: 1 }
+    stubOverlayFetch()
+
+    const component = await mountSuspended(InventoryPage, { route: '/inventory?q=Blue' })
+    const router = useRouter()
+    await component.findAll('li button').find(button => button.text() === 'Blue-Eyes White Dragon')!.trigger('click')
+    await vi.waitFor(() => {
+      expect(router.currentRoute.value.query.card).toBe(String(BLUE_EYES))
+    })
+
+    // What vue-router's web history keeps after the push (and after Back → Forward).
+    vi.spyOn(window.history, 'state', 'get').mockReturnValue({ back: '/inventory?q=Blue' })
+    const back = vi.spyOn(router, 'back').mockImplementation(() => {})
+    component.findComponent(CardDetailModal).vm.$emit('update:open', false)
+
+    expect(back).toHaveBeenCalledTimes(1)
+  })
+
+  it('replaces the URL when the previous entry is something else', async () => {
+    state.inventory = { items: [listRow], total: 1 }
+    stubOverlayFetch()
+
+    const component = await mountSuspended(InventoryPage, { route: `/inventory?q=Blue&card=${BLUE_EYES}` })
+    const router = useRouter()
+    // E.g. the filters changed while the panel was open, or another page.
+    vi.spyOn(window.history, 'state', 'get').mockReturnValue({ back: '/inventory?q=Dark' })
+    const back = vi.spyOn(router, 'back')
+    component.findComponent(CardDetailModal).vm.$emit('update:open', false)
+
+    await vi.waitFor(() => {
+      expect(router.currentRoute.value.query).toEqual({ q: 'Blue' })
+    })
+    expect(back).not.toHaveBeenCalled()
+  })
+})
+
+describe('the search in the URL (#148)', () => {
+  it('reads the search text, "Auch im Kartentext suchen" and the facets from a deep link', async () => {
+    state.inventory = { items: [listRow], total: 1 }
+    state.calls = []
+
+    const component = await mountSuspended(InventoryPage, { route: '/inventory?q=Blue&inText=1&type=Spell%20Card&level=4,7' })
+
+    expect(lastQuery('/api/inventory')).toMatchObject({ q: 'Blue', inText: 1, type: 'Spell Card', level: '4,7', page: 1 })
+    expect(lastQuery('/api/inventory/search')).toMatchObject({ q: 'Blue', inText: 1, type: 'Spell Card', level: '4,7' })
+    expect(component.find<HTMLInputElement>('input[aria-label="Inventar durchsuchen"]').element.value).toBe('Blue')
+    expect(component.find('[role="checkbox"]').attributes('aria-checked')).toBe('true')
+    const filters = component.findComponent(InventorySearchPanel).props('filters') as { type: string[], level: number[] }
+    expect(filters.type).toEqual(['Spell Card'])
+    expect(filters.level).toEqual([4, 7])
+  })
+
+  it('writes "Auch im Kartentext suchen" to the URL and removes it again', async () => {
+    state.inventory = { items: [listRow], total: 1 }
+
+    const component = await mountSuspended(InventoryPage, { route: '/inventory' })
+    const route = useRouter().currentRoute
+
+    await component.find('[role="checkbox"]').trigger('click')
+    await vi.waitFor(() => {
+      expect(route.value.query).toEqual({ inText: '1' })
+    })
+
+    await component.find('[role="checkbox"]').trigger('click')
+    await vi.waitFor(() => {
+      expect(route.value.query).toEqual({})
+    })
+  })
+
+  it('writes a facet change as a comma list, the sort and the debounced search text', async () => {
+    state.inventory = { items: [listRow], total: 1 }
+
+    const component = await mountSuspended(InventoryPage, { route: '/inventory?view=gallery' })
+    const route = useRouter().currentRoute
+    const panel = component.findComponent(InventorySearchPanel)
+    const filters = panel.props('filters') as Record<string, unknown>
+
+    panel.vm.$emit('update:filters', { ...filters, type: ['Spell Card', 'Normal Monster'], sort: 'quantity' })
+    await vi.waitFor(() => {
+      expect(route.value.query).toEqual({ view: 'gallery', type: 'Spell Card,Normal Monster', sort: 'quantity' })
+    })
+
+    await component.find('input[aria-label="Inventar durchsuchen"]').setValue('Drache')
+    await vi.waitFor(() => {
+      expect(route.value.query.q).toBe('Drache')
+    }, { timeout: 2000 })
+  })
+
+  it('reads and writes the list\'s page; a filter change goes back to page 1', async () => {
+    state.inventory = { items: [listRow], total: 45 }
+    state.calls = []
+
+    const component = await mountSuspended(InventoryPage, { route: '/inventory?page=2' })
+    const route = useRouter().currentRoute
+    expect(lastQuery('/api/inventory')).toMatchObject({ page: 2 })
+
+    const pagination = component.findComponent({ name: 'UPagination' })
+    pagination.vm.$emit('update:page', 3)
+    await vi.waitFor(() => {
+      expect(route.value.query).toEqual({ page: '3' })
+    })
+    expect(lastQuery('/api/inventory')).toMatchObject({ page: 3 })
+
+    await component.find('[role="checkbox"]').trigger('click')
+    await vi.waitFor(() => {
+      expect(route.value.query).toEqual({ inText: '1' })
+    })
+    expect(lastQuery('/api/inventory')).toMatchObject({ page: 1 })
+  })
+
+  it('keeps "Galerie"\'s page in the URL, not the list\'s', async () => {
+    state.inventory = { items: [listRow], total: 45 }
+    state.searchTotal = 100
+    state.calls = []
+
+    await mountSuspended(InventoryPage, { route: '/inventory?view=gallery&page=3' })
+
+    expect(lastQuery('/api/inventory/search')).toMatchObject({ page: 3 })
+    expect(lastQuery('/api/inventory')).toMatchObject({ page: 1 })
+    expect(useRouter().currentRoute.value.query).toEqual({ view: 'gallery', page: '3' })
+  })
+
+  it('shows the last page for a `?page=` past the end', async () => {
+    state.inventory = { items: [listRow], total: 45 }
+    state.calls = []
+
+    await mountSuspended(InventoryPage, { route: '/inventory?page=9' })
+    const route = useRouter().currentRoute
+
+    await vi.waitFor(() => {
+      expect(route.value.query).toEqual({ page: '3' })
+    })
+    expect(lastQuery('/api/inventory')).toMatchObject({ page: 3 })
   })
 })
