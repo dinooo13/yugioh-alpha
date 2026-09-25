@@ -7,6 +7,12 @@
 // with banlist data — so upcoming feature branches (fast card entry,
 // deckbuilder, rule formats) have real, stable fixtures to build E2E tests
 // against without depending on network access to YGOPRODeck.
+//
+// It also carries what a real sync leaves behind (ADR 0019, ADR 0023): two
+// retired rows (`CATALOG_FIXTURE_RETIRED_CARDS`: Odd-Eyes Pendulum Dragon's
+// old passcode, renumbered, and a placeholder without a replacement), and
+// one alternate artwork of Dark Magician with its own passcode (46986420,
+// Dark Magician's card id in the real catalog), which resolves to the card.
 import { foldCardName } from '../../../shared/card-name-fold'
 import type { useDb } from '../index'
 import { catalogCard, catalogCardImage, catalogCardTranslation, catalogPrinting, catalogSet } from '../schema'
@@ -37,7 +43,7 @@ export const CATALOG_FIXTURE_IDS = {
   stardustDragon: 44508094,
   utopia: 84013237,
   decodeTalker: 1861629,
-  oddEyesPendulumDragon: 16178681,
+  oddEyesPendulumDragon: 16178683,
   effectVeiler: 97268402,
 } as const satisfies Record<string, number>
 
@@ -377,6 +383,56 @@ export const CATALOG_FIXTURE_CARDS: CatalogCardRow[] = ([
   },
 ] satisfies Omit<CatalogCardRow, 'nameSearch'>[]).map(card => ({ ...card, nameSearch: foldCardName(card.name) }))
 
+/** Retired rows (ADR 0019), as a real sync leaves them. */
+export const CATALOG_FIXTURE_RETIRED_IDS = {
+  /** Renumbered → 16178683 (`CATALOG_FIXTURE_IDS.oddEyesPendulumDragon`). */
+  oddEyesPendulumDragonOld: 16178681,
+  /** A placeholder renamed at release: no replacement. */
+  leviathanOfAtlantisDaedalus: 101402013,
+} as const satisfies Record<string, number>
+
+/** Dark Magician's alternate artwork with its own passcode (ADR 0023). */
+export const CATALOG_FIXTURE_ALIAS_ARTWORK_ID = 46986420
+
+const oddEyesPendulumDragon = CATALOG_FIXTURE_CARDS.find(card => card.id === CATALOG_FIXTURE_IDS.oddEyesPendulumDragon)!
+
+export const CATALOG_FIXTURE_RETIRED_CARDS: CatalogCardRow[] = [
+  {
+    ...oddEyesPendulumDragon,
+    id: CATALOG_FIXTURE_RETIRED_IDS.oddEyesPendulumDragonOld,
+    // It left before the API sent Konami ids.
+    konamiId: null,
+    retiredAt: SYNCED_AT,
+    replacedById: CATALOG_FIXTURE_IDS.oddEyesPendulumDragon,
+  },
+  {
+    id: CATALOG_FIXTURE_RETIRED_IDS.leviathanOfAtlantisDaedalus,
+    name: 'Leviathan of Atlantis - Daedalus',
+    nameSearch: foldCardName('Leviathan of Atlantis - Daedalus'),
+    type: 'Effect Monster',
+    frameType: 'effect',
+    desc: 'This card\'s name becomes "Umi" while in the Monster Zone. You can only use each of the following effects of "Leviathan of Atlantis - Daedalus" once per turn. If you control "Atlantis, City of the Sea Dragon" or "Umi": You can Special Summon this card from your hand. You can send up to 3 face-up "Umi" you control to the GY; add that many cards that mention "Atlantis, City of the Sea Dragon" from your Deck to your hand, except Level 7 monsters, then you can send 1 card on the field to the GY.',
+    race: 'Sea Serpent',
+    archetype: 'Daedalus',
+    attribute: 'WATER',
+    atk: 2600,
+    def: 1500,
+    level: 7,
+    linkval: null,
+    scale: null,
+    linkMarkers: null,
+    banlistInfo: null,
+    cardPrices: null,
+    tcgDate: null,
+    ocgDate: '2026-07-18',
+    ygoprodeckUrl: 'https://ygoprodeck.com/card/leviathan-of-atlantis-daedalus-15781',
+    syncedAt: SYNCED_AT,
+    konamiId: null,
+    retiredAt: SYNCED_AT,
+    replacedById: null,
+  },
+]
+
 export const CATALOG_FIXTURE_SETS: CatalogSetRow[] = [
   { id: 'starter-deck-yugi', name: 'Starter Deck: Yugi' },
   { id: 'legend-of-blue-eyes-white-dragon', name: 'Legend of Blue Eyes White Dragon' },
@@ -407,11 +463,22 @@ export const CATALOG_FIXTURE_PRINTINGS: CatalogPrintingRow[] = [
   { id: 'DUDE-EN028', cardId: CATALOG_FIXTURE_IDS.effectVeiler, setId: 'duel-devastator', setCode: 'DUDE-EN028', rarity: 'Ultra Rare', price: '5.91' },
 ]
 
-export const CATALOG_FIXTURE_IMAGES: CatalogCardImageRow[] = Object.values(CATALOG_FIXTURE_IDS).map(id => ({
-  id,
-  cardId: id,
-  ...imageUrls(id),
-}))
+export const CATALOG_FIXTURE_IMAGES: CatalogCardImageRow[] = [
+  ...Object.values(CATALOG_FIXTURE_IDS).map(id => ({ id, cardId: id, ...imageUrls(id) })),
+  // The old passcode is an artwork of the renumbered card.
+  {
+    id: CATALOG_FIXTURE_RETIRED_IDS.oddEyesPendulumDragonOld,
+    cardId: CATALOG_FIXTURE_IDS.oddEyesPendulumDragon,
+    ...imageUrls(CATALOG_FIXTURE_RETIRED_IDS.oddEyesPendulumDragonOld),
+  },
+  {
+    id: CATALOG_FIXTURE_RETIRED_IDS.leviathanOfAtlantisDaedalus,
+    cardId: CATALOG_FIXTURE_RETIRED_IDS.leviathanOfAtlantisDaedalus,
+    ...imageUrls(CATALOG_FIXTURE_RETIRED_IDS.leviathanOfAtlantisDaedalus),
+  },
+  // Larger than 46986414, so Dark Magician's primary (lowest) image stays.
+  { id: CATALOG_FIXTURE_ALIAS_ARTWORK_ID, cardId: CATALOG_FIXTURE_IDS.darkMagician, ...imageUrls(CATALOG_FIXTURE_ALIAS_ARTWORK_ID) },
+]
 
 /**
  * Official German names and texts (ADR 0015), copied from the ygoresources
@@ -496,6 +563,13 @@ export const CATALOG_FIXTURE_TRANSLATIONS: CatalogCardTranslationRow[] = Object.
 export function seedCatalogFixture(db: Db) {
   db.transaction((tx) => {
     for (const cardRow of CATALOG_FIXTURE_CARDS) {
+      tx.insert(catalogCard)
+        .values(cardRow)
+        .onConflictDoUpdate({ target: catalogCard.id, set: cardRow })
+        .run()
+    }
+    // After the active cards: `replaced_by_id` references them.
+    for (const cardRow of CATALOG_FIXTURE_RETIRED_CARDS) {
       tx.insert(catalogCard)
         .values(cardRow)
         .onConflictDoUpdate({ target: catalogCard.id, set: cardRow })

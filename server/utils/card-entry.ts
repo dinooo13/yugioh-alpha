@@ -4,7 +4,8 @@ import { createError } from 'h3'
 import { foldCardName } from '../../shared/card-name-fold'
 import type { useDb } from '../db'
 import { catalogCard, catalogCardImage, catalogCardTranslation, catalogPrinting } from '../db/schema'
-import { activeCatalogCard, escapedLike, escapeLikeTerm, retiredPasscodeReplacement } from './card-name-search'
+import { activeCatalogCard, escapedLike, escapeLikeTerm } from './card-name-search'
+import { resolvePasscode } from './card-passcode'
 
 type Db = ReturnType<typeof useDb>
 
@@ -380,11 +381,13 @@ function collectScoredCandidates(db: Db, parsed: ParsedEntryLine, limit: number)
   }
 
   if (parsed.passcode !== undefined) {
-    // A retired passcode printed on a real card (a renumbered card, ADR 0019)
-    // resolves to its replacement.
-    const passcode = retiredPasscodeReplacement(db, parsed.passcode) ?? parsed.passcode
-    for (const row of selectCards(db, eq(catalogCard.id, passcode), 1)) {
-      remember({ ...row, score: 1, matchedBy: 'passcode' })
+    // The passcode printed on a real card: an alternate artwork resolves to
+    // its card (ADR 0023), a renumbered card to its replacement (ADR 0019).
+    const passcode = resolvePasscode(db, parsed.passcode)
+    if (passcode !== null) {
+      for (const row of selectCards(db, eq(catalogCard.id, passcode), 1)) {
+        remember({ ...row, score: 1, matchedBy: 'passcode' })
+      }
     }
   }
 

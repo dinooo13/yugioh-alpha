@@ -104,3 +104,22 @@ export const entityNameStaleFixture = simpleCard(101402053, 'Graceful &amp; Skul
 export const entityNameFixture = simpleCard(76630812, 'Graceful & Skull Dice', 'Spell Card')
 /** A placeholder renamed at release: no replacement can be found. */
 export const droppedFixture = simpleCard(101402013, 'Leviathan of Atlantis - Daedalus', 'Effect Monster')
+
+/**
+ * Dark Magician renumbered (#113): the card moves to 46986420 with the same
+ * Konami id, and the old passcode stays as one of its artworks, the way
+ * YGOPRODeck lists it today.
+ */
+export const darkMagicianRenumberedFixture: YgoproCard = {
+  ...darkMagicianFixture,
+  id: 46986420,
+  card_images: [
+    ...darkMagicianFixture.card_images!,
+    {
+      id: 46986420,
+      image_url: 'https://images.ygoprodeck.com/images/cards/46986420.jpg',
+      image_url_small: 'https://images.ygoprodeck.com/images/cards_small/46986420.jpg',
+      image_url_cropped: 'https://images.ygoprodeck.com/images/cards_cropped/46986420.jpg',
+    },
+  ],
+}

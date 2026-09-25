@@ -17,13 +17,17 @@
 //    covers, wishlist, and the card ids in user formats.
 //
 // Everything runs in one synchronous transaction (better-sqlite3).
+//
+// Then `pruneUnlistedCatalogRows` deletes the printings and images the
+// response no longer lists (ADR 0023).
 
 import { and, eq, inArray, isNotNull, isNull, ne } from 'drizzle-orm'
 import type { useDb } from '../db'
-import { catalogCard, deck, deckCard, ownedCard, ruleFormat, wishlistItem } from '../db/schema'
+import { catalogCard, catalogCardImage, catalogPrinting, deck, deckCard, ownedCard, ruleFormat, wishlistItem } from '../db/schema'
 import type { Rule, RuleSet } from '../../shared/rule-formats'
 import { chunkRows } from './catalog-sync'
 import { MAX_DECK_CARD_QUANTITY } from './decks'
+import { joinNotes } from './inventory'
 
 type Db = ReturnType<typeof useDb>
 
@@ -192,17 +196,6 @@ export function remapRuleSetCardIds(
   })
 
   return changed ? { ruleSet: { ...ruleSet, rules }, changed } : { ruleSet, changed }
-}
-
-function joinNotes(...notes: Array<string | null>): string | null {
-  const distinct: string[] = []
-  for (const note of notes) {
-    const trimmed = note?.trim()
-    if (trimmed && !distinct.includes(trimmed)) {
-      distinct.push(trimmed)
-    }
-  }
-  return distinct.length > 0 ? distinct.join('\n') : null
 }
 
 function laterDate(a: Date, b: Date): Date {
@@ -474,5 +467,72 @@ export function applyCatalogRetirement(
       },
       skipped: false,
     }
+  })
+}
+
+export interface CatalogCleanupResult {
+  /** Printings deleted because the latest response no longer lists them. */
+  printings: number
+  /** Card images deleted because the latest response no longer lists them. */
+  images: number
+  /** Retirement was skipped (the guard), so nothing was pruned either. */
+  skipped: boolean
+}
+
+/**
+ * Deletes the printings and card images the latest YGOPRODeck response no
+ * longer lists (ADR 0023). The upsert never removes rows, so without this a
+ * reprint YGOPRODeck dropped and the placeholder image of a renumbered card
+ * would stay forever. Runs in one transaction.
+ *
+ * - Retired cards **without** a replacement keep their rows: their image is
+ *   the only picture of a card users may still hold.
+ * - Retired cards with a replacement lose their stale placeholder image;
+ *   `CardFloatingImage` / `CardThumb` render a card without one.
+ * - Deleting a printing sets the legacy `owned_card.printing_id` to NULL
+ *   through its FK (`ON DELETE SET NULL`); that column has been hidden since
+ *   ADR 0017, so no user data is lost.
+ * - `catalog_set` rows stay (format set filters reference set ids), and so
+ *   do the translations.
+ *
+ * The caller skips this when retirement was skipped: a response that looks
+ * truncated must not prune anything either.
+ */
+export function pruneUnlistedCatalogRows(
+  db: Db,
+  options: { seenPrintingIds: Set<string>, seenImageIds: Set<number> },
+): CatalogCleanupResult {
+  return db.transaction((transaction) => {
+    const tx = transaction as unknown as Db
+    const keep = new Set(
+      tx
+        .select({ id: catalogCard.id })
+        .from(catalogCard)
+        .where(and(isNotNull(catalogCard.retiredAt), isNull(catalogCard.replacedById)))
+        .all()
+        .map(row => row.id),
+    )
+
+    const printingIds = tx
+      .select({ id: catalogPrinting.id, cardId: catalogPrinting.cardId })
+      .from(catalogPrinting)
+      .all()
+      .filter(row => !options.seenPrintingIds.has(row.id) && !keep.has(row.cardId))
+      .map(row => row.id)
+    for (const ids of chunkRows(printingIds, ID_CHUNK_SIZE)) {
+      tx.delete(catalogPrinting).where(inArray(catalogPrinting.id, ids)).run()
+    }
+
+    const imageIds = tx
+      .select({ id: catalogCardImage.id, cardId: catalogCardImage.cardId })
+      .from(catalogCardImage)
+      .all()
+      .filter(row => !options.seenImageIds.has(row.id) && !keep.has(row.cardId))
+      .map(row => row.id)
+    for (const ids of chunkRows(imageIds, ID_CHUNK_SIZE)) {
+      tx.delete(catalogCardImage).where(inArray(catalogCardImage.id, ids)).run()
+    }
+
+    return { printings: printingIds.length, images: imageIds.length, skipped: false }
   })
 }

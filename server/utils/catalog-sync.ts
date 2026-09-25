@@ -2,7 +2,13 @@ import { and, eq, inArray, isNotNull } from 'drizzle-orm'
 import { foldCardName } from '../../shared/card-name-fold'
 import type { useDb } from '../db'
 import { catalogCard, catalogCardImage, catalogPrinting, catalogSet, catalogSync } from '../db/schema'
-import { applyCatalogRetirement, type CatalogRetirementResult, type RetireGuard } from './catalog-retire'
+import {
+  applyCatalogRetirement,
+  pruneUnlistedCatalogRows,
+  type CatalogCleanupResult,
+  type CatalogRetirementResult,
+  type RetireGuard,
+} from './catalog-retire'
 import { fetchAllCards, mapCardToRows, type MappedCard } from './ygoprodeck'
 
 type Db = ReturnType<typeof useDb>
@@ -16,6 +22,8 @@ export interface CatalogSyncResult {
   cardCount: number
   /** Cards the response no longer lists, and the references moved (ADR 0019). */
   retirement: CatalogRetirementResult
+  /** Printings and images the response no longer lists, deleted (ADR 0023). */
+  cleanup: CatalogCleanupResult
 }
 
 export function chunkRows<T>(items: T[], size: number): T[][] {
@@ -87,8 +95,9 @@ function countRetired(db: Db, ids: number[]): number {
  * it into the local catalog tables, in chunks, recording a `catalog_sync`
  * run so the outcome is observable. Then retires the cards the response no
  * longer lists and moves references to their replacement
- * (`applyCatalogRetirement`, ADR 0019). Idempotent — re-running converges to
- * the same rows rather than creating duplicates.
+ * (`applyCatalogRetirement`, ADR 0019), and deletes the printings and images
+ * it no longer lists (`pruneUnlistedCatalogRows`, ADR 0023). Idempotent —
+ * re-running converges to the same rows rather than creating duplicates.
  *
  * A throw in the retirement step marks the run as `error`; the card upserts
  * already committed stay.
@@ -125,13 +134,21 @@ export async function syncCatalog(
       guard: options.retireGuard,
       restored,
     })
+    // The retirement guard covers the cleanup too: a response that looks
+    // truncated prunes nothing.
+    const cleanup = retirement.skipped
+      ? { printings: 0, images: 0, skipped: true }
+      : pruneUnlistedCatalogRows(db, {
+          seenPrintingIds: new Set(mapped.flatMap(m => m.printings.map(p => p.id))),
+          seenImageIds: new Set(mapped.flatMap(m => m.images.map(i => i.id))),
+        })
 
     db.update(catalogSync)
       .set({ status: 'success', cardCount: cards.length, finishedAt: new Date() })
       .where(eq(catalogSync.id, run.id))
       .run()
 
-    return { runId: run.id, cardCount: cards.length, retirement }
+    return { runId: run.id, cardCount: cards.length, retirement, cleanup }
   }
   catch (error) {
     const message = error instanceof Error ? error.message : String(error)

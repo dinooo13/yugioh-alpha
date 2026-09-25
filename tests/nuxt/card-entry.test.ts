@@ -2,7 +2,12 @@ import Database from 'better-sqlite3'
 import { drizzle } from 'drizzle-orm/better-sqlite3'
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
 import { beforeAll, describe, expect, it } from 'vitest'
-import { CATALOG_FIXTURE_IDS, seedCatalogFixture } from '../../server/db/fixtures/catalog-fixture'
+import {
+  CATALOG_FIXTURE_ALIAS_ARTWORK_ID,
+  CATALOG_FIXTURE_IDS,
+  CATALOG_FIXTURE_RETIRED_IDS,
+  seedCatalogFixture,
+} from '../../server/db/fixtures/catalog-fixture'
 import * as schema from '../../server/db/schema'
 import {
   MAX_ENTRY_LINES,
@@ -370,6 +375,17 @@ describe('suggestCatalogMatches with retired cards (ADR 0019)', () => {
 
   it('gives no candidate for the passcode of a retired card without a replacement', () => {
     expect(ids(String(RETIRED_DROPPED))).toEqual([])
+    expect(ids(String(CATALOG_FIXTURE_RETIRED_IDS.leviathanOfAtlantisDaedalus))).toEqual([])
+  })
+
+  it('resolves the passcode of an alternate artwork to its card (ADR 0023)', () => {
+    const candidates = suggestCatalogMatches(db, parseEntryLine(String(CATALOG_FIXTURE_ALIAS_ARTWORK_ID)))
+
+    expect(candidates).toHaveLength(1)
+    expect(candidates[0]).toMatchObject({ cardId: CATALOG_FIXTURE_IDS.darkMagician, matchedBy: 'passcode', score: 1 })
+    // The fixture's old Odd-Eyes passcode: a retired card row wins over its artwork.
+    expect(ids(String(CATALOG_FIXTURE_RETIRED_IDS.oddEyesPendulumDragonOld)))
+      .toEqual([CATALOG_FIXTURE_IDS.oddEyesPendulumDragon])
   })
 })
 

@@ -93,6 +93,7 @@ describe('syncCatalog', () => {
         remapped: { ownedCards: 0, deckCards: 0, deckCovers: 0, wishlistItems: 0, ruleFormats: 0 },
         skipped: false,
       },
+      cleanup: { printings: 0, images: 0, skipped: false },
     })
 
     const second = await syncCatalog(db, {
@@ -100,6 +101,8 @@ describe('syncCatalog', () => {
     })
     expect(second.cardCount).toBe(3)
     expect(second.retirement).toMatchObject({ retired: 3, restored: 0, withReplacement: 2, withoutReplacement: 1, skipped: false })
+    // The placeholder images of the two replaced cards; the dropped card keeps its own.
+    expect(second.cleanup).toEqual({ printings: 0, images: 2, skipped: false })
 
     const rows = new Map(db.select().from(schema.catalogCard).all().map(row => [row.id, row]))
     expect(rows.size).toBe(6)

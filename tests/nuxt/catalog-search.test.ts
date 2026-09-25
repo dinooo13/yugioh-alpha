@@ -282,6 +282,46 @@ describe('retired cards (ADR 0019)', () => {
   })
 })
 
+describe('getCatalogCardDetail with artwork passcodes (ADR 0023)', () => {
+  const syncedAt = new Date('2026-01-01T00:00:00Z')
+  const DARK_MAGICIAN = 46986420
+  const PRINTED = 46986414
+  let db: ReturnType<typeof createTestDb>
+
+  beforeEach(() => {
+    db = createTestDb()
+    db.insert(schema.catalogCard).values([
+      { id: DARK_MAGICIAN, name: 'Dark Magician', type: 'Normal Monster', desc: 'Wizard.', syncedAt },
+      // A card whose id is also another card's artwork id.
+      { id: 555, name: 'Card Row', type: 'Spell Card', desc: 'Row.', syncedAt },
+    ]).run()
+    db.insert(schema.catalogSet).values({ id: 'lob', name: 'Legend of Blue Eyes' }).run()
+    db.insert(schema.catalogPrinting).values({ id: 'LOB-005', cardId: DARK_MAGICIAN, setId: 'lob', setCode: 'LOB-005' }).run()
+    db.insert(schema.catalogCardImage).values([
+      { id: PRINTED, cardId: DARK_MAGICIAN, imageUrl: 'https://img/46986414.jpg' },
+      { id: DARK_MAGICIAN, cardId: DARK_MAGICIAN, imageUrl: 'https://img/46986420.jpg' },
+      { id: 555, cardId: DARK_MAGICIAN, imageUrl: 'https://img/555.jpg' },
+    ]).run()
+  })
+
+  it('returns the card an artwork id belongs to, with its printings and images', async () => {
+    const detail = await getCatalogCardDetail(db, PRINTED)
+
+    expect(detail?.card).toMatchObject({ id: DARK_MAGICIAN, name: 'Dark Magician', retired: false })
+    expect(detail?.printings.map(printing => printing.setCode)).toEqual(['LOB-005'])
+    expect(detail?.images.map(image => image.id)).toEqual([555, PRINTED, DARK_MAGICIAN])
+  })
+
+  it('prefers a card row over an artwork with the same id', async () => {
+    const detail = await getCatalogCardDetail(db, 555)
+    expect(detail?.card).toMatchObject({ id: 555, name: 'Card Row' })
+  })
+
+  it('returns null for an id that is neither a card nor an artwork', async () => {
+    await expect(getCatalogCardDetail(db, 12345678)).resolves.toBeNull()
+  })
+})
+
 describe('bilingual catalog search (ADR 0015)', () => {
   let db: ReturnType<typeof createTestDb>
 

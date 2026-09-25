@@ -12,11 +12,14 @@ import {
   type ReplacementCandidate,
 } from '../../server/utils/catalog-retire'
 import { syncCatalog } from '../../server/utils/catalog-sync'
+import { getCatalogCardDetail } from '../../server/utils/catalog-search'
+import { parseEntryLine, suggestCatalogMatches } from '../../server/utils/card-entry'
 import type { RuleSet } from '../../shared/rule-formats'
 import type { TournamentDeckSnapshot } from '../../shared/tournaments'
 import type { YgoproCard } from '../../server/utils/ygoprodeck'
 import {
   darkMagicianFixture,
+  darkMagicianRenumberedFixture,
   droppedFixture,
   entityNameFixture,
   entityNameStaleFixture,
@@ -350,5 +353,121 @@ describe('applyCatalogRetirement (through syncCatalog)', () => {
       // `retired_at` is the time of the first sync that found the card missing.
       expect(after).toEqual(before)
     })
+  })
+})
+
+describe('#113: Dark Magician renumbered 46986414 → 46986420', () => {
+  const OLD = darkMagicianFixture.id
+  const NEW = darkMagicianRenumberedFixture.id
+  const at = new Date('2026-01-01T00:00:00Z')
+
+  it('retires the old passcode, moves every reference and keeps it resolvable', async () => {
+    const db = createTestDb()
+    await sync(db, [darkMagicianFixture])
+
+    db.insert(schema.user).values({ id: 'user-a', name: 'A', email: 'a@example.com', emailVerified: false, createdAt: at, updatedAt: at }).run()
+    db.insert(schema.ownedCard).values({ id: 'own', userId: 'user-a', catalogCardId: OLD, quantity: 2, createdAt: at, updatedAt: at }).run()
+    db.insert(schema.deck).values({ id: 'deck-1', userId: 'user-a', name: 'Deck', coverCardId: OLD, createdAt: at, updatedAt: at }).run()
+    db.insert(schema.deckCard).values({ id: 'dc', deckId: 'deck-1', catalogCardId: OLD, section: 'main', quantity: 3, createdAt: at, updatedAt: at }).run()
+    db.insert(schema.wishlistItem).values({ id: 'wish', userId: 'user-a', catalogCardId: OLD, quantity: 1, createdAt: at, updatedAt: at }).run()
+
+    const result = await sync(db, [darkMagicianRenumberedFixture])
+
+    // The Konami id rule finds the replacement.
+    expect(result.retirement).toMatchObject({ retired: 1, withReplacement: 1, withoutReplacement: 0, skipped: false })
+    expect(result.retirement.remapped).toEqual({ ownedCards: 1, deckCards: 1, deckCovers: 1, wishlistItems: 1, ruleFormats: 0 })
+    expect(cardState(db, OLD)).toMatchObject({ retiredAt: expect.any(Date), replacedById: NEW })
+    expect(cardState(db, NEW)).toEqual({ retiredAt: null, replacedById: null })
+
+    expect(db.select().from(schema.ownedCard).get()!.catalogCardId).toBe(NEW)
+    expect(db.select().from(schema.deckCard).get()!.catalogCardId).toBe(NEW)
+    expect(db.select().from(schema.deck).get()!.coverCardId).toBe(NEW)
+    expect(db.select().from(schema.wishlistItem).get()!.catalogCardId).toBe(NEW)
+
+    // The old passcode is now an artwork of the new card; the printings follow.
+    const images = db.select().from(schema.catalogCardImage).all()
+    expect(images.map(row => [row.id, row.cardId]).sort()).toEqual([[OLD, NEW], [NEW, NEW]])
+    const printings = db.select().from(schema.catalogPrinting).all()
+    expect(printings.map(row => [row.id, row.cardId]).sort()).toEqual([['LOB-005', NEW], ['SDY-006', NEW]])
+    expect(result.cleanup).toEqual({ printings: 0, images: 0, skipped: false })
+
+    // A card row wins over the artwork with the same id: the retired row.
+    const detail = await getCatalogCardDetail(db, OLD)
+    expect(detail!.card).toMatchObject({ id: OLD, retired: true, replacedById: NEW })
+
+    // Quick entry takes the printed passcode to the current card.
+    expect(suggestCatalogMatches(db, parseEntryLine(String(OLD)))[0]).toMatchObject({ cardId: NEW, matchedBy: 'passcode' })
+  })
+})
+
+describe('pruneUnlistedCatalogRows (through syncCatalog, ADR 0023)', () => {
+  const at = new Date('2026-01-01T00:00:00Z')
+  const darkMagicianLobOnly: YgoproCard = {
+    ...darkMagicianFixture,
+    card_sets: darkMagicianFixture.card_sets!.filter(set => set.set_code === 'LOB-005'),
+  }
+  const oddEyesWithOldArtwork: YgoproCard = {
+    ...oddEyesFixture,
+    card_images: [
+      { id: oddEyesStaleFixture.id, image_url: 'https://images.ygoprodeck.com/images/cards/16178681.jpg' },
+      ...oddEyesFixture.card_images!,
+    ],
+  }
+
+  function catalogRows(db: TestDb) {
+    return {
+      printings: db.select().from(schema.catalogPrinting).all().map(row => row.id).sort(),
+      images: db.select().from(schema.catalogCardImage).all().map(row => [row.id, row.cardId]).sort(),
+    }
+  }
+
+  async function seedFirstSync(db: TestDb) {
+    await sync(db, [darkMagicianFixture, oddEyesStaleFixture, placeholderFixture, droppedFixture])
+    db.insert(schema.user).values({ id: 'user-a', name: 'A', email: 'a@example.com', emailVerified: false, createdAt: at, updatedAt: at }).run()
+    // The legacy printing column (hidden since ADR 0017).
+    db.insert(schema.ownedCard).values({
+      id: 'own', userId: 'user-a', catalogCardId: darkMagicianFixture.id, printingId: 'SDY-006', quantity: 1, createdAt: at, updatedAt: at,
+    }).run()
+  }
+
+  it('deletes the printings and images the response no longer lists', async () => {
+    const db = createTestDb()
+    await seedFirstSync(db)
+
+    const result = await sync(db, [darkMagicianLobOnly, oddEyesWithOldArtwork, placeholderRealFixture])
+
+    // SDY-006 and the placeholder's image 101402024.
+    expect(result.cleanup).toEqual({ printings: 1, images: 1, skipped: false })
+    expect(catalogRows(db)).toEqual({
+      printings: ['LOB-005'],
+      images: [
+        [darkMagicianFixture.id, darkMagicianFixture.id],
+        // A retired card without a replacement keeps its only picture.
+        [droppedFixture.id, droppedFixture.id],
+        // The old passcode, now an artwork of the new card.
+        [oddEyesStaleFixture.id, oddEyesFixture.id],
+        [oddEyesFixture.id, oddEyesFixture.id],
+        [placeholderRealFixture.id, placeholderRealFixture.id],
+      ].sort(),
+    })
+    // The owned row stays; only the legacy printing reference is cleared.
+    expect(db.select().from(schema.ownedCard).get()).toMatchObject({ id: 'own', quantity: 1, printingId: null })
+
+    // Idempotent.
+    const again = await sync(db, [darkMagicianLobOnly, oddEyesWithOldArtwork, placeholderRealFixture])
+    expect(again.cleanup).toEqual({ printings: 0, images: 0, skipped: false })
+  })
+
+  it('prunes nothing when the guard skips the retirement', async () => {
+    const db = createTestDb()
+    await seedFirstSync(db)
+    const before = catalogRows(db)
+
+    const result = await sync(db, [darkMagicianLobOnly], { minimum: 1, ratio: 0 })
+
+    expect(result.retirement.skipped).toBe(true)
+    expect(result.cleanup).toEqual({ printings: 0, images: 0, skipped: true })
+    expect(catalogRows(db)).toEqual(before)
+    expect(db.select().from(schema.ownedCard).get()!.printingId).toBe('SDY-006')
   })
 })

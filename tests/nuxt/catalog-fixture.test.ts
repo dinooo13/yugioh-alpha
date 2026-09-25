@@ -5,8 +5,11 @@ import Database from 'better-sqlite3'
 import { describe, expect, it } from 'vitest'
 import * as schema from '../../server/db/schema'
 import {
+  CATALOG_FIXTURE_ALIAS_ARTWORK_ID,
   CATALOG_FIXTURE_CARDS,
   CATALOG_FIXTURE_IDS,
+  CATALOG_FIXTURE_RETIRED_CARDS,
+  CATALOG_FIXTURE_RETIRED_IDS,
   CATALOG_FIXTURE_TRANSLATIONS,
   seedCatalogFixture,
 } from '../../server/db/fixtures/catalog-fixture'
@@ -23,11 +26,13 @@ describe('catalog fixture', () => {
     const db = createTestDb()
 
     seedCatalogFixture(db)
-    expect(db.select().from(schema.catalogCard).all()).toHaveLength(CATALOG_FIXTURE_CARDS.length)
+    expect(db.select().from(schema.catalogCard).all())
+      .toHaveLength(CATALOG_FIXTURE_CARDS.length + CATALOG_FIXTURE_RETIRED_CARDS.length)
 
     // Re-seeding must upsert (converge to the same rows), not duplicate.
     seedCatalogFixture(db)
-    expect(db.select().from(schema.catalogCard).all()).toHaveLength(CATALOG_FIXTURE_CARDS.length)
+    expect(db.select().from(schema.catalogCard).all())
+      .toHaveLength(CATALOG_FIXTURE_CARDS.length + CATALOG_FIXTURE_RETIRED_CARDS.length)
   })
 
   it('joins a printing to its card and set', () => {
@@ -63,6 +68,32 @@ describe('catalog fixture', () => {
       const images = db.select().from(schema.catalogCardImage).where(eq(schema.catalogCardImage.cardId, id)).all()
       expect(images.length).toBeGreaterThan(0)
     }
+  })
+})
+
+describe('catalog fixture retired rows (ADR 0019, ADR 0023)', () => {
+  it('seeds the retired rows as a real sync leaves them', () => {
+    const db = createTestDb()
+    seedCatalogFixture(db)
+
+    const card = (id: number) => db.select().from(schema.catalogCard).where(eq(schema.catalogCard.id, id)).get()!
+    expect(card(CATALOG_FIXTURE_RETIRED_IDS.oddEyesPendulumDragonOld)).toMatchObject({
+      retiredAt: expect.any(Date),
+      replacedById: CATALOG_FIXTURE_IDS.oddEyesPendulumDragon,
+      konamiId: null,
+    })
+    expect(card(CATALOG_FIXTURE_IDS.oddEyesPendulumDragon)).toMatchObject({ retiredAt: null, replacedById: null })
+    expect(card(CATALOG_FIXTURE_RETIRED_IDS.leviathanOfAtlantisDaedalus)).toMatchObject({
+      retiredAt: expect.any(Date),
+      replacedById: null,
+      nameSearch: 'leviathanofatlantisdaedalus',
+    })
+
+    const image = (id: number) => db.select().from(schema.catalogCardImage).where(eq(schema.catalogCardImage.id, id)).get()!
+    expect(image(CATALOG_FIXTURE_ALIAS_ARTWORK_ID).cardId).toBe(CATALOG_FIXTURE_IDS.darkMagician)
+    expect(image(CATALOG_FIXTURE_RETIRED_IDS.oddEyesPendulumDragonOld).cardId).toBe(CATALOG_FIXTURE_IDS.oddEyesPendulumDragon)
+    expect(image(CATALOG_FIXTURE_RETIRED_IDS.leviathanOfAtlantisDaedalus).cardId)
+      .toBe(CATALOG_FIXTURE_RETIRED_IDS.leviathanOfAtlantisDaedalus)
   })
 })
 
