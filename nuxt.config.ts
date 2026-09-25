@@ -25,7 +25,16 @@ export default defineNuxtConfig({
   // Dev only: pre-bundle the auth client so Vite doesn't discover it at runtime and reload the first page.
   vite: {
     optimizeDeps: {
-      include: ['better-auth/vue'],
+      include: [
+        'better-auth/vue',
+        // /assistant: the AI SDK chat and the Markdown parser (loaded lazily).
+        '@ai-sdk/vue',
+        'ai',
+        'comark',
+        'comark/plugins/breaks',
+        'comark/plugins/security',
+        'comark/utils',
+      ],
     },
   },
   nitro: {
