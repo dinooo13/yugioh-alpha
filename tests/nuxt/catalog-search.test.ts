@@ -207,6 +207,30 @@ describe('catalog search utilities', () => {
       { id: 'legend-of-blue-eyes', name: 'Legend of Blue Eyes' },
       { id: 'structure-deck-kaiba', name: 'Structure Deck: Kaiba' },
     ])
+    expect(facets.setsWithoutCards).toEqual([])
+  })
+
+  it('returns a Link monster\'s rating in the list payload', async () => {
+    db.insert(schema.catalogCard).values({
+      id: 8,
+      name: 'Decode Talker',
+      type: 'Link Monster',
+      frameType: 'link',
+      desc: '2+ Effect Monsters',
+      race: 'Cyberse',
+      attribute: 'DARK',
+      atk: 2300,
+      def: null,
+      level: null,
+      linkval: 3,
+      syncedAt: new Date('2026-01-01T00:00:00Z'),
+    }).run()
+
+    const result = await searchCatalog(db, parseCardListQuery({ q: 'Decode' }))
+    expect(result.items[0]).toMatchObject({ id: 8, level: null, linkval: 3 })
+
+    const others = await searchCatalog(db, parseCardListQuery({ q: 'Dark Magician' }))
+    expect(others.items[0]).toMatchObject({ linkval: null })
   })
 
   it('still finds rows without a name_search through the raw English name', async () => {
@@ -267,6 +291,25 @@ describe('retired cards (ADR 0019)', () => {
     expect(facets.attributes).not.toContain('WIND')
     expect(facets.races).not.toContain('Fairy')
     expect(facets.levels).not.toContain(12)
+  })
+
+  it('leaves sets without a printing of an active card out of the set facet (ADR 0025)', async () => {
+    db.insert(schema.catalogSet).values([
+      { id: 'duel-terminal-5', name: 'Duel Terminal 5' },
+      { id: 'retired-only', name: 'Retired Only' },
+    ]).run()
+    db.insert(schema.catalogPrinting).values(
+      { id: 'RO-001', cardId: 102, setId: 'retired-only', setCode: 'RO-001' },
+    ).run()
+
+    const facets = await getCatalogFacets(db)
+
+    expect(facets.sets.map(set => set.id)).toEqual(['legend-of-blue-eyes', 'structure-deck-kaiba'])
+    // The rows stay, with their names, for formats that name them.
+    expect(facets.setsWithoutCards).toEqual([
+      { id: 'duel-terminal-5', name: 'Duel Terminal 5' },
+      { id: 'retired-only', name: 'Retired Only' },
+    ])
   })
 
   it('still returns a retired card by id, flagged, with its replacement', async () => {

@@ -118,6 +118,16 @@ describe('catalog fixture translations', () => {
       .toMatch(/^\[ Pendeleffekt \]\n.+\n\n\[ Monstereffekt \]\n.+$/s)
   })
 
+  it('seeds Ten Thousand Dragon with "?" ATK/DEF, stored as -1 (#140)', () => {
+    const db = createTestDb()
+    seedCatalogFixture(db)
+
+    const card = db.select().from(schema.catalogCard).where(eq(schema.catalogCard.id, CATALOG_FIXTURE_IDS.tenThousandDragon)).get()
+    expect(card).toMatchObject({ name: 'Ten Thousand Dragon', atk: -1, def: -1, level: 10, retiredAt: null })
+    const printing = db.select().from(schema.catalogPrinting).where(eq(schema.catalogPrinting.cardId, CATALOG_FIXTURE_IDS.tenThousandDragon)).all()
+    expect(printing.map(row => [row.setCode, row.setId])).toEqual([['BLAR-EN10K', 'battles-of-legend-armageddon']])
+  })
+
   it('gives every fixture card a Konami id and a folded search name', () => {
     for (const card of CATALOG_FIXTURE_CARDS) {
       expect(card.konamiId).toEqual(expect.any(Number))
