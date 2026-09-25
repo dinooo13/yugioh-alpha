@@ -424,7 +424,9 @@ upsert a small, deterministic set of ~14 real cards (`server/db/fixtures/catalog
 migrations — this never happens outside of E2E runs. Specs can register a user (see
 `e2e/helpers/auth.ts`) and search/filter the catalog (e.g. `/catalog`) against known cards instead of
 depending on a full `catalog:sync` import. Set `E2E_PORT` to run the E2E server on a port other than the
-default `3300` (useful when running `pnpm test:e2e` alongside `pnpm dev`).
+default `3300` (useful when running `pnpm test:e2e` alongside `pnpm dev`). After a full page load, call
+`waitForHydration(page)` (`e2e/helpers/auth.ts`) before typing or clicking; don't use `networkidle`
+(lint rejects it).
 
 ## Production
 

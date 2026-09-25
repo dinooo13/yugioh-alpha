@@ -69,4 +69,15 @@ export default withNuxt(
       }],
     },
   },
+  {
+    // Hydration waits use waitForHydration(page) (e2e/helpers/auth.ts, #99).
+    name: 'e2e/no-networkidle',
+    files: ['e2e/**/*.ts'],
+    rules: {
+      'no-restricted-syntax': ['error', {
+        selector: "CallExpression[callee.property.name='waitForLoadState'][arguments.0.value='networkidle']",
+        message: 'Use waitForHydration(page) from e2e/helpers/auth.ts; networkidle is slow and not a hydration signal (#99).',
+      }],
+    },
+  },
 )

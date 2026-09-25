@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test'
 import { expect, test } from '@playwright/test'
-import { loginViaForm, logout, registerAndLogin, trackHydrationWarnings } from './helpers/auth'
+import { loginViaForm, logout, registerAndLogin, trackHydrationWarnings, waitForHydration } from './helpers/auth'
 
 // Interface language (#34 F2, ADR 0014): the switch, the `ui_locale` cookie,
 // the profile setting, and SSR rendering the chosen language without a
@@ -22,7 +22,7 @@ test.describe('interface language', () => {
     const warnings = trackHydrationWarnings(page)
 
     await page.goto('/login')
-    await page.waitForLoadState('networkidle')
+    await waitForHydration(page)
     await expect(page.getByRole('heading', { name: 'Anmelden' })).toBeVisible()
     await expect(page.locator('html')).toHaveAttribute('lang', 'de')
     await expect(page.getByText(/YGO Alpha ist ein inoffizielles Fanprojekt/)).toBeVisible()
@@ -36,7 +36,7 @@ test.describe('interface language', () => {
 
     // The server renders the cookie's language on the next page load.
     await page.reload()
-    await page.waitForLoadState('networkidle')
+    await waitForHydration(page)
     await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible()
     await expect(page.locator('html')).toHaveAttribute('lang', 'en')
 
@@ -53,7 +53,7 @@ test.describe('interface language', () => {
     await registerAndLogin(page)
 
     await page.goto('/profile')
-    await page.waitForLoadState('networkidle')
+    await waitForHydration(page)
     const sidebar = page.getByRole('complementary')
     await expect(sidebar.getByRole('link', { name: 'Inventar' })).toBeVisible()
 
@@ -75,7 +75,7 @@ test.describe('interface language', () => {
     await expect(sidebar.getByRole('link', { name: 'Inventory' })).toBeVisible()
 
     await page.reload()
-    await page.waitForLoadState('networkidle')
+    await waitForHydration(page)
     await expect(sidebar.getByRole('link', { name: 'Inventory' })).toBeVisible()
     await expect(page.locator('html')).toHaveAttribute('lang', 'en')
 
@@ -87,7 +87,7 @@ test.describe('interface language', () => {
     const user = await registerAndLogin(page)
 
     await page.goto('/profile')
-    await page.waitForLoadState('networkidle')
+    await waitForHydration(page)
     await pickLanguage(page, 'Anzeigesprache', 'English')
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
 
@@ -99,7 +99,7 @@ test.describe('interface language', () => {
     await loginViaForm(page, user)
 
     await expect(page).toHaveURL('/')
-    await page.waitForLoadState('networkidle')
+    await waitForHydration(page)
     const sidebar = page.getByRole('complementary')
     await expect(sidebar.getByRole('link', { name: 'Inventory' })).toBeVisible()
     await expect(page.locator('html')).toHaveAttribute('lang', 'en')
@@ -120,7 +120,7 @@ test.describe('interface language', () => {
     const warnings = trackHydrationWarnings(page)
 
     await page.goto('/login')
-    await page.waitForLoadState('networkidle')
+    await waitForHydration(page)
     await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible()
     await expect(page.locator('html')).toHaveAttribute('lang', 'en')
     await expect(page).toHaveTitle('Sign in – YGO Alpha')
@@ -130,7 +130,7 @@ test.describe('interface language', () => {
     // A cookie beats the header.
     await pickLanguage(page, 'Interface language', 'Deutsch')
     await page.reload()
-    await page.waitForLoadState('networkidle')
+    await waitForHydration(page)
     await expect(page.getByRole('heading', { name: 'Anmelden' })).toBeVisible()
 
     expect(warnings).toEqual([])

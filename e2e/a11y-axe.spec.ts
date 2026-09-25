@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
-import { registerAndLogin } from './helpers/auth'
+import { registerAndLogin, waitForHydration } from './helpers/auth'
 import { CARD } from './helpers/cards'
 
 // Automated WCAG 2.1 A/AA checks (color contrast included) on the key pages,
@@ -31,6 +31,10 @@ async function axeCurrent(page: Page, label: string): Promise<string[]> {
 
 async function axeViolations(page: Page, path: string): Promise<string[]> {
   await page.goto(path)
+  await waitForHydration(page)
+  // Not a hydration wait: lets client-loaded content settle before axe runs, e.g. the card
+  // overlay `/catalog?card=` opens after hydration and is still fading in (#99).
+  // eslint-disable-next-line no-restricted-syntax -- settle wait, see comment above
   await page.waitForLoadState('networkidle')
   return axeCurrent(page, path)
 }
@@ -80,11 +84,13 @@ test.describe('axe: no WCAG A/AA violations', () => {
       // `/catalog?card=` above.
       for (const [path, label] of [['/inventory?view=gallery', 'gallery'], ['/inventory', 'list']] as const) {
         await page.goto(path)
-        await page.waitForLoadState('networkidle')
+        await waitForHydration(page)
         await page.getByRole('button', { name: CARD.darkMagician, exact: true }).click()
         const overlay = page.getByRole('dialog', { name: CARD.darkMagician })
         await expect(overlay.getByRole('heading', { name: 'Im Inventar' })).toBeVisible()
         await expect(overlay.getByRole('spinbutton', { name: 'Anzahl in (keine Sammlung)' })).toBeVisible()
+        // Not a hydration wait: lets the overlay's image/data requests settle before axe runs (#99).
+        // eslint-disable-next-line no-restricted-syntax -- settle wait, see comment above
         await page.waitForLoadState('networkidle')
         // The open animation (fade/scale) runs even under reduced motion;
         // mid-way its colors would fail the contrast check.
@@ -94,7 +100,7 @@ test.describe('axe: no WCAG A/AA violations', () => {
 
       // "Zum Inventar" stacks the add dialog on top of the catalog overlay.
       await page.goto(`/catalog?card=${DARK_MAGICIAN}`)
-      await page.waitForLoadState('networkidle')
+      await waitForHydration(page)
       await page.getByRole('dialog', { name: CARD.darkMagician }).getByRole('button', { name: 'Zum Inventar' }).click()
       await expect(page.getByRole('dialog', { name: 'Karte hinzufügen' })).toBeVisible()
       await page.evaluate(() => Promise.all(document.getAnimations().map(animation => animation.finished)))
