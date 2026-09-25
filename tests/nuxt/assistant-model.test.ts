@@ -337,21 +337,21 @@ describe('the fake language model (NUXT_ASSISTANT_PROVIDER=fake)', () => {
     expect(fakeTurn({ prompt: [{ role: 'system', content: 'Deck ID: d1' }, user('Was ist in meinem Deck?')] }).text).toBe('Testantwort: Was ist in meinem Deck?')
   })
 
-  it('adds the first card of an earlier search (German or English add), and confirms the proposal', () => {
+  it('adds the first card of an earlier search (German or English add), with its text before the call (ADR 0025)', () => {
     const searched = [
       user('suche Dark Magician'),
       { role: 'assistant' as const, content: [{ type: 'tool-call' as const, toolCallId: '1', toolName: 'search_catalog', input: {} }] },
       { role: 'tool' as const, content: [{ type: 'tool-result' as const, toolCallId: '1', toolName: 'search_catalog', output: { type: 'json' as const, value: { items: [{ id: 46986414, name: 'Dark Magician' }] } } }] },
     ]
-    expect(fakeTurn({ prompt: [...searched, user('füge 2 hinzu')] }).toolCalls)
-      .toEqual([{ toolName: 'add_to_inventory', input: { items: [{ catalogCardId: 46986414, quantity: 2 }] } }])
+    expect(fakeTurn({ prompt: [...searched, user('füge 2 hinzu')] }))
+      .toEqual({ text: 'Hier ist mein Vorschlag.', toolCalls: [{ toolName: 'add_to_inventory', input: { items: [{ catalogCardId: 46986414, quantity: 2 }] } }] })
     expect(fakeTurn({ prompt: [...searched, user('add 3 of them')] }).toolCalls)
       .toEqual([{ toolName: 'add_to_inventory', input: { items: [{ catalogCardId: 46986414, quantity: 3 }] } }])
     expect(fakeTurn({ prompt: [
       user('füge 2 hinzu'),
       { role: 'assistant', content: [{ type: 'tool-call', toolCallId: '2', toolName: 'add_to_inventory', input: {} }] },
-      { role: 'tool', content: [{ type: 'tool-result', toolCallId: '2', toolName: 'add_to_inventory', output: { type: 'json', value: { status: 'pending_confirmation' } } }] },
-    ] })).toEqual({ text: 'Ich habe einen Vorschlag angelegt.', toolCalls: [] })
+      { role: 'tool', content: [{ type: 'tool-result', toolCallId: '2', toolName: 'add_to_inventory', output: { type: 'error-text', value: 'Unknown card IDs: 1' } }] },
+    ] })).toEqual({ text: 'Der Vorschlag hat nicht geklappt.', toolCalls: [] })
   })
 
   it('takes "suche" as a search intent only as a word, and searches for the last few words when nothing follows it', () => {

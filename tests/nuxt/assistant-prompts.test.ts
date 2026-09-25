@@ -1,5 +1,5 @@
 // What the chat assistant's model reads (server/utils/assistant-prompts.ts):
-// the #77, #54, #116 and #117 rules in the system prompt, the order of its
+// the #77, #54, #116, #117 and #148 rules in the system prompt, the order of its
 // parts, the card-term glossary (#117), and the title model's prompt (#129).
 
 import { describe, expect, it } from 'vitest'
@@ -44,6 +44,28 @@ describe('SYSTEM_PROMPT', () => {
     })
   })
 
+  it('ends the answer with a proposal: explain first, nothing after it, several proposals in one step (#148, ADR 0025)', () => {
+    const rule = '- A proposal ends your answer: write your short explanation first, in the same message as the write tool call, then make the call. After it, write nothing more (at most one short sentence)'
+    expect(SYSTEM_PROMPT).toContain(rule)
+    expect(SYSTEM_PROMPT).toContain('so don\'t ask for confirmation in text or repeat its contents. When one request needs several proposals, make all of them together in one step.')
+    // Right after the current-status rule.
+    expect(SYSTEM_PROMPT.indexOf(rule)).toBeGreaterThan(SYSTEM_PROMPT.indexOf('A write tool\'s result shows'))
+    expect(SYSTEM_PROMPT.indexOf(rule)).toBeLessThan(SYSTEM_PROMPT.indexOf('Call tools only through the tool-calling interface'))
+    expect(SYSTEM_PROMPT).toContain('with update_deck_cards in addition — both in the same step, or set_deck_format first.')
+    expect(SYSTEM_PROMPT).toContain('- Before proposing, briefly explain the most important cards or changes.')
+  })
+
+  it('allows Markdown tables for comparisons and short lists, but no HTML (#148)', () => {
+    expect(SYSTEM_PROMPT).toContain('- Answer briefly and clearly. Use Markdown where it helps: a table to compare cards, decks or options')
+    expect(SYSTEM_PROMPT).toContain('a short heading (###) only in a longer answer. No HTML, no images.')
+  })
+
+  it('asks the model to mention the relevant deck warnings (#148)', () => {
+    expect(SYSTEM_PROMPT).toContain('- get_deck and validate_deck also list warnings (usual deck sizes, more than 3 copies, cards no longer in the catalog); mention the relevant ones.')
+    expect(SYSTEM_PROMPT).toContain('get_card shows its replacement (replacedById)')
+    expect(TOOL_TEXT.noFormatAssigned).toContain('get_deck shows the deck\'s warnings.')
+  })
+
   it('asks for tool calls through the tool-calling interface only (#54)', () => {
     expect(SYSTEM_PROMPT).toContain('Call tools only through the tool-calling interface; never write a tool call or its JSON arguments into your message.')
   })
@@ -73,13 +95,21 @@ describe('buildSystemPrompt', () => {
     expect(REPLY_LANGUAGE_INSTRUCTION.en).toContain('Reply in English unless the user explicitly asks for another language.')
     expect(REPLY_LANGUAGE_INSTRUCTION.de).toContain('Reply in German')
     expect(CARD_NAME_INSTRUCTION.en).toContain('Keep card names in English')
-    expect(CARD_NAME_INSTRUCTION.de).toContain('official German name (nameDe in tool results)')
+    expect(CARD_NAME_INSTRUCTION.de).toContain('exactly as nameDe in a tool result spells it')
+    expect(CARD_NAME_INSTRUCTION.en).toContain('never translate them')
     // The reply-language instruction doesn't speak about card names.
     expect(REPLY_LANGUAGE_INSTRUCTION.de).not.toContain('card names')
     expect(REPLY_LANGUAGE_INSTRUCTION.en).not.toContain('card names')
     // The model-facing prompt itself is English in every locale.
     expect(SYSTEM_PROMPT.startsWith('You are the assistant in YGO Alpha')).toBe(true)
     expect(SYSTEM_PROMPT).toContain('the Yu-Gi-Oh! trading card game')
+  })
+
+  it('never lets the model make up a German card name (#148)', () => {
+    expect(CARD_NAME_INSTRUCTION.de).toContain('never translate a card name or make up a German one')
+    expect(CARD_NAME_INSTRUCTION.de).toContain('A card without nameDe in the tool results has no German name you know')
+    expect(CARD_NAME_INSTRUCTION.de).toContain('"Dark Magician Girl" stays "Dark Magician Girl"')
+    expect(CARD_NAME_INSTRUCTION.de).not.toMatch(/[äöüÄÖÜß]/)
   })
 
   it('leaves out the image hint when there are no images', () => {

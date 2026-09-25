@@ -125,6 +125,24 @@ function tool(name: string) {
   return ASSISTANT_TOOLS.find(candidate => candidate.name === name)!
 }
 
+/** A card that is no longer in the catalog (ADR 0019), replaced by Dark Magician. */
+const RETIRED_CARD = 101402024
+
+function insertRetiredCard(db: TestDb) {
+  db.insert(schema.catalogCard).values({
+    id: RETIRED_CARD,
+    name: 'Old Magician',
+    type: 'Normal Monster',
+    frameType: 'normal',
+    desc: 'Placeholder.',
+    syncedAt: new Date(),
+    retiredAt: new Date(),
+    replacedById: CARD.darkMagician,
+  }).run()
+}
+
+const MAIN_BELOW_MIN_1 = 'The Main Deck has 1 card; the usual minimum is 40.'
+
 let db: TestDb
 
 beforeEach(() => {
@@ -453,6 +471,24 @@ describe('get_deck', () => {
     })
   })
 
+  it('lists the deck\'s warnings as their English messages (#148)', async () => {
+    const deck = createDeck(db, 'user-a', { name: 'My Deck', description: null })
+    upsertDeckCard(db, 'user-a', deck.id, { catalogCardId: CARD.darkMagician, section: 'main', quantity: 1 })
+
+    const small = await tool('get_deck').run({ db, userId: 'user-a', cardLocale: 'en' }, { id: deck.id })
+    expect((small.result as { warnings: string[] }).warnings).toEqual([MAIN_BELOW_MIN_1])
+
+    insertRetiredCard(db)
+    upsertDeckCard(db, 'user-a', deck.id, { catalogCardId: CARD.potOfGreed, section: 'main', quantity: 4 })
+    upsertDeckCard(db, 'user-a', deck.id, { catalogCardId: RETIRED_CARD, section: 'main', quantity: 1 })
+    const outcome = await tool('get_deck').run({ db, userId: 'user-a', cardLocale: 'de' }, { id: deck.id })
+    expect((outcome.result as { warnings: string[] }).warnings).toEqual([
+      'The Main Deck has 6 cards; the usual minimum is 40.',
+      'Pot of Greed: 4 copies in the deck; the usual maximum is 3.',
+      'Old Magician is no longer in the catalog; its banlist status and card data are no longer updated.',
+    ])
+  })
+
   it('404s for a deck owned by another user', async () => {
     const foreignDeck = createDeck(db, 'user-b', { name: 'Foreign', description: null })
     expect(await statusOf(() => tool('get_deck').run({ db, userId: 'user-a', cardLocale: 'en' }, { id: foreignDeck.id }))).toBe(404)
@@ -482,6 +518,8 @@ describe('validate_deck', () => {
 
     const outcome = await tool('validate_deck').run({ db, userId: 'user-a', cardLocale: 'en' }, { deckId: deck.id })
     expect((outcome.result as { legal: boolean }).legal).toBe(false)
+    // The format-independent warnings come along (#148).
+    expect((outcome.result as { warnings: string[] }).warnings).toEqual(['The Main Deck has 2 cards; the usual minimum is 40.'])
   })
 
   it('validates against an explicit formatId even without an assigned format', async () => {
@@ -490,6 +528,17 @@ describe('validate_deck', () => {
 
     const outcome = await tool('validate_deck').run({ db, userId: 'user-a', cardLocale: 'en' }, { deckId: deck.id, formatId: format.id })
     expect((outcome.result as { legal: boolean }).legal).toBe(true)
+    expect((outcome.result as { warnings: string[] }).warnings).toEqual(['The Main Deck has 0 cards; the usual minimum is 40.'])
+  })
+
+  it('lists the warnings of a planned deck: more than 3 copies, too small (#148)', async () => {
+    const outcome = await tool('validate_deck').run({ db, userId: 'user-a', cardLocale: 'en' }, {
+      cards: [{ catalogCardId: CARD.potOfGreed, section: 'main', quantity: 4 }],
+    })
+    expect((outcome.result as { warnings: string[] }).warnings).toEqual([
+      'The Main Deck has 4 cards; the usual minimum is 40.',
+      'Pot of Greed: 4 copies in the deck; the usual maximum is 3.',
+    ])
   })
 
   it('400s when the deck has no format and none was given', async () => {
@@ -710,6 +759,9 @@ describe('create_deck (write tool)', () => {
       preview: expectedPreview,
     })
     expect(outcome.result).toMatchObject({ status: 'pending_confirmation', preview: expectedPreview })
+    // The preview's format-independent warnings, for the model and in the stored payload (#148).
+    expect((outcome.result as { preview: { warnings: string[] } }).preview.warnings).toEqual(['The Main Deck has 2 cards; the usual minimum is 40.'])
+    expect((outcome.action.payload as { preview: { warnings: string[] } }).preview.warnings).toEqual(['The Main Deck has 2 cards; the usual minimum is 40.'])
   })
 
   it('400s for a card placed in the wrong section', async () => {

@@ -5,7 +5,8 @@
 // storage (user message, title, the assistant placeholder a proposal's FK
 // needs), the history window, the fallback texts saved into the answer
 // (cut off, no answer, too many steps, cancelled, timeout), the #54 guards
-// against looping tool calls, and the error codes the UI translates.
+// against looping tool calls, a proposal ends the turn (ADR 0025), and the
+// error codes the UI translates.
 
 import { randomUUID } from 'node:crypto'
 import {
@@ -29,7 +30,7 @@ import { assistantConversation, assistantMessage } from '../db/schema'
 import { eq } from 'drizzle-orm'
 import { ASSISTANT_TOOL_NAMES } from '../../shared/assistant-chat'
 import type { AssistantActionView } from '../../shared/assistant-chat'
-import type { AssistantUIMessage, AssistantUIMessagePart } from '../../shared/assistant-ui'
+import type { AssistantToolOutput, AssistantUIMessage, AssistantUIMessagePart } from '../../shared/assistant-ui'
 import type { AppLocale } from '../../shared/locale'
 import {
   conversationTitleFromText,
@@ -82,7 +83,7 @@ function stableStringify(value: unknown): string {
   return JSON.stringify(value) ?? 'undefined'
 }
 
-type StepContent = { content: ReadonlyArray<{ type: string, toolCallId?: string, toolName?: string, input?: unknown, error?: unknown }> }
+type StepContent = { content: ReadonlyArray<{ type: string, toolCallId?: string, toolName?: string, input?: unknown, output?: unknown, error?: unknown }> }
 
 /** How often each identical tool call (tool name + input) failed across `steps`. */
 export function toolFailureCounts(steps: ReadonlyArray<StepContent>): Map<string, number> {
@@ -105,6 +106,56 @@ export function maxToolFailureCount(steps: ReadonlyArray<StepContent>): number {
 /** Stops the loop once one identical tool call failed `limit` times — the backstop behind `assistantPrepareStep`. */
 export function repeatedToolFailure(limit: number): StopCondition<AssistantToolSet> {
   return ({ steps }) => maxToolFailureCount(steps) >= limit
+}
+
+// --- A proposal ends the turn (ADR 0025) ---------------------------------------------
+
+interface StepProposal { toolName: string, output: AssistantToolOutput }
+
+/**
+ * The successful write calls of one step that created a pending proposal:
+ * their output (the tool's raw `execute` return, not what the model reads)
+ * carries `actionId`. A failed write call is a `tool-error` part, never one
+ * of these.
+ */
+export function stepProposals(step: StepContent): StepProposal[] {
+  return step.content.flatMap((part) => {
+    const output = part.output as Partial<AssistantToolOutput> | null | undefined
+    return part.type === 'tool-result' && typeof part.toolName === 'string' && typeof output?.actionId === 'string'
+      ? [{ toolName: part.toolName, output: output as AssistantToolOutput }]
+      : []
+  })
+}
+
+/** A set_deck_format proposal whose preview isn't legal: the model still has to propose the card changes (update_deck_cards). */
+function isIllegalFormatChange(proposal: StepProposal): boolean {
+  const result = proposal.output.result as { preview?: { validation?: { legal?: unknown } | null } } | null | undefined
+  return proposal.toolName === 'set_deck_format' && result?.preview?.validation?.legal === false
+}
+
+/**
+ * Whether the turn ends after the last step: it made at least one proposal,
+ * and not (this is the turn's first proposal step AND every proposal in it
+ * is an illegal format change) — that one exemption lets the model add the
+ * update_deck_cards the system prompt asks for after set_deck_format.
+ */
+export function shouldStopAfterProposal(steps: ReadonlyArray<StepContent>): boolean {
+  const last = steps.at(-1)
+  const proposals = last ? stepProposals(last) : []
+  if (proposals.length === 0) {
+    return false
+  }
+  const isFirstProposalStep = steps.slice(0, -1).every(step => stepProposals(step).length === 0)
+  return !(isFirstProposalStep && proposals.every(isIllegalFormatChange))
+}
+
+/**
+ * Ends the loop after a step that created a proposal, so the action card is
+ * the answer's last element. Not the SDK's `hasToolCall`: that fires on a
+ * failed write call too, which the model must still be able to fix.
+ */
+export function proposalEndsTurn(): StopCondition<AssistantToolSet> {
+  return ({ steps }) => shouldStopAfterProposal(steps)
 }
 
 /**
@@ -191,7 +242,9 @@ function stepHadToolCalls(step: Steps[number]): boolean {
  * The text saved (and streamed) after the model's last step, when the turn
  * didn't end in a proper answer: cut off by a length limit, stopped on a
  * repeated tool failure or the step cap while still calling tools, or no
- * text at all (also a content filter). null = the answer stands as is.
+ * text at all (also a content filter). null = the answer stands as is —
+ * also a turn that ended on a proposal (ADR 0025), even without any text:
+ * the action card is the answer.
  */
 export function fallbackText(steps: Steps, turnText: TurnText): string | null {
   const last = steps.at(-1)
@@ -200,6 +253,9 @@ export function fallbackText(steps: Steps, turnText: TurnText): string | null {
   }
   if (last.finishReason === 'length') {
     return last.text.trim() === '' ? `${turnText.cutOffFallback} ${turnText.cutOffSuffix}` : turnText.cutOffSuffix
+  }
+  if (stepProposals(last).length > 0) {
+    return null
   }
   if (stepHadToolCalls(last)) {
     return maxToolFailureCount(steps) >= ASSISTANT_REPEATED_TOOL_FAILURE_LIMIT ? turnText.repeatedToolFailure : turnText.tooManySteps
@@ -384,7 +440,7 @@ export function startAssistantTurn(options: AssistantTurnOptions): AssistantTurn
       messages: fields.messages,
       tools,
       toolChoice: 'auto',
-      stopWhen: [isStepCount(fields.maxSteps), repeatedToolFailure(ASSISTANT_REPEATED_TOOL_FAILURE_LIMIT)],
+      stopWhen: [isStepCount(fields.maxSteps), repeatedToolFailure(ASSISTANT_REPEATED_TOOL_FAILURE_LIMIT), proposalEndsTurn()],
       prepareStep: assistantPrepareStep,
       timeout: { stepMs: limits.timeoutMs },
       abortSignal,
