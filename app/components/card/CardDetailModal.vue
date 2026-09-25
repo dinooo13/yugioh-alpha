@@ -16,6 +16,11 @@
  * - The data comes from `GET /api/catalog/cards/:id`
  *   (`useCatalogCardDetail`), loaded only while the overlay is open;
  *   `preview` shows what the caller already knows while it loads.
+ * - A retired card (ADR 0019) gets an alert at the top of the right column;
+ *   with a replacement it links to the current card in the catalog (#108).
+ * - The detail of an alias id (a printed passcode YGOPRODeck keeps as an
+ *   alternate artwork, ADR 0023) is the canonical card: `resolved` reports
+ *   its id so the caller can put it into its URL.
  * - No source credit for the German texts in the UI (#87, ADR 0017).
  */
 import { cardFrame } from '~/utils/card-frame'
@@ -35,6 +40,8 @@ defineSlots<{
   context?: () => unknown
   actions?: (props: { card: CardDetailSummary | null }) => unknown
 }>()
+
+const emit = defineEmits<{ resolved: [id: number] }>()
 
 const open = defineModel<boolean>('open', { default: false })
 
@@ -73,6 +80,32 @@ const showGermanHint = computed(() => cardLocale.value === 'de' && detail.value 
 // full height (a tall title/chip block must not shrink under the scrolling
 // body) and leaves room for the absolutely placed close button.
 const ui = { content: 'sm:max-w-3xl', header: 'shrink-0', wrapper: 'min-w-0 flex-1 pe-10' }
+
+// An alias id loads its canonical card (ADR 0023). Only a fresh detail
+// counts: a new `cardId` clears the old one before loading.
+watch(() => detail.value?.card.id ?? null, (id) => {
+  if (id !== null && props.cardId !== null && id !== props.cardId) {
+    emit('resolved', id)
+  }
+})
+
+const route = useRoute()
+const retiredAlert = computed(() => {
+  const card = detail.value?.card
+  if (!card?.retired) {
+    return null
+  }
+  if (card.replacedById === null) {
+    return { description: t('card.retired.detailHint'), actions: [] }
+  }
+  const query = { card: String(card.replacedById) }
+  // On the catalog, only the open card changes; the filters stay.
+  const to = route.path === '/catalog' ? { query: { ...route.query, ...query } } : { path: '/catalog', query }
+  return {
+    description: t('card.retired.detailHintReplaced'),
+    actions: [{ label: t('card.retired.showReplacement'), color: 'warning' as const, variant: 'outline' as const, to }],
+  }
+})
 
 const hasDates = computed(() => Boolean(detail.value?.card.tcgDate || detail.value?.card.ocgDate))
 </script>
@@ -159,6 +192,17 @@ const hasDates = computed(() => Boolean(detail.value?.card.tcgDate || detail.val
         </div>
 
         <div class="min-w-0 space-y-6">
+          <UAlert
+            v-if="retiredAlert"
+            color="warning"
+            variant="subtle"
+            icon="i-lucide-archive"
+            :title="t('card.retired.badge')"
+            :description="retiredAlert.description"
+            :actions="retiredAlert.actions"
+            data-testid="card-retired-alert"
+          />
+
           <slot name="context" />
 
           <UAlert

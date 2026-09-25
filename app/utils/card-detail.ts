@@ -24,6 +24,10 @@ export interface CatalogCardDetail {
     tcgDate: string | null
     ocgDate: string | null
     ygoprodeckUrl: string | null
+    /** YGOPRODeck no longer lists the card (ADR 0019); it still resolves by id. */
+    retired: boolean
+    /** The active card a retired one was renumbered to, if any. */
+    replacedById: number | null
   }
   printings: Array<{
     setCode: string

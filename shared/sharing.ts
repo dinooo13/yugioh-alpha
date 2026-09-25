@@ -106,6 +106,8 @@ export interface SharedDeckCardRow {
   imageLarge: string | null
   section: DeckSection
   quantity: number
+  /** YGOPRODeck no longer lists the card (ADR 0019). */
+  retired: boolean
 }
 
 export interface SharedDeckView {
@@ -138,6 +140,8 @@ export interface SharedCardListItem {
   imageLarge: string | null
   /** Copies the owner holds in this source. */
   quantity: number
+  /** YGOPRODeck no longer lists the card (ADR 0019). */
+  retired: boolean
 }
 
 interface SharedCardListPage {

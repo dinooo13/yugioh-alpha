@@ -11,7 +11,11 @@
     "totalQuantity": "×{count} ges.",
     "retired": {
       "badge": "Nicht mehr im Katalog",
-      "hint": "YGOPRODeck führt diese Karte nicht mehr. Deine Einträge bleiben erhalten, in der Suche taucht sie aber nicht mehr auf."
+      "hint": "YGOPRODeck führt diese Karte nicht mehr. Deine Einträge bleiben erhalten, in der Suche taucht sie aber nicht mehr auf.",
+      "hintPublic": "YGOPRODeck führt diese Karte nicht mehr, deshalb taucht sie in der Suche nicht mehr auf.",
+      "detailHint": "YGOPRODeck führt diese Karte nicht mehr. Kartendaten und Banlist-Status werden nicht mehr aktualisiert.",
+      "detailHintReplaced": "YGOPRODeck führt diese Karte inzwischen unter einer neuen Nummer.",
+      "showReplacement": "Aktuelle Karte anzeigen"
     },
     "detail": {
       "fallbackTitle": "Karte",

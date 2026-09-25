@@ -70,6 +70,12 @@ function sectionName(section: DeckSection): string {
             <p class="truncate text-xs text-muted">
               {{ cardMetaLine(row) }}
             </p>
+            <div
+              v-if="row.retired"
+              class="mt-0.5"
+            >
+              <CardRetiredBadge audience="public" />
+            </div>
           </div>
 
           <span class="shrink-0 font-numeric text-sm font-semibold tracking-[0.04em] text-default tabular-nums">

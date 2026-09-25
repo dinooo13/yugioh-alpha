@@ -251,7 +251,13 @@ const isEmpty = computed(() => {
               :key="item.id"
               class="flex items-center justify-between gap-3 py-2 text-sm"
             >
-              <span class="truncate text-highlighted">{{ cardName(item) }}</span>
+              <span class="flex min-w-0 items-center gap-2">
+                <span class="truncate text-highlighted">{{ cardName(item) }}</span>
+                <CardRetiredBadge
+                  v-if="item.retired"
+                  audience="public"
+                />
+              </span>
               <span class="shrink-0 font-numeric font-semibold tracking-[0.04em] text-default tabular-nums">{{ item.quantity }}×</span>
             </li>
           </ul>

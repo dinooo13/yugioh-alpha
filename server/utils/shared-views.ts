@@ -49,6 +49,7 @@ function loadSharedDeckCardRows(db: Db, deckId: string): SharedDeckCardRow[] {
       // Same artwork as `imageSmall`: both URLs only differ in the directory,
       // so min() picks the same image id.
       imageLarge: sql<string | null>`min(${catalogCardImage.imageUrl})`,
+      retiredAt: catalogCard.retiredAt,
     })
     .from(deckCard)
     .innerJoin(catalogCard, eq(deckCard.catalogCardId, catalogCard.id))
@@ -57,7 +58,12 @@ function loadSharedDeckCardRows(db: Db, deckId: string): SharedDeckCardRow[] {
     .groupBy(deckCard.id)
     .all()
 
-  return rows.map(row => ({ ...row, section: row.section as DeckSection }))
+  // Only the flag leaves the server, not the date (ADR 0019).
+  return rows.map(({ retiredAt, ...row }) => ({
+    ...row,
+    section: row.section as DeckSection,
+    retired: retiredAt !== null,
+  }))
 }
 
 /**
@@ -219,6 +225,7 @@ function listAggregatedCards(db: Db, where: SQL, options: SharedCardListOptions)
           def: catalogCard.def,
           imageSmall: sql<string | null>`min(${catalogCardImage.imageUrlSmall})`,
           imageLarge: sql<string | null>`min(${catalogCardImage.imageUrl})`,
+          retiredAt: catalogCard.retiredAt,
         })
         .from(catalogCard)
         .leftJoin(catalogCardImage, eq(catalogCardImage.cardId, catalogCard.id))
@@ -245,6 +252,7 @@ function listAggregatedCards(db: Db, where: SQL, options: SharedCardListOptions)
       imageSmall: display?.imageSmall ?? null,
       imageLarge: display?.imageLarge ?? null,
       quantity: row.quantity,
+      retired: display ? display.retiredAt !== null : false,
     }
   })
 

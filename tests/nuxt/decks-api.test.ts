@@ -32,6 +32,7 @@ import {
 import type { DeckCoverCandidate } from '../../server/utils/decks'
 import { createCollection } from '../../server/utils/collections'
 import { addOwnedCard, validateInventoryInput } from '../../server/utils/inventory'
+import { seedBuiltinFormats } from '../../server/utils/rule-formats'
 import { setShareState } from '../../server/utils/sharing'
 import { seedGermanNames } from './fixtures/german-names'
 
@@ -598,6 +599,35 @@ describe('deck warnings', () => {
 
     // Over-limit quantities are warnings, never hard errors: the write stuck.
     expect(detail.counts).toMatchObject({ main: 2, side: 2, extra: 5 })
+  })
+
+  it('warns about a retired card, with a format assigned too (ADR 0019, #109)', () => {
+    const RETIRED = 101402013
+    db.insert(schema.catalogCard).values({
+      id: RETIRED,
+      name: 'Leviathan of Atlantis - Daedalus',
+      type: 'Effect Monster',
+      desc: 'Placeholder.',
+      syncedAt: new Date(),
+      retiredAt: new Date(),
+    }).run()
+    seedBuiltinFormats(db)
+    const deck = createDeck(db, 'user-a', { name: 'Deck', description: null })
+    upsertDeckCard(db, 'user-a', deck.id, { catalogCardId: RETIRED, section: 'main', quantity: 1 })
+    upsertDeckCard(db, 'user-a', deck.id, { catalogCardId: RETIRED, section: 'side', quantity: 1 })
+    const detail = upsertDeckCard(db, 'user-a', deck.id, { catalogCardId: CARD.darkMagician, section: 'main', quantity: 1 })
+
+    // One warning per card, not per row.
+    const retired = detail.warnings.filter(warning => warning.code === 'card_retired')
+    expect(retired).toEqual([{
+      code: 'card_retired',
+      cardId: RETIRED,
+      params: { cardId: RETIRED, cardName: 'Leviathan of Atlantis - Daedalus' },
+      message: 'Leviathan of Atlantis - Daedalus is no longer in the catalog; its banlist status and card data are no longer updated.',
+    }])
+
+    const withFormat = updateDeck(db, 'user-a', deck.id, { formatId: 'unlimited' })
+    expect(withFormat.warnings.filter(warning => warning.code === 'card_retired')).toHaveLength(1)
   })
 
   it('accepts at most 99 copies in one row', () => {

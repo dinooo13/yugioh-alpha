@@ -193,6 +193,7 @@ export type DeckWarningCode =
   | 'extra_above_max'
   | 'side_above_max'
   | 'copies_above_max'
+  | 'card_retired'
 
 /**
  * A structural hint independent of any rule format (standard deck sizes and
