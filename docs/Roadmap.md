@@ -361,6 +361,7 @@ Vercel AI SDK with Nuxt UI's chat components, stores messages as AI SDK `UIMessa
 (older conversations are converted when read), guards against looping tool calls (#54), and
 offers a model picker (`NUXT_ASSISTANT_MODELS`), and names new conversations with a separate
 title model (`NUXT_ASSISTANT_TITLE_MODEL`, #129).
+Answers render as sanitized Markdown (tables, headings, code; [ADR 0023](adr/0023-markdown-in-assistant-answers.md), #123).
 
 ### Phase 9: German and English (#34)
 
