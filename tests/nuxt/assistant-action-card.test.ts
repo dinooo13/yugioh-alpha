@@ -116,6 +116,72 @@ describe('AssistantActionCard', () => {
     expect(text).not.toContain('null')
   })
 
+  describe('the preview\'s deck warnings (#148)', () => {
+    const smallDeck = { code: 'main_below_min', message: 'The Main Deck has 5 cards; the usual minimum is 40.', params: { section: 'main', count: 5, min: 40 } }
+    const copies = { code: 'copies_above_max', cardId: 46986414, message: 'Dark Magician: 4 copies in the deck; the usual maximum is 3.', params: { cardId: 46986414, cardName: 'Dark Magician', copies: 4, maxCopies: 3 } }
+    const retired = { code: 'card_retired', cardId: 1, message: 'Old Magician is no longer in the catalog; its banlist status and card data are no longer updated.', params: { cardId: 1, cardName: 'Old Magician' } }
+
+    function withPreview(preview: Record<string, unknown>) {
+      const action = deckAction()
+      action.payload = {
+        ...action.payload,
+        preview: { formatId: null, formatName: null, counts: { main: 5, extra: 0, side: 0, total: 5 }, validation: null, missing: [], ...preview },
+      }
+      return action
+    }
+
+    it('shows them in the interface language, from code + params', async () => {
+      const component = await mountSuspended(ActionCard, {
+        props: { action: withPreview({ warnings: ['English only'], warningDetails: [smallDeck, copies, retired] }) },
+      })
+      const warnings = component.find('[data-testid="action-preview-warnings"]')
+      expect(warnings.exists()).toBe(true)
+      expect(warnings.text()).toContain('Hinweise zum Deckaufbau')
+      expect(warnings.text()).toContain('Das Main Deck hat 5 Karten, mindestens 40 sind üblich.')
+      expect(warnings.text()).toContain('Dark Magician: 4 Kopien im Deck, höchstens 3 sind üblich.')
+      expect(warnings.text()).toContain('Old Magician ist nicht mehr im Katalog')
+      expect(component.text()).not.toContain('English only')
+    })
+
+    it('shows only the retired-card warning when a format is in play, like the deck editor', async () => {
+      const component = await mountSuspended(ActionCard, {
+        props: { action: withPreview({ formatId: 'f', formatName: 'F', validation: { legal: true, issues: [] }, warningDetails: [smallDeck, copies, retired] }) },
+      })
+      const text = component.find('[data-testid="action-preview-warnings"]').text()
+      expect(text).toContain('Old Magician ist nicht mehr im Katalog')
+      expect(text).not.toContain('Main Deck hat 5 Karten')
+      expect(text).not.toContain('4 Kopien')
+
+      const noRetired = await mountSuspended(ActionCard, {
+        props: { action: withPreview({ formatId: 'f', formatName: 'F', validation: { legal: true, issues: [] }, warningDetails: [smallDeck] }) },
+      })
+      expect(noRetired.find('[data-testid="action-preview-warnings"]').exists()).toBe(false)
+    })
+
+    it('shows nothing for a preview stored before #148 (only the English texts, or none at all)', async () => {
+      const onlyTexts = await mountSuspended(ActionCard, { props: { action: withPreview({ warnings: ['The Main Deck has 5 cards; the usual minimum is 40.'] }) } })
+      expect(onlyTexts.find('[data-testid="action-preview"]').exists()).toBe(true)
+      expect(onlyTexts.find('[data-testid="action-preview-warnings"]').exists()).toBe(false)
+      expect(onlyTexts.text()).not.toContain('usual minimum')
+
+      const none = await mountSuspended(ActionCard, { props: { action: deckAction() } })
+      expect(none.find('[data-testid="action-preview-warnings"]').exists()).toBe(false)
+    })
+
+    it('shows them in English with an English interface', async () => {
+      await setTestLocale('en')
+      try {
+        const component = await mountSuspended(ActionCard, { props: { action: withPreview({ warningDetails: [smallDeck] }) } })
+        const text = component.find('[data-testid="action-preview-warnings"]').text()
+        expect(text).toContain('Deck-building hints')
+        expect(text).toContain('The Main Deck has 5 cards; the usual minimum is 40.')
+      }
+      finally {
+        await setTestLocale('de')
+      }
+    })
+  })
+
   it('renders an older action without preview or names as before', async () => {
     const component = await mountSuspended(ActionCard, {
       props: {

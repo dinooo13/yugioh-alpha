@@ -63,7 +63,8 @@ describe('SYSTEM_PROMPT', () => {
   it('asks the model to mention the relevant deck warnings (#148)', () => {
     expect(SYSTEM_PROMPT).toContain('- get_deck and validate_deck also list warnings (usual deck sizes, more than 3 copies, cards no longer in the catalog); mention the relevant ones.')
     expect(SYSTEM_PROMPT).toContain('get_card shows its replacement (replacedById)')
-    expect(TOOL_TEXT.noFormatAssigned).toContain('get_deck shows the deck\'s warnings.')
+    expect(TOOL_TEXT.noFormatAssigned).toContain('there is no legality check (legal: null)')
+    expect(TOOL_TEXT.noFormatAssigned).toContain('The warnings apply regardless.')
   })
 
   it('asks for tool calls through the tool-calling interface only (#54)', () => {

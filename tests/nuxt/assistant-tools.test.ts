@@ -541,9 +541,21 @@ describe('validate_deck', () => {
     ])
   })
 
-  it('400s when the deck has no format and none was given', async () => {
+  it('answers a deck without a format (and no formatId) with legal: null, the hint and the warnings (#148)', async () => {
     const deck = createDeck(db, 'user-a', { name: 'My Deck', description: null })
-    expect(await statusOf(() => tool('validate_deck').run({ db, userId: 'user-a', cardLocale: 'en' }, { deckId: deck.id }))).toBe(400)
+    upsertDeckCard(db, 'user-a', deck.id, { catalogCardId: CARD.darkMagician, section: 'main', quantity: 4 })
+
+    const outcome = await tool('validate_deck').run({ db, userId: 'user-a', cardLocale: 'en' }, { deckId: deck.id })
+
+    expect(outcome.result).toEqual({
+      legal: null,
+      issues: [],
+      note: TOOL_TEXT.noFormatAssigned,
+      warnings: [
+        'The Main Deck has 4 cards; the usual minimum is 40.',
+        'Dark Magician: 4 copies in the deck; the usual maximum is 3.',
+      ],
+    })
   })
 
   it('checks a planned new deck (cards + formatId): counts, legality, and missing cards, without writing', async () => {
@@ -759,9 +771,15 @@ describe('create_deck (write tool)', () => {
       preview: expectedPreview,
     })
     expect(outcome.result).toMatchObject({ status: 'pending_confirmation', preview: expectedPreview })
-    // The preview's format-independent warnings, for the model and in the stored payload (#148).
+    // The preview's format-independent warnings (#148): English text for the model, plus code + params in the stored payload for the action card.
     expect((outcome.result as { preview: { warnings: string[] } }).preview.warnings).toEqual(['The Main Deck has 2 cards; the usual minimum is 40.'])
-    expect((outcome.action.payload as { preview: { warnings: string[] } }).preview.warnings).toEqual(['The Main Deck has 2 cards; the usual minimum is 40.'])
+    expect((outcome.result as { preview: Record<string, unknown> }).preview).not.toHaveProperty('warningDetails')
+    expect(outcome.action.payload).toMatchObject({
+      preview: {
+        warnings: ['The Main Deck has 2 cards; the usual minimum is 40.'],
+        warningDetails: [{ code: 'main_below_min', params: { section: 'main', count: 2, min: 40 } }],
+      },
+    })
   })
 
   it('400s for a card placed in the wrong section', async () => {
@@ -873,7 +891,10 @@ describe('set_deck_format (write tool)', () => {
     const payloadMissing = (outcome.action.payload.preview as { missing: Array<Record<string, unknown>> }).missing
     expect(payloadMissing).toEqual([expect.objectContaining({ catalogCardId: CARD.darkMagician, nameDe: null })])
     const modelMissing = payloadMissing.map(({ nameDe: _nameDe, ...card }) => card)
-    expect(outcome.result).toMatchObject({ status: 'pending_confirmation', preview: { ...preview, validation: modelValidation, missing: modelMissing } })
+    // … and the warnings as English text only (#148).
+    const { warningDetails: _warningDetails, ...modelPreview } = preview as Record<string, unknown>
+    expect(outcome.result).toMatchObject({ status: 'pending_confirmation', preview: { ...modelPreview, validation: modelValidation, missing: modelMissing } })
+    expect((outcome.result as { preview: object }).preview).not.toHaveProperty('warningDetails')
     expect((outcome.result as { preview: { validation: object } }).preview.validation).not.toHaveProperty('issueDetails')
     expect((outcome.result as { preview: { missing: object[] } }).preview.missing[0]).not.toHaveProperty('nameDe')
     expect(outcome.action.summary).toContain('no format → Streng')
@@ -1330,6 +1351,71 @@ describe('buildAssistantToolSet (the AI SDK engine, ADR 0020)', () => {
   it('caps an over-budget result with the resultTooLarge envelope', async () => {
     const { tools } = buildSet({ limits: { toolResultChars: 10, toolResultItems: 100 } })
     expect(await execute(tools, 'search_catalog', { query: 'a' })).toEqual({ result: TOOL_TEXT.resultTooLarge })
+  })
+
+  describe('several proposals for one deck in one turn (#148, ADR 0026)', () => {
+    /** A deck with 2x Dark Magician, illegal in a one-copy format. */
+    function setup() {
+      const format = createRuleFormat(db, 'user-a', validateRuleFormatInput({ name: 'Highlander', rules: { rules: [{ kind: 'copies', maxCopies: 1 }] } }))
+      const deck = createDeck(db, 'user-a', { name: 'Magier-Deck', description: null })
+      upsertDeckCard(db, 'user-a', deck.id, { catalogCardId: CARD.darkMagician, section: 'main', quantity: 2 })
+      return { formatId: format.id, deckId: deck.id }
+    }
+
+    function storedPreview(actionId: string) {
+      const row = db.select().from(schema.assistantAction).where(eq(schema.assistantAction.id, actionId)).get()!
+      return (row.payload as { preview: { validation: { legal: boolean } | null, counts: { main: number }, formatName: string | null } }).preview
+    }
+
+    it('previews set_deck_format with the card changes proposed after it, and updates the earlier card', async () => {
+      const { formatId, deckId } = setup()
+      const updates: Array<{ toolCallId: string, view: AssistantActionView }> = []
+      const { tools, actions } = buildSet({ onActionUpdated: (toolCallId, view) => updates.push({ toolCallId, view }) })
+
+      const format = await execute(tools, 'set_deck_format', { deckId, formatId }, 'call-1')
+      expect(format.result).toMatchObject({ preview: { validation: { legal: false } } })
+
+      const cards = await execute(tools, 'update_deck_cards', { deckId, changes: [{ catalogCardId: CARD.darkMagician, section: 'main', quantity: 1 }] }, 'call-2')
+
+      // The later proposal previews the deck with both applied: new format, new cards.
+      expect(cards.result).toMatchObject({ preview: { formatName: 'Highlander', counts: { main: 1 }, validation: { legal: true } } })
+      expect(storedPreview(cards.actionId!)).toMatchObject({ formatName: 'Highlander', validation: { legal: true } })
+      // The earlier format change now previews the same package, stored and handed on as an update.
+      expect(storedPreview(format.actionId!)).toMatchObject({ formatName: 'Highlander', counts: { main: 1 }, validation: { legal: true } })
+      expect(updates).toEqual([{ toolCallId: 'call-2', view: expect.objectContaining({ id: format.actionId, payload: expect.objectContaining({ preview: expect.objectContaining({ validation: expect.objectContaining({ legal: true }) }) }) }) }])
+      expect(actions.map(action => action.view.id)).toEqual([format.actionId, cards.actionId])
+      // The deck itself is untouched.
+      expect(getDeckDetail(db, 'user-a', deckId).counts.main).toBe(2)
+    })
+
+    it('previews set_deck_format proposed after the card changes with them, in either order', async () => {
+      const { formatId, deckId } = setup()
+      const { tools } = buildSet()
+
+      const cards = await execute(tools, 'update_deck_cards', { deckId, changes: [{ catalogCardId: CARD.darkMagician, section: 'main', quantity: 1 }] }, 'call-1')
+      expect(cards.result).toMatchObject({ preview: { formatName: null, validation: null } })
+      const format = await execute(tools, 'set_deck_format', { deckId, formatId }, 'call-2')
+
+      expect(format.result).toMatchObject({ preview: { counts: { main: 1 }, validation: { legal: true } } })
+      expect(storedPreview(cards.actionId!)).toMatchObject({ formatName: 'Highlander', validation: { legal: true } })
+    })
+
+    it('leaves proposals for other decks, and resolved proposals, alone', async () => {
+      const { formatId, deckId } = setup()
+      const other = createDeck(db, 'user-a', { name: 'Anderes Deck', description: null })
+      upsertDeckCard(db, 'user-a', other.id, { catalogCardId: CARD.darkMagician, section: 'main', quantity: 2 })
+      const updates: AssistantActionView[] = []
+      const { tools } = buildSet({ onActionUpdated: (_toolCallId, view) => updates.push(view) })
+
+      const format = await execute(tools, 'set_deck_format', { deckId, formatId }, 'call-1')
+      const otherFormat = await execute(tools, 'set_deck_format', { deckId: other.id, formatId }, 'call-2')
+      rejectAction(db, 'user-a', format.actionId!)
+      await execute(tools, 'update_deck_cards', { deckId, changes: [{ catalogCardId: CARD.darkMagician, section: 'main', quantity: 1 }] }, 'call-3')
+
+      expect(updates).toEqual([])
+      expect(storedPreview(format.actionId!)).toMatchObject({ validation: { legal: false } })
+      expect(storedPreview(otherFormat.actionId!)).toMatchObject({ counts: { main: 2 }, validation: { legal: false } })
+    })
   })
 
   it('stores a write tool\'s proposal as a pending action of the turn\'s message and hands its view on with the call id', async () => {

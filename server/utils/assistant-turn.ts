@@ -405,6 +405,19 @@ export function startAssistantTurn(options: AssistantTurnOptions): AssistantTurn
     actionView: row => hydrateActionViews(db, userId, [row])[0]!,
     deckName: deckId => resolveDeckNames(db, userId, [deckId]).get(deckId),
     onAction: (toolCallId, view) => pendingActions.set(toolCallId, [...(pendingActions.get(toolCallId) ?? []), view]),
+    // An earlier proposal's new preview (#148): replaces its view if that
+    // isn't written yet, else goes out after this call's result, where the
+    // `data-action` part with the same id replaces the earlier one.
+    onActionUpdated: (toolCallId, view) => {
+      for (const views of pendingActions.values()) {
+        const index = views.findIndex(queued => queued.id === view.id)
+        if (index >= 0) {
+          views[index] = view
+          return
+        }
+      }
+      pendingActions.set(toolCallId, [...(pendingActions.get(toolCallId) ?? []), view])
+    },
   })
 
   const clientSignal = options.signal ?? new AbortController().signal
@@ -581,9 +594,19 @@ export function startAssistantTurn(options: AssistantTurnOptions): AssistantTurn
       try {
         let parts: AssistantUIMessagePart[] = [...responseMessage.parts]
         // Proposals whose tool result never reached the stream (the turn
-        // ended in between) still belong to this answer.
+        // ended in between) still belong to this answer; a newer view of a
+        // proposal already in the parts replaces it.
         for (const views of pendingActions.values()) {
-          parts.push(...views.map(view => ({ type: 'data-action' as const, id: view.id, data: view })))
+          for (const view of views) {
+            const index = parts.findIndex(part => part.type === 'data-action' && part.id === view.id)
+            const part = { type: 'data-action' as const, id: view.id, data: view }
+            if (index >= 0) {
+              parts[index] = part
+            }
+            else {
+              parts.push(part)
+            }
+          }
         }
         pendingActions.clear()
         parts = finalizeParts(parts)

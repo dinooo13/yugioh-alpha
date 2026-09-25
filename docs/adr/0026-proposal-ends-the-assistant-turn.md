@@ -46,6 +46,20 @@ it with a wall of text below.
 6. **The fake model** (`NUXT_ASSISTANT_PROVIDER=fake`) answers an add
    request with its text before the `add_to_inventory` call in the same step
    ("Hier ist mein Vorschlag."), the order the prompt asks for.
+7. **One deck, several proposals: one package.** When a turn proposes
+   `update_deck_cards` and `set_deck_format` for the same deck (the "make
+   this deck legal" flow, in one step or through the exemption), each
+   proposal's preview shows the deck with all of this turn's still pending
+   proposals for it applied: every card change on top of the deck's cards,
+   checked against the last proposed format. The tool set keeps the turn's
+   deck proposals in call order; a later one recomputes the preview, stores
+   it on every earlier pending proposal of that deck, and the turn streams
+   their views again (a `data-action` part with the same id replaces the
+   earlier one in the thread and in the stored answer). So the format card
+   no longer says "not legal" next to the card changes that fix it, in
+   whichever order the model made the calls. Previewing each proposal on
+   its own was the alternative; it is what a user who applies only one of
+   them gets, but it contradicts the package the model proposed.
 
 ## Consequences
 
@@ -58,6 +72,10 @@ it with a wall of text below.
   format flow) gets only the first; the prompt asks for them in one step,
   and the user can ask for the rest.
 - One model call fewer per proposal turn.
+- A package's previews are optimistic when the user applies only some of
+  its proposals; the deck editor then shows the real state. The model read
+  the first proposal's own preview in its tool result; that result is not
+  rewritten.
 - The next turn's history ends the answer with the tool call and its result,
   followed by the user's message, which OpenAI-compatible APIs accept. The
   #116 status rewrite of a resolved proposal works unchanged.
