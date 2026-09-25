@@ -215,6 +215,50 @@ describe('catalog page', () => {
     expect(lastQuery('/api/catalog/cards')).toMatchObject({ sort: '-name' })
   })
 
+  // "Auch im Kartentext suchen" (owner feedback in #148): the server already
+  // takes `inText`; the page sends it only with a search text and keeps it in the URL.
+  it('reads "Auch im Kartentext suchen" from a deep link', async () => {
+    const component = await mountPage({ route: '/catalog?q=Hexer&inText=1' })
+
+    expect(lastQuery('/api/catalog/cards')).toMatchObject({ q: 'Hexer', inText: 1 })
+    const checkbox = component.find('[role="checkbox"]')
+    expect(checkbox.attributes('aria-checked')).toBe('true')
+    expect(component.text()).toContain('Auch im Kartentext suchen')
+  })
+
+  it('writes "Auch im Kartentext suchen" to the URL and goes back to page 1', async () => {
+    const component = await mountPage({ route: '/catalog?q=Hexer&page=3' })
+    const route = useRouter().currentRoute
+    expect(lastQuery('/api/catalog/cards')).toMatchObject({ q: 'Hexer', page: 3 })
+    expect(lastQuery('/api/catalog/cards').inText).toBeUndefined()
+
+    await component.find('[role="checkbox"]').trigger('click')
+    await vi.waitFor(() => {
+      expect(route.value.query.inText).toBe('1')
+    })
+    expect(route.value.query.page).toBeUndefined()
+    expect(lastQuery('/api/catalog/cards')).toMatchObject({ q: 'Hexer', inText: 1, page: 1 })
+  })
+
+  it('keeps "Auch im Kartentext suchen" in the URL without a search text, but not in the query; reset clears it', async () => {
+    const component = await mountPage()
+    const route = useRouter().currentRoute
+
+    await component.find('[role="checkbox"]').trigger('click')
+    await vi.waitFor(() => {
+      expect(route.value.query.inText).toBe('1')
+    })
+    // Without a search text it would change nothing, so the grid isn't refetched.
+    expect(lastQuery('/api/catalog/cards').inText).toBeUndefined()
+
+    const reset = component.findAll('button').find(btn => btn.text() === 'Zurücksetzen')
+    await reset!.trigger('click')
+    await vi.waitFor(() => {
+      expect(route.value.query.inText).toBeUndefined()
+    })
+    expect(component.find('[role="checkbox"]').attributes('aria-checked')).toBe('false')
+  })
+
   it('opens the add-to-inventory modal pre-filled with the clicked card (#6)', async () => {
     const component = await mountPage()
 
@@ -277,6 +321,7 @@ describe('catalog page', () => {
     expect(text).toContain('Blue-Eyes White Dragon')
     expect(text).not.toContain('Blauäugiger')
     expect(component.find('input[aria-label="Search cards"]').exists()).toBe(true)
+    expect(text).toContain('Also search card text')
     expect(component.find('[aria-label="Type"]').exists()).toBe(true)
     expect(component.find('[aria-label="Sort by"]').exists()).toBe(true)
     expect(text).not.toContain('Karten')
