@@ -7,7 +7,7 @@
 // docs/adr/0010-chat-assistant-with-tools.md and
 // docs/adr/0011-deck-assistance-in-chat.md.
 
-import type { ValidationIssue } from './rule-formats'
+import type { DeckWarning, ValidationIssue } from './rule-formats'
 
 /** `GET /api/assistant/status` — whether (and how) the assistant is configured on this server. */
 export interface AssistantStatus {
@@ -117,12 +117,15 @@ export interface AssistantDeckPreview {
   /** `nameDe` (ADR 0015) is display only and missing on previews stored before #34 F3c. */
   missing: Array<{ catalogCardId: number, name: string, nameDe?: string | null, needed: number, owned: number }>
   /**
-   * The canonical English messages of the format-independent deck warnings
-   * (`buildWarnings`: usual deck sizes, more than 3 copies, retired cards),
-   * model-facing (#148). Missing on previews stored before R6; the action
-   * card doesn't show them yet.
+   * The format-independent deck warnings (`buildWarnings`: usual deck sizes,
+   * more than 3 copies, retired cards, #148). `warnings` is their canonical
+   * English text (what the model reads); `warningDetails` the same warnings
+   * as code + params, which the action card renders in the interface
+   * language. Both are missing on previews stored before #148, which show
+   * no warnings.
    */
   warnings?: string[]
+  warningDetails?: DeckWarning[]
 }
 
 // --- Limits, shared by client-side validation and the server ------------------

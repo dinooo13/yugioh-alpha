@@ -553,7 +553,8 @@ function toolValidateDeck(db: Db, userId: string, cardLocale: AppLocale, args: u
 
   const detail = getDeckDetail(db, userId, deckId)
   if (!detail.validation) {
-    badRequest(TOOL_TEXT.noFormatAssigned)
+    // No format to check against: no legality statement, but the warnings still apply (#148).
+    return { legal: null, issues: [], note: TOOL_TEXT.noFormatAssigned, warnings: warningMessages(detail.warnings) }
   }
   return { ...validationForModel(detail.validation, cardLocale), warnings: warningMessages(detail.warnings) }
 }
@@ -561,12 +562,14 @@ function toolValidateDeck(db: Db, userId: string, cardLocale: AppLocale, args: u
 // --- Write tools (propose a pending action; never mutate directly) ------------
 
 /**
- * A preview as the model reads it: the issues as canonical English text only
- * — `issueDetails` (code + params) is for the UI's action card and would just
- * repeat every issue in the tool result — and the missing cards with their
- * German name only in German card language (ADR 0015).
+ * A preview as the model reads it: the issues and warnings as canonical
+ * English text only — `issueDetails` and `warningDetails` (code + params) are
+ * for the UI's action card and would just repeat them in the tool result —
+ * and the missing cards with their German name only in German card language
+ * (ADR 0015).
  */
-function previewForModel(preview: AssistantDeckPreview, cardLocale: AppLocale): AssistantDeckPreview {
+function previewForModel(fullPreview: AssistantDeckPreview, cardLocale: AppLocale): AssistantDeckPreview {
+  const { warningDetails: _warningDetails, ...preview } = fullPreview
   const missing = preview.missing.map(({ catalogCardId, name, nameDe, ...card }) => ({
     catalogCardId,
     name,
@@ -1064,6 +1067,85 @@ export interface AssistantToolSetContext extends ToolRunContext {
   deckName: (deckId: string) => string | undefined
   /** Receives a proposal's view with the id of the tool call that made it; the turn writes it as a `data-action` part after that call's result. */
   onAction: (toolCallId: string, view: AssistantActionView) => void
+  /**
+   * Receives the new view of an earlier proposal of this turn whose preview
+   * changed (a later proposal for the same deck, see
+   * `combineTurnDeckPreviews`), with the id of the tool call that changed it.
+   * The turn replaces a view it hasn't written yet, else writes the new view
+   * after that call's result (a `data-action` part with the same id replaces
+   * the earlier one). Defaults to `onAction`.
+   */
+  onActionUpdated?: (toolCallId: string, view: AssistantActionView) => void
+}
+
+// --- Several proposals for one deck in one turn -----------------------------------
+
+/** A deck proposal of this turn: update_deck_cards (its changes) or set_deck_format (its format). */
+interface TurnDeckProposal {
+  actionId: string
+  deckId: string
+  changes: DeckCardInput[]
+  /** Only set_deck_format: the new format (null = none). */
+  formatId?: string | null
+}
+
+/** The deck-affecting part of an update_deck_cards / set_deck_format proposal's payload, or null for any other proposal. */
+function turnDeckProposalOf(action: AssistantProposedAction): Omit<TurnDeckProposal, 'actionId'> | null {
+  const { kind, payload } = action
+  if (typeof payload.deckId !== 'string') {
+    return null
+  }
+  if (kind === 'update_deck_cards' && Array.isArray(payload.changes)) {
+    const changes = (payload.changes as DeckCardInput[]).map(({ catalogCardId, section, quantity }) => ({ catalogCardId, section, quantity }))
+    return { deckId: payload.deckId, changes }
+  }
+  if (kind === 'set_deck_format') {
+    return { deckId: payload.deckId, changes: [], formatId: typeof payload.formatId === 'string' ? payload.formatId : null }
+  }
+  return null
+}
+
+/**
+ * The preview of a deck once all of `proposals` (one deck, in call order)
+ * are applied: every card change on top of the deck's current cards (a later
+ * change of the same card and section wins), checked against the last
+ * proposed format, or the deck's own when none was proposed.
+ */
+function combinedDeckPreview(db: Db, userId: string, deckId: string, proposals: Array<Omit<TurnDeckProposal, 'actionId'>>): AssistantDeckPreview {
+  const formatProposals = proposals.filter(proposal => proposal.formatId !== undefined)
+  return previewDeckProposal(db, userId, {
+    deckId,
+    changes: proposals.flatMap(proposal => proposal.changes),
+    ...(formatProposals.length > 0 ? { formatId: formatProposals.at(-1)!.formatId } : {}),
+  })
+}
+
+/** The proposals of `proposals` the user hasn't applied or rejected yet (they can while the turn still runs). */
+function stillPending(db: Db, proposals: TurnDeckProposal[]): TurnDeckProposal[] {
+  if (proposals.length === 0) {
+    return []
+  }
+  const pending = new Set(db.select({ id: assistantAction.id }).from(assistantAction)
+    .where(and(inArray(assistantAction.id, proposals.map(proposal => proposal.actionId)), eq(assistantAction.status, 'pending')))
+    .all()
+    .map(row => row.id))
+  return proposals.filter(proposal => pending.has(proposal.actionId))
+}
+
+/** Replaces the stored preview of a still pending proposal; returns the updated row, or null when it isn't pending any more. */
+function updatePendingActionPreview(db: Db, actionId: string, preview: AssistantDeckPreview): AssistantActionRow | null {
+  const row = db.select().from(assistantAction)
+    .where(and(eq(assistantAction.id, actionId), eq(assistantAction.status, 'pending')))
+    .get()
+  if (!row) {
+    return null
+  }
+  const [updated] = db.update(assistantAction)
+    .set({ payload: { ...row.payload, preview } })
+    .where(and(eq(assistantAction.id, actionId), eq(assistantAction.status, 'pending')))
+    .returning()
+    .all()
+  return updated ?? null
 }
 
 export type AssistantToolSet = Record<AssistantToolName, Tool<Record<string, unknown>, AssistantToolOutput>>
@@ -1081,6 +1163,10 @@ export type AssistantToolSet = Record<AssistantToolName, Tool<Record<string, unk
  * (`toModelOutput`).
  */
 export function buildAssistantToolSet(ctx: AssistantToolSetContext): AssistantToolSet {
+  // The turn's deck proposals so far, in call order (#148).
+  const turnDeckProposals: TurnDeckProposal[] = []
+  const onActionUpdated = ctx.onActionUpdated ?? ctx.onAction
+
   const entries = ASSISTANT_TOOLS.map((definition) => {
     const parameters = toolParameters(definition, ctx.limits.toolResultItems)
     const name = definition.name as AssistantToolName
@@ -1092,17 +1178,40 @@ export function buildAssistantToolSet(ctx: AssistantToolSetContext): AssistantTo
       execute: async (input, { toolCallId }): Promise<AssistantToolOutput> => {
         try {
           const outcome = await definition.run(ctx, input)
-          const result: unknown = JSON.parse(serializeToolResult(outcome.result, ctx.limits.toolResultChars))
+          let action = 'action' in outcome ? outcome.action : undefined
+          let resultValue = outcome.result
+          // Several proposals for one deck in one turn (e.g. set_deck_format
+          // + update_deck_cards) form one package: each previews the deck
+          // with all of them applied (#148, ADR 0026).
+          const deckProposal = action ? turnDeckProposalOf(action) : null
+          const earlier = deckProposal ? stillPending(ctx.db, turnDeckProposals.filter(proposal => proposal.deckId === deckProposal.deckId)) : []
+          const combined = deckProposal && earlier.length > 0
+            ? combinedDeckPreview(ctx.db, ctx.userId, deckProposal.deckId, [...earlier, deckProposal])
+            : null
+          if (action && combined) {
+            action = { ...action, payload: { ...action.payload, preview: combined } }
+            resultValue = { ...(resultValue as Record<string, unknown>), preview: previewForModel(combined, ctx.cardLocale) }
+          }
+          const result: unknown = JSON.parse(serializeToolResult(resultValue, ctx.limits.toolResultChars))
           let actionId: string | undefined
-          if ('action' in outcome) {
+          if (action) {
             const row = insertPendingAction(ctx.db, {
               conversationId: ctx.conversationId,
               messageId: ctx.messageId,
               userId: ctx.userId,
-              action: outcome.action,
+              action,
             })
             actionId = row.id
             ctx.onAction(toolCallId, ctx.actionView(row))
+            if (deckProposal) {
+              turnDeckProposals.push({ ...deckProposal, actionId: row.id })
+            }
+            for (const proposal of combined ? earlier : []) {
+              const updated = updatePendingActionPreview(ctx.db, proposal.actionId, combined!)
+              if (updated) {
+                onActionUpdated(toolCallId, ctx.actionView(updated))
+              }
+            }
           }
           const deckId = toolCallDeckId({ name, arguments: input })
           const deckName = deckId ? ctx.deckName(deckId) : undefined

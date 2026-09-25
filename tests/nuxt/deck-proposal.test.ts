@@ -165,6 +165,12 @@ describe('previewDeckProposal', () => {
       'Pot of Greed: 4 copies in the deck; the usual maximum is 3.',
       retiredMessage,
     ])
+    // The same warnings as code + params, for the action card.
+    expect(planned.warningDetails).toMatchObject([
+      { code: 'main_below_min', params: { section: 'main', count: 5, min: 40 } },
+      { code: 'copies_above_max', cardId: CARD.potOfGreed, params: { cardName: 'Pot of Greed', copies: 4, maxCopies: 3 } },
+      { code: 'card_retired', cardId: 101402024, params: { cardName: 'Old Magician' } },
+    ])
 
     const deck = createDeck(db, 'user-a', { name: 'Mein Deck', description: null })
     upsertDeckCard(db, 'user-a', deck.id, { catalogCardId: CARD.darkMagician, section: 'main', quantity: 1 })
@@ -184,6 +190,7 @@ describe('previewDeckProposal', () => {
 
     expect(preview.counts.main).toBe(42)
     expect(preview.warnings).toEqual([])
+    expect(preview.warningDetails).toEqual([])
   })
 
   it('404s for another user\'s deck', async () => {

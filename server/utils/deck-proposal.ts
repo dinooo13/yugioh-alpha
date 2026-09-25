@@ -157,7 +157,8 @@ export function previewDeckProposal(db: Db, userId: string, input: DeckProposalI
         }
       : null,
     missing,
-    // Model-facing, canonical English (like `issues`).
+    // Canonical English for the model (like `issues`); code + params for the action card.
     warnings: warnings.map(warning => warning.message),
+    warningDetails: warnings,
   }
 }

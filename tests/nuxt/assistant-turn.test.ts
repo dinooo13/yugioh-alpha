@@ -514,11 +514,28 @@ describe('startAssistantTurn: a proposal ends the turn (ADR 0026)', () => {
     const { chunks } = await runTurn(conversationId, model, { body: userText('mach das Deck legal für Highlander') })
 
     expect(calls).toHaveLength(2)
-    expect(db.select().from(schema.assistantAction).all().map(action => action.kind).sort()).toEqual(['set_deck_format', 'update_deck_cards'])
+    const actions = db.select().from(schema.assistantAction).all()
+    expect(actions.map(action => action.kind).sort()).toEqual(['set_deck_format', 'update_deck_cards'])
+    const formatAction = actions.find(action => action.kind === 'set_deck_format')!
     const types = chunks.map(chunk => chunk.type)
     expect(types.slice(types.lastIndexOf('data-action') + 1)).toEqual(['finish-step', 'finish'])
-    expect(assistantParts(conversationId).at(-1)).toMatchObject({ type: 'data-action', data: { kind: 'update_deck_cards' } })
     expect(storedMessages(conversationId).at(-1)!.content).toBe('Erst das Format.\n\nDann die Karten.')
+
+    // The format change first previewed the deck as it is (not legal, what
+    // the model read); the card changes made it legal, so its view goes out
+    // again with the combined preview (#148) and replaces the first one in
+    // place. (The SDK updates the first chunk object in place, so only the
+    // count and the last one are checked here.)
+    const formatOutput = chunks.find(chunk => chunk.type === 'tool-output-available' && (chunk.output as { actionId?: string }).actionId === formatAction.id)
+    expect(formatOutput).toMatchObject({ output: { result: { preview: { validation: { legal: false } } } } })
+    const formatChunks = chunks.filter(chunk => chunk.type === 'data-action' && chunk.id === formatAction.id)
+    expect(formatChunks).toHaveLength(2)
+    expect(formatChunks.at(-1)).toMatchObject({ data: { payload: { preview: { validation: { legal: true } } } } })
+    expect(types.indexOf('data-action', types.lastIndexOf('tool-output-available'))).toBe(types.lastIndexOf('tool-output-available') + 1)
+    const parts = assistantParts(conversationId)
+    expect(parts.filter(part => part.type === 'data-action')).toHaveLength(2)
+    expect(parts.find(part => part.type === 'data-action' && part.id === formatAction.id)).toMatchObject({ data: { payload: { preview: { validation: { legal: true } } } } })
+    expect(parts.at(-1)).toMatchObject({ type: 'data-action', data: { kind: 'update_deck_cards' } })
   })
 
   it('stops right after a set_deck_format whose preview is legal', async () => {

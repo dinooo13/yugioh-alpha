@@ -183,6 +183,8 @@ interface DeckPreview {
   /** `issueDetails` when stored (code + params, #34 F2d), else the stored `issues` text. */
   validation: { legal: boolean, issues: Array<ValidationTextSource | string> } | null
   missing: Array<{ catalogCardId: number, name: string, needed: number, owned: number }>
+  /** The format-independent deck warnings (`warningDetails`, #148); none on previews stored before. */
+  warnings: ValidationTextSource[]
 }
 
 const PREVIEW_ISSUES_SHOWN = 5
@@ -214,10 +216,23 @@ const preview = computed<DeckPreview | null>(() => {
       needed: Number(card.needed) || 0,
       owned: Number(card.owned) || 0,
     })),
+    warnings: Array.isArray(raw.warningDetails) ? raw.warningDetails.filter(isIssueDetail) : [],
   }
 })
 
 const previewIssues = computed(() => (preview.value?.validation?.issues ?? []).slice(0, PREVIEW_ISSUES_SHOWN).map(issue => validationText(issue)))
+
+// Like the deck editor: a format's validation replaces the "usual size and
+// copies" hints; a retired card (ADR 0019) is not a format question, so its
+// warning always shows.
+const previewWarnings = computed(() => {
+  const current = preview.value
+  if (!current) {
+    return []
+  }
+  const shown = current.validation ? current.warnings.filter(warning => warning.code === 'card_retired') : current.warnings
+  return shown.map(warning => validationText(warning))
+})
 const hiddenIssueCount = computed(() => Math.max(0, (preview.value?.validation?.issues.length ?? 0) - PREVIEW_ISSUES_SHOWN))
 
 const previewCounts = computed(() => {
@@ -388,6 +403,23 @@ async function reject() {
           {{ t('assistant.action.preview.moreIssues', { count: integer(hiddenIssueCount) }, hiddenIssueCount) }}
         </li>
       </ul>
+
+      <div
+        v-if="previewWarnings.length > 0"
+        data-testid="action-preview-warnings"
+      >
+        <p class="font-medium text-highlighted">
+          {{ t('decks.warningsTitle') }}
+        </p>
+        <ul class="mt-0.5 list-inside list-disc space-y-0.5 text-warning">
+          <li
+            v-for="(warning, index) in previewWarnings"
+            :key="index"
+          >
+            {{ warning }}
+          </li>
+        </ul>
+      </div>
 
       <div v-if="preview.missing.length > 0">
         <p class="font-medium text-highlighted">
