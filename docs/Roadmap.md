@@ -148,6 +148,10 @@ Product outcome:
 
 Users can answer: "Which cards do I own, how many do I have, and where are they?"
 
+Hosting (ADR 0027): on a public host, sign-up is invite-only (one shared
+code, `NUXT_INVITE_CODE`) and the catalog sync endpoints need an admin token
+(`NUXT_ADMIN_TOKEN`) instead of any signed-in session.
+
 ### Phase 2: Faster Card Entry
 
 Goal: Make it faster and easier to add many cards to the inventory.

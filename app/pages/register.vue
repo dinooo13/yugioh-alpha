@@ -11,6 +11,8 @@ usePageTitle('auth.register.title')
 const name = ref('')
 const email = ref('')
 const password = ref('')
+// Only checked by the server, and only when it has an invite code set (ADR 0027).
+const inviteCode = ref('')
 // A message key, so the error follows a language switch.
 const errorKey = ref('')
 const loading = ref(false)
@@ -27,11 +29,15 @@ async function onSubmit() {
   }
 
   loading.value = true
-  const { error: signUpError } = await authClient.signUp.email({
+  // `inviteCode` isn't in Better Auth's sign-up type; the server's invite
+  // gate reads it from the body (server/utils/invite-code.ts).
+  const payload = {
     name: name.value || email.value,
     email: email.value,
     password: password.value,
-  })
+    inviteCode: inviteCode.value.trim(),
+  }
+  const { error: signUpError } = await authClient.signUp.email(payload)
   loading.value = false
 
   if (signUpError) {
@@ -96,6 +102,20 @@ async function onSubmit() {
           placeholder="••••••••"
           class="w-full"
           required
+        />
+      </UFormField>
+
+      <UFormField
+        :label="t('auth.fields.inviteCode')"
+        :help="t('auth.register.inviteCodeHelp')"
+      >
+        <UInput
+          v-model="inviteCode"
+          name="inviteCode"
+          autocomplete="off"
+          autocapitalize="characters"
+          spellcheck="false"
+          class="w-full"
         />
       </UFormField>
 

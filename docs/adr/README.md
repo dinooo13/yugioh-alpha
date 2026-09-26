@@ -8,7 +8,7 @@ mark the old as superseded.
 
 | # | Title | Status |
 |---|-------|--------|
-| [0001](0001-card-catalog-data-model.md) | Card catalog data model and YGOPRODeck import | Accepted |
+| [0001](0001-card-catalog-data-model.md) | Card catalog data model and YGOPRODeck import | Accepted (admin endpoint gate superseded by [0027](0027-invite-code-and-admin-token.md)) |
 | [0002](0002-owned-card-inventory-data-model.md) | Owned-card inventory data model | Accepted (collector parts superseded by [0017](0017-inventory-without-collector-details.md)) |
 | [0003](0003-client-side-ocr-and-speech-entry.md) | Client-side OCR and speech entry, server-side matching | Accepted |
 | [0004](0004-deck-data-model.md) | Deck data model | Accepted |
@@ -34,3 +34,4 @@ mark the old as superseded.
 | [0024](0024-passcode-aliases-and-catalog-cleanup.md) | Passcode aliases and catalog cleanup | Accepted (extended by [0025](0025-primary-artwork-and-set-facet.md)) |
 | [0025](0025-primary-artwork-and-set-facet.md) | Primary artwork and the set facet | Accepted |
 | [0026](0026-proposal-ends-the-assistant-turn.md) | A proposal ends the assistant turn | Accepted |
+| [0027](0027-invite-code-and-admin-token.md) | Invite-only sign-up and an admin token for the catalog syncs | Accepted |

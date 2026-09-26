@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test'
 import { expect } from '@playwright/test'
+import { E2E_INVITE_CODE } from './invite-code'
 
 /** Generates a unique, valid email so parallel/repeat E2E runs never collide on a registered user. */
 export function uniqueEmail(): string {
@@ -10,6 +11,8 @@ export interface RegisterAndLoginOptions {
   name?: string
   email?: string
   password?: string
+  /** Defaults to the E2E server's invite code (playwright.config.ts). */
+  inviteCode?: string
 }
 
 export interface RegisteredUser {
@@ -49,6 +52,7 @@ export async function registerAndLogin(page: Page, options: RegisterAndLoginOpti
   await page.getByLabel('Name').fill(name)
   await page.getByLabel('E-Mail').fill(email)
   await page.getByLabel('Passwort').fill(password)
+  await page.getByLabel('Einladungscode').fill(options.inviteCode ?? E2E_INVITE_CODE)
   await page.getByRole('button', { name: 'Registrieren' }).click()
 
   await expect(page).toHaveURL('/')

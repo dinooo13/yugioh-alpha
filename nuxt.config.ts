@@ -64,6 +64,12 @@ export default defineNuxtConfig({
   runtimeConfig: {
     dbFilePath: process.env.DB_FILE_PATH || process.env.DATABASE_URL || './data/app.db',
     betterAuthSecret: process.env.BETTER_AUTH_SECRET || 'dev-only-insecure-secret-change-me',
+    // Invite-only sign-up (ADR 0027): the shared code the register form asks
+    // for. '' = open sign-up. Overridable via NUXT_INVITE_CODE.
+    inviteCode: '',
+    // Bearer token for /api/admin/** (catalog syncs, ADR 0027). '' = those
+    // endpoints are off. Overridable via NUXT_ADMIN_TOKEN.
+    adminToken: '',
     // Set to '1' (via NUXT_E2E_SEED_CATALOG) to upsert the small, deterministic
     // E2E catalog fixture after migrations. Never enabled in normal runs —
     // see server/plugins/migrate.ts and server/db/fixtures/catalog-fixture.ts.

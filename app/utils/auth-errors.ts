@@ -12,6 +12,8 @@ const KNOWN_AUTH_ERROR_CODES: ReadonlySet<string> = new Set([
   'USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL',
   'INVALID_EMAIL',
   'INVALID_EMAIL_OR_PASSWORD',
+  // Ours: the sign-up invite code check (server/utils/invite-code.ts, ADR 0027).
+  'INVALID_INVITE_CODE',
 ])
 
 interface AuthClientError {

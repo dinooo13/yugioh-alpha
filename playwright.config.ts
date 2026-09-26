@@ -1,5 +1,6 @@
 import { defineConfig, devices } from '@playwright/test'
 import { fileURLToPath } from 'node:url'
+import { E2E_INVITE_CODE } from './e2e/helpers/invite-code'
 
 const PORT = Number(process.env.E2E_PORT) || 3300
 const baseURL = `http://localhost:${PORT}`
@@ -37,6 +38,9 @@ export default defineConfig({
       NUXT_PUBLIC_BETTER_AUTH_URL: baseURL,
       NUXT_E2E_SEED_CATALOG: '1',
       NUXT_ASSISTANT_PROVIDER: 'fake',
+      // Sign-up is invite-only whenever a code is set (ADR 0027); the E2E
+      // helper types it in, so every test registers through the real check.
+      NUXT_INVITE_CODE: E2E_INVITE_CODE,
     },
   },
 })
