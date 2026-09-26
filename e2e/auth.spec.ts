@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { logout, registerAndLogin, uniqueEmail } from './helpers/auth'
+import { logout, registerAndLogin, uniqueEmail, waitForHydration } from './helpers/auth'
 
 test.describe('auth happy path', () => {
   test('register, logout, then login again', async ({ page }) => {
@@ -32,5 +32,20 @@ test.describe('auth happy path', () => {
 
     // Log out again to leave a clean state.
     await logout(page)
+  })
+})
+
+test.describe('invite-only sign-up', () => {
+  test('a wrong invite code keeps the visitor on /register', async ({ page }) => {
+    await page.goto('/register')
+    await waitForHydration(page)
+    await page.getByLabel('Name').fill('Uninvited')
+    await page.getByLabel('E-Mail').fill(uniqueEmail())
+    await page.getByLabel('Passwort').fill('super-secret-123')
+    await page.getByLabel('Einladungscode').fill('NOT-THE-CODE')
+    await page.getByRole('button', { name: 'Registrieren' }).click()
+
+    await expect(page.getByRole('alert')).toHaveText('Der Einladungscode ist ungültig.')
+    await expect(page).toHaveURL('/register')
   })
 })

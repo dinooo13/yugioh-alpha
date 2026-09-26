@@ -1,5 +1,5 @@
 import { useDb } from '../../../../db'
-import { useAuth } from '../../../../utils/auth'
+import { requireAdminToken } from '../../../../utils/admin-token'
 import { syncCardTranslations } from '../../../../utils/card-translations-sync'
 
 /**
@@ -7,14 +7,10 @@ import { syncCardTranslations } from '../../../../utils/card-translations-sync'
  * when the source repo hasn't changed since the last successful run, and
  * fails until `catalog:sync` has filled the Konami ids.
  *
- * Same MVP auth gate as `POST /api/admin/catalog/sync`: any authenticated
- * session (docs/adr/0001-card-catalog-data-model.md).
+ * Same admin-token gate as `POST /api/admin/catalog/sync` (ADR 0027).
  */
 export default defineEventHandler(async (event) => {
-  const session = await useAuth().api.getSession({ headers: event.headers })
-  if (!session) {
-    throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
-  }
+  requireAdminToken(event)
 
   const result = await syncCardTranslations(useDb())
   return result

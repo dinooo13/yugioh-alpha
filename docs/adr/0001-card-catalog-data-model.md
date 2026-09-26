@@ -6,6 +6,8 @@ Accepted
 
 Extended by [0019](0019-retired-catalog-cards.md): the sync now retires cards YGOPRODeck no longer lists and re-points references to their replacement.
 
+The session gate on `POST /api/admin/catalog/sync` is superseded by [0027](0027-invite-code-and-admin-token.md): the endpoint needs an admin bearer token.
+
 ## Context
 
 Phase 1 of the [Roadmap](../Roadmap.md) requires a global card catalog: the

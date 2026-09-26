@@ -30,6 +30,8 @@ See [`.env.example`](./.env.example) for all available variables:
 - `NUXT_BETTER_AUTH_SECRET` - secret for Better Auth (required in production, for example `openssl rand -base64 32`)
 - `NUXT_PUBLIC_BETTER_AUTH_URL` - publicly reachable base URL of the app
 - `NUXT_DB_FILE_PATH` - path to the SQLite database file (default: `./data/app.db`; the directory is created automatically)
+- `NUXT_INVITE_CODE` - shared invite code the register form asks for (case, spaces and dashes don't matter). Empty = anyone can sign up; **set it in production** ([ADR 0027](docs/adr/0027-invite-code-and-admin-token.md))
+- `NUXT_ADMIN_TOKEN` - bearer token for the `/api/admin/**` catalog sync endpoints. Empty = those endpoints are off
 - `NUXT_ASSISTANT_API_KEY` - API key for the chat assistant (optional; falls back to `OPENAI_API_KEY`). Without a key or a custom base URL the feature is disabled and the UI shows a notice instead.
 - `NUXT_ASSISTANT_PROVIDER` / `NUXT_ASSISTANT_BASE_URL` / `NUXT_ASSISTANT_MODEL` / `NUXT_ASSISTANT_REASONING_EFFORT` - override the assistant's provider (`openai` / `fake`), the OpenAI-compatible endpoint's base URL, the model id, and an optional `reasoning_effort` some gateways (e.g. OpenCode Go) require; see [`.env.example`](./.env.example)
 - `NUXT_ASSISTANT_VISION_MODEL` - optional override model for chat turns that include an image (the chat assistant at `/assistant`, see below); leave empty to use `NUXT_ASSISTANT_MODEL` for those turns too
@@ -73,11 +75,11 @@ After running migrations, populate (or refresh) the catalog with a full sync —
 curl -X POST http://localhost:3000/_nitro/tasks/catalog:sync
 ```
 
-On a production server (the `/_nitro/tasks` runner exists only in dev, and nuxi has no `task` command), trigger it as an authenticated user:
+On a production server (the `/_nitro/tasks` runner exists only in dev, and nuxi has no `task` command), trigger it with the admin token (`NUXT_ADMIN_TOKEN`; a signed-in session is not enough, [ADR 0027](docs/adr/0027-invite-code-and-admin-token.md)):
 
 ```bash
-curl -X POST http://localhost:3000/api/admin/catalog/sync \
-  -H "Cookie: <your better-auth session cookie>"
+curl -X POST https://your-host/api/admin/catalog/sync \
+  -H "Authorization: Bearer $NUXT_ADMIN_TOKEN"
 ```
 
 The sync is idempotent (upsert-based) and safe to re-run at any time to pick up new or updated cards. Cards YGOPRODeck no longer lists (renumbered pre-release placeholders, changed passcodes) are marked retired and hidden from search; inventory, decks and wishlists that use them move to the renumbered card (see [ADR 0019](docs/adr/0019-retired-catalog-cards.md)). Printings and images the response no longer lists are removed ([ADR 0024](docs/adr/0024-passcode-aliases-and-catalog-cleanup.md)). Card images are currently stored as remote YGOPRODeck URLs; a local image proxy/cache is planned as follow-up work (see the ADR).
@@ -95,7 +97,7 @@ included. See [`docs/adr/0015-german-card-data.md`](./docs/adr/0015-german-card-
   after the card sync. That part is best effort: if it fails, the card result
   still stands and the response reports the error under `translations`.
 - The German sync on its own: `POST /_nitro/tasks/catalog:sync-translations` on
-  the dev server, or `POST /api/admin/catalog/translations/sync` (same session check). It asks GitHub
+  the dev server, or `POST /api/admin/catalog/translations/sync` (same admin token). It asks GitHub
   for the head commit once and is `skipped` when nothing changed since the last
   successful run; otherwise it streams the repo tarball (~15 MB) and reads only `de/`.
 - **After deploying this change, run `catalog:sync` once.** Until then no card has
@@ -456,6 +458,8 @@ For production, `NUXT_BETTER_AUTH_SECRET` must be set, for example through a `.e
 ```bash
 NUXT_BETTER_AUTH_SECRET="$(openssl rand -base64 32)" docker compose up --build -d
 ```
+
+On a public host, also set `NUXT_INVITE_CODE` (otherwise anyone can register) and, if you want to run the catalog syncs there, `NUXT_ADMIN_TOKEN` (for example `openssl rand -hex 32`); see [ADR 0027](docs/adr/0027-invite-code-and-admin-token.md).
 
 ## Project Structure
 
